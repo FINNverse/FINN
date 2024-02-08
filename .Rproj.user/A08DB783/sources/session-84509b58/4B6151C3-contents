@@ -1,0 +1,16 @@
+
+
+FINN = function(env, 
+                reg = ~ Temp + Precp, 
+                growth = ~ Temp, 
+                mort = ~ Temp + Precp, 
+                models = list(reg = NULL,
+                              growth = dnn(c(20L, 20L), lambda = 0.001), 
+                              # Neural network with two hidden layers, each with 20 units
+                              mort = c(20L, 20L)
+                              ) # lineares Modell
+                
+                parameters = list(...),
+                simulate = TRUE
+                
+                 )
