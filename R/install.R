@@ -32,10 +32,7 @@ install_FINN = function(conda = "auto",
   # torch will be installed via pip on macOS because of mkl dependencies
   pip = FALSE
   channel = "pytorch"
-  if(is_osx()) {
-    pip = TRUE
-    channel = NULL
-  }
+
 
   # install dependencies
   error = tryCatch({
@@ -51,7 +48,7 @@ install_FINN = function(conda = "auto",
     )
 
     reticulate::py_install(
-      c("numpy", "pandas"),
+      c("numpy", "pandas", "tqdm", "torch_optimizer"),
       envname = envname,
       method = "conda",
       conda = "auto",
@@ -68,8 +65,8 @@ install_FINN = function(conda = "auto",
 
     invisible(NULL)
   } else {
-    cli::cli_alert_danger("\nInstallation failed... try to install manually PyTorch (install instructions: https://github.com/TheoreticalEcology/s-jSDM\n")
-    cli::cli_alert_info("If the installation still fails, please report the following error on https://github.com/TheoreticalEcology/s-jSDM/issues\n")
+    cli::cli_alert_danger("\nInstallation failed... try to install manually PyTorch (install instructions: https://github.com/FINNverse/FINN\n")
+    cli::cli_alert_info("If the installation still fails, please report the following error on https://github.com/FINNverse/FINN/issues\n")
     cli::cli_alert(error$message)
   }
 }

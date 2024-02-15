@@ -14,3 +14,8 @@ check_installation = function() {
   if(reticulate::py_module_available("madgrad")) madgrad_ =  c(crayon::green(cli::symbol$tick), 1)
   return(rbind("torch" = torch_,  "torch_optimizer" = torch_optimizer_, "pyro" = pyro_, "madgrad" = madgrad_))
 }
+
+force_r = function(x) {
+  if(inherits(x, "python.builtin.object")) return(reticulate::py_to_r( x ))
+  else return(x)
+}
