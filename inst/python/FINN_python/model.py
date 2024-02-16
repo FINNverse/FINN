@@ -602,6 +602,7 @@ class FINN:
     def continue_fit(self, 
                      X: Optional[torch.Tensor]=None, 
                      Y: Optional[torch.Tensor]=None, 
+                     initCohort: CohortMat = None,
                      epochs: int=2, 
                      batch_size: int=20, 
                      learning_rate: float=0.1, 
@@ -629,6 +630,7 @@ class FINN:
         
         self.fit(X, 
                  Y, 
+                 initCohort,
                  epochs, 
                  batch_size, 
                  learning_rate, 
