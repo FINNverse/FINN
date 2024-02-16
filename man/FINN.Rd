@@ -7,13 +7,15 @@
 FINN(
   formula,
   data = NULL,
-  observed = NULL,
+  response = NULL,
   patches = 10L,
   epochs = 1L,
   learning_rate = 1,
   batch_size = 70L,
   device = "cpu",
-  start_time = 0.7
+  start_time = 0.7,
+  X = NULL,
+  Y = NULL
 )
 }
 \arguments{
@@ -21,7 +23,7 @@ FINN(
 
 \item{data}{environmental data, must contain the variables timestep and site}
 
-\item{observed}{species dbh and number of trees, must contain the variables timestep, site, nTree, and Species}
+\item{response}{species dbh and number of trees, must contain the variables timestep, site, nTree, and Species}
 
 \item{patches}{number of patches}
 
@@ -34,6 +36,10 @@ FINN(
 \item{device}{cpu or cuda, if available}
 
 \item{start_time}{when to record, fractional, from 0 to 1}
+
+\item{X}{alternative parametrization, dims: (site, time, predictors)}
+
+\item{Y}{alternative parametrization, dims: (site, time, species, 2), 2 for dbh/ba/ba*t and number of Trees (must be integers)}
 }
 \description{
 FINN model
