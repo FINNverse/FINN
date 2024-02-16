@@ -11,7 +11,16 @@
 #' @param start_time when to record, fractional, from 0 to 1
 #' @param X alternative parametrization, dims: (site, time, predictors)
 #' @param Y alternative parametrization, dims: (site, time, species, 2), 2 for dbh/ba/ba*t and number of Trees (must be integers)
+#' @param init_global Initial values for global parameters (optional).
+#' @param init_growth Initial values for growth parameters (optional).
+#' @param init_mort Initial values for mortality parameters (optional).
+#' @param init_reg Initial values for regeneration parameters (optional).
+#' @param hidden_growth List of specifications for hidden layers in growth NN (optional).
+#' @param hidden_mort List of specifications for hidden layers in mort NN (optional).
+#' @param hidden_reg List of specifications for hidden layers in reg NN (optional)
+#' @param simulate fit or simulation modus, if simulation, model is not fitted and will be returned
 #'
+#' @return An object of class `FINN` containing the fitted model, data, and functions to access the model and predictions.
 #' @export
 #' @author Maximilian Pichler
 
@@ -25,7 +34,15 @@ FINN = function(formula,
                 device = "cpu",
                 start_time = 0.7,
                 X = NULL,
-                Y = NULL) {
+                Y = NULL,
+                init_global = NULL,
+                init_growth = NULL,
+                init_mort = NULL,
+                init_reg = NULL,
+                hidden_growth = list(),
+                hidden_mort = list(),
+                hidden_reg = list(),
+                simulate = FALSE) {
   require(dplyr)
 
   if(is.null(X)) {
@@ -100,16 +117,29 @@ FINN = function(formula,
   }
   out = list()
 
-  out$get_model = function()  pkg.env$FINN$FINN(sp = dim(observations)[3], env = dim(environment)[3], device = device)
+  out$get_model = function()  pkg.env$FINN$FINN(sp = dim(observations)[3],
+                                                env = dim(environment)[3],
+                                                device = device,
+                                                parGlobal = init_global,
+                                                parGrowth = init_growth,
+                                                parMort = init_mort,
+                                                parReg = init_reg,
+                                                hidden_growth = hidden_growth,
+                                                hidden_mort = hidden_mort,
+                                                hidden_reg = hidden_reg
+                                                )
   out$model = out$get_model()
-  out$model$fit(X = environment,
-                Y = ba_observations,
-                response = "ba*T",
-                epochs = as.integer(epochs),
-                batch_size = as.integer(batch_size),
-                start_time = start_time,
-                patches = as.integer(patches),
-                learning_rate = learning_rate)
+
+  if(!simulate) {
+    out$model$fit(X = environment,
+                  Y = ba_observations,
+                  response = "ba*T",
+                  epochs = as.integer(epochs),
+                  batch_size = as.integer(batch_size),
+                  start_time = start_time,
+                  patches = as.integer(patches),
+                  learning_rate = learning_rate)
+  }
   out$data = list(env = environment, ba_observations = ba_observations, observations = observations)
   class(out) = "FINN"
   return(out)

@@ -121,40 +121,124 @@ def height_P(dbh: torch.Tensor, par: torch.Tensor) -> torch.Tensor:
     return height
 
 class FINN:
-    def __init__(self, device: str='cpu', sp: int=5, env: int=2):
+    def __init__(self, 
+                 device: str='cpu', 
+                 sp: int=5, 
+                 env: int=2, 
+                 parGlobal: Optional[np.ndarray]=None, # must be dim [species]
+                 parGrowth: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
+                 parMort: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
+                 parReg: Optional[np.ndarray]=None, # must be dim [species]
+                 hidden_growth: List[int] = [],
+                 hidden_mort: List[int]  = [],
+                 hidden_reg: List[int]  = []
+                 ):
         """Initialize the model.
         
         Args:
             device (str, optional): The device to use for computation. Supported options are 'cpu', 'cuda', and 'mps'. Defaults to 'cpu'.
             sp (int, optional): The number of species. Defaults to 5.
             env (int, optional): The number of environmental covariates. Defaults to 2.
+            parGlobal (Optional[np.ndarray], optional): The global parameters. Must be of dimension [species]. Defaults to None.
+            parGrowth (Optional[np.ndarray], optional): The growth parameters. Must be of dimension [species, 2], with the first column representing shade tolerance. Defaults to None.
+            parMort (Optional[np.ndarray], optional): The mortality parameters. Must be of dimension [species, 2], with the first column representing shade tolerance. Defaults to None.
+            parReg (Optional[np.ndarray], optional): The regeneration parameters. Must be of dimension [species]. Defaults to None.
+            hidden_growth (List[int], optional): The hidden layers for the growth neural network. Defaults to [].
+            hidden_mort (List[int], optional): The hidden layers for the mortality neural network. Defaults to [].
+            hidden_reg (List[int], optional): The hidden layers for the regeneration neural network. Defaults to [].
+        
+        Returns:
+            None
         """
         self.device = torch.device(device)
         self.sp = sp
         self.env = env
         self.optimizer = None
         self.dtype = torch.float32
-        self.nnRegEnv = torch.nn.Sequential(
-            torch.nn.Linear(env, self.sp),
-            torch.nn.Sigmoid()
-        )
+        self.nnRegEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=[False], dropout=-99)
         self.nnRegEnv.to(self.device)
-        self.nnGrowthEnv = torch.nn.Sequential(
-            torch.nn.Linear(env, self.sp),
-            torch.nn.Sigmoid()
-        )
+        self.nnGrowthEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_growth, activation="selu", bias=[False], dropout=-99)
         self.nnGrowthEnv.to(self.device)
-        self.nnMortEnv = torch.nn.Sequential(
-            torch.nn.Linear(env, self.sp),
-            torch.nn.Sigmoid()
-        )
+        self.nnMortEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=[False], dropout=-99)
         self.nnMortEnv.to(self.device)
         
-        self._parGlobal = torch.tensor(np.random.normal(0.90, 1.0, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
-        self._parGrowth = torch.tensor(np.random.normal(0.4, 0.5, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
-        self._parMort = torch.tensor(np.random.normal(0.4, 0.5, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
-        self._parReg = torch.tensor(np.random.normal(0.4, 0.5, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
+        if parGlobal is None:
+            self._parGlobal = torch.tensor(np.random.uniform(0.90, 1.0, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
+        else:
+            self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device)
+            
+        if parGrowth is None:
+            self._parGrowth = torch.tensor(np.random.uniform(-0.01, 0.01, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
+        else: 
+            self._parGrowth = torch.tensor(parGrowth, requires_grad=True, dtype=torch.float32, device=self.device)
+        
+        if parMort is None:
+            self._parMort = torch.tensor(np.random.uniform(0.5, 0.6, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
+        else:
+            self._parMort = torch.tensor(parMort, requires_grad=True, dtype=torch.float32, device=self.device)
+            
+        if parReg is None:
+            self._parReg = torch.tensor(np.random.uniform(0.4, 0.5, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
+        else:
+            self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device)
+            
         self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
+        
+    def _build_NN(self, 
+                  input_shape: int, 
+                  output_shape: int, 
+                  hidden: List, 
+                  bias: List[bool], 
+                  activation: List[str], 
+                  dropout: float) -> torch.nn.modules.container.Sequential:
+        """Build neural network
+
+        Args:
+            input_shape (int): Number of predictors
+            output_shape (int): Number of species
+            hidden (List): List of hidden layers
+            bias (List[bool]): Biases in hidden layers
+            activation (List[str]): List of activation functions
+            dropout (float): Dropout rate
+
+        Returns:
+            torch.nn.modules.container.Sequential: Sequential neural network object
+        """                  
+        model_list = torch.nn.ModuleList()
+        if len(hidden) != len(activation):
+            activation = [activation[0] for _ in range(len(hidden))]
+
+        if len(bias) == 1:
+            bias = [bias[0] for _ in range(len(hidden))]
+            
+        bias.insert(0, False)
+
+        if len(hidden) > 0:
+            for i in range(len(hidden)):
+                if i == 0:
+                    model_list.append(torch.nn.Linear(input_shape, hidden[i], bias=bias[i]).type(self.dtype))
+                else:
+                    model_list.append(torch.nn.Linear(hidden[i-1], hidden[i], bias=bias[i]).type(self.dtype))
+
+                if activation[i] == "relu":
+                     model_list.append(torch.nn.ReLU())
+                if activation[i] == "selu":
+                     model_list.append(torch.nn.SELU())
+                if activation[i] == "leakyrelu":
+                     model_list.append(torch.nn.LeakyReLU())
+                if activation[i] == "tanh": 
+                    model_list.append(torch.nn.Tanh())
+                if activation[i] == "sigmoid":
+                    model_list.append(torch.nn.Sigmoid())
+                if dropout > 0.0:
+                    model_list.append(torch.nn.Dropout(p=dropout))
+
+        if len(hidden) > 0:
+            model_list.append(torch.nn.Linear(hidden[-1], output_shape, bias=bias[-1]).type(self.dtype))
+        else:
+            model_list.append(torch.nn.Linear(input_shape, output_shape, bias=False).type(self.dtype))
+        model_list.append(torch.nn.Sigmoid())    
+        return torch.nn.Sequential(*model_list)       
 
     
     def compF_P(self, dbh: torch.Tensor, Species: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
@@ -465,6 +549,7 @@ class FINN:
                 dbh = cohorts.dbh
                 x = x.to(self.device, non_blocking=True)
                 y = y.to(self.device, non_blocking=True)
+                c = c.to(self.device, non_blocking=True)
                 pred = self.predict(dbh, nTree, Species, x, start_time, response)
                 loss1 = torch.nn.functional.mse_loss(y[:, start_time:,:,0], pred[0][:,start_time:,:]).mean() # dbh / ba
                 #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
