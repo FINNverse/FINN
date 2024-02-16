@@ -14,7 +14,7 @@ pkg.env$FINN = NULL
   # load r-sjsdm environment
   success_env = try({
     envs = reticulate::conda_list()
-    env_path = envs[which(envs$name %in% "r-sjsdm", arr.ind = TRUE), 2]
+    env_path = envs[which(envs$name %in% "r-FINN", arr.ind = TRUE), 2]
     reticulate::use_python(env_path, required = TRUE)
   }, silent = TRUE)
 
@@ -25,15 +25,15 @@ pkg.env$FINN = NULL
   modules_available = any(check[,2] == "0")
   if(!modules_available) {
     # load torch
-    pkg.env$torch = reticulate::import("torch", delay_load = TRUE, convert = FALSE )
+    pkg.env$torch = reticulate::import("torch", delay_load = FALSE, convert = FALSE )
 
     # 'compile' and load sjSDM python package
     path = system.file("python", package = "FINN")
     try({
-      compile = reticulate::import("compileall", delay_load = TRUE)
+      compile = reticulate::import("compileall", delay_load = FALSE)
       tmp = compile$compile_dir(paste0(path, "/FINN_python"),quiet = 2L,force=TRUE)
-    }, silent = TRUE)
-    pkg.env$FINN = reticulate::import_from_path("FINN_python", path, delay_load = TRUE, convert = FALSE)
+    }, silent = FALSE)
+    pkg.env$FINN = reticulate::import_from_path("FINN_python", path, delay_load = FALSE, convert = FALSE)
     check= cbind(check, crayon::black( c(pkg.env$torch$`__version__`, rep("", 3))))
   }
 
