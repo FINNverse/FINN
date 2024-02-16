@@ -456,26 +456,23 @@ class FINN:
         # Run over timesteps
         for i in range(time):
             
-            # TODO: change, when cohorts dead, recruitment can still occur
-            if dbh.shape[2] == 0:
-                return (Result, Result_T)
-            
             # aggregate results
             sites = env.shape[0]
             if i > record_time:
-                if response == "dbh":
-                    ba = dbh
-                elif response == "ba":
-                    BA_T(dbh, nTree)
-                else:    
-                    # ba * nTree
-                    ba = BA_T_P(dbh, nTree)
-                labels = Species
-                samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)  # torch.sigmoid((nTree - 0.5)/1e-3) Baeume da oder nicht
-                samples_T = (nTree * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)
-                tmp_res1, tmp_res2 = self.__aggregate(labels, samples, samples_T, Result[:,i,:], Result_T[:,i,:])
-                Result[:,i,:] = Result[:,i,:] + tmp_res1/patches
-                Result_T[:,i,:] = Result_T[:,i,:] + tmp_res2/patches
+                if dbh.shape[2] != 0:
+                    if response == "dbh":
+                        ba = dbh
+                    elif response == "ba":
+                        BA_T(dbh, nTree)
+                    else:    
+                        # ba * nTree
+                        ba = BA_T_P(dbh, nTree)
+                    labels = Species
+                    samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)  # torch.sigmoid((nTree - 0.5)/1e-3) Baeume da oder nicht
+                    samples_T = (nTree * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)
+                    tmp_res1, tmp_res2 = self.__aggregate(labels, samples, samples_T, Result[:,i,:], Result_T[:,i,:])
+                    Result[:,i,:] = Result[:,i,:] + tmp_res1/patches
+                    Result_T[:,i,:] = Result_T[:,i,:] + tmp_res2/patches
 
             # Model
             # envM = env[:,i,:]
@@ -519,7 +516,7 @@ class FINN:
     def fit(self, 
             X: Optional[torch.Tensor]=None, 
             Y: Optional[torch.Tensor]=None, 
-            cohorts =  None,
+            initCohort: CohortMat = None,
             epochs: int=2, 
             batch_size: int=20, 
             learning_rate: float=0.1, 
@@ -557,10 +554,13 @@ class FINN:
             pin_memory = False
         else:
             pin_memory = True
-        Counts = np.round(Y[:,:,:,1]).astype(int)        
+        Counts = np.round(Y[:,:,:,1]).astype(int)
+        indices = np.arange(0, X.shape[0]).astype(int)
         data = torch.utils.data.TensorDataset(torch.tensor(X, dtype=self.dtype, device=torch.device('cpu')),
                                               torch.tensor(Y[:,:,:,:], dtype=self.dtype, device=torch.device('cpu')),
-                                              torch.tensor(Counts, dtype=torch.int64, device=torch.device('cpu')))
+                                              torch.tensor(Counts, dtype=torch.int64, device=torch.device('cpu')),
+                                              torch.tensor(indices, dtype=torch.int64, device=torch.device('cpu'))
+                                              )
         DataLoader = torch.utils.data.DataLoader(data, batch_size=int(batch_size), shuffle=True, num_workers=0, pin_memory=pin_memory, drop_last=True)
         
         batch_loss = np.zeros(stepSize)
@@ -568,14 +568,19 @@ class FINN:
         
         ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
         for epoch in ep_bar:
-            for step, (x, y, c) in enumerate(DataLoader):
+            for step, (x, y, c, ind) in enumerate(DataLoader):
                 self.optimizer.zero_grad()
-                # TODO, cohorten nicht random, sondern first time strep
-                if cohorts is None:
+                
+                if initCohort is None:
                     cohorts = CohortMat(dims = [x.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
-                nTree = cohorts.nTree
-                Species = cohorts.Species
-                dbh = cohorts.dbh
+                    nTree = cohorts.nTree
+                    Species = cohorts.Species
+                    dbh = cohorts.dbh
+                else:
+                    nTree = (initCohort.nTree[ind,...]).to(self.device, non_blocking=True)
+                    Species = (initCohort.Species[ind,...]).to(self.device, non_blocking=True)
+                    dbh = (initCohort.dbh[ind,...]).to(self.device, non_blocking=True)
+                    
                 x = x.to(self.device, non_blocking=True)
                 y = y.to(self.device, non_blocking=True)
                 c = c.to(self.device, non_blocking=True)
