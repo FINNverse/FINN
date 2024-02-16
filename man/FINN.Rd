@@ -15,7 +15,14 @@ FINN(
   device = "cpu",
   start_time = 0.7,
   X = NULL,
-  Y = NULL
+  Y = NULL,
+  init_global = NULL,
+  init_growth = NULL,
+  init_mort = NULL,
+  init_reg = NULL,
+  hidden_growth = list(),
+  hidden_mort = list(),
+  hidden_reg = list()
 )
 }
 \arguments{
@@ -40,6 +47,23 @@ FINN(
 \item{X}{alternative parametrization, dims: (site, time, predictors)}
 
 \item{Y}{alternative parametrization, dims: (site, time, species, 2), 2 for dbh/ba/ba*t and number of Trees (must be integers)}
+
+\item{init_global}{Initial values for global parameters (optional).}
+
+\item{init_growth}{Initial values for growth parameters (optional).}
+
+\item{init_mort}{Initial values for mortality parameters (optional).}
+
+\item{init_reg}{Initial values for regeneration parameters (optional).}
+
+\item{hidden_growth}{List of specifications for hidden layers in growth NN (optional).}
+
+\item{hidden_mort}{List of specifications for hidden layers in mort NN (optional).}
+
+\item{hidden_reg}{List of specifications for hidden layers in reg NN (optional).}
+}
+\value{
+An object of class `FINN` containing the fitted model, data, and functions to access the model and predictions.
 }
 \description{
 FINN model
