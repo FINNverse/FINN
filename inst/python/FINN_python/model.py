@@ -37,7 +37,8 @@ class CohortMat:
         """
         
         device = torch.device(device)
-        self.nTree = np.random.poisson(10, size = dims) if nTree is None else nTree
+        # TODO initial kohorten
+        self.nTree = np.random.poisson(10, size = dims) if nTree is None else nTree 
         self.Species = np.random.randint(0, sp, size=dims[0:3]) if Species is None else Species
         self.dbh = np.random.uniform(10, 90, size=dims) if dbh is None else dbh
         
@@ -59,6 +60,10 @@ def pad_tensors_speed_up(value: torch.Tensor, indices: torch.Tensor, org_dim: to
     
     Returns:
         torch.Tensor: The padded tensor.
+
+    dbh, nTree : [sites, patches, cohorts, 1]
+    species: [sites, patches, cohorts]
+    parGlobal[Species]
     """
     
     KK = torch.tensor_split(value.flatten(0, 1), org_dim[0]*org_dim[1])
@@ -66,6 +71,7 @@ def pad_tensors_speed_up(value: torch.Tensor, indices: torch.Tensor, org_dim: to
     for i in range(indices.shape[0]):
         KK_new.append(KK[i][0,indices[i,]])
     return torch.nn.utils.rnn.pad_sequence(KK_new, batch_first=True)
+
 
 @torch.jit.script
 def BA_T_P(dbh: torch.Tensor, nTree: torch.Tensor) -> torch.Tensor:
@@ -106,7 +112,7 @@ def BA_P(dbh: torch.Tensor) -> torch.Tensor:
     return torch.pi*(dbh/100./2.).pow(2.0)
 
 @torch.jit.script
-def height_P(dbh: torch.Tensor, par: torch.Tensor) -> torch.Tensor:
+def height_P(dbh: torch.Tensor, parGlobal: torch.Tensor) -> torch.Tensor:
     """Calculate the height of a tree based on its diameter at breast height (dbh) and a parameter (par).
     
     Args:
@@ -117,12 +123,12 @@ def height_P(dbh: torch.Tensor, par: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The calculated height of the tree.
     """
     
-    height = (dbh*par*0.03).exp()
+    height = (dbh*parGlobal*0.03).exp()
     return height
 
 class FINN:
     def __init__(self, 
-                 device: str='cpu', 
+                 device: str='cpu',  # 'mps'
                  sp: int=5, 
                  env: int=2, 
                  parGlobal: Optional[np.ndarray]=None, # must be dim [species]
@@ -162,6 +168,8 @@ class FINN:
         self.nnMortEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=[False], dropout=-99)
         self.nnMortEnv.to(self.device)
         
+        # TODO: Sind diese Init Parametriesierungen sinnvoll?
+
         if parGlobal is None:
             self._parGlobal = torch.tensor(np.random.uniform(0.90, 1.0, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
@@ -240,7 +248,7 @@ class FINN:
         model_list.append(torch.nn.Sigmoid())    
         return torch.nn.Sequential(*model_list)       
 
-    
+    # TODO: lighht -> global Parameter, fitbar
     def compF_P(self, dbh: torch.Tensor, Species: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
         """Competition function
         
@@ -270,7 +278,7 @@ class FINN:
         Args:
             dbh (torch.Tensor): The diameter at breast height of the tree.
             Species (torch.Tensor): The species of the tree.
-            pred (torch.Tensor): The environmental predictors.
+            pred (torch.Tensor): The environmental predictions nnGrowthEnv(env)[Species].
         
         Returns:
             torch.Tensor: The growth of the tree.
@@ -307,6 +315,8 @@ class FINN:
         mort = torch.distributions.Beta(predM*nTree.squeeze(3)+0.00001, nTree.squeeze(3) - predM*nTree.squeeze(3)+0.00001).rsample()*nTree.squeeze(3)
         return mort + mort.round().detach() - mort.detach() 
     
+    # TODO: wenn alles tot, AL = 1
+
     def regFP(self, dbh: torch.Tensor, Species: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
         """Calculate Regeneration rate
         
@@ -326,6 +336,7 @@ class FINN:
         regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
         return regeneration
         
+    
     def __aggregate(self, labels, samples, samples_T, Result, Result_T):
         """Aggregate results.
         
@@ -391,6 +402,9 @@ class FINN:
                 pred_reg: Optional[torch.Tensor]=None,
                 patches: Optional[float]=50) -> [torch.Tensor, torch.Tensor]:
         """Predicts the growth and mortality of trees based on the given inputs.
+
+        
+
         
         Args:
             dbh (Optional[torch.Tensor]): The diameter at breast height of the trees. If None, it will be initialized using CohortMat.
@@ -406,9 +420,12 @@ class FINN:
         
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: The predicted dbh and number of trees for the recorded times points.
+
+
+
         """
         
-
+        # TODO use start
         if dbh is None:
             cohorts = CohortMat(dims = [env.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
             nTree = cohorts.nTree
@@ -418,6 +435,7 @@ class FINN:
         if type(env) is np.ndarray:
             env = torch.tensor(env, dtype=self.dtype, device=self.device)
 
+        # Predict env niches for all sites and timesteps
         if pred_growth is None:
             pred_growth = self.nnGrowthEnv(env)
         if pred_morth is None:    
@@ -425,16 +443,22 @@ class FINN:
         if pred_reg is None:    
             pred_reg = self.nnRegEnv(env)
         
+        # Result arrays
+        ## dbh / ba / ba*nTRee
         Result = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) # sites, time, species
+        ## number of trees
         Result_T = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device)
+
         time = env.shape[1]
         patches = dbh.shape[1]
         sp = self.sp
+
+        # Run over timesteps
         for i in range(time):
             
+            # TODO: change, when cohorts dead, recruitment can still occur
             if dbh.shape[2] == 0:
                 return (Result, Result_T)
-            
             
             # aggregate results
             sites = env.shape[0]
@@ -444,16 +468,17 @@ class FINN:
                 elif response == "ba":
                     BA_T(dbh, nTree)
                 else:    
+                    # ba * nTree
                     ba = BA_T_P(dbh, nTree)
                 labels = Species
-                samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)
+                samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)  # torch.sigmoid((nTree - 0.5)/1e-3) Baeume da oder nicht
                 samples_T = (nTree * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)
                 tmp_res1, tmp_res2 = self.__aggregate(labels, samples, samples_T, Result[:,i,:], Result_T[:,i,:])
                 Result[:,i,:] = Result[:,i,:] + tmp_res1/patches
                 Result_T[:,i,:] = Result_T[:,i,:] + tmp_res2/patches
 
             # Model
-            envM = env[:,i,:]
+            # envM = env[:,i,:]
             g = self.growthFP(dbh, Species, pred_growth[:,i,:])
             dbh = dbh+g.unsqueeze(3)
             m = self.mortFP(dbh, Species, nTree, pred_morth[:,i,:]).unsqueeze(3)
@@ -461,7 +486,7 @@ class FINN:
             r = self.regFP(dbh, Species, pred_reg[:,i,:])
 
             # New recruits
-            new_dbh = ((r-1+0.1)/1e-3).sigmoid()
+            new_dbh = ((r-1+0.1)/1e-3).sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
             new_nTree = r
             new_Species = torch.arange(0, sp, dtype=torch.int64, device = self.device).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1)
 
@@ -479,7 +504,7 @@ class FINN:
                 nTree = pad_tensors_speed_up(nTree.squeeze(3), indices, org_dim_t).unflatten(0, org_dim).unsqueeze(3)
                 Species = pad_tensors_speed_up(Species, indices, org_dim_t).unflatten(0, org_dim)
     
-            # Quick and dirty padding
+            # Quick and dirty padding [sites, patches, cohorts] [,,4] == 0 trees und wenn jam raus damit
             nTree_ind = nTree.squeeze(3) 
             valid_cols = []
             for col_idx in range(nTree_ind.size(2)):
@@ -494,6 +519,7 @@ class FINN:
     def fit(self, 
             X: Optional[torch.Tensor]=None, 
             Y: Optional[torch.Tensor]=None, 
+            cohorts =  None,
             epochs: int=2, 
             batch_size: int=20, 
             learning_rate: float=0.1, 
@@ -510,7 +536,7 @@ class FINN:
             learning_rate (float): The learning rate for the optimizer. Default is 0.1.
             start_time (float): The start time for prediction. Default is 0.5.
             patches (int): The number of patches. Default is 50.
-            response (str): The response variable. Default is "dbh".
+            response (str): The response variable. Default is "dbh", other options are 'ba' or 'ba*nT'.
         
         Returns:
             None
@@ -518,6 +544,7 @@ class FINN:
         
         if self.optimizer is None:
             self.optimizer = optim.DiffGrad(params = itertools.chain(*self.parameters), lr = learning_rate) # AdaBound was also good
+            # TODO scheduler implementieren
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
         time = X.shape[1]
         start_time = round(start_time*time)
@@ -543,7 +570,9 @@ class FINN:
         for epoch in ep_bar:
             for step, (x, y, c) in enumerate(DataLoader):
                 self.optimizer.zero_grad()
-                cohorts = CohortMat(dims = [x.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
+                # TODO, cohorten nicht random, sondern first time strep
+                if cohorts is None:
+                    cohorts = CohortMat(dims = [x.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
                 nTree = cohorts.nTree
                 Species = cohorts.Species
                 dbh = cohorts.dbh
