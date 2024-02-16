@@ -19,3 +19,40 @@ force_r = function(x) {
   if(inherits(x, "python.builtin.object")) return(reticulate::py_to_r( x ))
   else return(x)
 }
+
+
+
+checkModel = function(object) {
+  check_module()
+
+  if(!reticulate::py_is_null_xptr(object$model)) return(object)
+
+  object$model = object$get_model()
+
+  if(inherits(object, c("sjSDM", "sjSDM_DNN"))){
+    object$model$set_env_weights(lapply(object$weights, function(w) reticulate::r_to_py(w)$copy()))
+    if(!is.null(object$spatial)) object$model$set_spatial_weights(lapply(object$spatial_weights, function(w) reticulate::r_to_py(w)$copy()))
+    object$model$set_sigma(reticulate::r_to_py(object$sigma)$copy())
+  }
+
+  if(object$family$family$family == "nbinom") {
+    object$model$set_theta(reticulate::r_to_py(object$theta)$copy())
+  }
+  return(object)
+}
+
+
+#' check module
+#'
+#' check if module is loaded
+check_module = function(){
+  if(is.null(pkg.env$fa)){
+    .onLoad()
+  }
+
+  if(is.null(pkg.env$fa)) {
+    stop("PyTorch not installed", call. = FALSE)
+  }
+
+  if(reticulate::py_is_null_xptr(pkg.env$FINN)) .onLoad()
+}

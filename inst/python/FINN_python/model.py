@@ -235,7 +235,7 @@ class FINN:
             torch.Tensor: Regeneration of the forest plot.
         """
         
-        AL = self.compF_P(dbh, Species, h = torch.zeros([1, 1]))
+        AL = self.compF_P(dbh, Species, h = torch.zeros([1, 1])) # Was ist wenn alles tot ist?
         regP = torch.sigmoid((self._parReg - AL)/1e-2)
         environment = pred
         regeneration = sample_poisson_relaxed(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9, 20)
@@ -332,7 +332,7 @@ class FINN:
             dbh = cohorts.dbh
 
         if type(env) is np.ndarray:
-            env = torch.tensor(env, dtype=self.dtype, device=self.dtype)
+            env = torch.tensor(env, dtype=self.dtype, device=self.device)
 
         if pred_growth is None:
             pred_growth = self.nnGrowthEnv(env)
@@ -347,6 +347,10 @@ class FINN:
         patches = dbh.shape[1]
         sp = self.sp
         for i in range(time):
+            
+            if dbh.shape[2] == 0:
+                return (Result, Result_T)
+            
             
             # aggregate results
             sites = env.shape[0]
@@ -442,8 +446,10 @@ class FINN:
             pin_memory = False
         else:
             pin_memory = True
-        data = torch.utils.data.TensorDataset(torch.tensor(X, dtype=self.dtype, device=torch.device('cpu')), 
-                                              torch.tensor(Y, dtype=self.dtype, device=torch.device('cpu')))
+        Counts = np.round(Y[:,:,:,1]).astype(int)        
+        data = torch.utils.data.TensorDataset(torch.tensor(X, dtype=self.dtype, device=torch.device('cpu')),
+                                              torch.tensor(Y[:,:,:,:], dtype=self.dtype, device=torch.device('cpu')),
+                                              torch.tensor(Counts, dtype=torch.int64, device=torch.device('cpu')))
         DataLoader = torch.utils.data.DataLoader(data, batch_size=int(batch_size), shuffle=True, num_workers=0, pin_memory=pin_memory, drop_last=True)
         
         batch_loss = np.zeros(stepSize)
@@ -451,9 +457,9 @@ class FINN:
         
         ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
         for epoch in ep_bar:
-            for step, (x, y) in enumerate(DataLoader):
+            for step, (x, y, c) in enumerate(DataLoader):
                 self.optimizer.zero_grad()
-                cohorts = CohortMat(dims = [batch_size, patches, self.sp, 1], sp = self.sp, device=self.device)
+                cohorts = CohortMat(dims = [x.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
                 nTree = cohorts.nTree
                 Species = cohorts.Species
                 dbh = cohorts.dbh
@@ -461,8 +467,9 @@ class FINN:
                 y = y.to(self.device, non_blocking=True)
                 pred = self.predict(dbh, nTree, Species, x, start_time, response)
                 loss1 = torch.nn.functional.mse_loss(y[:, start_time:,:,0], pred[0][:,start_time:,:]).mean() # dbh / ba
-                loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
-                loss = 100*(loss1 + loss2)
+                #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
+                loss2 = torch.distributions.Poisson(pred[1][:,start_time:,:]+0.001).log_prob(c[:, start_time:,:]).mean().negative() # nTree
+                loss = (loss1 + loss2)
                 loss.backward()
                 self.optimizer.step()
                 batch_loss[step] = loss.item()
@@ -538,5 +545,9 @@ class FINN:
         return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnMortEnv.parameters()]
 
     @property
-    def GrowthEnv(self):
+    def RegEnv(self):
         return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnRegEnv.parameters()]    
+    
+    @property
+    def weights(self):
+        return [(lambda p: p.data.cpu().numpy())(p) for p in self.parameters] 
