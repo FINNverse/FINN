@@ -34,7 +34,7 @@ pkg.env$FINN = NULL
       tmp = compile$compile_dir(paste0(path, "/FINN_python"),quiet = 2L,force=TRUE)
     }, silent = FALSE)
     pkg.env$FINN = reticulate::import_from_path("FINN_python", path, delay_load = FALSE, convert = FALSE)
-    check= cbind(check, crayon::black( c(pkg.env$torch$`__version__`, rep("", 3))))
+    check= cbind(check, crayon::black( c(pkg.env$torch$`__version__`, rep("", 1))))
   }
 
   check[,2] = crayon::black( rownames(check) )

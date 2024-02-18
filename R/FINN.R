@@ -15,6 +15,9 @@
 #' @param init_growth Initial values for growth parameters (optional).
 #' @param init_mort Initial values for mortality parameters (optional).
 #' @param init_reg Initial values for regeneration parameters (optional).
+#' @param init_growth_env Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)
+#' @param init_mort_env Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)
+#' @param init_reg_env Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)
 #' @param hidden_growth List of specifications for hidden layers in growth NN (optional).
 #' @param hidden_mort List of specifications for hidden layers in mort NN (optional).
 #' @param hidden_reg List of specifications for hidden layers in reg NN (optional)
@@ -39,6 +42,9 @@ FINN = function(formula,
                 init_growth = NULL,
                 init_mort = NULL,
                 init_reg = NULL,
+                init_growth_env = NULL,
+                init_mort_env = NULL,
+                init_reg_env = NULL,
                 hidden_growth = list(),
                 hidden_mort = list(),
                 hidden_reg = list(),
@@ -126,7 +132,10 @@ FINN = function(formula,
                                                 parReg = init_reg,
                                                 hidden_growth = hidden_growth,
                                                 hidden_mort = hidden_mort,
-                                                hidden_reg = hidden_reg
+                                                hidden_reg = hidden_reg,
+                                                parGrowthEnv = init_growth_env,
+                                                parMortEnv = init_mort_env,
+                                                parRegEnv = init_reg_env
                                                 )
   out$model = out$get_model()
 

@@ -135,6 +135,9 @@ class FINN:
                  parGrowth: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
                  parMort: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
                  parReg: Optional[np.ndarray]=None, # must be dim [species]
+                 parGrowthEnv: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
+                 parMortEnv: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
+                 parRegEnv: Optional[np.ndarray]=None, # must be dim [species]                 
                  hidden_growth: List[int] = [],
                  hidden_mort: List[int]  = [],
                  hidden_reg: List[int]  = []
@@ -168,6 +171,15 @@ class FINN:
         self.nnMortEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=[False], dropout=-99)
         self.nnMortEnv.to(self.device)
         
+        if parGrowthEnv is not None:
+            self.set_weights_nnGrowthEnv(parGrowthEnv)
+
+        if parMortEnv is not None:
+            self.set_weights_nnMortEnv(parMortEnv)        
+        
+        if parRegEnv is not None:
+            self.set_weights_nnRegEnv(parRegEnv)
+                    
         # TODO: Sind diese Init Parametriesierungen sinnvoll?
 
         if parGlobal is None:
@@ -443,6 +455,15 @@ class FINN:
         if pred_reg is None:    
             pred_reg = self.nnRegEnv(env)
         
+        if type(dbh) is np.ndarray:
+            dbh = torch.tensor(dbh, dtype=self.dtype, device=self.device)
+            
+        if type(nTree) is np.ndarray:
+            nTree = torch.tensor(nTree, dtype=self.dtype, device=self.device)
+            
+        if type(Species) is np.ndarray:
+            Species = torch.tensor(Species, dtype=torch.int64, device=self.device)
+        
         # Result arrays
         ## dbh / ba / ba*nTRee
         Result = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) # sites, time, species
@@ -672,3 +693,83 @@ class FINN:
     @property
     def weights(self):
         return [(lambda p: p.data.cpu().numpy())(p) for p in self.parameters] 
+    
+    
+    def set_weights_nnMortEnv(self, w: List[np.ndarray]):
+        """Set weights for the neural network regularization environment.
+        
+            Args:
+                w (List[np.ndarray]): List of numpy arrays containing weights and biases.
+        
+            Sets the weights and biases of the linear layers in the neural network regularization environment 
+            based on the provided numpy arrays. The function iterates through the layers of the neural network 
+            regularization environment and assigns the weights and biases accordingly.
+        
+            Note:
+                This function modifies the weights and biases of the neural network regularization environment in-place.
+        
+            Returns:
+                None
+        """      
+        with torch.no_grad():
+            counter = 0
+            for i in range(len(self.nnMortEnv)):
+                if type(self.nnMortEnv[i]) is torch.nn.modules.linear.Linear:
+                    self.nnMortEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnMortEnv[i].weight.dtype, device=self.nnMortEnv[i].weight.device))
+                    counter+=1
+                    if self.nnMortEnv[i].bias is not None:
+                        self.nnMortEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnMortEnv[i].bias.dtype, device=self.nnMortEnv[i].bias.device))
+                        counter+=1
+    
+    def set_weights_nnGrowthEnv(self, w: List[np.ndarray]):
+        """Set weights for the neural network regularization environment.
+        
+            Args:
+                w (List[np.ndarray]): List of numpy arrays containing weights and biases.
+        
+            Sets the weights and biases of the linear layers in the neural network regularization environment 
+            based on the provided numpy arrays. The function iterates through the layers of the neural network 
+            regularization environment and assigns the weights and biases accordingly.
+        
+            Note:
+                This function modifies the weights and biases of the neural network regularization environment in-place.
+        
+            Returns:
+                None
+        """      
+        with torch.no_grad():
+            counter = 0
+            for i in range(len(self.nnGrowthEnv)):
+                if type(self.nnGrowthEnv[i]) is torch.nn.modules.linear.Linear:
+                    self.nnGrowthEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnGrowthEnv[i].weight.dtype, device=self.nnGrowthEnv[i].weight.device))
+                    counter+=1
+                    if self.nnGrowthEnv[i].bias is not None:
+                        self.nnGrowthEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnGrowthEnv[i].bias.dtype, device=self.nnGrowthEnv[i].bias.device))
+                        counter+=1
+                        
+    def set_weights_nnRegEnv(self, w: List[np.ndarray]):
+        """Set weights for the neural network regularization environment.
+        
+            Args:
+                w (List[np.ndarray]): List of numpy arrays containing weights and biases.
+        
+            Sets the weights and biases of the linear layers in the neural network regularization environment 
+            based on the provided numpy arrays. The function iterates through the layers of the neural network 
+            regularization environment and assigns the weights and biases accordingly.
+        
+            Note:
+                This function modifies the weights and biases of the neural network regularization environment in-place.
+        
+            Returns:
+                None
+        """
+        
+        with torch.no_grad():
+            counter = 0
+            for i in range(len(self.nnRegEnv)):
+                if type(self.nnRegEnv[i]) is torch.nn.modules.linear.Linear:
+                    self.nnRegEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnRegEnv[i].weight.dtype, device=self.nnRegEnv[i].weight.device))
+                    counter+=1
+                    if self.nnRegEnv[i].bias is not None:
+                        self.nnRegEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnRegEnv[i].bias.dtype, device=self.nnRegEnv[i].bias.device))
+                        counter+=1
