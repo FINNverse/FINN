@@ -20,9 +20,13 @@ FINN(
   init_growth = NULL,
   init_mort = NULL,
   init_reg = NULL,
+  init_growth_env = NULL,
+  init_mort_env = NULL,
+  init_reg_env = NULL,
   hidden_growth = list(),
   hidden_mort = list(),
-  hidden_reg = list()
+  hidden_reg = list(),
+  simulate = FALSE
 )
 }
 \arguments{
@@ -56,11 +60,19 @@ FINN(
 
 \item{init_reg}{Initial values for regeneration parameters (optional).}
 
+\item{init_growth_env}{Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)}
+
+\item{init_mort_env}{Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)}
+
+\item{init_reg_env}{Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)}
+
 \item{hidden_growth}{List of specifications for hidden layers in growth NN (optional).}
 
 \item{hidden_mort}{List of specifications for hidden layers in mort NN (optional).}
 
-\item{hidden_reg}{List of specifications for hidden layers in reg NN (optional).}
+\item{hidden_reg}{List of specifications for hidden layers in reg NN (optional)}
+
+\item{simulate}{fit or simulation modus, if simulation, model is not fitted and will be returned}
 }
 \value{
 An object of class `FINN` containing the fitted model, data, and functions to access the model and predictions.
