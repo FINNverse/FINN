@@ -3,4 +3,8 @@
 S3method(coef,FINN)
 S3method(predict,FINN)
 export(FINN)
+export(competition)
+export(growth)
 export(install_FINN)
+export(mort)
+export(reg)
