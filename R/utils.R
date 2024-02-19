@@ -44,11 +44,11 @@ checkModel = function(object) {
 #'
 #' check if module is loaded
 check_module = function(){
-  if(is.null(pkg.env$fa)){
+  if(is.null(pkg.env$FINN)){
     .onLoad()
   }
 
-  if(is.null(pkg.env$fa)) {
+  if(is.null(pkg.env$FINN)) {
     stop("PyTorch not installed", call. = FALSE)
   }
 
