@@ -4,7 +4,16 @@
 \alias{reg}
 \title{Reg function}
 \usage{
-reg(dbh, Species, parGlobal, parReg, pred, dtype = "float32", device = "cpu")
+reg(
+  dbh,
+  nTree,
+  Species,
+  parGlobal,
+  parReg,
+  pred,
+  dtype = "float32",
+  device = "cpu"
+)
 }
 \arguments{
 \item{dbh}{dbh of species, should be of dimensions [sites, patches, species, 1]}

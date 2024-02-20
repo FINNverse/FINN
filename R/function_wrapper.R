@@ -1,6 +1,7 @@
 #' Competition function
 #'
 #' @param dbh dbh of species, should be of dimensions [sites, patches, species, 1]
+#' @param nTree number of trees, should be of dimensions [sites, patches, species]
 #' @param Species species identifier, should be of dimensions [sites, patches, species]
 #' @param parGlobal species global parameter, should be of dimensions [species] (so it should be a vector)
 #' @param h height of species, if not null, should be [1,1]
@@ -15,18 +16,19 @@
 #' competition(rep(50, 5), 0:4, rep(1., 5))
 #' @export
 
-competition = function(dbh, Species, parGlobal, h = NULL, minLight = 50.0, dtype = "float32", device= "cpu") {
+competition = function(dbh, nTree, Species, parGlobal, h = NULL, minLight = 50.0, dtype = "float32", device= "cpu") {
 
   torch = pkg.env$torch
 
   if(dtype == "float32") dtype = torch$float32
   else dtype = torch$float64
   dbh = to_Tensor(dbh, dtype, device, TRUE, TRUE)
+  nTree = to_Tensor(nTree, dtype, device, TRUE, TRUE)
   Species = to_Tensor(Species, dtype=torch$int64, device=device, TRUE, FALSE)
   parGlobal = to_Tensor(parGlobal, dtype = dtype, device = device, FALSE, correct_zero = TRUE)
   if(!is.null(h)) h = to_Tensor(h)
 
-  result = pkg.env$FINN$FINN$compF_P(dbh, Species, parGlobal, h = h, minLight = minLight)$cpu()$data$numpy()
+  result = pkg.env$FINN$FINN$compF_P(dbh, nTree, Species, parGlobal, h = h, minLight = minLight)$cpu()$data$numpy()
   return(force_r(result))
 
 }
@@ -35,6 +37,7 @@ competition = function(dbh, Species, parGlobal, h = NULL, minLight = 50.0, dtype
 #' Growth function
 #'
 #' @param dbh dbh of species, should be of dimensions [sites, patches, species, 1]
+#' @param nTree number of trees, should be of dimensions [sites, patches, species]
 #' @param Species species identifier, should be of dimensions [sites, patches, species]
 #' @param parGlobal species global parameter, should be of dimensions [species] (so it should be a vector)
 #' @param parGrowth species growth parameter, should be of dimensions [species, 2]
@@ -48,12 +51,13 @@ competition = function(dbh, Species, parGlobal, h = NULL, minLight = 50.0, dtype
 #' @examples
 #' growth(rep(50, 5), 0:4, rep(1., 5), matrix(1., 5, 2), rep(0.5, 5))
 #' @export
-growth = function(dbh, Species, parGlobal, parGrowth, pred,  dtype = "float32", device= "cpu") {
+growth = function(dbh, nTree, Species, parGlobal, parGrowth, pred,  dtype = "float32", device= "cpu") {
   torch = pkg.env$torch
 
   if(dtype == "float32") dtype = torch$float32
   else dtype = torch$float64
   dbh = to_Tensor(dbh, dtype, device, TRUE, TRUE)
+  nTree = to_Tensor(nTree, dtype, device, TRUE, TRUE)
   pred = to_Tensor(pred, dtype=torch$int64, device=device, TRUE, FALSE, env = TRUE)
   Species = to_Tensor(Species, dtype=torch$int64, device=device, TRUE, FALSE)
 
@@ -61,7 +65,7 @@ growth = function(dbh, Species, parGlobal, parGrowth, pred,  dtype = "float32", 
   parGlobal = to_Tensor(parGlobal, dtype = dtype, device = device, FALSE, correct_zero = TRUE)
 
 
-  result = pkg.env$FINN$FINN$growthFP(dbh, Species, parGlobal, parGrowth, pred)$cpu()$data$numpy()
+  result = pkg.env$FINN$FINN$growthFP(dbh, nTree, Species, parGlobal, parGrowth, pred)$cpu()$data$numpy()
   return(force_r(result))
 }
 
@@ -98,7 +102,7 @@ mort = function(dbh, Species, nTree, parGlobal, parMort, pred,  dtype = "float32
   parMort = to_Tensor(parMort, dtype = dtype, device = device, FALSE)
 
 
-  result = pkg.env$FINN$FINN$mortFP(dbh, Species,nTree, parGlobal, parMort, pred)$cpu()$data$numpy()
+  result = pkg.env$FINN$FINN$mortFP(dbh, Species, nTree, parGlobal, parMort, pred)$cpu()$data$numpy()
   return(force_r(result))
 }
 
@@ -119,12 +123,13 @@ mort = function(dbh, Species, nTree, parGlobal, parMort, pred,  dtype = "float32
 #' @examples
 #' reg(rep(50, 5), 0:4, rep(1., 5), rep(1., 5), rep(0.5, 5))
 #' @export
-reg = function(dbh, Species, parGlobal, parReg, pred,  dtype = "float32", device= "cpu") {
+reg = function(dbh, nTree, Species, parGlobal, parReg, pred,  dtype = "float32", device= "cpu") {
   torch = pkg.env$torch
 
   if(dtype == "float32") dtype = torch$float32
   else dtype = torch$float64
   dbh = to_Tensor(dbh, dtype, device, TRUE, TRUE)
+  nTree = to_Tensor(nTree, dtype, device, TRUE, TRUE)
   pred = to_Tensor(pred, dtype=torch$int64, device=device, TRUE, FALSE, env = TRUE)
   Species = to_Tensor(Species, dtype=torch$int64, device=device, TRUE, FALSE)
 
@@ -132,7 +137,7 @@ reg = function(dbh, Species, parGlobal, parReg, pred,  dtype = "float32", device
   parReg = to_Tensor(parReg, dtype = dtype, device = device, FALSE, correct_zero = TRUE)
 
 
-  result = pkg.env$FINN$FINN$regFP(dbh, Species, parGlobal, parReg, pred)$cpu()$data$numpy()
+  result = pkg.env$FINN$FINN$regFP(dbh, nTree, Species, parGlobal, parReg, pred)$cpu()$data$numpy()
   return(force_r(result))
 }
 

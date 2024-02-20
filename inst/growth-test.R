@@ -1,6 +1,6 @@
 ################################################################################
-#' This scripts tests the competition function and contains code that
-#' helps to identify plausible parameter ranges
+#' This scripts tests the growth function and contains code that
+#' help to identify plausible parameter ranges
 ################################################################################
 
 library(FINN)
@@ -22,14 +22,11 @@ for(dbh_i in dbhTest){
       parGlobal = rep(i_dbh2height, each = Ncohorts_per_Sp),
       heights = rep(c(rep("small",Ncohorts_per_Sp/2), rep("big (dbh + 20)", Ncohorts_per_Sp/2)), Nspecies),
       dbh = rep(c(rep(dbh_i,Ncohorts_per_Sp/2),rep(dbh_i+20,Ncohorts_per_Sp/2)),Nspecies),
-      nTree = 3
+      nTree = 1
     )
   i_cohort_list = cohort_df2arrays(i_cohort_df)
   compOut <- FINN::competition(
-    dbh = i_cohort_list$dbh,
-    nTree = i_cohort_list$nTree,
-    Species = i_cohort_list$Species,
-    parGlobal = i_dbh2height
+    dbh = i_cohort_list$dbh, Species = i_cohort_list$Species, parGlobal = i_dbh2height
   )
   out_dt <- rbind(
     out_dt,
@@ -39,7 +36,7 @@ for(dbh_i in dbhTest){
       parGlobal = rep(i_dbh2height, each = Ncohorts_per_Sp),
       AL = as.vector(compOut),
       heights = i_cohort_df$heights
-      )
+    )
   )
 }
 
@@ -51,7 +48,7 @@ ggplot(out_dt, aes(y = AL, x = dbh, color = heights))+
 
 # do species with lower parGlobal values have less light available than species with higher?
 sum(out_dt[parGlobal == parGlobal_i[1]]$AL) < sum(out_dt[parGlobal == parGlobal_i[2]]$AL) &
-sum(out_dt[parGlobal == parGlobal_i[2]]$AL) < sum(out_dt[parGlobal == parGlobal_i[3]]$AL)
+  sum(out_dt[parGlobal == parGlobal_i[2]]$AL) < sum(out_dt[parGlobal == parGlobal_i[3]]$AL)
 
 # Does a tree with a dbh of 500 has a lower height than 150 meter?
 # The tallest tree on earth was 116 m with a dbh of 450 cm.

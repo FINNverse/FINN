@@ -210,7 +210,7 @@ class FINN:
 
     # TODO: lighht -> global Parameter, fitbar
     @staticmethod
-    def compF_P(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
+    def compF_P(dbh: torch.Tensor, nTree: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
         """Compute the fraction of available light (AL) for each cohort based on the given parameters.
         
             Args:
@@ -224,7 +224,7 @@ class FINN:
                 torch.Tensor: Fraction of available light (AL) for each cohort.
         """
         
-        ba = BA_P(dbh)/0.1
+        ba = (BA_P(dbh)*nTree)/0.1
         cohortHeights = height_P(dbh, parGlobal[Species][...,None])
         if h is None:
             h = cohortHeights
@@ -236,7 +236,7 @@ class FINN:
         return AL
     
     @staticmethod
-    def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, pred: torch.Tensor) -> torch.Tensor:
+    def growthFP(dbh: torch.Tensor, nTree: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, pred: torch.Tensor) -> torch.Tensor:
         """'''Calculate the growth of a forest stand based on the given parameters.
         
         Args:
@@ -252,7 +252,7 @@ class FINN:
         """
         
         
-        AL = FINN.compF_P(dbh, Species, parGlobal)
+        AL = FINN.compF_P(dbh, nTree, Species, parGlobal)
         shade = ((AL**2)*parGrowth[Species,0]).sigmoid()
         #environment = pred[..., Species[3]]
         environment = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
@@ -277,7 +277,7 @@ class FINN:
         """
         
         
-        AL = FINN.compF_P(dbh, Species, parGlobal)
+        AL = FINN.compF_P(dbh, nTree, Species, parGlobal)
         shade = 1-((AL**2)*parMort[Species,0]).sigmoid()
         pred = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
         environment = 1 - pred
@@ -289,7 +289,7 @@ class FINN:
     # TODO: wenn alles tot, AL = 1
 
     @staticmethod
-    def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parReg: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
+    def regFP(dbh: torch.Tensor, nTree: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parReg: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
         """Calculate the regeneration of forest patches based on the input parameters.
         
             Args:
@@ -304,7 +304,7 @@ class FINN:
         """
         
         
-        AL = FINN.compF_P(dbh, Species, parGlobal, h = torch.zeros([1, 1])) # Was ist wenn alles tot ist?
+        AL = FINN.compF_P(dbh, nTree, Species, parGlobal, h = torch.zeros([1, 1])) # Was ist wenn alles tot ist?
         regP = torch.sigmoid((parReg - AL)/1e-2)
         environment = pred
         regeneration = sample_poisson_relaxed(10.*(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9), 20)
@@ -459,11 +459,11 @@ class FINN:
 
             # Model
             # envM = env[:,i,:]
-            g = self.growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:])
+            g = self.growthFP(dbh, nTree, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:])
             dbh = dbh+g.unsqueeze(3)
             m = self.mortFP(dbh, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:]).unsqueeze(3)
             nTree = torch.clamp(nTree - m, min = 0)
-            r = self.regFP(dbh, Species, self._parGlobal, self._parReg, pred_reg[:,i,:])
+            r = self.regFP(dbh, nTree, Species, self._parGlobal, self._parReg, pred_reg[:,i,:])
 
             # New recruits
             new_dbh = ((r-1+0.1)/1e-3).sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
