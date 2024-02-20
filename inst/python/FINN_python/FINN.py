@@ -71,7 +71,7 @@ def height_P(dbh: torch.Tensor, parGlobal: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The calculated height of the tree.
     """
     
-    height = (dbh*parGlobal*0.03).exp()
+    height = ((((dbh * parGlobal) / (dbh+100)).exp())-1)*100
     return height
 
 class FINN:
