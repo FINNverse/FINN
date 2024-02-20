@@ -4,12 +4,23 @@
 \alias{reg}
 \title{Reg function}
 \usage{
-reg(dbh, Species, parGlobal, parReg, pred, dtype = "float32", device = "cpu")
+reg(
+  dbh,
+  Species,
+  nTree,
+  parGlobal,
+  parReg,
+  pred,
+  dtype = "float32",
+  device = "cpu"
+)
 }
 \arguments{
-\item{dbh}{dbh of species, should be of dimensions [sites, patches, species, 1]}
+\item{dbh}{dbh of species, should be of dimensions [sites, patches, species]}
 
 \item{Species}{species identifier, should be of dimensions [sites, patches, species]}
+
+\item{nTree}{number of trees should be of dimensions [sites, patches, species]}
 
 \item{parGlobal}{species global parameter, should be of dimensions [species] (so it should be a vector)}
 
@@ -28,5 +39,5 @@ Reg function
 if [length(dim) == 1] this dimension is assumed to be the species dimension (works only for R objects!)
 }
 \examples{
-reg(rep(50, 5), 0:4, rep(1., 5), rep(1., 5), rep(0.5, 5))
+reg(rep(50, 5), 0:4, rep(1, 5), rep(1., 5), rep(1., 5), rep(0.5, 5))
 }

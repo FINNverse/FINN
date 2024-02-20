@@ -1,7 +1,7 @@
 library(dplyr)
 library(FINN)
-observed =read.csv("data/testing-data/evaluation2-obs.csv")
-data = read.csv("data/testing-data/evaluation2-env.csv")
+observed =read.csv("/Users/maximilianpichler/Downloads/evaluation2-obs.csv")
+data = read.csv("/Users/maximilianpichler/Downloads/evaluation2-env.csv")
 m = FINN(~0 + envAct1 + envAct2 ,
          data = data %>% filter(site < 14), epochs = 1L, batch_size = 5L,
          response = observed %>% filter(site < 14))

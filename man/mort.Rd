@@ -16,7 +16,7 @@ mort(
 )
 }
 \arguments{
-\item{dbh}{dbh of species, should be of dimensions [sites, patches, species, 1]}
+\item{dbh}{dbh of species, should be of dimensions [sites, patches, species]}
 
 \item{Species}{species identifier, should be of dimensions [sites, patches, species]}
 
