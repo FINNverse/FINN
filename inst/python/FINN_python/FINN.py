@@ -307,7 +307,7 @@ class FINN:
         AL = FINN.compF_P(dbh, Species, parGlobal, h = torch.zeros([1, 1])) # Was ist wenn alles tot ist?
         regP = torch.sigmoid((parReg - AL)/1e-2)
         environment = pred
-        regeneration = sample_poisson_relaxed(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9, 20)
+        regeneration = sample_poisson_relaxed(10.*(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9), 20)
         regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
         return regeneration
         
