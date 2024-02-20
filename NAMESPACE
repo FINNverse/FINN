@@ -3,6 +3,7 @@
 S3method(coef,FINN)
 S3method(predict,FINN)
 export(FINN)
+export(cohort_df2arrays)
 export(competition)
 export(growth)
 export(install_FINN)
