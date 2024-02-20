@@ -219,3 +219,19 @@ coef.FINN <- function(object,...){
   pars$ENVreg = FINN:::force_r(m$model$RegEnv)
   return(pars)
 }
+
+#' Make FINN arrays from observation data frame
+#'
+#' @param cohort_df a data frame with the columns Species, dbh, nTree. Optionally cohortID an be provided.
+#' @param ... nothing implemented yet
+#' @return list of cohort arrays dbh, nTree, Species from data frame with dendrometric data
+#'
+#' @export
+cohort_df2arrays <- function(cohort_df, ...){
+  Nspecies = length(unique(cohort_df$Species))
+  Ncohorts = nrow(cohort_df)
+  Species = array(data = cohort_df$Species, dim = c(1,1,Ncohorts))
+  dbh = array(data = cohort_df$dbh,dim = c(1,1,Ncohorts,1))
+  nTree = array(data = cohort_df$nTree,dim = c(1,1,Ncohorts,1))
+  return(list(dbh = dbh, nTree = nTree, Species = Species))
+}
