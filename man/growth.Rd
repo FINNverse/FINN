@@ -7,6 +7,7 @@
 growth(
   dbh,
   Species,
+  nTree,
   parGlobal,
   parGrowth,
   pred,
@@ -15,9 +16,11 @@ growth(
 )
 }
 \arguments{
-\item{dbh}{dbh of species, should be of dimensions [sites, patches, species, 1]}
+\item{dbh}{dbh of species, should be of dimensions [sites, patches, species]}
 
 \item{Species}{species identifier, should be of dimensions [sites, patches, species]}
+
+\item{nTree}{number of trees, should be of dimensions [sites, patches, species]}
 
 \item{parGlobal}{species global parameter, should be of dimensions [species] (so it should be a vector)}
 
@@ -36,5 +39,5 @@ Growth function
 if [length(dim) == 1] this dimension is assumed to be the species dimension (works only for R objects!)
 }
 \examples{
-growth(rep(50, 5), 0:4, rep(1., 5), matrix(1., 5, 2), rep(0.5, 5))
+growth(rep(50, 5), 0:4,rep(1., 5), rep(1., 5), matrix(1., 5, 2), rep(0.5, 5))
 }

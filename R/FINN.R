@@ -231,7 +231,7 @@ cohort_df2arrays <- function(cohort_df, ...){
   Nspecies = length(unique(cohort_df$Species))
   Ncohorts = nrow(cohort_df)
   Species = array(data = cohort_df$Species, dim = c(1,1,Ncohorts))
-  dbh = array(data = cohort_df$dbh,dim = c(1,1,Ncohorts,1))
-  nTree = array(data = cohort_df$nTree,dim = c(1,1,Ncohorts,1))
+  dbh = array(data = cohort_df$dbh,dim = c(1,1,Ncohorts))
+  nTree = array(data = cohort_df$nTree,dim = c(1,1,Ncohorts))
   return(list(dbh = dbh, nTree = nTree, Species = Species))
 }

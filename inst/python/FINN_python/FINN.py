@@ -10,7 +10,6 @@ import torch_optimizer as optim
 from .utils import *
 from .CohortMat import *
 
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 Bernoulli = torch.distributions.relaxed_bernoulli.RelaxedBernoulli
 
@@ -71,8 +70,102 @@ def height_P(dbh: torch.Tensor, parGlobal: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The calculated height of the tree.
     """
     
-    height = ((((dbh * parGlobal) / (dbh+100)).exp())-1)*100
+    height = ((((dbh * parGlobal) / (dbh+100)).exp())-1)*100 + 0.001
     return height
+
+@torch.jit.script
+def compF_P(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
+    """Compute the fraction of available light (AL) for each cohort based on the given parameters.
+    
+        Args:
+            dbh (torch.Tensor): Diameter at breast height for each cohort.
+            Species (torch.Tensor): Species index for each cohort.
+            parGlobal (torch.Tensor): Global parameters for all species.
+            h (Optional[torch.Tensor], optional): Height of each cohort. Defaults to None.
+            minLight (float, optional): Minimum light requirement. Defaults to 50.
+    
+        Returns:
+            torch.Tensor: Fraction of available light (AL) for each cohort.
+    """
+    
+    ba = (BA_P(dbh)*nTree)/0.1
+    cohortHeights = height_P(dbh, parGlobal[Species]).unsqueeze(3)
+    if h is None:
+        h = cohortHeights
+        BA_height = (ba.unsqueeze(3)*torch.sigmoid((cohortHeights - h.permute(0,1, 3, 2) - 0.1)/1e-3) ).sum(-2)
+    else:
+        BA_height = (ba.unsqueeze(3)*torch.sigmoid((cohortHeights - 0.1)/1e-3)).sum(-2)
+    AL = 1.-BA_height/minLight
+    AL = torch.clamp(AL, min = 0)
+    return AL
+
+
+@torch.jit.script
+def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
+    """'''Calculate the growth of a forest stand based on the given parameters.
+    
+    Args:
+        dbh (torch.Tensor): Diameter at breast height.
+        Species (torch.Tensor): Species of the trees.
+        parGlobal (torch.Tensor): Global parameters.
+        parGrowth: Growth parameters.
+        pred (torch.Tensor): Predicted values.
+    
+    Returns:
+        torch.Tensor: Growth of the forest stand.
+    '''
+    """
+    
+    shade = ((AL**2)*parGrowth[Species,0]).sigmoid()
+    environment = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
+    pred = (shade+environment)
+    growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
+    return torch.nn.functional.softplus(growth)
+
+def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, parMort: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
+    """Calculate mortality of trees based on various factors.
+    
+    Args:
+        dbh (torch.Tensor): Diameter at breast height of trees.
+        Species (torch.Tensor): Species of trees.
+        nTree (torch.Tensor): Number of trees.
+        parGlobal (torch.Tensor): Global parameters.
+        parMort (torch.Tensor): Mortality parameters.
+        pred (torch.Tensor): Prediction values.
+    
+    Returns:
+        torch.Tensor: Calculated mortality values.
+    """
+    
+    
+    shade = 1-((AL**2)*parMort[Species,0]).sigmoid()
+    pred = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
+    environment = 1 - pred
+    gPSize = 0.1*(torch.clamp(dbh/(parMort[Species,1]*10), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
+    predM = torch.sigmoid(shade+environment+gPSize)
+    mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
+    return mort + mort.round().detach() - mort.detach()
+
+def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parReg: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
+    """Calculate the regeneration of forest patches based on the input parameters.
+    
+        Args:
+            dbh (torch.Tensor): Diameter at breast height.
+            Species (torch.Tensor): Species information.
+            parGlobal (torch.Tensor): Global parameters.
+            parReg (torch.Tensor): Regression parameters.
+            pred (torch.Tensor): Prediction values.
+    
+        Returns:
+            torch.Tensor: Regeneration values for forest patches.
+    """
+    
+    
+    regP = torch.sigmoid((parReg - AL)/1e-2)
+    environment = pred
+    regeneration = sample_poisson_relaxed(10.*(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9), 20)
+    regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
+    return regeneration
 
 class FINN:
     def __init__(self, 
@@ -207,110 +300,6 @@ class FINN:
             model_list.append(torch.nn.Linear(input_shape, output_shape, bias=False).type(self.dtype))
         model_list.append(torch.nn.Sigmoid())    
         return torch.nn.Sequential(*model_list)       
-
-    # TODO: lighht -> global Parameter, fitbar
-    @staticmethod
-    def compF_P(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
-        """Compute the fraction of available light (AL) for each cohort based on the given parameters.
-        
-            Args:
-                dbh (torch.Tensor): Diameter at breast height for each cohort.
-                Species (torch.Tensor): Species index for each cohort.
-                parGlobal (torch.Tensor): Global parameters for all species.
-                h (Optional[torch.Tensor], optional): Height of each cohort. Defaults to None.
-                minLight (float, optional): Minimum light requirement. Defaults to 50.
-        
-            Returns:
-                torch.Tensor: Fraction of available light (AL) for each cohort.
-        """
-        
-        ba = BA_P(dbh)/0.1
-        cohortHeights = height_P(dbh, parGlobal[Species][...,None])
-        if h is None:
-            h = cohortHeights
-            BA_height = (ba*torch.sigmoid((cohortHeights - h.permute(0,1, 3, 2) - 0.1)/1e-3)).sum(-2)
-        else:
-            BA_height = (ba*torch.sigmoid((cohortHeights - 0.1)/1e-3)).sum(-2)
-        AL = 1.-BA_height/minLight
-        AL = torch.clamp(AL, min = 0)
-        return AL
-    
-    @staticmethod
-    def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, pred: torch.Tensor) -> torch.Tensor:
-        """'''Calculate the growth of a forest stand based on the given parameters.
-        
-        Args:
-            dbh (torch.Tensor): Diameter at breast height.
-            Species (torch.Tensor): Species of the trees.
-            parGlobal (torch.Tensor): Global parameters.
-            parGrowth: Growth parameters.
-            pred (torch.Tensor): Predicted values.
-        
-        Returns:
-            torch.Tensor: Growth of the forest stand.
-        '''
-        """
-        
-        
-        AL = FINN.compF_P(dbh, Species, parGlobal)
-        shade = ((AL**2)*parGrowth[Species,0]).sigmoid()
-        #environment = pred[..., Species[3]]
-        environment = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
-        pred = (shade+environment)
-        growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
-        return torch.nn.functional.softplus(growth)
-    
-    @staticmethod
-    def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, parMort: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
-        """Calculate mortality of trees based on various factors.
-        
-        Args:
-            dbh (torch.Tensor): Diameter at breast height of trees.
-            Species (torch.Tensor): Species of trees.
-            nTree (torch.Tensor): Number of trees.
-            parGlobal (torch.Tensor): Global parameters.
-            parMort (torch.Tensor): Mortality parameters.
-            pred (torch.Tensor): Prediction values.
-        
-        Returns:
-            torch.Tensor: Calculated mortality values.
-        """
-        
-        
-        AL = FINN.compF_P(dbh, Species, parGlobal)
-        shade = 1-((AL**2)*parMort[Species,0]).sigmoid()
-        pred = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
-        environment = 1 - pred
-        gPSize = 0.1*(torch.clamp(dbh.squeeze(3)/(parMort[Species,1]*10), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
-        predM = torch.sigmoid(shade+environment+gPSize)
-        mort = torch.distributions.Beta(predM*nTree.squeeze(3)+0.00001, nTree.squeeze(3) - predM*nTree.squeeze(3)+0.00001).rsample()*nTree.squeeze(3)
-        return mort + mort.round().detach() - mort.detach() 
-    
-    # TODO: wenn alles tot, AL = 1
-
-    @staticmethod
-    def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parReg: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
-        """Calculate the regeneration of forest patches based on the input parameters.
-        
-            Args:
-                dbh (torch.Tensor): Diameter at breast height.
-                Species (torch.Tensor): Species information.
-                parGlobal (torch.Tensor): Global parameters.
-                parReg (torch.Tensor): Regression parameters.
-                pred (torch.Tensor): Prediction values.
-        
-            Returns:
-                torch.Tensor: Regeneration values for forest patches.
-        """
-        
-        
-        AL = FINN.compF_P(dbh, Species, parGlobal, h = torch.zeros([1, 1])) # Was ist wenn alles tot ist?
-        regP = torch.sigmoid((parReg - AL)/1e-2)
-        environment = pred
-        regeneration = sample_poisson_relaxed(10.*(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9), 20)
-        regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
-        return regeneration
-        
     
     def __aggregate(self, labels, samples, samples_T, Result, Result_T):
         """Aggregate results.
@@ -401,7 +390,7 @@ class FINN:
         """
         
         if dbh is None:
-            cohorts = CohortMat(dims = [env.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
+            cohorts = CohortMat(dims = [env.shape[0], patches, self.sp], sp = self.sp, device=self.device)
             nTree = cohorts.nTree
             Species = cohorts.Species
             dbh = cohorts.dbh
@@ -451,19 +440,32 @@ class FINN:
                         # ba * nTree
                         ba = BA_T_P(dbh, nTree)
                     labels = Species
-                    samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)  # torch.sigmoid((nTree - 0.5)/1e-3) Baeume da oder nicht
-                    samples_T = (nTree * torch.sigmoid((nTree - 0.5)/1e-3)).squeeze(3)
+                    samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)) #.squeeze(3)  # torch.sigmoid((nTree - 0.5)/1e-3) Baeume da oder nicht
+                    samples_T = (nTree * torch.sigmoid((nTree - 0.5)/1e-3)) #.squeeze(3)
                     tmp_res1, tmp_res2 = self.__aggregate(labels, samples, samples_T, Result[:,i,:], Result_T[:,i,:])
                     Result[:,i,:] = Result[:,i,:] + tmp_res1/patches
                     Result_T[:,i,:] = Result_T[:,i,:] + tmp_res2/patches
 
             # Model
-            # envM = env[:,i,:]
-            g = self.growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:])
-            dbh = dbh+g.unsqueeze(3)
-            m = self.mortFP(dbh, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:]).unsqueeze(3)
+            
+            with torch.no_grad():
+                nTree_clone =  nTree.clone() #torch.zeros_like(nTree).to(self.device)+0
+            
+            AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
+
+            g = growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:], AL)
+            dbh = dbh+g
+            AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
+           
+            m = mortFP(dbh, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:], AL) #.unsqueeze(3)
             nTree = torch.clamp(nTree - m, min = 0)
-            r = self.regFP(dbh, Species, self._parGlobal, self._parReg, pred_reg[:,i,:])
+            
+            with torch.no_grad():
+                nTree_clone =  nTree.clone() #torch.zeros_like(nTree).to(self.device)+0
+            
+            AL = compF_P(dbh, Species, nTree_clone, self._parGlobal, h = torch.zeros([1, 1]))
+           
+            r = regFP(dbh, Species, self._parGlobal, self._parReg, pred_reg[:,i,:], AL)
 
             # New recruits
             new_dbh = ((r-1+0.1)/1e-3).sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
@@ -471,32 +473,23 @@ class FINN:
             new_Species = torch.arange(0, sp, dtype=torch.int64, device = self.device).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1)
 
             # Combine
-            dbh = torch.concat([dbh, new_dbh.unsqueeze(3)], 2)
-            nTree = torch.concat([nTree, new_nTree.unsqueeze(3)], 2)
+            dbh = torch.concat([dbh, new_dbh], 2)
+            nTree = torch.concat([nTree, new_nTree], 2)
             Species = torch.concat([Species, new_Species], 2)
             
             # Pad tensors, expensive
             if i % 10 == 0:
-                indices = (nTree > 0.5).squeeze(3).flatten(0, 1)
+                indices = (nTree > 0.5).flatten(0, 1)
                 org_dim = Species.shape[0:2]
                 org_dim_t = torch.tensor(org_dim, dtype = torch.long, device = "cpu")
-                dbh = pad_tensors_speed_up(dbh.squeeze(3), indices, org_dim_t).unflatten(0, org_dim).unsqueeze(3)
-                nTree = pad_tensors_speed_up(nTree.squeeze(3), indices, org_dim_t).unflatten(0, org_dim).unsqueeze(3)
+                dbh = pad_tensors_speed_up(dbh, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
+                nTree = pad_tensors_speed_up(nTree, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
                 Species = pad_tensors_speed_up(Species, indices, org_dim_t).unflatten(0, org_dim)
-    
-            # Quick and dirty padding [sites, patches, cohorts] [,,4] == 0 trees und wenn jam raus damit
-            nTree_ind = nTree.squeeze(3) 
-            valid_cols = []
-            for col_idx in range(nTree_ind.size(2)):
-                if not torch.all(nTree_ind[:,:, col_idx] == 0):
-                    valid_cols.append(col_idx)
-            dbh = dbh[:,:,valid_cols,:]
-            nTree = nTree[:,:,valid_cols,:]
-            Species = Species[:,:,valid_cols]
+
         return (Result, Result_T)
 
 
-    def fit(self, 
+    def fit(self,
             X: Optional[torch.Tensor]=None, 
             Y: Optional[torch.Tensor]=None, 
             initCohort: CohortMat = None,
@@ -506,6 +499,7 @@ class FINN:
             start_time: float=0.5, 
             patches: int=50, 
             response: str="dbh"):
+        
         """Fits the model to the given data.
         
         Args:
@@ -555,7 +549,7 @@ class FINN:
                 self.optimizer.zero_grad()
                 
                 if initCohort is None:
-                    cohorts = CohortMat(dims = [x.shape[0], patches, self.sp, 1], sp = self.sp, device=self.device)
+                    cohorts = CohortMat(dims = [x.shape[0], patches, self.sp], sp = self.sp, device=self.device)
                     nTree = cohorts.nTree
                     Species = cohorts.Species
                     dbh = cohorts.dbh
@@ -575,13 +569,14 @@ class FINN:
                 loss.backward()
                 self.optimizer.step()
                 batch_loss[step] = loss.item()
-            #self.scheduler.step()    
+                    #sf.scheduler.step()    
             bl = np.mean(batch_loss)
             bl = np.round(bl, 3)
             ep_bar.set_postfix(loss=f'{bl}')
             self.history[epoch] = bl
         torch.cuda.empty_cache()
 
+    
     def continue_fit(self, 
                      X: Optional[torch.Tensor]=None, 
                      Y: Optional[torch.Tensor]=None, 
@@ -592,6 +587,7 @@ class FINN:
                      start_time: float=0.5, 
                      patches: int=50, 
                      response: str="dbh"):
+        
         """Continues the training of the model using the provided data.
         
         Args:

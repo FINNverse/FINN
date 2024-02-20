@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 class CohortMat:
-    def __init__(self, dbh=None, nTree=None, Species=None, dims=[50, 30, 10,1], sp = 10, device: str='cpu'):
+    def __init__(self, dbh=None, nTree=None, Species=None, dims=[50, 30, 10], sp = 10, device: str='cpu'):
         """Initializes an instance of the class cohortMat.
         
         Args:

@@ -7,6 +7,7 @@
 competition(
   dbh,
   Species,
+  nTree,
   parGlobal,
   h = NULL,
   minLight = 50,
@@ -18,6 +19,8 @@ competition(
 \item{dbh}{dbh of species, should be of dimensions [sites, patches, species, 1]}
 
 \item{Species}{species identifier, should be of dimensions [sites, patches, species]}
+
+\item{nTree}{number of trees, should be of dimensions [sites, patches, species]}
 
 \item{parGlobal}{species global parameter, should be of dimensions [species] (so it should be a vector)}
 
@@ -36,5 +39,5 @@ Competition function
 if [length(dim) == 1] this dimension is assumed to be the species dimension (works only for R objects!)
 }
 \examples{
-competition(rep(50, 5), 0:4, rep(1., 5))
+competition(rep(50, 5),rep(1, 5), 0:4, rep(1., 5))
 }
