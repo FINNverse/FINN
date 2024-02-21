@@ -161,9 +161,9 @@ def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, par
     """
     
     
-    regP = torch.sigmoid((parReg - AL)/1e-2)
+    regP = torch.sigmoid((AL + parReg - 0.5)/1e-2)
     environment = pred
-    regeneration = sample_poisson_relaxed(10.*(regP+environment[:,None,...].repeat(1, Species.shape[1], 1,)*0.9), 20)
+    regeneration = sample_poisson_relaxed((regP*environment[:,None,...].repeat(1, Species.shape[1], 1,) + 0.0001), 20)
     regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
     return regeneration
 
@@ -205,7 +205,7 @@ class FINN:
         self.env = env
         self.optimizer = None
         self.dtype = torch.float32
-        self.nnRegEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=[False], dropout=-99)
+        self.nnRegEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=[False], dropout=-99, last_activation = "relu")
         self.nnRegEnv.to(self.device)
         self.nnGrowthEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_growth, activation="selu", bias=[False], dropout=-99)
         self.nnGrowthEnv.to(self.device)
@@ -251,7 +251,8 @@ class FINN:
                   hidden: List, 
                   bias: List[bool], 
                   activation: List[str], 
-                  dropout: float) -> torch.nn.modules.container.Sequential:
+                  dropout: float,
+                  last_activation: str="sigmoid") -> torch.nn.modules.container.Sequential:
         """Build neural network
 
         Args:
@@ -298,8 +299,11 @@ class FINN:
             model_list.append(torch.nn.Linear(hidden[-1], output_shape, bias=bias[-1]).type(self.dtype))
         else:
             model_list.append(torch.nn.Linear(input_shape, output_shape, bias=False).type(self.dtype))
-        model_list.append(torch.nn.Sigmoid())    
-        return torch.nn.Sequential(*model_list)       
+        if last_activation == "sigmoid":
+            model_list.append(torch.nn.Sigmoid())
+        if last_activation == "relu":
+            model_list.append(torch.nn.ReLU())            
+        return torch.nn.Sequential(*model_list)        
     
     def __aggregate(self, labels, samples, samples_T, Result, Result_T):
         """Aggregate results.
@@ -450,15 +454,16 @@ class FINN:
             
             with torch.no_grad():
                 nTree_clone =  nTree.clone() #torch.zeros_like(nTree).to(self.device)+0
-            
-            AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
 
-            g = growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:], AL)
-            dbh = dbh+g
-            AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
-           
-            m = mortFP(dbh, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:], AL) #.unsqueeze(3)
-            nTree = torch.clamp(nTree - m, min = 0)
+            if dbh.shape[2] != 0:
+                AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
+
+                g = growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:], AL)
+                dbh = dbh+g
+                AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
+            
+                m = mortFP(dbh, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:], AL) #.unsqueeze(3)
+                nTree = torch.clamp(nTree - m, min = 0)
             
             with torch.no_grad():
                 nTree_clone =  nTree.clone() #torch.zeros_like(nTree).to(self.device)+0
