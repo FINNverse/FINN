@@ -161,7 +161,7 @@ def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, par
     """
     
     
-    regP = torch.sigmoid((AL + parReg - 0.5)/1e-2)
+    regP = torch.sigmoid((AL + (1-parReg) - 1)/1e-1)
     environment = pred
     regeneration = sample_poisson_relaxed((regP*environment[:,None,...].repeat(1, Species.shape[1], 1,) + 0.0001), 20)
     regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
