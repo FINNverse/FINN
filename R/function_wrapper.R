@@ -27,8 +27,10 @@ competition = function(dbh, Species,nTree, parGlobal, h = NULL, minLight = 50.0,
   nTree = to_Tensor(nTree, dtype, device, TRUE, TRUE)
 
   parGlobal = to_Tensor(parGlobal, dtype = dtype, device = device, FALSE, correct_zero = TRUE)
-  if(!is.null(h)) h = to_Tensor(h)
+  if(h == 0) h = torch$zeros(list(1L, 1L)) else
+    if(!is.null(h)) h = to_Tensor(h)
 
+  # AL = pkg.env$FINN$compF_P(dbh, Species, nTree, parGlobal, h= torch$zeros(list(1L, 1L)))$cpu()$data$numpy()
   result = pkg.env$FINN$compF_P(dbh, Species, nTree, parGlobal, h = h, minLight = minLight)$cpu()$data$numpy()
   return(force_r(result))
 
