@@ -20,15 +20,15 @@ competition = function(dbh, Species,nTree, parGlobal, h = NULL, minLight = 50.0,
 
   torch = pkg.env$torch
 
-  if(dtype == "float32") dtype = torch$float32
-  else dtype = torch$float64
-  dbh = to_Tensor(dbh, dtype, device, TRUE, TRUE)
-  Species = to_Tensor(Species, dtype=torch$int64, device=device, TRUE, FALSE)
-  nTree = to_Tensor(nTree, dtype, device, TRUE, TRUE)
+  if(dtype == "float32") dtype = torch$float32  else dtype = torch$float64
+  dbh = FINN:::to_Tensor(dbh, dtype, device, TRUE, TRUE)
+  Species = FINN:::to_Tensor(Species, dtype=torch$int64, device=device, TRUE, FALSE)
+  nTree = FINN:::to_Tensor(nTree, dtype, device, TRUE, TRUE)
 
-  parGlobal = to_Tensor(parGlobal, dtype = dtype, device = device, FALSE, correct_zero = TRUE)
-  if(h == 0) h = torch$zeros(list(1L, 1L)) else
-    if(!is.null(h)) h = to_Tensor(h)
+  parGlobal = FINN:::to_Tensor(parGlobal, dtype = dtype, device = device, FALSE, correct_zero = TRUE)
+  if(!is.null(h)){
+    if(h == 0) h = torch$zeros(list(1L, 1L)) else h = to_Tensor(h)
+    }
 
   # AL = pkg.env$FINN$compF_P(dbh, Species, nTree, parGlobal, h= torch$zeros(list(1L, 1L)))$cpu()$data$numpy()
   result = pkg.env$FINN$compF_P(dbh, Species, nTree, parGlobal, h = h, minLight = minLight)$cpu()$data$numpy()
