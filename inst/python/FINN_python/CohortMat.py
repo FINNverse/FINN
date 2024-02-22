@@ -21,7 +21,7 @@ class CohortMat:
         # TODO initial kohorten
         self.nTree = np.random.poisson(10, size = dims) if nTree is None else nTree 
         self.Species = np.random.randint(0, sp, size=dims[0:3]) if Species is None else Species
-        self.dbh = np.random.uniform(10, 90, size=dims) if dbh is None else dbh
+        self.dbh = np.zeros(dims) if dbh is None else dbh
         
         if not torch.is_tensor(self.nTree):
             self.nTree = torch.tensor(self.nTree, dtype=torch.float32, device=device)
