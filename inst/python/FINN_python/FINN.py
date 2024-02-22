@@ -224,22 +224,29 @@ class FINN:
         # TODO: Sind diese Init Parametriesierungen sinnvoll?
 
         if parGlobal is None:
-            self._parGlobal = torch.tensor(np.random.uniform(0.90, 1.0, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
+            self._parGlobal = torch.tensor(np.random.uniform(0.3, 0.7, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
             self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device)
             
         if parGrowth is None:
-            self._parGrowth = torch.tensor(np.random.uniform(-0.01, 0.01, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
+            first = np.random.uniform(-1, 100, size = [self.sp,1])
+            second = np.random.uniform(1, 10, size = [self.sp,1])
+            self._parGrowth = torch.tensor(np.concatenate([first, second], 1), requires_grad=True, dtype=torch.float32, device=self.device)
+            # self._parGrowth = torch.tensor(np.random.uniform(0, 5, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
         else: 
             self._parGrowth = torch.tensor(parGrowth, requires_grad=True, dtype=torch.float32, device=self.device)
         
         if parMort is None:
-            self._parMort = torch.tensor(np.random.uniform(0.5, 0.6, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
+          if parMort is None:
+            first = np.random.uniform(-1, 100, size = [self.sp,1])
+            second = np.random.uniform(50, 400, size = [self.sp,1])
+            self._parMort = torch.tensor(np.concatenate([first, second], 1), requires_grad=True, dtype=torch.float32, device=self.device)
+            # self._parMort = torch.tensor(np.random.uniform(0, 500, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
             self._parMort = torch.tensor(parMort, requires_grad=True, dtype=torch.float32, device=self.device)
             
         if parReg is None:
-            self._parReg = torch.tensor(np.random.uniform(0.4, 0.5, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
+            self._parReg = torch.tensor(np.random.uniform(0, 1, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
             self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device)
             
