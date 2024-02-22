@@ -1,12 +1,51 @@
 library(dplyr)
 library(FINN)
-observed =read.csv("/Users/maximilianpichler/Downloads/evaluation2-obs.csv")
-data = read.csv("/Users/maximilianpichler/Downloads/evaluation2-env.csv")
+library(data.table)
+library(ggplot2)
+observed = fread("data/testing-data/evaluation2-obs.csv")
+data = fread("data/testing-data/evaluation2-env.csv")
 m = FINN(~0 + envAct1 + envAct2 ,
-         data = data %>% filter(site < 14), epochs = 1L, batch_size = 5L,
-         response = observed %>% filter(site < 14))
+         data = data %>% filter(site < 101), batch_size = 20, start_time=0.0, epochs=3, learning_rate=0.1,
+         response = observed %>% filter(site < 101))
 dim(m$data$env)
 dim(m$data$observations)
+
+pred = FINN:::predict.FINN(m)
+my_array = pred[[2]]
+
+# Generate the indices for each dimension
+dim_indices <- expand.grid(site = 1:dim(my_array)[1],
+                           timestep = 1:dim(my_array)[2],
+                           Species = 1:dim(my_array)[3])
+
+# Convert the 3D array to a vector and combine with indices
+long_data <- cbind(dim_indices, ba = as.vector(my_array))
+
+# Convert to data.table
+dt_long <- as.data.table(long_data)
+
+
+out_dt_all_pred <- merge(dt_long, data, by = c("site", "timestep"))
+# out_dt_all_pred[,ba := (circle_area(dbh)*nTree)/0.1,]
+species_dt = data.table(
+  names = c("Fagus sylvatica", "Picea abies", "Acer pseudoplatanus", "Betula pendula", "Abies alba"),
+  dbh2height = c(0.6,0.6,0.6,0.6,0.6),
+  Light = c(0.1,0.15,0.5,0.6,0.07),
+  Temp = c(0.6,0.3,0.7,0.4,0.3),
+  Prec = c(0.6,0.7,0.4,0.4,0.5),
+  maxD = c(350,300,200,100,350),
+  maxG = c(3,5,7,8,4)
+)
+
+out_dt_all_pred[,SpeciesName := factor(Species, levels = 1:5, labels = paste(1:5, species_dt$names)),]
+
+p2 <- ggplot(out_dt_all_pred[,.(
+  ba = log(mean(ba))
+), by = .(site,timestep,SpeciesName,envAvg1,envAvg2)], aes(x = timestep, y = ba, color = SpeciesName))+
+  geom_line()+
+  facet_grid(round(envAvg1,2)~round(envAvg2,2))
+p2
+
 
 # env: [sites, timestep, anzahl predictors] -> [100, 100, 4]
 # observed: [sites, timestep, species, responses] -> 2x responses, dbh/ba/ba*T und nTRees
