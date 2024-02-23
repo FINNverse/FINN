@@ -19,7 +19,8 @@ class CohortMat:
         
         device = torch.device(device)
         # TODO initial kohorten
-        self.nTree = np.random.poisson(10, size = dims) if nTree is None else nTree 
+        # self.nTree = np.random.poisson(10, size = dims) if nTree is None else nTree 
+        self.nTree = np.zeros(dims) if nTree is None else nTree 
         self.Species = np.random.randint(0, sp, size=dims[0:3]) if Species is None else Species
         self.dbh = np.zeros(dims) if dbh is None else dbh
         
