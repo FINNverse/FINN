@@ -5,7 +5,7 @@ library(FINN)
 library(data.table)
 
 Nsites = 9
-Ntimesteps = 100
+Ntimesteps = 500
 Npatches = 1
 NsamplesPerEnv = ceiling(sqrt(Nsites))
 EnvSiteAvg = seq(0,1,length.out = NsamplesPerEnv)
@@ -32,29 +32,37 @@ for(i_site in 1:Nsites){
     envAvg2 = envAvg2
   )
   env_out_all = rbind(env_out_all, env_out)
-  observed = rbind(observed, data.table(Species = rep(0:1, each = Ntimesteps), dbh = 1, nTree = 1, timestep = 1:Ntimesteps, site = i_site))
+  observed = rbind(observed, data.table(Species = rep(0:1, each = Ntimesteps), dbh = 0, nTree = 0, timestep = 1:Ntimesteps, site = i_site))
 }
 
+#array(cbind(c(0,1),c(1,1)), dim = c())
 m2 =
 FINN::FINN(
-  formula = ~0+envAct1+envAct2,patches = 1,
+  formula = ~0+envAct1+envAct2,patches = Npatches,
   # X = m$data$env[,,1:2],
   # Y = m$data$ba_observations[,,,],
   data = env_out_all,
   response = observed,
-  init_global = NULL,
-  init_growth = NULL,
-  init_mort = NULL,
-  init_reg = NULL,
+  init_global = c(0.3,0.7),
+  init_growth =
+    rbind(c(0.1,3),
+          c(5,3)),
+  init_mort =
+    rbind(c(0.1,30),
+          c(0,10)),
+  init_reg = c(0.01,0.8),
   hidden_growth = list(),
   hidden_mort = list(),
   hidden_reg = list(),
-  init_growth_env = list(array(10,dim = c(2,2))),
-  init_mort_env = list(array(10,dim = c(2,2))),
-  init_reg_env = list(array(10,dim = c(2,2))),
+  init_growth_env = list(array(.1,dim = c(2,2))),
+  init_mort_env = list(array(0,dim = c(2,2))),
+  init_reg_env = list(array(
+    rbind(c(.1,.1),
+          c(.1,.1)),dim = c(2,2))),
   simulate = T
   )
 
+# to_Tensor(parGlobal, dtype = dtype, device = dtype = "float32", FALSE, correct_zero = TRUE)
 pred = FINN:::predict.FINN(object = m2, newdata = m2$data$env[,,1:2])
 
 my_array = pred[[2]]
@@ -83,11 +91,11 @@ species_dt = data.table(
   maxG = c(3,5,7,8,4)
 )
 
-out_dt_all_pred[,SpeciesName := factor(Species, levels = 1:5, labels = paste(1:5, species_dt$names)),]
+# out_dt_all_pred[,SpeciesName := factor(Species, levels = 1:5, labels = paste(1:5, species_dt$names)),]
 
 p2 <- ggplot(out_dt_all_pred[,.(
   ba = (mean(ba))
-), by = .(site,timestep,SpeciesName,envAvg1,envAvg2)], aes(x = timestep, y = ba, color = SpeciesName))+
+), by = .(site,timestep,Species,envAvg1,envAvg2)], aes(x = timestep, y = ba, color = factor(Species)))+
   geom_line()+
   facet_grid(round(envAvg1,2)~round(envAvg2,2))+
   coord_cartesian()

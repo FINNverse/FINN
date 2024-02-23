@@ -118,7 +118,7 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
     
     shade = ((AL**2)*parGrowth[Species,0]).sigmoid()
     environment = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
-    pred = (shade+environment)
+    pred = (shade*environment)
     growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
     return torch.nn.functional.softplus(growth)
 
@@ -142,7 +142,7 @@ def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlo
     pred = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
     environment = 1 - pred
     gPSize = 0.1*(torch.clamp(dbh/(parMort[Species,1]*10), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
-    predM = torch.sigmoid(shade+environment+gPSize)
+    predM = shade*environment*gPSize
     mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
     return mort + mort.round().detach() - mort.detach()
 

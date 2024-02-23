@@ -183,8 +183,7 @@ AL = seq(0,1,0.01)
 shadeF = function(AL, parGrowth1) 1-plogis((AL**2)*parGrowth1)
 plot(AL, shadeF(AL, 2), type = "l", col = "red", ylim = c(0,2))
 lines(AL, shadeF(AL, 1), type = "l", col = "green")
-lines(AL, shadeF(AL, -500), type = "l", col = "green")
-lines(AL, shadeF(AL, 500), type = "l", col = "blue")
+lines(AL, shadeF(AL, 10), type = "l", col = "blue")
 
 AL = 0
 env = 1
@@ -196,6 +195,10 @@ growfun = function(parGrowth, pred = seq(-5,5,length.out = 100)) (1.- (1.- pred)
 plot(pred, growfun(4), type = "l", col = "red", ylim = c(-0.1,4.1))
 lines(pred, growfun(3), type = "l", col = "green")
 lines(pred, growfun(0), type = "l", col = "blue")
+
+parMort1 = 30
+mortF = function(dbh, parMort) 0.1*(dbh/(parMort*10))^(2.3)
+plot(1:300, mortF(1:300,parMort1), type = "l", col = "red")
 
 ggplot(out_dt, aes(y = growth, x = env, color = factor(parGlobal)))+
   geom_jitter(alpha = 0.3)+
