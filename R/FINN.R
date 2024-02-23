@@ -176,6 +176,7 @@ predict.FINN <- function(object, newdata = NULL,
 
   if(is.data.frame(newdata)) {
     data <- stats::model.matrix(object$call$formula, newdata)
+    # data <- stats::model.matrix(object$call$formula, newdata)
     XX = as.data.frame(cbind(timestep = data$timestep, site = data$site, X))
     timesteps = length(unique(XX$timestep))
     sites = length(unique(XX$site))
@@ -195,7 +196,7 @@ predict.FINN <- function(object, newdata = NULL,
     newdata = environment[,,,1]
   }
 
-  predictions = reticulate::py_to_r(object$model$predict(env = newdata, ...))
+  predictions = reticulate::py_to_r(object$model$predict(env = newdata))
   predictions = lapply(predictions, function(d) force_r(d$cpu()$data$numpy()))
   return(predictions)
 }
