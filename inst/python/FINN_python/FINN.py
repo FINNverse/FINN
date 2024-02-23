@@ -212,14 +212,14 @@ class FINN:
         self.nnMortEnv = self._build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=[False], dropout=-99)
         self.nnMortEnv.to(self.device)
         
-        if hidden_growth is not None:
-            self.set_weights_nnGrowthEnv(hidden_growth)
+        if parGrowthEnv is not None:
+         self.set_weights_nnGrowthEnv(parGrowthEnv)
+         
+        if parMortEnv is not None:
+          self.set_weights_nnMortEnv(parMortEnv)
 
-        if hidden_mort is not None:
-            self.set_weights_nnMortEnv(hidden_mort)        
-        
-        if hidden_reg is not None:
-            self.set_weights_nnRegEnv(hidden_reg)
+        if parRegEnv is not None:
+          self.set_weights_nnRegEnv(parRegEnv)
                     
         # TODO: Sind diese Init Parametriesierungen sinnvoll?
 
