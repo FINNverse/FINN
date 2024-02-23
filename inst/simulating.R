@@ -5,10 +5,10 @@ library(FINN)
 library(data.table)
 
 Nsites = 9
-Ntimesteps = 500
+Ntimesteps = 100
 Npatches = 1
 NsamplesPerEnv = ceiling(sqrt(Nsites))
-EnvSiteAvg = seq(0,1,length.out = NsamplesPerEnv)
+EnvSiteAvg = seq(-1,11,length.out = NsamplesPerEnv)
 EnvSiteAvgM = expand.grid(list(EnvSiteAvg,EnvSiteAvg))
 
 cat("start at")
@@ -20,8 +20,8 @@ for(i_site in 1:Nsites){
   envAvg1 = EnvSiteAvgM[i_site,1]
   envAvg2 = EnvSiteAvgM[i_site,2]
   envM = matrix(c(rnorm(Ntimesteps, envAvg1, 0.1), rnorm(Ntimesteps, envAvg2, 0.1)), Ntimesteps, 2)
-  envM[envM > 1] = 1
-  envM[envM < 0] = 0
+  # envM[envM > 1] = 1
+  # envM[envM < 0] = 0
   envM_list[[i_site]] = envM
   env_out = data.table(
     timestep = 1:Ntimesteps,
@@ -38,7 +38,7 @@ for(i_site in 1:Nsites){
 #array(cbind(c(0,1),c(1,1)), dim = c())
 m2 =
 FINN::FINN(
-  formula = ~0+envAct1+envAct2,patches = Npatches,
+  formula = ~0+(envAct1^2)+(envAct2^2),patches = Npatches,
   # X = m$data$env[,,1:2],
   # Y = m$data$ba_observations[,,,],
   data = env_out_all,
@@ -55,10 +55,8 @@ FINN::FINN(
   hidden_mort = list(),
   hidden_reg = list(),
   init_growth_env = list(array(.1,dim = c(2,2))),
-  init_mort_env = list(array(0,dim = c(2,2))),
-  init_reg_env = list(array(
-    rbind(c(.1,.1),
-          c(.1,.1)),dim = c(2,2))),
+  init_mort_env = list(array(.1,dim = c(2,2))),
+  init_reg_env = list(array(.1,dim = c(2,2))),
   simulate = T
   )
 
