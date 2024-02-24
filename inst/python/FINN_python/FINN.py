@@ -116,7 +116,7 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
     '''
     """
     
-    shade = ((AL**2)*parGrowth[Species,0]).sigmoid()
+    shade = (((AL**2)*parGrowth[Species,0]).sigmoid()-0.5)*2
     environment = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
     pred = (shade*environment)
     growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
@@ -138,7 +138,7 @@ def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlo
     """
     
     
-    shade = 1-((AL**2)*parMort[Species,0]).sigmoid()
+    shade = 1-(((AL**2)*10*parMort[Species,0]).sigmoid()-0.5)*2
     pred = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
     environment = 1 - pred
     gPSize = 0.1*(torch.clamp(dbh/(parMort[Species,1]*10), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
@@ -229,8 +229,8 @@ class FINN:
             self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device)
             
         if parGrowth is None:
-            first = np.random.uniform(-1, 100, size = [self.sp,1])
-            second = np.random.uniform(1, 10, size = [self.sp,1])
+            first = np.random.uniform(0, 6, size = [self.sp,1])
+            second = np.random.uniform(0, 6, size = [self.sp,1])
             self._parGrowth = torch.tensor(np.concatenate([first, second], 1), requires_grad=True, dtype=torch.float32, device=self.device)
             # self._parGrowth = torch.tensor(np.random.uniform(0, 5, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
         else: 
@@ -238,8 +238,8 @@ class FINN:
         
         if parMort is None:
           if parMort is None:
-            first = np.random.uniform(-1, 100, size = [self.sp,1])
-            second = np.random.uniform(50, 400, size = [self.sp,1])
+            first = np.random.uniform(0, 2, size = [self.sp,1])
+            second = np.random.uniform(1, 50, size = [self.sp,1])
             self._parMort = torch.tensor(np.concatenate([first, second], 1), requires_grad=True, dtype=torch.float32, device=self.device)
             # self._parMort = torch.tensor(np.random.uniform(0, 500, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:

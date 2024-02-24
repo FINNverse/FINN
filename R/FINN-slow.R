@@ -70,32 +70,26 @@ FINN = function(formula,
     XX = as.data.frame(cbind(timestep = data$timestep, site = data$site, X))
     timesteps = length(unique(XX$timestep))
     sites = length(unique(XX$site))
-    Nenv = dim(X)[2]
 
     # sites, time, patch, species
     # slow as fuck...
-    Npatches = patches
-    # response = data.frame(response)
-    response_dt = data.table(response)
-    response_dt2 = response_dt[,.(dbh = mean(dbh), nTree = mean(nTree)), by = .(site, timestep, Species)]
+    obs_array =
+      lapply(1:sites, function(site) {
+        tmp_site = response[response$site == site, ]
+        tmps =
+          lapply(1:timesteps, function(time) {
+            tmp =
+              tmp_site[tmp_site$timestep == time, ] %>%
+              group_by(Species) %>%
+              summarise(dbh = mean(dbh), nTree = mean(nTree)) %>%
+              select(-Species) %>%
+              as.data.frame()
+            return(tmp)
+          })
+        return(abind::abind(tmps, along = 0L))
+      })
 
-    # Step 1: Use dcast to create a wide format data.table
-    wide_dt <- dcast(response_dt2, timestep+site ~ Species, value.var = c("dbh", "nTree"))
-
-    # Step 2: Convert the wide data.table to a matrix (excluding the first two columns which are site and timestep)
-    wide_matrix <- as.matrix(wide_dt[, -c(1,2), with = FALSE])
-
-    # Determine the dimensions for the array
-    # Assuming you know the number of unique sites, timesteps, and species
-    n_sites <- length(unique(response_dt2$site))
-    n_timesteps <- length(unique(response_dt2$timestep))
-    n_species <- length(unique(response_dt2$Species))
-    n_variables <- 2 # dbh and nTree
-
-    # Step 3: Reshape the matrix into a 4-dimensional array
-    # Dimensions: site, timestep, species, variables (dbh and nTree)
-    array_dims <- c(n_sites, n_timesteps, n_species, n_variables)
-    observations <- array(wide_matrix, dim = array_dims, dimnames = list(NULL, NULL, NULL, c("dbh", "nTree")))
+    observations = abind::abind(obs_array, along = 0L)
 
     env_array =
       lapply(1:sites, function(site) {
