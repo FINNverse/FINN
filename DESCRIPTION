@@ -25,7 +25,8 @@ Imports:
     dplyr,
     reticulate,
     stats,
-    utils
+    utils,
+    data.table
 Suggests:
     testthat,
     knitr,

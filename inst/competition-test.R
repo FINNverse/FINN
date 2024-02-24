@@ -180,18 +180,19 @@ for(dbh_i in dbhTest){
 }
 
 AL = seq(0,1,0.01)
-shadeF = function(AL, parGrowth1) 1-plogis((AL**2)*parGrowth1)
+shadeF = function(AL, parGrowth1) 1-(plogis((AL**2)*parGrowth1*10)-0.5)*2
 plot(AL, shadeF(AL, 2), type = "l", col = "red", ylim = c(0,2))
-lines(AL, shadeF(AL, 1), type = "l", col = "green")
+lines(AL, shadeF(AL, 0.1), type = "l", col = "green")
 lines(AL, shadeF(AL, 10), type = "l", col = "blue")
+lines(AL, shadeF(AL, 100), type = "l", col = "blue")
 
 AL = 0
 env = 1
 AL*(AL+env)
 
-pred = seq(-5,5,length.out = 100)
+pred = seq(0,1,length.out = 100)
 # regfun = function(parReg, AL = seq(0,1,0.01)) (plogis((AL + (1-parReg) - 1)/1e-1))
-growfun = function(parGrowth, pred = seq(-5,5,length.out = 100)) (1.- (1.- pred)^4.0) * parGrowth
+growfun = function(parGrowth, pred = seq(0,1,length.out = 100)) (1.- (1.- pred)^4.0) * parGrowth
 plot(pred, growfun(4), type = "l", col = "red", ylim = c(-0.1,4.1))
 lines(pred, growfun(3), type = "l", col = "green")
 lines(pred, growfun(0), type = "l", col = "blue")
