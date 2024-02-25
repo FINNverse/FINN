@@ -85,32 +85,46 @@ FINN = function(formula,
     # Step 2: Convert the wide data.table to a matrix (excluding the first two columns which are site and timestep)
     wide_matrix <- as.matrix(wide_dt[, -c(1,2), with = FALSE])
 
-    # Determine the dimensions for the array
-    # Assuming you know the number of unique sites, timesteps, and species
-    n_sites <- length(unique(response_dt2$site))
-    n_timesteps <- length(unique(response_dt2$timestep))
-    n_species <- length(unique(response_dt2$Species))
-    n_variables <- 2 # dbh and nTree
-
     # Step 3: Reshape the matrix into a 4-dimensional array
     # Dimensions: site, timestep, species, variables (dbh and nTree)
-    array_dims <- c(n_sites, n_timesteps, n_species, n_variables)
-    observations <- array(wide_matrix, dim = array_dims, dimnames = list(NULL, NULL, NULL, c("dbh", "nTree")))
+    n_variables <- 2 # dbh and nTree
+    observations <- array(
+      wide_matrix,
+      dim = c(
+        uniqueN(response_dt2$site),
+        uniqueN(response_dt2$timestep),
+        uniqueN(response_dt2$Species),
+        n_variables
+      ),
+      dimnames = list(NULL, NULL, NULL, c("dbh", "nTree"))
+    )
 
-    env_array =
-      lapply(1:sites, function(site) {
-        tmp_site = XX[XX$site == site, ]
-        tmps =
-          lapply(1:timesteps, function(time) {
-            tmp =
-              tmp_site[tmp_site$timestep == time, ] %>% select(-timestep, -site) %>% c()
-            return(matrix(unlist(tmp), length(tmp), 1))
-          })
-        return(abind::abind(tmps, along = 0L))
-      })
-    environment = abind::abind(env_array, along = 0L)
-    environment = environment[,,,1]
+    # Assuming XX is your data.table and it contains 'site', 'timestep', and other environmental variables
 
+    # Step 1: Order by 'site' and 'timestep'
+    XX_dt = data.table(XX)
+
+    # Step 2: Create a wide format data.table
+    # Here, we'll pivot wider on all other columns except 'site' and 'timestep'
+    # This step assumes that for each 'site' and 'timestep', there's only one row for the remaining measurements
+    wide_dt <- dcast(XX_dt,  timestep + site ~ rowid(site, timestep), value.var = names(XX_dt)[!names(XX_dt) %in% c("site", "timestep")])
+
+    # Step 3: Convert the wide data.table to a matrix (excluding 'site' and 'timestep' columns)
+    wide_matrix <- as.matrix(wide_dt[, -c(1,2), with = FALSE])
+
+    # Determine dimensions for the array
+    # Assuming the number of unique sites and timesteps are known
+    n_sites <- length(unique(XX_dt$site))
+    n_timesteps <- length(unique(XX_dt$timestep))
+    # The number of environmental variables is the number of columns in wide_matrix divided by (n_sites * n_timesteps)
+    n_variables <- ncol(wide_matrix)
+
+    # Step 4: Reshape the matrix into a 3-dimensional array
+    # Dimensions: site, timestep, environmental variables
+    array_dims <- c(n_sites, n_timesteps, n_variables)
+    final_array <- array(wide_matrix, dim = array_dims)
+
+    environment = final_array
 
     ### Transform outputs
     torch = pkg.env$torch
