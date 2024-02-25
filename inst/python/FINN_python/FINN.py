@@ -226,7 +226,7 @@ class FINN:
         if parGlobal is None:
             self._parGlobal = torch.tensor(np.random.uniform(0.3, 0.7, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
-            self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device)
+            self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device).reshape(-1)
             
         if parGrowth is None:
             first = np.random.uniform(0, 6, size = [self.sp,1])
@@ -248,7 +248,7 @@ class FINN:
         if parReg is None:
             self._parReg = torch.tensor(np.random.uniform(0, 1, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
-            self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device)
+            self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device).reshape(-1)
             
         self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
         
