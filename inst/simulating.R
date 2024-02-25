@@ -48,8 +48,8 @@ FINN::FINN(
     rbind(c(1,3),
           c(5,5)),
   init_mort =
-    rbind(c(1,40),
-          c(.1,10)),
+    rbind(c(1,4),
+          c(.1,1)),
   init_reg = c(0.1,0.5),
   hidden_growth = list(),
   hidden_mort = list(),
