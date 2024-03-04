@@ -242,18 +242,19 @@ class FINN:
         if parGlobal is None:
             self._parGlobal = torch.tensor(np.random.uniform(0.3, 0.7, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
-            self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device).reshape(-1)
+            if type(parGlobal) != np.ndarray:
+                parGlobal = np.array(parGlobal)            
+            parGlobal = parGlobal.reshape(-1)
+            self._parGlobal = torch.tensor(parGlobal, requires_grad=True, dtype=torch.float32, device=self.device)
             
         if parGrowth is None:
             first = np.random.uniform(0, 6, size = [self.sp,1])
             second = np.random.uniform(0, 6, size = [self.sp,1])
             self._parGrowth = torch.tensor(np.concatenate([first, second], 1), requires_grad=True, dtype=torch.float32, device=self.device)
-            # self._parGrowth = torch.tensor(np.random.uniform(0, 5, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
         else: 
             self._parGrowth = torch.tensor(parGrowth, requires_grad=True, dtype=torch.float32, device=self.device)
         
         if parMort is None:
-          if parMort is None:
             first = np.random.uniform(0, 2, size = [self.sp,1])
             second = np.random.uniform(.1, 5, size = [self.sp,1])
             self._parMort = torch.tensor(np.concatenate([first, second], 1), requires_grad=True, dtype=torch.float32, device=self.device)
@@ -264,14 +265,17 @@ class FINN:
         if parReg is None:
             self._parReg = torch.tensor(np.random.uniform(0, 1, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
-            self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device).reshape(-1)
-        
-        if which == "both":  
-            self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
+            if type(parReg) != np.ndarray:
+                parReg = np.array(parReg)
+            parReg = parReg.reshape(-1)
+            self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device)
+            
         if which == "env":
             self.parameters = [ self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
-        if which == "species":
+        elif which == "species":
             self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg]]
+        else:
+            self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
             
         print(self.parameters)
 
