@@ -56,6 +56,15 @@ def test_predict(env, NN, dbh, Species, time = 0):
     pred = NN(env)[:,time,:]
     return pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
 
+
+def test_predict_second(env, NN, dbh, Species, time = 0):
+    pred = NN(env)[:,time,:]
+    shapes = pred.shape
+    X_expanded = pred.unsqueeze(1).expand(shapes[0], Species.shape[1], shapes[1])
+    pred = torch.gather(X_expanded, 2, Species)
+
+    return output
+
     
 
 @torch.jit.script
@@ -99,6 +108,12 @@ def compF_P(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGl
     AL = torch.clamp(AL, min = 0)
     return AL
 
+def index_species(pred, Species):
+    shapes = pred.shape
+    X_expanded = pred.unsqueeze(1).expand(shapes[0], Species.shape[1], shapes[1])
+    pred = torch.gather(X_expanded, 2, Species)
+    return pred
+
 
 @torch.jit.script
 def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
@@ -117,7 +132,7 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
     """
     
     shade = (((AL**2)*parGrowth[Species,0]).sigmoid()-0.5)*2
-    environment = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
+    environment = index_species(pred, Species)
     pred = (shade*environment)
     growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
     return torch.nn.functional.softplus(growth)
@@ -139,7 +154,7 @@ def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlo
     
     
     shade = 1-(((AL**2)*10*parMort[Species,0]).sigmoid()-0.5)*2
-    pred = pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
+    pred = index_species(pred, Species)
     environment = 1 - pred
     gPSize = 0.1*(torch.clamp(dbh/(parMort[Species,1]*100), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
     predM = shade*environment*gPSize
@@ -172,6 +187,7 @@ class FINN:
                  device: str='cpu',  # 'mps'
                  sp: int=5, 
                  env: int=2, 
+                 which: str="both",
                  parGlobal: Optional[np.ndarray]=None, # must be dim [species]
                  parGrowth: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
                  parMort: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
@@ -249,9 +265,16 @@ class FINN:
             self._parReg = torch.tensor(np.random.uniform(0, 1, size = [self.sp]), requires_grad=True, dtype=torch.float32, device=self.device)
         else:
             self._parReg = torch.tensor(parReg, requires_grad=True, dtype=torch.float32, device=self.device).reshape(-1)
-            
-        self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
         
+        if which == "both":  
+            self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
+        if which == "env":
+            self.parameters = [ self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
+        if which == "species":
+            self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg]]
+            
+        print(self.parameters)
+
     def _build_NN(self, 
                   input_shape: int, 
                   output_shape: int, 
@@ -464,7 +487,6 @@ class FINN:
 
             if dbh.shape[2] != 0:
                 AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
-
                 g = growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:], AL)
                 dbh = dbh+g
                 AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
@@ -529,7 +551,7 @@ class FINN:
         """
         
         if self.optimizer is None:
-            self.optimizer = optim.DiffGrad(params = itertools.chain(*self.parameters), lr = learning_rate) # AdaBound was also good
+            self.optimizer = torch.optim.Adagrad(params = itertools.chain(*self.parameters), lr = learning_rate) # AdaBound was also good
             # TODO scheduler implementieren
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
         time = X.shape[1]
@@ -578,6 +600,8 @@ class FINN:
                 #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
                 loss2 = torch.distributions.Poisson(pred[1][:,start_time:,:]+0.001).log_prob(c[:, start_time:,:]).mean().negative() # nTree
                 loss = (loss1 + loss2)
+                #loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / ba
+
                 loss.backward()
                 self.optimizer.step()
                 batch_loss[step] = loss.item()
