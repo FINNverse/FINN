@@ -188,7 +188,8 @@ FINN = function(formula,
 predict.FINN <- function(object, newdata = NULL,
                             type=c("link", "response", "class"),
                             device = c("cpu","cuda", "mps"),
-                            reduce = c("mean", "median", "none"),...) {
+                            reduce = c("mean", "median", "none"),
+                         response = "dbh",...) {
 
   # object = checkModel(object)
 
@@ -216,7 +217,7 @@ predict.FINN <- function(object, newdata = NULL,
     newdata = environment[,,,1]
   }
 
-  predictions = reticulate::py_to_r(object$model$predict(env = newdata))
+  predictions = reticulate::py_to_r(object$model$predict(env = newdata, response = response))
   predictions = lapply(predictions, function(d) force_r(d$cpu()$data$numpy()))
   return(predictions)
 }
