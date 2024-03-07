@@ -116,7 +116,7 @@ def index_species(pred, Species):
 
 
 @torch.jit.script
-def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
+def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, parMort, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
     """'''Calculate the growth of a forest stand based on the given parameters.
     
     Args:
@@ -131,13 +131,16 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
     '''
     """
     
-    shade = (((AL**2)*parGrowth[Species,0]).sigmoid()-0.5)*2
+      # shade = (((AL**2)*parGrowth[Species,0]).sigmoid()-0.5)*2
+    shade = torch.sigmoid((AL + (1-parGrowth[Species,0]) - 1)/1e-1)
     environment = index_species(pred, Species)
-    pred = (shade*environment)
-    growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
+    pred = (shade+environment)
+    # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
+    growth = pred/2 * parGrowth[Species,1] * ((parMort[Species,1]-dbh/100) / parMort[Species,1]).pow(2)
+    # growth = parGrowth[Species,1]
     return torch.nn.functional.softplus(growth)
 
-def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, parMort: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
+def mortFP(dbh: torch.Tensor, g: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, parMort: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
     """Calculate mortality of trees based on various factors.
     
     Args:
@@ -152,12 +155,14 @@ def mortFP(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlo
         torch.Tensor: Calculated mortality values.
     """
     
-    
-    shade = 1-(((AL**2)*10*parMort[Species,0]).sigmoid()-0.5)*2
+    # shade = 1-(((AL**2)*10*parMort[Species,0]).sigmoid()-0.5)*2
+    shade = 1-torch.sigmoid((AL + (1-parMort[Species,0]) - 1)/1e-2)
     pred = index_species(pred, Species)
     environment = 1 - pred
     gPSize = 0.1*(torch.clamp(dbh/(parMort[Species,1]*100), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
-    predM = shade*environment*gPSize
+    # relIncr = 0.1*((dbh/torch.clamp(dbh-g, max = 0.00001) - 1).sigmoid()*2-1)
+    predM = torch.clamp((shade*0.1+environment*0/2)+gPSize*1, max = 1)
+    # predM = relIncr
     mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
     return mort + mort.round().detach() - mort.detach()
 
@@ -175,10 +180,10 @@ def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, par
             torch.Tensor: Regeneration values for forest patches.
     """
     
-    
-    regP = torch.sigmoid((AL + (1-parReg) - 1)/1e-1)
+    print(AL.shape)
+    regP = torch.sigmoid((AL + (1-parReg) - 1)/1e-3)
     environment = pred
-    regeneration = sample_poisson_relaxed((regP*environment[:,None,...].repeat(1, Species.shape[1], 1,) + 0.0001), 20)
+    regeneration = sample_poisson_relaxed((regP*environment[:,None,...].repeat(1, Species.shape[1], 1,) + 1e-20), 20)
     regeneration = regeneration + regeneration.round().detach() - regeneration.detach() 
     return regeneration
 
@@ -277,7 +282,7 @@ class FINN:
         else:
             self.parameters = [[self._parGlobal], [self._parGrowth], [self._parMort], [self._parReg], self.nnRegEnv.parameters(), self.nnGrowthEnv.parameters(), self.nnMortEnv.parameters()]
             
-        print(self.parameters)
+        # print(self.parameters)
 
     def _build_NN(self, 
                   input_shape: int, 
@@ -473,7 +478,7 @@ class FINN:
                     if response == "dbh":
                         ba = dbh
                     elif response == "ba":
-                        BA_T(dbh, nTree)
+                        ba = BA_P(dbh, nTree)
                     else:    
                         # ba * nTree
                         ba = BA_T_P(dbh, nTree)
@@ -491,12 +496,17 @@ class FINN:
 
             if dbh.shape[2] != 0:
                 AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
-                g = growthFP(dbh, Species, self._parGlobal, self._parGrowth, pred_growth[:,i,:], AL)
+                g = growthFP(dbh, Species, self._parGlobal, self._parGrowth, self._parMort, pred_growth[:,i,:], AL)
                 dbh = dbh+g
                 AL = compF_P(dbh, Species, nTree_clone, self._parGlobal)
-            
-                m = mortFP(dbh, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:], AL) #.unsqueeze(3)
+                
+                m = mortFP(dbh, g, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:], AL) #.unsqueeze(3)
                 nTree = torch.clamp(nTree - m, min = 0)
+                
+                # print(g)
+                # You can append more messages in a similar way
+                # with open('output_document.txt', 'a') as file:  # Note the 'a' mode for appending
+                # file.write('Appending another message to the document.\n')
             
             with torch.no_grad():
                 nTree_clone =  nTree.clone() #torch.zeros_like(nTree).to(self.device)+0
