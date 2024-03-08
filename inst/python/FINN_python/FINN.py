@@ -158,10 +158,11 @@ def mortFP(dbh: torch.Tensor, g: torch.Tensor, Species: torch.Tensor, nTree: tor
     # shade = 1-(((AL**2)*10*parMort[Species,0]).sigmoid()-0.5)*2
     shade = 1-torch.sigmoid((AL + (1-parMort[Species,0]) - 1)/1e-2)
     pred = index_species(pred, Species)
-    environment = 1 - pred
+    environment = pred
+    # environment = 1 - pred
     gPSize = 0.1*(torch.clamp(dbh/(parMort[Species,1]*100), min = 0.00001) ).pow(2.3) #.reshape([-1,1])
     # relIncr = 0.1*((dbh/torch.clamp(dbh-g, max = 0.00001) - 1).sigmoid()*2-1)
-    predM = torch.clamp((shade*0.1+environment*0/2)+gPSize*1, max = 1)
+    predM = torch.clamp((shade*0.1+environment)+gPSize*1, max = 1)
     # predM = relIncr
     mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
     return mort + mort.round().detach() - mort.detach()
