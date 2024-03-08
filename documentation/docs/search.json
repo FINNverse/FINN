@@ -1,0 +1,72 @@
+[
+  {
+    "objectID": "A1-GettingStarted.html#r-system",
+    "href": "A1-GettingStarted.html#r-system",
+    "title": "1  Getting Started",
+    "section": "1.1 R System",
+    "text": "1.1 R System"
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Forest Informed Neural Networks (FINN)",
+    "section": "",
+    "text": "Preface\nForest Informed Neural Networks (FINN) is a seamless integration of a dynamic forest model and neural networks. It main purpose is to understand the limitations and potentials of dynamic forest models in a changing world. A key element of FINN is the interface between classic processes based modeling and data driven machine learning techniques.\nAuthors:\nMaximilian Pichler: @_Max_Pichler\nYannek Käber: @KaberYannek\nContributors:\nThis work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License"
+  },
+  {
+    "objectID": "index.html#before-the-course",
+    "href": "index.html#before-the-course",
+    "title": "Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks",
+    "section": "Before the course",
+    "text": "Before the course\n\nPlease read the following two reviews about Machine Learning in General (pichler2023machine?) and Deep Learning (borowiec2022deep?)\nPlease install all dependencies before the course because it will take some time, see Chapter 1 for installation instructions\nThis course assumes advanced knowledge of the R programming language. If you want to refresh your knowledge about R, you can find a crashcourse in R in the book of the advanced statistic course: R-Crash-Course\n\nAuthors:\nMaximilian Pichler: @_Max_Pichler\nFlorian Hartig: @florianhartig\nContributors:\nJohannes Oberpriller, Matthias Meier\nThis work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License"
+  },
+  {
+    "objectID": "A2-basic-assumptions.html#header-1",
+    "href": "A2-basic-assumptions.html#header-1",
+    "title": "2  Basic assumptions",
+    "section": "2.1 Header 1",
+    "text": "2.1 Header 1"
+  },
+  {
+    "objectID": "A3-demographic-processes.html#header-1",
+    "href": "A3-demographic-processes.html#header-1",
+    "title": "3  Basic assumptions",
+    "section": "3.1 Header 1",
+    "text": "3.1 Header 1"
+  },
+  {
+    "objectID": "B1-forest-succession.html#header-1",
+    "href": "B1-forest-succession.html#header-1",
+    "title": "4  Basic assumptions",
+    "section": "4.1 Header 1",
+    "text": "4.1 Header 1"
+  },
+  {
+    "objectID": "C1-fit-environment.html#header-1",
+    "href": "C1-fit-environment.html#header-1",
+    "title": "5  Basic assumptions",
+    "section": "5.1 Header 1",
+    "text": "5.1 Header 1"
+  },
+  {
+    "objectID": "Appendix-Datasets.html#header-1",
+    "href": "Appendix-Datasets.html#header-1",
+    "title": "Appendix A — Basic assumptions",
+    "section": "A.1 Header 1",
+    "text": "A.1 Header 1"
+  },
+  {
+    "objectID": "A1-GettingStarted.html#installation",
+    "href": "A1-GettingStarted.html#installation",
+    "title": "1  Getting Started",
+    "section": "1.1 Installation",
+    "text": "1.1 Installation\nYou can install the development version of FINN from GitHub with:\n# install.packages(\"devtools\")\ndevtools::install_github(\"FINNverse/FINN\")\nFINN::install_FINN()"
+  },
+  {
+    "objectID": "A1-GettingStarted.html#example",
+    "href": "A1-GettingStarted.html#example",
+    "title": "1  Getting Started",
+    "section": "1.2 Example",
+    "text": "1.2 Example\nThis is a basic example which shows you how to solve a common problem:\n\nlibrary(FINN)\n#&gt; ── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n#&gt; ✔ torch &lt;environment&gt; \n#&gt; ✔ torch_optimizer\n## basic example code"
+  }
+]

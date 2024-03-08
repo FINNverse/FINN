@@ -1,0 +1,51 @@
+project:
+  type: book
+  output-dir: docs
+book:
+  title: Forest Informed Neural Networks (FINN)
+  author:
+    name: Yannek Käber and Maximilian Pichler
+    url: https://www.uni-regensburg.de/biologie-vorklinische-medizin/theoretische-oekologie/mitarbeiter/maximilian-pichler/index.html
+  date: March 2024
+  # site-url: https://TheoreticalEcology.github.io/machinelearning/
+  # repo-url: https://github.com/TheoreticalEcology/machinelearning
+  repo-branch: master
+  repo-actions: edit
+  sharing:
+  - twitter
+  - facebook
+  - linkedin
+  chapters:
+  - index.qmd
+  - A1-GettingStarted.qmd
+  - part: Model description
+    chapters:
+    - A2-basic-assumptions.qmd
+    - A3-demographic-processes.qmd
+  - part: Simulating
+    chapters:
+    - B1-forest-succession.qmd
+  - part: Fitting
+    chapters:
+    - C1-fit-environment.qmd
+  appendices:
+  - Appendix-Datasets.qmd
+engine: knitr
+bibliography: references.bib
+google-scholar: true
+execute:
+  freeze: auto
+  cache: false
+format:
+  html:
+    theme:
+      light: flatly
+      dark: darkly
+    css: include/webex.css
+    include-after-body: include/webex.js
+    grid:
+      sidebar-width: 280px
+      body-width: 800px
+      margin-width: 220px
+      gutter-width: 1.5em
+editor: visual

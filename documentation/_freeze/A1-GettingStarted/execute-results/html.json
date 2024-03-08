@@ -1,0 +1,14 @@
+{
+  "hash": "a90b567100670940ad34efb1b4a8678c",
+  "result": {
+    "markdown": "# Getting Started {#sec-gettingstarted}\n\n\n\n\n\n## Installation\n\nYou can install the development version of FINN from [GitHub](https://github.com/) with:\n\n``` r\n# install.packages(\"devtools\")\ndevtools::install_github(\"FINNverse/FINN\")\nFINN::install_FINN()\n```\n\n## Example\n\nThis is a basic example which shows you how to solve a common problem:\n\n\n::: {.cell}\n\n```{.r .cell-code}\nlibrary(FINN)\n#> ── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n#> ✔ torch <environment> \n#> ✔ torch_optimizer\n## basic example code\n```\n:::\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

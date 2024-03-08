@@ -1,0 +1,17 @@
+# Preface {.unnumbered}
+
+**Forest Informed Neural Networks (FINN)** is a seamless integration of a dynamic forest model and neural networks. It main purpose is to understand the limitations and potentials of dynamic forest models in a changing world. A key element of FINN is the interface between classic processes based modeling and data driven machine learning techniques.
+
+**Authors**:
+
+Maximilian Pichler: [\@\_Max_Pichler](https://twitter.com/_Max_Pichler)
+
+Yannek Käber: [\@KaberYannek](https://twitter.com/KaberYannek)
+
+**Contributors**:
+
+
+
+```{=html}
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>
+```
