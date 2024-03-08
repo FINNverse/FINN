@@ -2,6 +2,7 @@ import sys
 import os
 from typing import Union, Tuple, List, Optional, Callable
 import itertools
+from xmlrpc.client import Boolean
 from tqdm import tqdm
 import torch
 import numpy as np
@@ -181,7 +182,6 @@ def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, par
             torch.Tensor: Regeneration values for forest patches.
     """
     
-    print(AL.shape)
     regP = torch.sigmoid((AL + (1-parReg) - 1)/1e-3)
     environment = pred
     regeneration = sample_poisson_relaxed((regP*environment[:,None,...].repeat(1, Species.shape[1], 1,) + 1e-20), 20)
@@ -224,6 +224,7 @@ class FINN:
         """
         self.device = torch.device(device)
         self.sp = sp
+        self.pred = None
         self.env = env
         self.optimizer = None
         self.dtype = torch.float32
@@ -345,7 +346,7 @@ class FINN:
             model_list.append(torch.nn.ReLU())            
         return torch.nn.Sequential(*model_list)        
     
-    def __aggregate(self, labels, samples, samples_T, Result, Result_T):
+    def __aggregate(self, labels, samples, Results):
         """Aggregate results.
         
         Args:
@@ -359,19 +360,21 @@ class FINN:
             list: A list containing the aggregated result arrays [Result, Result_T].
         """
         
+        
         for k in range(labels.shape[0]):
-            values, positions = self.__groupby_mean(samples[k,:,:].flatten().view([-1,1]), samples_T[k,:,:].flatten().view([-1,1]), labels[k,:,:].flatten())
-            Result[k,positions] = Result[k,positions] + values[0].squeeze()
-            Result_T[k,positions] = Result_T[k,positions] + values[1].squeeze()       
-        return [Result, Result_T]
+            samples_tmp = [sample[k,:,:].flatten().view([-1,1]) for sample in samples]
+
+            values, positions = self.__groupby_mean(samples_tmp, labels[k,:,:].flatten())
+            
+            for v in range(len(samples)):
+                Results[v][k,positions] = Results[v][k,positions] + values[v].squeeze()  
+        return Results
     
-    def __groupby_mean(self, value:torch.Tensor, value_T: torch.Tensor, labels:torch.LongTensor) -> (torch.Tensor, torch.LongTensor):
+    def __groupby_mean(self, values: List[torch.Tensor], labels:torch.LongTensor) -> (torch.Tensor, torch.LongTensor):
         """Groups the given values by their corresponding labels and calculates the mean for each group.
         
         Args:
-            value (torch.Tensor): The values to be grouped.
-            value_T (torch.Tensor): The transpose of the values to be grouped.
-            labels (torch.LongTensor): The labels for grouping.
+            values List(torch.Tensor): The values to be grouped.
         
         Returns:
             tuple: A tuple containing two tensors:
@@ -384,13 +387,13 @@ class FINN:
         labels = labels.tolist()
         key_val = {key: val for key, val in zip(uniques, range(len(uniques)))}
         val_key = {val: key for key, val in zip(uniques, range(len(uniques)))}
-        labels = torch.tensor(list(map(key_val.get, labels)), device = value.device, dtype=torch.int64)
-        labels = labels.view(labels.size(0), 1).expand(-1, value.size(1))
+        labels = torch.tensor(list(map(key_val.get, labels)), device = values[0].device, dtype=torch.int64)
+        labels = labels.view(labels.size(0), 1).expand(-1, values[0].size(1))
         unique_labels = labels.unique(dim=0, return_counts=False)
-        result = torch.zeros_like(unique_labels, dtype = value.dtype).scatter_add_(0, labels, value)
-        result_T = torch.zeros_like(unique_labels, dtype = value.dtype).scatter_add_(0, labels, value_T)
+        
+        results = [torch.zeros_like(unique_labels, dtype = value.dtype).scatter_add_(0, labels, value) for value in values]
         new_labels = torch.LongTensor(list(map(val_key.get, unique_labels[:, 0].tolist())))
-        return [result, result_T], new_labels
+        return results, new_labels
         
     def __pad_tensors(self, value, indices, org_dim):
         KK = torch.tensor_split(value.flatten(0, 1), org_dim[0]*org_dim[1])
@@ -408,7 +411,8 @@ class FINN:
                 pred_growth: Optional[torch.Tensor]=None, 
                 pred_morth: Optional[torch.Tensor]=None, 
                 pred_reg: Optional[torch.Tensor]=None,
-                patches: Optional[float]=50) -> [torch.Tensor, torch.Tensor]:
+                patches: Optional[float]=50,
+                debug: Boolean=True) -> [torch.Tensor, torch.Tensor]:
         """Predicts the growth and mortality of trees based on the given inputs.
 
         
@@ -464,6 +468,18 @@ class FINN:
         Result = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) # sites, time, species
         ## number of trees
         Result_T = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device)
+        
+        AL = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device)
+        g = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device)
+        m = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device)
+        r = torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device)
+        
+        
+        if debug:
+            Result = [torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) for _ in range(6)]
+        else:
+            Result = [torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) for _ in range(2)]
+        
 
         time = env.shape[1]
         patches = dbh.shape[1]
@@ -484,11 +500,16 @@ class FINN:
                         # ba * nTree
                         ba = BA_T_P(dbh, nTree)
                     labels = Species
-                    samples = (ba * torch.sigmoid((nTree - 0.5)/1e-3)) #.squeeze(3)  # torch.sigmoid((nTree - 0.5)/1e-3) Baeume da oder nicht
-                    samples_T = (nTree * torch.sigmoid((nTree - 0.5)/1e-3)) #.squeeze(3)
-                    tmp_res1, tmp_res2 = self.__aggregate(labels, samples, samples_T, Result[:,i,:], Result_T[:,i,:])
-                    Result[:,i,:] = Result[:,i,:] + tmp_res1/patches
-                    Result_T[:,i,:] = Result_T[:,i,:] + tmp_res2/patches
+                    
+                    samples = []
+                    samples.append((ba * torch.sigmoid((nTree - 0.5)/1e-3)))
+                    samples.append((nTree * torch.sigmoid((nTree - 0.5)/1e-3)))
+                    
+                    Results_tmp = [torch.zeros_like(Result[0][:,i,:]) for _ in range(len(samples))]
+                    tmp_res = self.__aggregate(labels, samples, Results_tmp)
+                    for v in range(2):
+                        Result[v][:,i,:] = Result[v][:,i,:] + tmp_res[v]/patches
+                    
 
             # Model
             
@@ -504,22 +525,37 @@ class FINN:
                 m = mortFP(dbh, g, Species, nTree, self._parGlobal, self._parMort, pred_morth[:,i,:], AL) #.unsqueeze(3)
                 nTree = torch.clamp(nTree - m, min = 0)
                 
-                # print(g)
-                # You can append more messages in a similar way
-                # with open('output_document.txt', 'a') as file:  # Note the 'a' mode for appending
-                # file.write('Appending another message to the document.\n')
             
             with torch.no_grad():
                 nTree_clone =  nTree.clone() #torch.zeros_like(nTree).to(self.device)+0
             
-            AL = compF_P(dbh, Species, nTree_clone, self._parGlobal, h = torch.zeros([1, 1]))
+            AL_reg = compF_P(dbh, Species, nTree_clone, self._parGlobal, h = torch.zeros([1, 1]))
            
-            r = regFP(dbh, Species, self._parGlobal, self._parReg, pred_reg[:,i,:], AL)
-
+            r = regFP(dbh, Species, self._parGlobal, self._parReg, pred_reg[:,i,:], AL_reg)
+            
             # New recruits
             new_dbh = ((r-1+0.1)/1e-3).sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
             new_nTree = r
-            new_Species = torch.arange(0, sp, dtype=torch.int64, device = self.device).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1)
+            new_Species = torch.arange(0, sp, dtype=torch.int64, device = self.device).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1)            
+             
+            if debug:
+                if dbh.shape[2] != 0:
+                    labels = Species
+
+                    samples = []
+                    samples.append(AL)
+                    samples.append(g)
+                    samples.append(m)
+                    #samples.append(r)
+
+                    Results_tmp = [torch.zeros_like(Result[0][:,i,:]) for _ in range(len(samples))]
+                    tmp_res = self.__aggregate(labels, samples, Results_tmp)
+                    for v in [2,3,4]:
+                        Result[v][:,i,:] = Result[v][:,i,:] + tmp_res[v-2]/patches
+                        
+                    # reg extra
+                    tmp_res = self.__aggregate(new_Species, [r], [torch.zeros(Result[0][:,i,:].shape[0], sp ) ])
+                    Result[5][:,i,:] = Result[5][:,i,:] + tmp_res[0]/patches
 
             # Combine
             dbh = torch.concat([dbh, new_dbh], 2)
@@ -535,7 +571,7 @@ class FINN:
                 nTree = pad_tensors_speed_up(nTree, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
                 Species = pad_tensors_speed_up(Species, indices, org_dim_t).unflatten(0, org_dim)
 
-        return (Result, Result_T)
+        return Result
 
 
     def fit(self,
@@ -626,6 +662,8 @@ class FINN:
             ep_bar.set_postfix(loss=f'{bl}')
             self.history[epoch] = bl
         torch.cuda.empty_cache()
+        self.pred = pred
+
 
     
     def continue_fit(self, 
