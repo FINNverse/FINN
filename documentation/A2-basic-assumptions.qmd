@@ -1,5 +1,12 @@
 # Basic assumptions {#sec-modeldescription}
 
-## Header 1
+## FINN is a simple forest gap model
 
+### Forest Gap models
+Starting with the considerations of gap dynamics @Watt1947 and the introduction of Jabowa [@]
+Forest Gap Models simulate forests on multiple independent forest patches. Each patch is a realization 
+
+
+### How is FINN simple?
+FINN is build as a simple forest gap model. 
 

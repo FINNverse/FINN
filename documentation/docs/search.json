@@ -67,6 +67,6 @@
     "href": "A1-GettingStarted.html#example",
     "title": "1  Getting Started",
     "section": "1.2 Example",
-    "text": "1.2 Example\nThis is a basic example which shows you how to solve a common problem:\n\nlibrary(FINN)\n#&gt; ── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n#&gt; ✔ torch &lt;environment&gt; \n#&gt; ✔ torch_optimizer\n## basic example code"
+    "text": "1.2 Example\nThis is a basic example which shows you how to solve a common problem:\n\nlibrary(FINN)\n\n── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n\n\n✔ torch &lt;environment&gt; \n✔ torch_optimizer"
   }
 ]
