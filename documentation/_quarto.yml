@@ -2,11 +2,11 @@ project:
   type: book
   output-dir: docs
 book:
-  title: Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks
+  title: Forest Informed Neural Networks (FINN)
   author:
     name: Yannek Käber and Maximilian Pichler
     url: https://www.uni-regensburg.de/biologie-vorklinische-medizin/theoretische-oekologie/mitarbeiter/maximilian-pichler/index.html
-  date: Juni 2023
+  date: March 2024
   # site-url: https://TheoreticalEcology.github.io/machinelearning/
   # repo-url: https://github.com/TheoreticalEcology/machinelearning
   repo-branch: master

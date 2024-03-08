@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Yannek Käber and Maximilian Pichler">
-<meta name="dcterms.date" content="2023-06-01">
+<meta name="dcterms.date" content="2024-03-01">
 
-<title>Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks</title>
+<title>Forest Informed Neural Networks (FINN)</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -67,12 +67,12 @@ ul.task-list li input[type="checkbox"] {
 
 
 <link rel="stylesheet" href="include/webex.css">
-<meta name="citation_title" content="Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks">
+<meta name="citation_title" content="Forest Informed Neural Networks (FINN)">
 <meta name="citation_author" content="Yannek Käber and Maximilian Pichler">
-<meta name="citation_publication_date" content="2023-06-01">
-<meta name="citation_cover_date" content="2023-06-01">
-<meta name="citation_year" content="2023">
-<meta name="citation_online_date" content="2023-06-01">
+<meta name="citation_publication_date" content="2024-03-01">
+<meta name="citation_cover_date" content="2024-03-01">
+<meta name="citation_year" content="2024">
+<meta name="citation_online_date" content="2024-03-01">
 <meta name="citation_language" content="en">
 <meta name="citation_reference" content="citation_title=Unlocking the forest inventory data: Relating individual tree performance to unmeasured environmental factors;,citation_abstract=Geographically extensive forest inventories, such as the USDA Forest Service’s Forest Inventory and Analysis (FIA) program, contain millions of individual tree growth and mortality records that could be used to develop broad-scale models of forest dynamics. A limitation of inventory data, however, is that individual-level measurements of light (L) and other environmental factors are typically absent. Thus, inventory data alone cannot be used to parameterize mechanistic models of forest dynamics in which individual performance depends on light, water, nutrients, etc. To overcome this limitation, we developed methods to estimate species-specific parameters (θG) relating sapling growth (G) to L using data sets in which G, but not L, is observed for each sapling. Our approach involves: (1) using calibration data that we collected in both eastern and western North America to quantify the probability that saplings receive different amounts of light, conditional on covariates x that can be obtained from inventory data (e.g., sapling crown class and neighborhood crowding); and (2) combining these probability distributions with observed G and x to estimate θG using Bayesian computational methods. Here, we present a test case using a data set in which G, L, and x were observed for saplings of nine species. This test data set allowed us to compare estimates of θG obtained from the standard approach (where G and L are observed for each sapling) to our method (where G and x, but not L, are observed). For all species, estimates of θG obtained from analyses with and without observed L were similar. This suggests that our approach should be useful for estimating light-dependent growth functions from inventory data that lack direct measurements of L. Our approach could be extended to estimate parameters relating sapling mortality to L from inventory data, as well as to deal with uncertainty in other resources (e.g., water or nutrients) or environmental factors (e.g., temperature).;,citation_author=Jeremy W. Lichstein;,citation_author=Jonathan Dushoff;,citation_author=Kiona Ogle;,citation_author=Anping Chen;,citation_author=Drew W. Purves;,citation_author=John P. Caspersen;,citation_author=Stephen W. Pacala;,citation_publication_date=2010;,citation_cover_date=2010;,citation_year=2010;,citation_fulltext_html_url=https://onlinelibrary.wiley.com/doi/abs/10.1890/08-2334.1;,citation_issue=3;,citation_doi=10.1890/08-2334.1;,citation_issn=1939-5582;,citation_volume=20;,citation_language=en-US;,citation_journal_title=Ecological Applications;">
 <meta name="citation_reference" content="citation_title=Cutting out the middleman: Calibrating and validating a dynamic vegetation model (ED2-PROSPECT5) using remotely sensed surface reflectance;,citation_abstract=Abstract. Canopy radiative transfer is the primary mechanism by which models relate vegetation composition and state to the surface energy balance, which is important to light- and temperature-sensitive plant processes as well as understanding land–atmosphere feedbacks. In addition, certain parameters (e.g., specific leaf area, SLA) that have an outsized influence on vegetation model behavior can be constrained by observations of shortwave reflectance, thus reducing model predictive uncertainty. Importantly, calibrating against radiative transfer outputs allows models to directly use remote sensing reflectance products without relying on highly derived products (such as MODIS leaf area index) whose assumptions may be incompatible with the target vegetation model and whose uncertainties are usually not well quantified. Here, we created the EDR model by coupling the two-stream representation of canopy radiative transfer in the Ecosystem Demography model version 2 (ED2) with a leaf radiative transfer model (PROSPECT-5) and a simple soil reflectance model to predict full-range, high-spectral-resolution surface reflectance that is dependent on the underlying ED2 model state. We then calibrated this model against estimates of hemispherical reflectance (corrected for directional effects) from the NASA Airborne Visible/Infrared Imaging Spectrometer (AVIRIS) and survey data from 54 temperate forest plots in the northeastern United States. The calibration significantly reduced uncertainty in model parameters related to leaf biochemistry and morphology and canopy structure for five plant functional types. Using a single common set of parameters across all sites, the calibrated model was able to accurately reproduce surface reflectance for sites with highly varied forest composition and structure. However, the calibrated model’s predictions of leaf area index (LAI) were less robust, capturing only 46 % of the variability in the observations. Comparing the ED2 radiative transfer model with another two-stream soil–leaf–canopy radiative transfer model commonly used in remote sensing studies (PRO4SAIL) illustrated structural errors in the ED2 representation of direct radiation backscatter that resulted in systematic underestimation of reflectance. In addition, we also highlight that, to directly compare with a two-stream radiative transfer model like EDR, we had to perform an additional processing step to convert the directional reflectance estimates of AVIRIS to hemispherical reflectance (also known as “albedo”). In future work, we recommend that vegetation models add the capability to predict directional reflectance, to allow them to more directly assimilate a wide range of airborne and satellite reflectance products. We ultimately conclude that despite these challenges, using dynamic vegetation models to predict surface reflectance is a promising avenue for model calibration and validation using remote sensing data.;,citation_author=Alexey N. Shiklomanov;,citation_author=Michael C. Dietze;,citation_author=Istem Fer;,citation_author=Toni Viskari;,citation_author=Shawn P. Serbin;,citation_publication_date=2021-05-12;,citation_cover_date=2021-05-12;,citation_year=2021;,citation_fulltext_html_url=https://gmd.copernicus.org/articles/14/2603/2021/;,citation_issue=5;,citation_doi=10.5194/gmd-14-2603-2021;,citation_issn=1991-9603;,citation_volume=14;,citation_language=en-US;,citation_journal_title=Geoscientific Model Development;,citation_journal_abbrev=Geosci. Model Dev.;">
@@ -103,7 +103,7 @@ ul.task-list li input[type="checkbox"] {
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal sidebar-navigation floating overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
-      <a href="./">Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks</a> 
+      <a href="./">Forest Informed Neural Networks (FINN)</a> 
         <div class="sidebar-tools-main">
     <div class="dropdown">
       <a href="" title="Share" id="quarto-navigation-tool-dropdown-0" class="quarto-navigation-tool dropdown-toggle px-1" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Share"><i class="bi bi-share"></i></a>
@@ -235,10 +235,7 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#preface" id="toc-preface" class="nav-link active" data-scroll-target="#preface">Preface</a>
-  <ul class="collapse">
-  <li><a href="#before-the-course" id="toc-before-the-course" class="nav-link" data-scroll-target="#before-the-course">Before the course</a></li>
-  </ul></li>
+  <li><a href="#preface" id="toc-preface" class="nav-link active" data-scroll-target="#preface">Preface</a></li>
   </ul>
 </nav>
     </div>
@@ -247,7 +244,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks</h1>
+<h1 class="title">Forest Informed Neural Networks (FINN)</h1>
 </div>
 
 
@@ -264,7 +261,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 1, 2023</p>
+      <p class="date">March 1, 2024</p>
     </div>
   </div>
   
@@ -276,33 +273,14 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="preface" class="level1 unnumbered">
 <h1 class="unnumbered">Preface</h1>
-<p><strong>Machine learning (ML)</strong> is the process of building a predictive model that makes predictions about new data based on observations (training data). The goal of this course is to enable you to build a robust ML model, one that generalizes well to new observations and doesn’t “overfit” your training data. To do this, you will need to master a number of skills, in particular</p>
-<ul>
-<li>Understanding the bias-variance tradeoff (model complexity), including hyperparameter tuning and regularization (shrinkage)</li>
-<li>Understanding classic ML pipeline to tune and validate your models</li>
-<li>Understanding the different ML algorithms, their strengths and limitations</li>
-</ul>
-<p>In recent years, a new field within ML called <strong>Deep Learning</strong> has emerged and attracted a lot of attention. The reason for this is that DL incorporates many different but very flexible architectures that allow to natively model different types of data, e.g.&nbsp;Convolutional Neural Networks for images or Recurrent Neural Networks for time series. However, exploiting the flexibility of DL requires a deeper, more fundamental understanding of the frameworks in which they are implemented. To this end, the course will also cover common DL frameworks such as TensorFlow (and PyTorch) and:</p>
-<ul>
-<li>Understanding neural networks and how they are trained</li>
-<li>Understanding different DL architectures such as Fully Connected NN, Convolutional Neural Networks, and Recurrent Neural Networks</li>
-</ul>
-<section id="before-the-course" class="level2">
-<h2 class="anchored" data-anchor-id="before-the-course">Before the course</h2>
-<ul>
-<li>Please read the following two reviews about <a href="https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.14061">Machine Learning in General</a> <span class="citation" data-cites="pichler2023machine">(<a href="#ref-pichler2023machine" role="doc-biblioref"><strong>pichler2023machine?</strong></a>)</span> and <a href="https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13901">Deep Learning</a> <span class="citation" data-cites="borowiec2022deep">(<a href="#ref-borowiec2022deep" role="doc-biblioref"><strong>borowiec2022deep?</strong></a>)</span></li>
-<li>Please install all dependencies before the course because it will take some time, see <a href="A1-GettingStarted.html"><span>Chapter&nbsp;1</span></a> for installation instructions</li>
-<li>This course assumes advanced knowledge of the R programming language. If you want to refresh your knowledge about R, you can find a crashcourse in R in the book of the advanced statistic course: <a href="https://theoreticalecology.github.io/AdvancedRegressionModels/6A-RCrashCourse.html">R-Crash-Course</a></li>
-</ul>
+<p><strong>Forest Informed Neural Networks (FINN)</strong> is a seamless integration of a dynamic forest model and neural networks. It main purpose is to understand the limitations and potentials of dynamic forest models in a changing world. A key element of FINN is the interface between classic processes based modeling and data driven machine learning techniques.</p>
 <p><strong>Authors</strong>:</p>
 <p>Maximilian Pichler: <a href="https://twitter.com/_Max_Pichler">@_Max_Pichler</a></p>
-<p>Florian Hartig: <a href="https://twitter.com/florianhartig">@florianhartig</a></p>
+<p>Yannek Käber: <a href="https://twitter.com/KaberYannek">@KaberYannek</a></p>
 <p><strong>Contributors</strong>:</p>
-<p>Johannes Oberpriller, Matthias Meier</p>
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png"></a><br>This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

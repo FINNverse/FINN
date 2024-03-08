@@ -9,9 +9,9 @@
   {
     "objectID": "index.html",
     "href": "index.html",
-    "title": "Forest Informed Neural Networks (FINN) - a seamless integration of a process based forest model with neural networks",
+    "title": "Forest Informed Neural Networks (FINN)",
     "section": "",
-    "text": "Preface\nMachine learning (ML) is the process of building a predictive model that makes predictions about new data based on observations (training data). The goal of this course is to enable you to build a robust ML model, one that generalizes well to new observations and doesn’t “overfit” your training data. To do this, you will need to master a number of skills, in particular\nIn recent years, a new field within ML called Deep Learning has emerged and attracted a lot of attention. The reason for this is that DL incorporates many different but very flexible architectures that allow to natively model different types of data, e.g. Convolutional Neural Networks for images or Recurrent Neural Networks for time series. However, exploiting the flexibility of DL requires a deeper, more fundamental understanding of the frameworks in which they are implemented. To this end, the course will also cover common DL frameworks such as TensorFlow (and PyTorch) and:"
+    "text": "Preface\nForest Informed Neural Networks (FINN) is a seamless integration of a dynamic forest model and neural networks. It main purpose is to understand the limitations and potentials of dynamic forest models in a changing world. A key element of FINN is the interface between classic processes based modeling and data driven machine learning techniques.\nAuthors:\nMaximilian Pichler: @_Max_Pichler\nYannek Käber: @KaberYannek\nContributors:\nThis work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License"
   },
   {
     "objectID": "index.html#before-the-course",
@@ -54,5 +54,19 @@
     "title": "Appendix A — Basic assumptions",
     "section": "A.1 Header 1",
     "text": "A.1 Header 1"
+  },
+  {
+    "objectID": "A1-GettingStarted.html#installation",
+    "href": "A1-GettingStarted.html#installation",
+    "title": "1  Getting Started",
+    "section": "1.1 Installation",
+    "text": "1.1 Installation\nYou can install the development version of FINN from GitHub with:\n# install.packages(\"devtools\")\ndevtools::install_github(\"FINNverse/FINN\")\nFINN::install_FINN()"
+  },
+  {
+    "objectID": "A1-GettingStarted.html#example",
+    "href": "A1-GettingStarted.html#example",
+    "title": "1  Getting Started",
+    "section": "1.2 Example",
+    "text": "1.2 Example\nThis is a basic example which shows you how to solve a common problem:\n\nlibrary(FINN)\n#&gt; ── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n#&gt; ✔ torch &lt;environment&gt; \n#&gt; ✔ torch_optimizer\n## basic example code"
   }
 ]
