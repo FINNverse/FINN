@@ -1,14 +1,5 @@
 # Getting Started {#sec-gettingstarted}
 
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
-)
-```
-
 ## Installation
 
 You can install the development version of FINN from [GitHub](https://github.com/) with:
@@ -25,7 +16,6 @@ This is a basic example which shows you how to solve a common problem:
 
 ```{r example}
 library(FINN)
-## basic example code
 ```
 
 
