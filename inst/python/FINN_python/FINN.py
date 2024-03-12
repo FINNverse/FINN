@@ -460,6 +460,8 @@ class FINN:
             
         if type(Species) is np.ndarray:
             Species = torch.tensor(Species, dtype=torch.int64, device=self.device)
+            
+        cohort_ids = torch.randint(0, 50000, size=Species.shape)
         
         # Result arrays
         ## dbh / ba / ba*nTRee
@@ -476,6 +478,7 @@ class FINN:
         if debug:
             Result = [torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) for _ in range(6)]
             Raw_results = []
+            Raw_cohorts = []
         else:
             Result = [torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) for _ in range(2)]
         
@@ -535,7 +538,8 @@ class FINN:
             # New recruits
             new_dbh = ((r-1+0.1)/1e-3).sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
             new_nTree = r
-            new_Species = torch.arange(0, sp, dtype=torch.int64, device = self.device).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1)            
+            new_Species = torch.arange(0, sp, dtype=torch.int64, device = self.device).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1)
+            new_cohort_id = torch.randint(0, 50000, size = [sp, 1]).unsqueeze(0).repeat(r.shape[0], r.shape[1], 1) 
              
             if debug:
                 if dbh.shape[2] != 0:
@@ -556,7 +560,8 @@ class FINN:
                     for v in [2,3,4]:
                         Result[v][:,i,:] = Result[v][:,i,:] + tmp_res[v-2]/cohort_counts[0]/patches
                         
-                    
+                    # cohort ids
+                    Raw_cohorts.append(cohort_ids)
                         
                     # reg extra
                     tmp_res = self.__aggregate(new_Species, [r], [torch.zeros(Result[0][:,i,:].shape[0], sp ) ])
@@ -568,6 +573,7 @@ class FINN:
             dbh = torch.concat([dbh, new_dbh], 2)
             nTree = torch.concat([nTree, new_nTree], 2)
             Species = torch.concat([Species, new_Species], 2)
+            cohort_ids = torch.cat([cohort_ids, new_cohort_id], 2)
             
             # Pad tensors, expensive
             if i % 10 == 0:
@@ -576,10 +582,13 @@ class FINN:
                 org_dim_t = torch.tensor(org_dim, dtype = torch.long, device = "cpu")
                 dbh = pad_tensors_speed_up(dbh, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
                 nTree = pad_tensors_speed_up(nTree, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
+                cohort_ids = pad_tensors_speed_up(cohort_ids, indices, org_dim_t).unflatten(0, org_dim)
                 Species = pad_tensors_speed_up(Species, indices, org_dim_t).unflatten(0, org_dim)
+  
 
         if debug:
             Result.append(Raw_results)
+            Result.append(Raw_cohorts)
 
         return Result
 
