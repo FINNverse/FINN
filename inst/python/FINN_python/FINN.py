@@ -547,14 +547,20 @@ class FINN:
                     samples.append(m)
                     #samples.append(r)
 
+                    # count number of cohorts
+                    Sp_tmp = Species.type(g.dtype)
+                    cohort_counts = self.__aggregate(labels, [(Sp_tmp+1)/(Sp_tmp+1)], [torch.zeros_like(Result[0][:,i,:], dtype=g.dtype) ])
+                    
                     Results_tmp = [torch.zeros_like(Result[0][:,i,:]) for _ in range(len(samples))]
                     tmp_res = self.__aggregate(labels, samples, Results_tmp)
                     for v in [2,3,4]:
-                        Result[v][:,i,:] = Result[v][:,i,:] + tmp_res[v-2]/patches
+                        Result[v][:,i,:] = Result[v][:,i,:] + tmp_res[v-2]/cohort_counts[0]/patches
+                        
+                    
                         
                     # reg extra
                     tmp_res = self.__aggregate(new_Species, [r], [torch.zeros(Result[0][:,i,:].shape[0], sp ) ])
-                    Result[5][:,i,:] = Result[5][:,i,:] + tmp_res[0]/patches
+                    Result[5][:,i,:] = Result[5][:,i,:] + tmp_res[0]/cohort_counts[0]/patches
                     
                     Raw_results.append([Species.cpu().data.numpy(), dbh.cpu().data.numpy(), m.cpu().data.numpy(), g.cpu().data.numpy(), r.cpu().data.numpy()])
 
