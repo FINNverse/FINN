@@ -139,7 +139,8 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
     # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
     growth = pred/2 * parGrowth[Species,1] * ((parMort[Species,1]-dbh/100) / parMort[Species,1]).pow(2)
     # growth = parGrowth[Species,1]
-    return torch.nn.functional.softplus(growth)
+    # return torch.nn.functional.softplus(growth)
+    return torch.clamp_min(growth, 0.0)
 
 def mortFP(dbh: torch.Tensor, g: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, parMort: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
     """Calculate mortality of trees based on various factors.
