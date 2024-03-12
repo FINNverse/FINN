@@ -475,6 +475,7 @@ class FINN:
         
         if debug:
             Result = [torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) for _ in range(6)]
+            Raw_results = []
         else:
             Result = [torch.zeros([env.shape[0],env.shape[1],  dbh.shape[2]], device=self.device) for _ in range(2)]
         
@@ -554,6 +555,8 @@ class FINN:
                     # reg extra
                     tmp_res = self.__aggregate(new_Species, [r], [torch.zeros(Result[0][:,i,:].shape[0], sp ) ])
                     Result[5][:,i,:] = Result[5][:,i,:] + tmp_res[0]/patches
+                    
+                    Raw_results.append([Species.cpu().data.numpy(), dbh.cpu().data.numpy(), m.cpu().data.numpy(), g.cpu().data.numpy(), r.cpu().data.numpy()])
 
             # Combine
             dbh = torch.concat([dbh, new_dbh], 2)
@@ -568,6 +571,9 @@ class FINN:
                 dbh = pad_tensors_speed_up(dbh, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
                 nTree = pad_tensors_speed_up(nTree, indices, org_dim_t).unflatten(0, org_dim)#.unsqueeze(3)
                 Species = pad_tensors_speed_up(Species, indices, org_dim_t).unflatten(0, org_dim)
+
+        if debug:
+            Result.append(Raw_results)
 
         return Result
 
