@@ -135,7 +135,7 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
       # shade = (((AL**2)*parGrowth[Species,0]).sigmoid()-0.5)*2
     shade = torch.sigmoid((AL + (1-parGrowth[Species,0]) - 1)/1e-1)
     environment = index_species(pred, Species)
-    pred = (shade+environment)
+    pred = (shade*environment)
     # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
     growth = pred/2 * parGrowth[Species,1] * ((parMort[Species,1]-dbh/100) / parMort[Species,1]).pow(2)
     # growth = parGrowth[Species,1]
