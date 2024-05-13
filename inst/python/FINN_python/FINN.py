@@ -15,7 +15,7 @@ from .CohortMat import *
 Bernoulli = torch.distributions.relaxed_bernoulli.RelaxedBernoulli
 
 
-@torch.jit.script
+@torch.jit.script ## MAX
 def BA_T_P(dbh: torch.Tensor, nTree: torch.Tensor) -> torch.Tensor:
     """Calculate the basal area of trees.
     
@@ -35,7 +35,7 @@ def BA_T_P(dbh: torch.Tensor, nTree: torch.Tensor) -> torch.Tensor:
     
     return torch.pi*(dbh/100./2.).pow(2)*nTree    
     
-@torch.jit.script
+@torch.jit.script ## Yannek
 def BA_P(dbh: torch.Tensor) -> torch.Tensor:
     """Calculate the basal area of a tree given the diameter at breast height (dbh).
     
@@ -53,11 +53,13 @@ def BA_P(dbh: torch.Tensor) -> torch.Tensor:
     
     return torch.pi*(dbh/100./2.).pow(2.0)
 
-def test_predict(env, NN, dbh, Species, time = 0):
+# IGNORE
+def test_predict(env, NN, dbh, Species, time = 0): 
     pred = NN(env)[:,time,:]
     return pred.flatten()[Species.permute(1, 0, 2).flatten(1, 2)].unflatten(1, [Species.shape[0], Species.shape[2]]).permute(1, 0, 2)
 
 
+# IGNORE
 def test_predict_second(env, NN, dbh, Species, time = 0):
     pred = NN(env)[:,time,:]
     shapes = pred.shape
@@ -67,7 +69,7 @@ def test_predict_second(env, NN, dbh, Species, time = 0):
     return output
 
     
-
+# YANNEK
 @torch.jit.script
 def height_P(dbh: torch.Tensor, parGlobal: torch.Tensor) -> torch.Tensor:
     """Calculate the height of a tree based on its diameter at breast height (dbh) and a parameter (par).
@@ -83,6 +85,7 @@ def height_P(dbh: torch.Tensor, parGlobal: torch.Tensor) -> torch.Tensor:
     height = ((((dbh * parGlobal) / (dbh+100)).exp())-1)*100 + 0.001
     return height
 
+# YANNEK
 @torch.jit.script
 def compF_P(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, h: Optional[torch.Tensor]=None, minLight: float=50.) -> torch.Tensor:
     """Compute the fraction of available light (AL) for each cohort based on the given parameters.
@@ -102,13 +105,14 @@ def compF_P(dbh: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGl
     cohortHeights = height_P(dbh, parGlobal[Species]).unsqueeze(3)
     if h is None:
         h = cohortHeights
-        BA_height = (ba.unsqueeze(3)*torch.sigmoid((cohortHeights - h.permute(0,1, 3, 2) - 0.1)/1e-3) ).sum(-2)
+        BA_height = (ba.unsqueeze(3)*torch.sigmoid((cohortHeights - h.permute(0,1, 3, 2) - 0.1)/1e-3) ).sum(-2) # AUFPASSEN
     else:
         BA_height = (ba.unsqueeze(3)*torch.sigmoid((cohortHeights - 0.1)/1e-3)).sum(-2)
     AL = 1.-BA_height/minLight
     AL = torch.clamp(AL, min = 0)
     return AL
 
+# MAX
 def index_species(pred, Species):
     shapes = pred.shape
     X_expanded = pred.unsqueeze(1).expand(shapes[0], Species.shape[1], shapes[1])
@@ -116,6 +120,7 @@ def index_species(pred, Species):
     return pred
 
 
+# YANNEK
 @torch.jit.script
 def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parGrowth, parMort, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
     """'''Calculate the growth of a forest stand based on the given parameters.
@@ -142,6 +147,7 @@ def growthFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, 
     # return torch.nn.functional.softplus(growth)
     return torch.clamp_min(growth, 0.0)
 
+# MAX
 def mortFP(dbh: torch.Tensor, g: torch.Tensor, Species: torch.Tensor, nTree: torch.Tensor, parGlobal: torch.Tensor, parMort: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
     """Calculate mortality of trees based on various factors.
     
@@ -167,6 +173,7 @@ def mortFP(dbh: torch.Tensor, g: torch.Tensor, Species: torch.Tensor, nTree: tor
     mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
     return mort + mort.round().detach() - mort.detach()
 
+# Yannek
 def regFP(dbh: torch.Tensor, Species: torch.Tensor, parGlobal: torch.Tensor, parReg: torch.Tensor, pred: torch.Tensor, AL: torch.Tensor) -> torch.Tensor:
     """Calculate the regeneration of forest patches based on the input parameters.
     
@@ -345,6 +352,7 @@ class FINN:
             model_list.append(torch.nn.ReLU())            
         return torch.nn.Sequential(*model_list)        
     
+    # Max
     def __aggregate(self, labels, samples, Results):
         """Aggregate results.
         
@@ -369,6 +377,7 @@ class FINN:
                 Results[v][k,positions] = Results[v][k,positions] + values[v].squeeze()  
         return Results
     
+    # Max
     def __groupby_mean(self, values: List[torch.Tensor], labels:torch.LongTensor) -> (torch.Tensor, torch.LongTensor):
         """Groups the given values by their corresponding labels and calculates the mean for each group.
         
@@ -393,6 +402,7 @@ class FINN:
         results = [torch.zeros_like(unique_labels, dtype = value.dtype).scatter_add_(0, labels, value) for value in values]
         new_labels = torch.LongTensor(list(map(val_key.get, unique_labels[:, 0].tolist())))
         return results, new_labels
+        
         
     def __pad_tensors(self, value, indices, org_dim):
         KK = torch.tensor_split(value.flatten(0, 1), org_dim[0]*org_dim[1])
