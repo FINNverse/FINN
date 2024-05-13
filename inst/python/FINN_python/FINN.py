@@ -508,7 +508,7 @@ class FINN:
                     if response == "dbh":
                         ba = dbh
                     elif response == "ba":
-                        ba = BA_P(dbh, nTree)
+                        ba = BA_P(dbh)
                     else:    
                         # ba * nTree
                         ba = BA_T_P(dbh, nTree)
