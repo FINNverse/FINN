@@ -17,7 +17,7 @@ CohortMat = R6::R6Class("CohortMat", public = list(
 
     if(!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype=torch_float32(), device=self$device)
     if(!inherits(self$nTree, "torch_tensor")) self$nTree = torch::torch_tensor(self$nTree, dtype=torch_float32(), device=self$device)
-    if(!inherits(self$Species, "torch_tensor")) self$Species = torch::torch_tensor(self$Species, dtype=torch_float32(), device=self$device)
+    if(!inherits(self$Species, "torch_tensor")) self$Species = torch::torch_tensor(self$Species, dtype=torch_int64(), device=self$device)
 
   }
 ))

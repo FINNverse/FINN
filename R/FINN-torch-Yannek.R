@@ -58,12 +58,12 @@ height_P = function(dbh, parHeight) {
 compF_P = function(dbh, Species, nTree, parHeight, h = NULL, minLight = 50.){
 
   ba = (BA_P(dbh)*nTree)/0.1
-  cohortHeights = height_P(dbh, parHeight[Species])$unsqueeze(3)
+  cohortHeights = height_P(dbh, parHeight[Species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
-    BA_height = (ba$unsqueeze(3)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-3) )$sum(-2) # AUFPASSEN
+    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-3) )$sum(-2) # AUFPASSEN
   }else{
-    BA_height = (ba$unsqueeze(3)*torch_sigmoid((cohortHeights - 0.1)/1e-3))$sum(-2)
+    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-3))$sum(-2)
   }
   AL = 1.-BA_height/minLight
   AL = torch_clamp(AL, min = 0)
@@ -381,9 +381,9 @@ predict = function(self,
 
   # Result arrays
   ## dbh / ba / ba*nTRee
-  Result = torch_zeros(list(env$shape[1],env$shape[2],  dbh$shape[3]), device=self$device) # sites, time, species
+  Result = torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device) # sites, time, species
   ## number of trees
-  Result_T = torch_zeros(list(env$shape[1],env$shape[2],  dbh$shape[3]), device=self$device)
+  Result_T = torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device)
 
   AL = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
   g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
@@ -392,11 +392,11 @@ predict = function(self,
 
 
   if(debug){
-    Result = lapply(1:6,function(kk) torch_zeros(list(env$shape[1],env$shape[2],  dbh$shape[3]), device=self$device))
+    Result = lapply(1:6,function(kk) torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device))
     Raw_results = list()
     Raw_cohorts = list()
   }else{
-    Result = lapply(1:2,torch_zeros(list(env$shape[1],env$shape[2],  dbh$shape[3]), device=self$device))
+    Result = lapply(1:2,torch_zeros(list(env$shape[1],env$shape[2],  dbh$shape[3]), device=self$sp))
     }
 
   time = env$shape[2]
@@ -444,6 +444,7 @@ predict = function(self,
     AL = compF_P(dbh, Species, nTree_clone, self$parHeight)
 
     m = mortFP(dbh, Species, nTree, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3)
+    m = torch_ones_like(m)
     #### TODO if nTree = 0 then NA...prevent!
     nTree = torch_clamp(nTree - m, min = 0)
   }
@@ -453,7 +454,7 @@ predict = function(self,
     nTree_clone =  nTree$clone() #torch.zeros_like(nTree).to(self.device)+0
   })
 
-  AL_reg = compF_P(dbh, Species, nTree_clone, self$parHeight, h = torch_zeros(list(1, 1)))
+  AL_reg = compF_P(dbh, Species, nTree_clone, self$parHeight, h = torch_zeros(list(1, 1))) # must have dimension = n species in last dim
 
   r = regFP(Species, self$parReg, pred_reg[,i,], AL_reg)
   # New recruits
