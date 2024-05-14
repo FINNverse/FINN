@@ -453,6 +453,102 @@ predict = function(self,
 }
 
 
+fit = function(self,
+        X = NULL,
+        Y = NULL,
+        initCohort = NULL,
+        epochs = 2L,
+        batch_size = 20L,
+        learning_rate = 0.1,
+        start_time = 0.5,
+        patches = 50L,
+        response = "dbh"){
+
+    # Fits the model to the given data.
+    #
+    #       Args:
+    #           X (Optional[torch.Tensor]): The input data. Default is None.
+    #           Y (Optional[torch.Tensor]): The target data. Default is None.
+    #           epochs (int): The number of epochs to train the model. Default is 2.
+    #           batch_size (int): The batch size for training. Default is 20.
+    #           learning_rate (float): The learning rate for the optimizer. Default is 0.1.
+    #           start_time (float): The start time for prediction. Default is 0.5.
+    #           patches (int): The number of patches. Default is 50.
+    #           response (str): The response variable. Default is "dbh", other options are 'ba' or 'ba*nT'.
+    #
+    #       Returns:
+    #           None
+
+  torch::optim_adagrad()
+  if(is.null(self.optimizer)){
+    self$optimizer = optim_adagrad(params = self.parameters, lr = learning_rate) # AdaBound was also good
+    # TODO scheduler implementieren
+    # self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
+  }
+  time = X$shape[2]
+  start_time = round(start_time*time)
+
+  stepSize = floor(X$shape[1] / batch_size) # type: ignore
+
+  if(self$device$type == 'cuda'){
+    torch.cuda.set_device(self$device)
+    pin_memory = FALSE
+  }else{
+    pin_memory = True
+  }
+  Counts = round(Y[,,,2])
+  indices = torch_arange(1, X.shape[1])
+  data = tensor_dataset(torch_tensor(X, dtype=self$dtype, device=torch$device('cpu')),
+                        torch_tensor(Y[,,,], dtype=self$dtype, device=torch$device('cpu')),
+                        torch_tensor(Counts, dtype=torch_int64(), device=torch$device('cpu')),
+                        torch_tensor(indices, dtype=torch_int64(), device=torch$device('cpu'))
+  )
+  DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
+
+  batch_loss = torch_zeros(stepSize)
+  self$history = torch_zeros(epochs)
+
+
+  #### bis hier habe ich gemacht
+  ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
+  for(epoch in ep_bar){
+
+    for step, (x, y, c, ind) in enumerate(DataLoader):
+    self.optimizer.zero_grad()
+
+      if initCohort is None:
+        cohorts = CohortMat(dims = [x.shape[0], patches, self.sp], sp = self.sp, device=self.device)
+      nTree = cohorts.nTree
+      Species = cohorts.Species
+      dbh = cohorts.dbh
+      else:
+        nTree = (initCohort.nTree[ind,...]).to(self.device, non_blocking=True)
+      Species = (initCohort.Species[ind,...]).to(self.device, non_blocking=True)
+      dbh = (initCohort.dbh[ind,...]).to(self.device, non_blocking=True)
+
+      x = x.to(self.device, non_blocking=True)
+      y = y.to(self.device, non_blocking=True)
+      c = c.to(self.device, non_blocking=True)
+      pred = self.predict(dbh, nTree, Species, x, start_time, response)
+      loss1 = torch.nn.functional.mse_loss(y[:, start_time:,:,0], pred[0][:,start_time:,:]).mean() # dbh / ba
+      #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
+      loss2 = torch.distributions.Poisson(pred[1][:,start_time:,:]+0.001).log_prob(c[:, start_time:,:]).mean().negative() # nTree
+      loss = (loss1 + loss2)
+      #loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / ba
+
+      loss.backward()
+      self.optimizer.step()
+      batch_loss[step] = loss.item()
+      #sf.scheduler.step()
+      bl = np.mean(batch_loss)
+      bl = np.round(bl, 3)
+      ep_bar.set_postfix(loss=f'{bl}')
+      self.history[epoch] = bl
+  }
+  torch.cuda.empty_cache()
+  self.pred = pred
+}
+
 library(R6)
 
 FINN = R6Class(
@@ -476,6 +572,7 @@ FINN = R6Class(
     #initialisation function
     initialize = init_FINN,
     build_NN = build_NN,
+    predict = predict
 
     ))
 
@@ -517,97 +614,6 @@ class FINN:
   #       """
 
 
-
-
-def fit(self,
-        X: Optional[torch.Tensor]=None,
-        Y: Optional[torch.Tensor]=None,
-        initCohort: CohortMat = None,
-        epochs: int=2,
-        batch_size: int=20,
-        learning_rate: float=0.1,
-        start_time: float=0.5,
-        patches: int=50,
-        response: str="dbh"):
-
-  """Fits the model to the given data.
-
-        Args:
-            X (Optional[torch.Tensor]): The input data. Default is None.
-            Y (Optional[torch.Tensor]): The target data. Default is None.
-            epochs (int): The number of epochs to train the model. Default is 2.
-            batch_size (int): The batch size for training. Default is 20.
-            learning_rate (float): The learning rate for the optimizer. Default is 0.1.
-            start_time (float): The start time for prediction. Default is 0.5.
-            patches (int): The number of patches. Default is 50.
-            response (str): The response variable. Default is "dbh", other options are 'ba' or 'ba*nT'.
-
-        Returns:
-            None
-        """
-
-if self.optimizer is None:
-  self.optimizer = torch.optim.Adagrad(params = itertools.chain(*self.parameters), lr = learning_rate) # AdaBound was also good
-# TODO scheduler implementieren
-self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
-time = X.shape[1]
-start_time = round(start_time*time)
-
-desc='loss: Inf'
-stepSize = np.floor(X.shape[0] / batch_size).astype(int) # type: ignore
-
-if self.device.type == 'cuda':
-  torch.cuda.set_device(self.device)
-pin_memory = False
-else:
-  pin_memory = True
-Counts = np.round(Y[:,:,:,1]).astype(int)
-indices = np.arange(0, X.shape[0]).astype(int)
-data = torch.utils.data.TensorDataset(torch.tensor(X, dtype=self.dtype, device=torch.device('cpu')),
-                                      torch.tensor(Y[:,:,:,:], dtype=self.dtype, device=torch.device('cpu')),
-                                      torch.tensor(Counts, dtype=torch.int64, device=torch.device('cpu')),
-                                      torch.tensor(indices, dtype=torch.int64, device=torch.device('cpu'))
-)
-DataLoader = torch.utils.data.DataLoader(data, batch_size=int(batch_size), shuffle=True, num_workers=0, pin_memory=pin_memory, drop_last=True)
-
-batch_loss = np.zeros(stepSize)
-self.history = np.zeros(epochs)
-
-ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
-for epoch in ep_bar:
-  for step, (x, y, c, ind) in enumerate(DataLoader):
-  self.optimizer.zero_grad()
-
-if initCohort is None:
-  cohorts = CohortMat(dims = [x.shape[0], patches, self.sp], sp = self.sp, device=self.device)
-nTree = cohorts.nTree
-Species = cohorts.Species
-dbh = cohorts.dbh
-else:
-  nTree = (initCohort.nTree[ind,...]).to(self.device, non_blocking=True)
-Species = (initCohort.Species[ind,...]).to(self.device, non_blocking=True)
-dbh = (initCohort.dbh[ind,...]).to(self.device, non_blocking=True)
-
-x = x.to(self.device, non_blocking=True)
-y = y.to(self.device, non_blocking=True)
-c = c.to(self.device, non_blocking=True)
-pred = self.predict(dbh, nTree, Species, x, start_time, response)
-loss1 = torch.nn.functional.mse_loss(y[:, start_time:,:,0], pred[0][:,start_time:,:]).mean() # dbh / ba
-#loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
-loss2 = torch.distributions.Poisson(pred[1][:,start_time:,:]+0.001).log_prob(c[:, start_time:,:]).mean().negative() # nTree
-loss = (loss1 + loss2)
-#loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / ba
-
-loss.backward()
-self.optimizer.step()
-batch_loss[step] = loss.item()
-#sf.scheduler.step()
-bl = np.mean(batch_loss)
-bl = np.round(bl, 3)
-ep_bar.set_postfix(loss=f'{bl}')
-self.history[epoch] = bl
-torch.cuda.empty_cache()
-self.pred = pred
 
 
 
