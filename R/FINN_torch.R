@@ -153,12 +153,12 @@ A = torch_ones(10, 2)
 A$split(dim = 1L, split_size = 10L)
 
 
-pad_tensors_speed_up = function(value, indices, org_dim) {
+pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
   # KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), split_size = org_dim[1]*org_dim[2], dim = 1) TODO does not work...bug?!
   KK = value$flatten(start_dim = 1, end_dim = 2)$split(1, 1)
   KK_new = vector("list", length = length(KK))
   for( i in 1:indices$shape[1]) {
-    KK_new[[i]] = KK[[i]]$masked_select(indices[i, ]$detach())
+    KK_new[[i]] = KK[[i]][1, indices[i, ]$detach()]
   }
-  return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE))
+  return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE, padding_value = const))
 }
