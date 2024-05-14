@@ -1,4 +1,5 @@
 library(R6)
+library(data.table)
 
 # Function to transform obs_dt into three arrays
 obsDF2arrays = function(obs_dt) {
@@ -30,8 +31,6 @@ obsDF2arrays = function(obs_dt) {
     nTree = nTree_array
   ))
 }
-
-library(data.table)
 
 # Function to transform arrays back to a data.table
 array2obsDF <- function(obs_array) {
@@ -74,7 +73,6 @@ array2obsDF <- function(obs_array) {
   return(obs_dt)
 }
 
-
 CohortMat = R6::R6Class("CohortMat", public = list(
   dbh=NULL,
   nTree=NULL,
@@ -105,6 +103,9 @@ CohortMat = R6::R6Class("CohortMat", public = list(
 
   },
   # Function to transform obs_dt into three arrays
-  obsDF2arrays = obsDF2arrays
+  obsDF2arrays = obsDF2arrays,
+  asDF = function() {
+    array2obsDF(list(dbh = torch::as_array(self$dbh),nTree = torch::as_array(self$nTree),species = torch::as_array(self$Species)))
+    }
 ))
 
