@@ -1,13 +1,13 @@
 #' Calculate the basal area of a tree given the diameter at breast height (dbh).
 #'
-#' Calculate the basal area of a tree given the diameter at breast height (dbh).
+#' This function calculates the basal area of a tree given the diameter at breast height (dbh).
 #'
-#' @param dbh (torch.Tensor) The diameter at breast height of the tree.
+#' @param dbh torch.Tensor The diameter at breast height of the tree.
 #'
-#' @return (torch.Tensor) The basal area of the tree.
+#' @return torch.Tensor The basal area of the tree.
 #'
 #' @examples
-#' dbh = torch.tensor(50)
+#' dbh = torch::torch_tensor(50)
 #' basal_area = BA_P(dbh)
 #' print(basal_area)
 #'
@@ -39,17 +39,21 @@ height_P = function(dbh, parGlobal) {
 
 #' Compute the fraction of available light (AL) for each cohort based on the given parameters.
 #'
-#' @param dbh \code{torch.Tensor} Diameter at breast height for each cohort.
-#' @param Species \code{torch.Tensor} Species index for each cohort.
+#' This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
+#'
+#' @param dbh torch.Tensor Diameter at breast height for each cohort.
+#' @param Species torch.Tensor Species index for each cohort.
 #' @param nTree Number of trees.
-#' @param parGlobal \code{torch.Tensor} Global parameters for all species.
-#' @param h \code{torch.Tensor} (Optional) Height of each cohort. Defaults to \code{NULL}.
-#' @param minLight \code{float} (Optional) Minimum light requirement. Defaults to 50.
-#' @return \code{torch.Tensor} Fraction of available light (AL) for each cohort.
+#' @param parGlobal torch.Tensor Global parameters for all species.
+#' @param h torch.Tensor (Optional) Height of each cohort. Defaults to NULL.
+#' @param minLight float (Optional) Minimum light requirement. Defaults to 50.
+#'
+#' @return torch.Tensor Fraction of available light (AL) for each cohort.
 #' @import torch
 #' @examples
-#' compF_P(dbh = torch_tensor(c(10, 15, 20)), Species = torch_tensor(c(1, 2, 1)),
-#'         nTree = 100, parGlobal = torch_tensor(c(0.3, 0.5)), h = torch_tensor(c(5, 7, 6)), minLight = 40)
+#' compF_P(dbh = torch::torch_tensor(c(10, 15, 20)), Species = torch::torch_tensor(c(1, 2, 1)),
+#'         nTree = 100, parGlobal = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
+#' @export
 compF_P = function(dbh, Species, nTree, parGlobal, h = NULL, minLight = 50.){
 
   ba = (BA_P(dbh)*nTree)/0.1
@@ -65,19 +69,18 @@ compF_P = function(dbh, Species, nTree, parGlobal, h = NULL, minLight = 50.){
   return(AL)
 }
 
-# YANNEK
-#' Calculate forest plot growth
+#' Calculate growth
 #'
-#' This function calculates forest plot growth based on specified parameters.
+#' This function calculates growth based on specified parameters.
 #'
-#' @param dbh Diameter at breast height
-#' @param Species Species of tree
-#' @param parGrowth Growth parameters
-#' @param parMort Mortality parameters
-#' @param pred Predicted values
-#' @param AL Accumulated Light
+#' @param dbh torch.Tensor Diameter at breast height.
+#' @param Species torch.Tensor Species of tree.
+#' @param parGrowth torch.Tensor Growth parameters.
+#' @param parMort torch.Tensor Mortality parameters.
+#' @param pred torch.Tensor Predicted values.
+#' @param AL torch.Tensor Accumulated Light.
 #'
-#' @return A numeric value representing the forest plot growth
+#' @return torch.Tensor A tensor representing the forest plot growth.
 #'
 #' @import torch
 #' @importFrom torch nn functional
@@ -99,16 +102,18 @@ growthFP = function(dbh, Species, parGrowth, parMort, pred, AL){
 
 #' Calculate the regeneration of forest patches based on the input parameters.
 #'
-#' @param Species Species information.
-#' @param parReg Regeneration parameters.
-#' @param pred Prediction values.
-#' @param AL Available light variable for calculation.
+#' This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 #'
-#' @return Regeneration values for forest patches.
+#' @param Species torch.Tensor Species information.
+#' @param parReg torch.Tensor Regeneration parameters.
+#' @param pred torch.Tensor Prediction values.
+#' @param AL torch.Tensor Available light variable for calculation.
+#'
+#' @return torch.Tensor Regeneration values for forest patches.
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid
-#'
+#' @export
 regFP = function(Species, parReg, pred, AL) {
   regP = torch_sigmoid((AL + (1-parReg) - 1)/1e-3)
   environment = pred
@@ -117,14 +122,43 @@ regFP = function(Species, parReg, pred, AL) {
   return(regeneration)
 }
 
-# This function generates random numbers from a uniform distribution
-# with specified low and high values and size similar to np.random.uniform in Python
-
-# Function definition
+#' Generate random numbers from a uniform distribution
+#'
+#' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.
+#'
+#' @param low numeric Lower bound of the uniform distribution.
+#' @param high numeric Upper bound of the uniform distribution.
+#' @param size numeric Size of the output array.
+#'
+#' @return array A numeric array of random numbers.
+#'
+#' @examples
+#' np_runif(0, 1, c(2, 3))
+#'
+#' @export
 np_runif = function(low, high, size) {
   N = prod(size)  # Calculate total number of values to generate
   array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
 }
+
+#' Initialize the FINN model with specified parameters.
+#'
+#' This function initializes the FINN model with specified species, device, global parameters, growth parameters, mortality parameters, regeneration parameters, and neural network settings.
+#'
+#' @param sp integer Number of species.
+#' @param device character Device to use ('cpu' or 'cuda').
+#' @param parGlobal torch.Tensor Global parameters.
+#' @param parGrowth torch.Tensor Growth parameters.
+#' @param parMort torch.Tensor Mortality parameters.
+#' @param parReg torch.Tensor Regeneration parameters.
+#' @param parGrowthEnv torch.Tensor Growth environment parameters.
+#' @param parMortEnv torch.Tensor Mortality environment parameters.
+#' @param parRegEnv torch.Tensor Regeneration environment parameters.
+#' @param hidden_growth list Hidden layers for growth model.
+#' @param hidden_mort list Hidden layers for mortality model.
+#' @param hidden_reg list Hidden layers for regeneration model.
+#'
+#' @export
 init_FINN = function(
     sp = self$sp,
     device = self$device,
@@ -211,14 +245,25 @@ init_FINN = function(
   }
 
 }
-# input_shape = 2
-# output_shape = 3
-# hidden = c(1,3,2)
-# bias = TRUE
-# activation = "relu"
-# dropout = 1
-# last_activation ="sigmoid"
 
+#' Build a neural network
+#'
+#' This function builds a neural network with specified input shape, output shape, hidden layers, bias, activation functions, dropout rate, and last activation function.
+#'
+#' @param input_shape integer Number of predictors.
+#' @param output_shape integer Number of species.
+#' @param hidden vector List of hidden layers.
+#' @param bias vector Boolean values indicating whether to use bias in hidden layers.
+#' @param activation vector List of activation functions.
+#' @param dropout float Dropout rate.
+#' @param last_activation character Last activation function.
+#'
+#' @return torch.nn.modules.container.Sequential Sequential neural network object.
+#'
+#' @examples
+#' build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
+#'
+#' @export
 build_NN <- function(self,
               input_shape,
               output_shape,
@@ -275,6 +320,26 @@ build_NN <- function(self,
   return(do.call(torch::nn_sequential,model_list))
 }
 
+
+#' Predict the growth and mortality of trees based on the given inputs.
+#'
+#' This function predicts the growth and mortality of trees based on the given inputs, including diameter at breast height (dbh), number of trees, species, environmental data, and other parameters.
+#'
+#' @param dbh torch.Tensor (Optional) The diameter at breast height of the trees. If NULL, it will be initialized using CohortMat.
+#' @param nTree torch.Tensor (Optional) The number of trees. If NULL, it will be initialized using CohortMat.
+#' @param Species torch.Tensor (Optional) The species of the trees. If NULL, it will be initialized using CohortMat.
+#' @param env torch.Tensor The environmental data.
+#' @param record_time integer The time at which to start recording the results.
+#' @param response character The response variable to use for aggregating results. Can be "dbh", "ba", or "ba_p".
+#' @param pred_growth torch.Tensor (Optional) The predicted growth values.
+#' @param pred_morth torch.Tensor (Optional) The predicted mortality values.
+#' @param pred_reg torch.Tensor (Optional) The predicted regeneration values.
+#' @param patches float (Optional) The number of patches.
+#' @param debug logical Whether to run in debug mode.
+#'
+#' @return list A list of predicted values for dbh and number of trees for the recorded time points.
+#'
+#' @export
 predict = function(self,
             dbh = NULL,
             nTree = NULL,
@@ -468,7 +533,23 @@ predict = function(self,
   return(Result)
 }
 
-
+#' Fit the model to the given data.
+#'
+#' This function fits the model to the given data using specified epochs, batch size, learning rate, start time, and response variable.
+#'
+#' @param X torch.Tensor (Optional) The input data. Default is NULL.
+#' @param Y torch.Tensor (Optional) The target data. Default is NULL.
+#' @param initCohort list (Optional) Initial cohort data. Default is NULL.
+#' @param epochs integer The number of epochs to train the model. Default is 2.
+#' @param batch_size integer The batch size for training. Default is 20.
+#' @param learning_rate float The learning rate for the optimizer. Default is 0.1.
+#' @param start_time float The start time for prediction. Default is 0.5.
+#' @param patches integer The number of patches. Default is 50.
+#' @param response character The response variable. Default is "dbh", other options are 'ba' or 'ba*nT'.
+#'
+#' @return None
+#'
+#' @export
 fit = function(self,
         X = NULL,
         Y = NULL,
@@ -567,6 +648,26 @@ fit = function(self,
 
 library(R6)
 
+
+#' FINN: Forest Inventory Neural Network
+#'
+#' A class to initialize and train a Forest Inventory Neural Network (FINN) for predicting tree growth, mortality, and regeneration.
+#'
+#' @field np_runif Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.
+#' @field sp integer Number of species.
+#' @field device character Device to use ('cpu' or 'cuda').
+#' @field parGlobal torch.Tensor Global parameters.
+#' @field parGrowth torch.Tensor Growth parameters.
+#' @field parMort torch.Tensor Mortality parameters.
+#' @field parReg torch.Tensor Regeneration parameters.
+#' @field parGrowthEnv torch.Tensor Growth environment parameters.
+#' @field parMortEnv torch.Tensor Mortality environment parameters.
+#' @field parRegEnv torch.Tensor Regeneration environment parameters.
+#' @field hidden_growth list Hidden layers for growth model.
+#' @field hidden_mort list Hidden layers for mortality model.
+#' @field hidden_reg list Hidden layers for regeneration model.
+#'
+#' @export
 FINN = R6Class(
   classname = 'FINN',
   public = list(
@@ -588,204 +689,204 @@ FINN = R6Class(
     #initialisation function
     initialize = init_FINN,
     build_NN = build_NN,
-    predict = predict
-
+    predict = predict,
+    fit = fit
     ))
 
-obj = FINN$new(sp = 5, device = "egal") obj$sp
-
-class FINN:
-  def __init__(self,
-               device: str='cpu',  # 'mps'
-               sp: int=5,
-               env: int=2,
-               which: str="both",
-               parGlobal: Optional[np.ndarray]=None, # must be dim [species]
-               parGrowth: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
-               parMort: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
-               parReg: Optional[np.ndarray]=None, # must be dim [species]
-               parGrowthEnv: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
-               parMortEnv: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
-               parRegEnv: Optional[np.ndarray]=None, # must be dim [species]
-               hidden_growth: List[int] = [],
-               hidden_mort: List[int]  = [],
-               hidden_reg: List[int]  = []
-  ):
-  # """Initialize the model.
-  #
-  #       Args:
-  #           device (str, optional): The device to use for computation. Supported options are 'cpu', 'cuda', and 'mps'. Defaults to 'cpu'.
-  #           sp (int, optional): The number of species. Defaults to 5.
-  #           env (int, optional): The number of environmental covariates. Defaults to 2.
-  #           parGlobal (Optional[np.ndarray], optional): The global parameters. Must be of dimension [species]. Defaults to None.
-  #           parGrowth (Optional[np.ndarray], optional): The growth parameters. Must be of dimension [species, 2], with the first column representing shade tolerance. Defaults to None.
-  #           parMort (Optional[np.ndarray], optional): The mortality parameters. Must be of dimension [species, 2], with the first column representing shade tolerance. Defaults to None.
-  #           parReg (Optional[np.ndarray], optional): The regeneration parameters. Must be of dimension [species]. Defaults to None.
-  #           hidden_growth (List[int], optional): The hidden layers for the growth neural network. Defaults to [].
-  #           hidden_mort (List[int], optional): The hidden layers for the mortality neural network. Defaults to [].
-  #           hidden_reg (List[int], optional): The hidden layers for the regeneration neural network. Defaults to [].
-  #
-  #       Returns:
-  #           None
-  #       """
-
-
-
-
-
-def continue_fit(self,
-                 X: Optional[torch.Tensor]=None,
-                 Y: Optional[torch.Tensor]=None,
-                 initCohort: CohortMat = None,
-                 epochs: int=2,
-                 batch_size: int=20,
-                 learning_rate: float=0.1,
-                 start_time: float=0.5,
-                 patches: int=50,
-                 response: str="dbh"):
-
-  """Continues the training of the model using the provided data.
-
-        Args:
-            X (Optional[torch.Tensor]): The input data. Defaults to None.
-            Y (Optional[torch.Tensor]): The target data. Defaults to None.
-            epochs (int): The number of training epochs. Defaults to 2.
-            batch_size (int): The batch size for training. Defaults to 20.
-            learning_rate (float): The learning rate for training. Defaults to 0.1.
-            start_time (float): The starting time for training. Defaults to 0.5.
-            patches (int): The number of patches. Defaults to 50.
-            response (str): The response type. Defaults to "dbh".
-
-        Returns:
-            None
-
-        Note:
-            This function internally calls the `fit` method to continue the training process.
-        """
-
-self.fit(X,
-         Y,
-         initCohort,
-         epochs,
-         batch_size,
-         learning_rate,
-         start_time,
-         patches,
-         response)
-
-def gradients(self):
-  return [p.grad for p in self.optimizer.param_groups[0]["params"]]
-
-@property
-def parGrowth(self):
-  return self._parGrowth.cpu().data.numpy()
-
-@property
-def parMort(self):
-  return self._parMort.cpu().data.numpy()
-
-@property
-def parReg(self):
-  return self._parReg.cpu().data.numpy()
-
-@property
-def parGlobal(self):
-  return self._parGlobal.cpu().data.numpy()
-
-@property
-def GrowthEnv(self):
-  return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnGrowthEnv.parameters()]
-
-@property
-def MortEnv(self):
-  return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnMortEnv.parameters()]
-
-@property
-def RegEnv(self):
-  return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnRegEnv.parameters()]
-
-@property
-def weights(self):
-  return [(lambda p: p.data.cpu().numpy())(p) for p in self.parameters]
-
-
-def set_weights_nnMortEnv(self, w: List[np.ndarray]):
-  """Set weights for the neural network regularization environment.
-
-            Args:
-                w (List[np.ndarray]): List of numpy arrays containing weights and biases.
-
-            Sets the weights and biases of the linear layers in the neural network regularization environment
-            based on the provided numpy arrays. The function iterates through the layers of the neural network
-            regularization environment and assigns the weights and biases accordingly.
-
-            Note:
-                This function modifies the weights and biases of the neural network regularization environment in-place.
-
-            Returns:
-                None
-        """
-with torch.no_grad():
-  counter = 0
-for i in range(len(self.nnMortEnv)):
-  if type(self.nnMortEnv[i]) is torch.nn.modules.linear.Linear:
-  self.nnMortEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnMortEnv[i].weight.dtype, device=self.nnMortEnv[i].weight.device))
-counter+=1
-if self.nnMortEnv[i].bias is not None:
-  self.nnMortEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnMortEnv[i].bias.dtype, device=self.nnMortEnv[i].bias.device))
-counter+=1
-
-def set_weights_nnGrowthEnv(self, w: List[np.ndarray]):
-  """Set weights for the neural network regularization environment.
-
-            Args:
-                w (List[np.ndarray]): List of numpy arrays containing weights and biases.
-
-            Sets the weights and biases of the linear layers in the neural network regularization environment
-            based on the provided numpy arrays. The function iterates through the layers of the neural network
-            regularization environment and assigns the weights and biases accordingly.
-
-            Note:
-                This function modifies the weights and biases of the neural network regularization environment in-place.
-
-            Returns:
-                None
-        """
-with torch.no_grad():
-  counter = 0
-for i in range(len(self.nnGrowthEnv)):
-  if type(self.nnGrowthEnv[i]) is torch.nn.modules.linear.Linear:
-  self.nnGrowthEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnGrowthEnv[i].weight.dtype, device=self.nnGrowthEnv[i].weight.device))
-counter+=1
-if self.nnGrowthEnv[i].bias is not None:
-  self.nnGrowthEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnGrowthEnv[i].bias.dtype, device=self.nnGrowthEnv[i].bias.device))
-counter+=1
-
-def set_weights_nnRegEnv(self, w: List[np.ndarray]):
-  """Set weights for the neural network regularization environment.
-
-            Args:
-                w (List[np.ndarray]): List of numpy arrays containing weights and biases.
-
-            Sets the weights and biases of the linear layers in the neural network regularization environment
-            based on the provided numpy arrays. The function iterates through the layers of the neural network
-            regularization environment and assigns the weights and biases accordingly.
-
-            Note:
-                This function modifies the weights and biases of the neural network regularization environment in-place.
-
-            Returns:
-                None
-        """
-
-with torch.no_grad():
-  counter = 0
-for i in range(len(self.nnRegEnv)):
-  if type(self.nnRegEnv[i]) is torch.nn.modules.linear.Linear:
-  self.nnRegEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnRegEnv[i].weight.dtype, device=self.nnRegEnv[i].weight.device))
-counter+=1
-if self.nnRegEnv[i].bias is not None:
-  self.nnRegEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnRegEnv[i].bias.dtype, device=self.nnRegEnv[i].bias.device))
-counter+=1
+# obj = FINN$new(sp = 5, device = "egal") obj$sp
+#
+# class FINN:
+#   def __init__(self,
+#                device: str='cpu',  # 'mps'
+#                sp: int=5,
+#                env: int=2,
+#                which: str="both",
+#                parGlobal: Optional[np.ndarray]=None, # must be dim [species]
+#                parGrowth: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
+#                parMort: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
+#                parReg: Optional[np.ndarray]=None, # must be dim [species]
+#                parGrowthEnv: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance
+#                parMortEnv: Optional[np.ndarray]=None, # must be dim [species, 2], first for shade tolerance,
+#                parRegEnv: Optional[np.ndarray]=None, # must be dim [species]
+#                hidden_growth: List[int] = [],
+#                hidden_mort: List[int]  = [],
+#                hidden_reg: List[int]  = []
+#   ):
+#   # """Initialize the model.
+#   #
+#   #       Args:
+#   #           device (str, optional): The device to use for computation. Supported options are 'cpu', 'cuda', and 'mps'. Defaults to 'cpu'.
+#   #           sp (int, optional): The number of species. Defaults to 5.
+#   #           env (int, optional): The number of environmental covariates. Defaults to 2.
+#   #           parGlobal (Optional[np.ndarray], optional): The global parameters. Must be of dimension [species]. Defaults to None.
+#   #           parGrowth (Optional[np.ndarray], optional): The growth parameters. Must be of dimension [species, 2], with the first column representing shade tolerance. Defaults to None.
+#   #           parMort (Optional[np.ndarray], optional): The mortality parameters. Must be of dimension [species, 2], with the first column representing shade tolerance. Defaults to None.
+#   #           parReg (Optional[np.ndarray], optional): The regeneration parameters. Must be of dimension [species]. Defaults to None.
+#   #           hidden_growth (List[int], optional): The hidden layers for the growth neural network. Defaults to [].
+#   #           hidden_mort (List[int], optional): The hidden layers for the mortality neural network. Defaults to [].
+#   #           hidden_reg (List[int], optional): The hidden layers for the regeneration neural network. Defaults to [].
+#   #
+#   #       Returns:
+#   #           None
+#   #       """
+#
+#
+#
+#
+#
+# def continue_fit(self,
+#                  X: Optional[torch.Tensor]=None,
+#                  Y: Optional[torch.Tensor]=None,
+#                  initCohort: CohortMat = None,
+#                  epochs: int=2,
+#                  batch_size: int=20,
+#                  learning_rate: float=0.1,
+#                  start_time: float=0.5,
+#                  patches: int=50,
+#                  response: str="dbh"):
+#
+#   """Continues the training of the model using the provided data.
+#
+#         Args:
+#             X (Optional[torch.Tensor]): The input data. Defaults to None.
+#             Y (Optional[torch.Tensor]): The target data. Defaults to None.
+#             epochs (int): The number of training epochs. Defaults to 2.
+#             batch_size (int): The batch size for training. Defaults to 20.
+#             learning_rate (float): The learning rate for training. Defaults to 0.1.
+#             start_time (float): The starting time for training. Defaults to 0.5.
+#             patches (int): The number of patches. Defaults to 50.
+#             response (str): The response type. Defaults to "dbh".
+#
+#         Returns:
+#             None
+#
+#         Note:
+#             This function internally calls the `fit` method to continue the training process.
+#         """
+#
+# self.fit(X,
+#          Y,
+#          initCohort,
+#          epochs,
+#          batch_size,
+#          learning_rate,
+#          start_time,
+#          patches,
+#          response)
+#
+# def gradients(self):
+#   return [p.grad for p in self.optimizer.param_groups[0]["params"]]
+#
+# @property
+# def parGrowth(self):
+#   return self._parGrowth.cpu().data.numpy()
+#
+# @property
+# def parMort(self):
+#   return self._parMort.cpu().data.numpy()
+#
+# @property
+# def parReg(self):
+#   return self._parReg.cpu().data.numpy()
+#
+# @property
+# def parGlobal(self):
+#   return self._parGlobal.cpu().data.numpy()
+#
+# @property
+# def GrowthEnv(self):
+#   return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnGrowthEnv.parameters()]
+#
+# @property
+# def MortEnv(self):
+#   return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnMortEnv.parameters()]
+#
+# @property
+# def RegEnv(self):
+#   return [(lambda p: p.data.cpu().numpy())(p) for p in self.nnRegEnv.parameters()]
+#
+# @property
+# def weights(self):
+#   return [(lambda p: p.data.cpu().numpy())(p) for p in self.parameters]
+#
+#
+# def set_weights_nnMortEnv(self, w: List[np.ndarray]):
+#   """Set weights for the neural network regularization environment.
+#
+#             Args:
+#                 w (List[np.ndarray]): List of numpy arrays containing weights and biases.
+#
+#             Sets the weights and biases of the linear layers in the neural network regularization environment
+#             based on the provided numpy arrays. The function iterates through the layers of the neural network
+#             regularization environment and assigns the weights and biases accordingly.
+#
+#             Note:
+#                 This function modifies the weights and biases of the neural network regularization environment in-place.
+#
+#             Returns:
+#                 None
+#         """
+# with torch.no_grad():
+#   counter = 0
+# for i in range(len(self.nnMortEnv)):
+#   if type(self.nnMortEnv[i]) is torch.nn.modules.linear.Linear:
+#   self.nnMortEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnMortEnv[i].weight.dtype, device=self.nnMortEnv[i].weight.device))
+# counter+=1
+# if self.nnMortEnv[i].bias is not None:
+#   self.nnMortEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnMortEnv[i].bias.dtype, device=self.nnMortEnv[i].bias.device))
+# counter+=1
+#
+# def set_weights_nnGrowthEnv(self, w: List[np.ndarray]):
+#   """Set weights for the neural network regularization environment.
+#
+#             Args:
+#                 w (List[np.ndarray]): List of numpy arrays containing weights and biases.
+#
+#             Sets the weights and biases of the linear layers in the neural network regularization environment
+#             based on the provided numpy arrays. The function iterates through the layers of the neural network
+#             regularization environment and assigns the weights and biases accordingly.
+#
+#             Note:
+#                 This function modifies the weights and biases of the neural network regularization environment in-place.
+#
+#             Returns:
+#                 None
+#         """
+# with torch.no_grad():
+#   counter = 0
+# for i in range(len(self.nnGrowthEnv)):
+#   if type(self.nnGrowthEnv[i]) is torch.nn.modules.linear.Linear:
+#   self.nnGrowthEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnGrowthEnv[i].weight.dtype, device=self.nnGrowthEnv[i].weight.device))
+# counter+=1
+# if self.nnGrowthEnv[i].bias is not None:
+#   self.nnGrowthEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnGrowthEnv[i].bias.dtype, device=self.nnGrowthEnv[i].bias.device))
+# counter+=1
+#
+# def set_weights_nnRegEnv(self, w: List[np.ndarray]):
+#   """Set weights for the neural network regularization environment.
+#
+#             Args:
+#                 w (List[np.ndarray]): List of numpy arrays containing weights and biases.
+#
+#             Sets the weights and biases of the linear layers in the neural network regularization environment
+#             based on the provided numpy arrays. The function iterates through the layers of the neural network
+#             regularization environment and assigns the weights and biases accordingly.
+#
+#             Note:
+#                 This function modifies the weights and biases of the neural network regularization environment in-place.
+#
+#             Returns:
+#                 None
+#         """
+#
+# with torch.no_grad():
+#   counter = 0
+# for i in range(len(self.nnRegEnv)):
+#   if type(self.nnRegEnv[i]) is torch.nn.modules.linear.Linear:
+#   self.nnRegEnv[i].weight = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnRegEnv[i].weight.dtype, device=self.nnRegEnv[i].weight.device))
+# counter+=1
+# if self.nnRegEnv[i].bias is not None:
+#   self.nnRegEnv[i].bias = torch.nn.Parameter(torch.tensor(w[counter], dtype=self.nnRegEnv[i].bias.dtype, device=self.nnRegEnv[i].bias.device))
+# counter+=1
 
 
