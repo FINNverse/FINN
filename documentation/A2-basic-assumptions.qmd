@@ -1,12 +1,13 @@
 # Basic assumptions {#sec-modeldescription}
 
-## FINN is a simple forest gap model
+## A simple forest gap model
 
-### Forest Gap models
-Starting with the considerations of gap dynamics @Watt1947 and the introduction of Jabowa [@]
-Forest Gap Models simulate forests on multiple independent forest patches. Each patch is a realization 
+All forest gap models are based on the idea of gap dynamics [@watt_pattern_1947]. In 1972 Botkin introduced the first forest gap model Jabowa [@botkin_ecological_1972], which was followed by a range of many models that are all based on same principles [@bugmann_evolution_2022]. Thus, over 50 years of model development led to a large range of forest models that are used to study forest ecosystems in various ways.
 
+The fundamental idea of a Forest Gap Model is to simulate forest succession on independent patches. Multiple stochastic realizations of forest succession trajectories lead to stable average estimates of forest structure (biomass, species, composition, size distribution). The number of patches is determined by the scale of the models application. Within these basic principles a range of models implement the idea of forest succession in different ways.
 
-### How is FINN simple?
-FINN is build as a simple forest gap model. 
+So, what makes a simple forest model? 
 
+## Model structure
+
+In FINN trees are represented with cohorts.
