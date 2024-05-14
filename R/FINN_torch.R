@@ -152,7 +152,7 @@ groupby_mean = function(values, labels) {
 
 
 pad_tensors_speed_up = function(value, indices, org_dim) {
-  KK = torch::torch_split(value$flatten(1, 2), org_dim[1]*org_dim[2])
+  KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), org_dim[1]*org_dim[2])
   KK_new = list()
   for( i in 1:indices$shape[1]) {
     KK_new = c(KK_new, KK[[i]][1,indices[i,]])

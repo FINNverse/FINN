@@ -26,7 +26,8 @@ Imports:
     reticulate,
     stats,
     utils,
-    data.table
+    data.table,
+    coro
 Suggests:
     testthat,
     knitr,
