@@ -1,0 +1,63 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+Help functions and environment:
+
+-   environment: no temporal variation
+
+```{r}
+library(FINN)
+FINN:::.onLoad()
+FINN = FINN:::pkg.env$FINN
+torch = FINN:::pkg.env$torch
+as_ten = function(x, dtype=torch$float32) {torch$tensor(x, dtype=dtype)}
+to_r = function(x) FINN:::force_r(x$cpu()$data$numpy())
+
+env = matrix(runif(50*1,-2,2), 50, 1)
+env = cbind(1, env)
+env_a = abind::abind(lapply(1:50, function(i) env), along = 0)
+```
+
+## Growth along environmental gradient
+
+```{r}
+library(FINN)
+FINN:::.onLoad()
+FINN = FINN:::pkg.env$FINN
+torch = FINN:::pkg.env$torch
+as_ten = function(x, dtype=torch$float32) {torch$tensor(x, dtype=dtype)}
+to_r = function(x) FINN:::force_r(x$cpu()$data$numpy())
+
+env = matrix(runif(50*1,-2,2), 50, 1)
+env = cbind(1, env)
+env_a = abind::abind(lapply(1:50, function(i) env), along = 0)
+model= FINN$FINN(sp = 1L, env = 2L,
+          parGlobal = 0.5,
+          parGrowth = matrix(c(5, 17), 1, 2),
+          parMort = matrix(c(0.2, 5.5), 1, 2),
+          parReg = 0.1,
+          parGrowthEnv = list(matrix(c(0,2), 1, 2)),
+          parMortEnv = list(matrix(c(2,0), 1, 2)),
+          parRegEnv = list(matrix(c(0.1, 0.0), 1, 2))
+          )
+plot(env_a[,1,2], to_r(model$nnGrowthEnv(as_ten(env_a[,1,]))) )
+```
+
+Growth increases with environment
+
+Expectation: More DBH at higher env
+
+```{r}
+pred = model$predict(env = as_ten(env_a), response = "dbh", patches = 50L)
+dbh = to_r(pred[[0]])
+nTree = to_r(pred[[1]])
+plot(env_a[,1,2], dbh[,30,1]/nTree[,30,1])
+plot(env_a[,1,2], nTree[,30,1])
+
+plot(env_a[,1,2], apply(dbh, c(1, 3), mean)/apply(nTree, c(1, 3), mean))
+```
+
+...no pattern, why?
