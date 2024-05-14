@@ -1,54 +1,64 @@
+#' Calculate the basal area of a tree given the diameter at breast height (dbh).
+#'
+#' Calculate the basal area of a tree given the diameter at breast height (dbh).
+#'
+#' @param dbh (torch.Tensor) The diameter at breast height of the tree.
+#'
+#' @return (torch.Tensor) The basal area of the tree.
+#'
+#' @examples
+#' dbh = torch.tensor(50)
+#' basal_area = BA_P(dbh)
+#' print(basal_area)
+#'
+#' @import torch
+#' @export
 BA_P = function(dbh) {
-  # Calculate the basal area of a tree given the diameter at breast height (dbh).
-  #
-  # Args:
-  # dbh (torch.Tensor): The diameter at breast height of the tree.
-  #
-  # Returns:
-  # torch.Tensor: The basal area of the tree.
-  #
-  # Example:
-  # dbh = torch.tensor(50)
-  # basal_area = BA_P(dbh)
-  # print(basal_area)
   return(pi*(dbh/100./2.)^2.0)
 }
 
-# YANNEK
+
+#' Calculate the height of a tree based on its diameter at breast height and a global parameter.
+#'
+#' This function calculates the height of a tree based on the diameter at breast height (dbh) and a parameter.
+#'
+#' @param dbh A numeric value representing the diameter at breast height of the tree.
+#' @param parGlobal A numeric value representing the global parameter used in the height calculation.
+#'
+#' @return A numeric value representing the calculated height of the tree.
+#'
+#' @examples
+#' height_P(30, 0.5)
+#'
+#' @export
 height_P = function(dbh, parGlobal) {
-  # Calculate the height of a tree based on its diameter at breast height (dbh) and a parameter (par).
-  # Args:
-  # dbh (torch.Tensor): The diameter at breast height of the tree.
-  # par (torch.Tensor): The parameter used to calculate the height.
-  #
-  # Returns:
-  # torch.Tensor: The calculated height of the tree.
   height = (exp((((dbh * parGlobal) / (dbh+100))))-1)*100 + 0.001
   return(height)
 }
 
-# YANNEK
-@torch.jit.script
-compF_P = function(dbh, Species, nTree, parGlobal, h = NULL, minLigh = 50.){
 
-  # Compute the fraction of available light (AL) for each cohort based on the given parameters.
-  #
-  # Args:
-  # dbh (torch.Tensor): Diameter at breast height for each cohort.
-  # Species (torch.Tensor): Species index for each cohort.
-  # parGlobal (torch.Tensor): Global parameters for all species.
-  # h (Optional[torch.Tensor], optional): Height of each cohort. Defaults to None.
-  # minLight (float, optional): Minimum light requirement. Defaults to 50.
-  #
-  # Returns:
-  # torch.Tensor: Fraction of available light (AL) for each cohort.
+#' Compute the fraction of available light (AL) for each cohort based on the given parameters.
+#'
+#' @param dbh \code{torch.Tensor} Diameter at breast height for each cohort.
+#' @param Species \code{torch.Tensor} Species index for each cohort.
+#' @param nTree Number of trees.
+#' @param parGlobal \code{torch.Tensor} Global parameters for all species.
+#' @param h \code{torch.Tensor} (Optional) Height of each cohort. Defaults to \code{NULL}.
+#' @param minLight \code{float} (Optional) Minimum light requirement. Defaults to 50.
+#' @return \code{torch.Tensor} Fraction of available light (AL) for each cohort.
+#' @import torch
+#' @examples
+#' compF_P(dbh = torch_tensor(c(10, 15, 20)), Species = torch_tensor(c(1, 2, 1)),
+#'         nTree = 100, parGlobal = torch_tensor(c(0.3, 0.5)), h = torch_tensor(c(5, 7, 6)), minLight = 40)
+compF_P = function(dbh, Species, nTree, parGlobal, h = NULL, minLight = 50.){
+
   ba = (BA_P(dbh)*nTree)/0.1
   cohortHeights = height_P(dbh, parGlobal[Species])$unsqueeze(3)
   if(is.null(h)) {
     h = cohortHeights
-    BA_height = (ba$unsqueeze(3)*torch_sigmoid((cohortHeights - h$permute(0,1, 3, 2) - 0.1)/1e-3) )$sum(-2) # AUFPASSEN
+    BA_height = (ba$unsqueeze(3)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-3) )$sum(-2) # AUFPASSEN
   }else{
-    BA_height = (ba.unsqueeze(3)*torch.sigmoid((cohortHeights - 0.1)/1e-3)).sum(-2)
+    BA_height = (ba$unsqueeze(3)*torch.sigmoid((cohortHeights - 0.1)/1e-3))$sum(-2)
   }
   AL = 1.-BA_height/minLight
   AL = torch_clamp(AL, min = 0)
@@ -56,49 +66,53 @@ compF_P = function(dbh, Species, nTree, parGlobal, h = NULL, minLigh = 50.){
 }
 
 # YANNEK
-growthFP = function(dbh, Species, parGlobal, parGrowth, parMort, pred, AL){
+#' Calculate forest plot growth
+#'
+#' This function calculates forest plot growth based on specified parameters.
+#'
+#' @param dbh Diameter at breast height
+#' @param Species Species of tree
+#' @param parGrowth Growth parameters
+#' @param parMort Mortality parameters
+#' @param pred Predicted values
+#' @param AL Accumulated Light
+#'
+#' @return A numeric value representing the forest plot growth
+#'
+#' @import torch
+#' @importFrom torch nn functional
+#' @importFrom torch nn functional torch_sigmoid
+#' @importFrom torch nn functional torch_clamp
+#'
+#' @export
+growthFP = function(dbh, Species, parGrowth, parMort, pred, AL){
 
-  # Calculate the growth of a forest stand based on the given parameters.
-  #
-  # Args:
-  # dbh (torch.Tensor): Diameter at breast height.
-  # Species (torch.Tensor): Species of the trees.
-  # parGlobal (torch.Tensor): Global parameters.
-  # parGrowth: Growth parameters.
-  # pred (torch.Tensor): Predicted values.
-  #
-  # Returns:
-  # torch.Tensor: Growth of the forest stand.
-  # shade = (((AL**2)*parGrowth[Species,0]).sigmoid()-0.5)*2
-
-  shade = torch_sigmoid((AL + (1-parGrowth[Species,1]) - 1)/1e-1)
+  shade = torch_sigmoid((AL + (1-parGrowth[,1][Species]) - 1)/1e-1)
   environment = index_species(pred, Species)
   pred = (shade*environment)
   # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
-  growth = pred/2 * parGrowth[Species,2] * ((parMort[Species,2]-dbh/100) / parMort[Species,2])^(2)
+  growth = pred/2 * parGrowth[,2][Species] * ((parMort[,2][Species]-dbh/100) / parMort[,2][Species])^(2)
   # growth = parGrowth[Species,1]
   # return torch.nn.functional.softplus(growth)
   return(torch_clamp(growth, min = 0.0))
 }
 
-# Yannek
-regFP = function(dbh, Species, parGlobal, parReg, pred, AL) {
-
-  # Calculate the regeneration of forest patches based on the input parameters.
-  #
-  # Args:
-  # dbh (torch.Tensor): Diameter at breast height.
-  # Species (torch.Tensor): Species information.
-  # parGlobal (torch.Tensor): Global parameters.
-  # parReg (torch.Tensor): Regression parameters.
-  # pred (torch.Tensor): Prediction values.
-  #
-  # Returns:
-  # torch.Tensor: Regeneration values for forest patches.
-  #
+#' Calculate the regeneration of forest patches based on the input parameters.
+#'
+#' @param Species Species information.
+#' @param parReg Regeneration parameters.
+#' @param pred Prediction values.
+#' @param AL Available light variable for calculation.
+#'
+#' @return Regeneration values for forest patches.
+#'
+#' @import torch
+#' @importFrom torch torch_sigmoid
+#'
+regFP = function(Species, parReg, pred, AL) {
   regP = torch_sigmoid((AL + (1-parReg) - 1)/1e-3)
   environment = pred
-  regeneration = sample_poisson_relaxed((regP*environment[,NULL]$repeat(c(1, Species$shape[2], 1)) + 1e-20), 20)
+  regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, Species$shape[2], 1)) + 1e-20)) # TODO, check if exp or not?! lambda should be always positive!
   regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
   return(regeneration)
 }
@@ -145,9 +159,11 @@ init_FINN = function(
   self$optimizer = NULL
   self$dtype = torch_float32()
   self$nnRegEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=list(FALSE), dropout=-99, last_activation = "relu")
-  self$nnRegEnv$to(self.device)
+  self$nnRegEnv$to(self$device)
   self$nnGrowthEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_growth, activation="selu", bias=list(FALSE), dropout=-99)
-  self$nnGrowthEnv$to(self.device)
+  self$nnGrowthEnv$to(self$device)
+
+
   self$nnMortEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=list(FALSE), dropout=-99)
   self$nnMortEnv$to(self$device)
 
