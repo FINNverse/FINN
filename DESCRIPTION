@@ -29,10 +29,11 @@ Imports:
     data.table,
     coro
 Suggests:
-    testthat,
+    testthat (>= 3.0.0),
     knitr,
     rmarkdown
 RoxygenNote: 7.3.0
 Roxygen: list(old_usage = FALSE)
 VignetteBuilder: knitr
 RdMacros: mathjaxr
+Config/testthat/edition: 3

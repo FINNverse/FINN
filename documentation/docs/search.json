@@ -30,7 +30,7 @@
   {
     "objectID": "A3-demographic-processes.html#header-1",
     "href": "A3-demographic-processes.html#header-1",
-    "title": "3  Basic assumptions",
+    "title": "3  Process definitions",
     "section": "3.1 Header 1",
     "text": "3.1 Header 1"
   },
@@ -68,5 +68,61 @@
     "title": "1  Getting Started",
     "section": "1.2 Example",
     "text": "1.2 Example\nThis is a basic example which shows you how to solve a common problem:\n\nlibrary(FINN)\n\n── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n\n\n✔ torch &lt;environment&gt; \n✔ torch_optimizer"
+  },
+  {
+    "objectID": "A2-basic-assumptions.html#finn-is-a-simple-forest-gap-model",
+    "href": "A2-basic-assumptions.html#finn-is-a-simple-forest-gap-model",
+    "title": "2  Basic assumptions",
+    "section": "2.1 FINN is a simple forest gap model",
+    "text": "2.1 FINN is a simple forest gap model\n\n2.1.1 Forest Gap models\nStarting with the considerations of gap dynamics (Watt 1947) and the introduction of Jabowa Forest Gap Models simulate forests on multiple independent forest patches. Each patch is a realization\n\n\n2.1.2 How is FINN simple?\nFINN is build as a simple forest gap model.\n\n\n\n\nWatt, Alex S. 1947. “Pattern and Process in the Plant Community.” Journal of Ecology 35 (1): 1–22. https://doi.org/10.2307/2256497."
+  },
+  {
+    "objectID": "A2-basic-assumptions.html#references",
+    "href": "A2-basic-assumptions.html#references",
+    "title": "2  Basic assumptions",
+    "section": "2.2 References",
+    "text": "2.2 References\n\n\n\n\nWatt, Alex S. 1947. “Pattern and Process in the Plant Community.” Journal of Ecology 35 (1): 1–22. https://doi.org/10.2307/2256497."
+  },
+  {
+    "objectID": "A2-basic-assumptions.html#forest-gap-models",
+    "href": "A2-basic-assumptions.html#forest-gap-models",
+    "title": "2  Basic assumptions",
+    "section": "2.1 Forest Gap models",
+    "text": "2.1 Forest Gap models\nAll forest gap models are based on the idea of gap dynamics (Watt 1947). In 1972 Botkin introduced the first forest gap model Jabowa (Botkin, Janak, and Wallis 1972), which was followed by a range of many models that are all based on same principles (Bugmann and Seidl 2022). Thus, over 50 years of model development led to a large range of forest models that are used to study forest ecosystems in various ways.\nThe fundamental idea of a Forest Gap Model is to simulate forest succession on independent patches. Multiple stochastic realizations of forest succession trajectories lead to stable average estimates of forest structure (biomass, species, composition, size distribution). The number of patches is determined by the scale of the models application. Within these basic principles a range of models implement the idea of forest succession in different ways."
+  },
+  {
+    "objectID": "A2-basic-assumptions.html#a-simple-forest-gap-model",
+    "href": "A2-basic-assumptions.html#a-simple-forest-gap-model",
+    "title": "2  Basic assumptions",
+    "section": "2.1 A simple forest gap model",
+    "text": "2.1 A simple forest gap model\nAll forest gap models are based on the idea of gap dynamics (Watt 1947). In 1972 Botkin introduced the first forest gap model Jabowa (Botkin, Janak, and Wallis 1972), which was followed by a range of many models that are all based on same principles (Bugmann and Seidl 2022). Thus, over 50 years of model development led to a large range of forest models that are used to study forest ecosystems in various ways.\nThe fundamental idea of a Forest Gap Model is to simulate forest succession on independent patches. Multiple stochastic realizations of forest succession trajectories lead to stable average estimates of forest structure (biomass, species, composition, size distribution). The number of patches is determined by the scale of the models application. Within these basic principles a range of models implement the idea of forest succession in different ways."
+  },
+  {
+    "objectID": "A2-basic-assumptions.html#section",
+    "href": "A2-basic-assumptions.html#section",
+    "title": "2  Basic assumptions",
+    "section": "2.2 ",
+    "text": "2.2 \nSo, what makes a simple forest model?\n\n\n\n\nBotkin, Daniel B., James F. Janak, and James R. Wallis. 1972. “Some Ecological Consequences of a Computer Model of Forest Growth.” The Journal of Ecology 60 (3): 849–49. https://doi.org/10.2307/2258570.\n\n\nBugmann, Harald, and Rupert Seidl. 2022. “The Evolution, Complexity and Diversity of Models of Long-Term Forest Dynamics.” Journal of Ecology 110 (10): 2288–2307. https://doi.org/10.1111/1365-2745.13989.\n\n\nWatt, Alex S. 1947. “Pattern and Process in the Plant Community.” Journal of Ecology 35 (1): 1–22. https://doi.org/10.2307/2256497."
+  },
+  {
+    "objectID": "B1-forest-succession.html#one-species",
+    "href": "B1-forest-succession.html#one-species",
+    "title": "4  Simulating patterns of forest succesion",
+    "section": "4.1 One species",
+    "text": "4.1 One species"
+  },
+  {
+    "objectID": "B1-forest-succession.html#two-species",
+    "href": "B1-forest-succession.html#two-species",
+    "title": "4  Simulating patterns of forest succesion",
+    "section": "4.2 Two species",
+    "text": "4.2 Two species"
+  },
+  {
+    "objectID": "B1-forest-succession.html#multiple-species",
+    "href": "B1-forest-succession.html#multiple-species",
+    "title": "4  Simulating patterns of forest succesion",
+    "section": "4.3 Multiple species",
+    "text": "4.3 Multiple species"
   }
 ]
