@@ -24,7 +24,7 @@ BA_P = function(dbh) {
 #' This function calculates the height of a tree based on the diameter at breast height (dbh) and a parameter.
 #'
 #' @param dbh A numeric value representing the diameter at breast height of the tree.
-#' @param parGlobal A numeric value representing the global parameter used in the height calculation.
+#' @param parHeight A numeric value representing the global parameter used in the height calculation.
 #'
 #' @return A numeric value representing the calculated height of the tree.
 #'
@@ -32,8 +32,8 @@ BA_P = function(dbh) {
 #' height_P(30, 0.5)
 #'
 #' @export
-height_P = function(dbh, parGlobal) {
-  height = (exp((((dbh * parGlobal) / (dbh+100))))-1)*100 + 0.001
+height_P = function(dbh, parHeight) {
+  height = (exp((((dbh * parHeight) / (dbh+100))))-1)*100 + 0.001
   return(height)
 }
 
@@ -45,7 +45,7 @@ height_P = function(dbh, parGlobal) {
 #' @param dbh torch.Tensor Diameter at breast height for each cohort.
 #' @param Species torch.Tensor Species index for each cohort.
 #' @param nTree Number of trees.
-#' @param parGlobal torch.Tensor Global parameters for all species.
+#' @param parHeight torch.Tensor Global parameters for all species.
 #' @param h torch.Tensor (Optional) Height of each cohort. Defaults to NULL.
 #' @param minLight float (Optional) Minimum light requirement. Defaults to 50.
 #'
@@ -53,12 +53,12 @@ height_P = function(dbh, parGlobal) {
 #' @import torch
 #' @examples
 #' compF_P(dbh = torch::torch_tensor(c(10, 15, 20)), Species = torch::torch_tensor(c(1, 2, 1)),
-#'         nTree = 100, parGlobal = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
+#'         nTree = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-compF_P = function(dbh, Species, nTree, parGlobal, h = NULL, minLight = 50.){
+compF_P = function(dbh, Species, nTree, parHeight, h = NULL, minLight = 50.){
 
   ba = (BA_P(dbh)*nTree)/0.1
-  cohortHeights = height_P(dbh, parGlobal[Species])$unsqueeze(3)
+  cohortHeights = height_P(dbh, parHeight[Species])$unsqueeze(3)
   if(is.null(h)) {
     h = cohortHeights
     BA_height = (ba$unsqueeze(3)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-3) )$sum(-2) # AUFPASSEN
@@ -148,7 +148,7 @@ np_runif = function(low, high, size) {
 #'
 #' @param sp integer Number of species.
 #' @param device character Device to use ('cpu' or 'cuda').
-#' @param parGlobal torch.Tensor Global parameters.
+#' @param parHeight torch.Tensor Global parameters.
 #' @param parGrowth torch.Tensor Growth parameters.
 #' @param parMort torch.Tensor Mortality parameters.
 #' @param parReg torch.Tensor Regeneration parameters.
@@ -164,7 +164,7 @@ init_FINN = function(
     sp = self$sp,
     env = self$env,
     device = self$device,
-    parGlobal = self$parGlobal,
+    parHeight = self$parHeight,
     parGrowth = self$parGrowth,
     parMort = self$parMort,
     parReg = self$parReg,
@@ -178,7 +178,7 @@ init_FINN = function(
     ){
   self$sp = sp
   self$device = device
-  self$parGlobal = parGlobal
+  self$parHeight = parHeight
   self$parGrowth = parGrowth
   self$parMort = parMort
   self$parReg = parReg
@@ -208,11 +208,11 @@ init_FINN = function(
   if(!is.null(parMortEnv)) self$set_weights_nnMortEnv(parMortEnv)
   if(!is.null(parRegEnv)) self$set_weights_nnRegEnv(parRegEnv)
 
-  if(is.null(parGlobal)){
-    self$parGlobal = torch_tensor(np_runif(0.3, 0.7, size = self$sp), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
+  if(is.null(parHeight)){
+    self$parHeight = torch_tensor(np_runif(0.3, 0.7, size = self$sp), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }else{
-    parGlobal = parGlobal$reshape(-1)
-    self$parGlobal = torch_tensor(parGlobal, requires_grad=TRUE, dtype=torch_float32(), device=self$device)
+    parHeight = parHeight$reshape(-1)
+    self$parHeight = torch_tensor(parHeight, requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }
 
   if(is.null(parGrowth)){
@@ -242,9 +242,9 @@ init_FINN = function(
   if(which == "env"){
     self$parameters = list(self$nnRegEnv$parameters(), self$nnGrowthEnv$parameters(), self$nnMortEnv$parameters())
   }else if(which == "species"){
-    self$parameters = list(list(self$parGlobal), list(self$parGrowth), list(self$parMort), list(self$parReg))
+    self$parameters = list(list(self$parHeight), list(self$parGrowth), list(self$parMort), list(self$parReg))
   }else{
-    self$parameters = list(list(self$parGlobal), list(self$parGrowth), list(self$parMort), list(self$parReg), list(self$nnRegEnv$parameters), list(self$nnGrowthEnv$parameters), list(self$nnMortEnv$parameters))
+    self$parameters = list(list(self$parHeight), list(self$parGrowth), list(self$parMort), list(self$parReg), list(self$nnRegEnv$parameters), list(self$nnGrowthEnv$parameters), list(self$nnMortEnv$parameters))
   }
   return(self) # Only for testing now
 }
@@ -438,10 +438,10 @@ predict = function(self,
   })
 
   if(dbh$shape[3] != 0){
-    AL = compF_P(dbh, Species, nTree_clone, self$parGlobal)
+    AL = compF_P(dbh, Species, nTree_clone, self$parHeight)
     g = growthFP(dbh, Species, self$parGrowth, self$parMort, pred_growth[,i,], AL)
     dbh = dbh+g
-    AL = compF_P(dbh, Species, nTree_clone, self$parGlobal)
+    AL = compF_P(dbh, Species, nTree_clone, self$parHeight)
 
     m = mortFP(dbh, Species, nTree, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3)
     #### TODO if nTree = 0 then NA...prevent!
@@ -453,7 +453,7 @@ predict = function(self,
     nTree_clone =  nTree$clone() #torch.zeros_like(nTree).to(self.device)+0
   })
 
-  AL_reg = compF_P(dbh, Species, nTree_clone, self$parGlobal, h = torch_zeros(list(1, 1)))
+  AL_reg = compF_P(dbh, Species, nTree_clone, self$parHeight, h = torch_zeros(list(1, 1)))
 
   r = regFP(Species, self$parReg, pred_reg[,i,], AL_reg)
   # New recruits
@@ -655,7 +655,7 @@ library(R6)
 #' @field np_runif Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.
 #' @field sp integer Number of species.
 #' @field device character Device to use ('cpu' or 'cuda').
-#' @field parGlobal torch.Tensor Global parameters.
+#' @field parHeight torch.Tensor Global parameters.
 #' @field parGrowth torch.Tensor Growth parameters.
 #' @field parMort torch.Tensor Mortality parameters.
 #' @field parReg torch.Tensor Regeneration parameters.
@@ -675,7 +675,7 @@ FINN = R6Class(
     # default model parameters
     sp = NULL,
     device = 'cpu',
-    parGlobal = NULL, # must be dim [species]
+    parHeight = NULL, # must be dim [species]
     parGrowth = NULL, # must be dim [species, 2], first for shade tolerance
     parMort = NULL, # must be dim [species, 2], first for shade tolerance,
     parReg = NULL, # must be dim [species]
