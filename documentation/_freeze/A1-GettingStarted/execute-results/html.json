@@ -1,5 +1,5 @@
 {
-  "hash": "69975d7c3d528f8b17ad4a6915bf5fd1",
+  "hash": "0dd405e353c61e41174d47825cab9aa8",
   "result": {
     "markdown": "# Getting Started {#sec-gettingstarted}\n\n## Installation\n\nYou can install the development version of FINN from [GitHub](https://github.com/) with:\n\n``` r\n# install.packages(\"devtools\")\ndevtools::install_github(\"FINNverse/FINN\")\nFINN::install_FINN()\n```\n\n## Example\n\nThis is a basic example which shows you how to solve a common problem:\n\n\n::: {.cell}\n\n```{.r .cell-code}\nlibrary(FINN)\n```\n\n::: {.cell-output .cell-output-stderr}\n```\n── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──\n```\n:::\n\n::: {.cell-output .cell-output-stderr}\n```\n✔ torch <environment> \n✔ torch_optimizer  \n```\n:::\n:::\n",
     "supporting": [],
