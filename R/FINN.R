@@ -75,15 +75,15 @@ height = function(dbh, parHeight) {
 #' @export
 competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.){
 
-  BA_stem = (BA_stem(dbh)*trees)/0.1
+  ba = (BA_stem(dbh)*trees)/0.1
   cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
-    BA_stem_height = (BA_stem$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
+    ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
   }else{
-    BA_stem_height = (BA_stem$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
+    ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
   }
-  light = 1.-BA_stem_height/minLight
+  light = 1.-ba_height/minLight
   light = torch_clamp(light, min = 0)
   return(light)
 }
