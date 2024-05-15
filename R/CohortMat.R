@@ -1,7 +1,19 @@
 library(R6)
 library(data.table)
 
-# Function to transform obs_dt into three arrays
+#' Transform Observation Data Table to Arrays
+#'
+#' This function transforms an observation data table into three arrays: species, dbh, and trees.
+#'
+#' @param obs_dt data.table The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
+#'
+#' @return A list containing three arrays: species, dbh, and trees.
+#'
+#' @examples
+#' obs_dt <- data.table(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
+#' result <- obsDF2arrays(obs_dt)
+#'
+#' @export
 obsDF2arrays = function(obs_dt) {
   # Retrieve dimensions from obs_dt
   Nsites <- length(unique(obs_dt$siteID))
@@ -32,7 +44,19 @@ obsDF2arrays = function(obs_dt) {
   ))
 }
 
-# Function to transform arrays back to a data.table
+#' Transform Arrays to Observation Data Table
+#'
+#' This function transforms arrays of species, dbh, and trees back into an observation data table.
+#'
+#' @param obs_array A list containing three arrays: species, dbh, and trees.
+#'
+#' @return A data.table with columns siteID, patchID, cohortID, species, dbh, and trees.
+#'
+#' @examples
+#' obs_array <- list(species = array(c("A", "B"), dim = c(2, 2, 2)), dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)), trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
+#' result <- array2obsDF(obs_array)
+#'
+#' @export
 array2obsDF <- function(obs_array) {
   # Retrieve dimensions
 
@@ -73,6 +97,18 @@ array2obsDF <- function(obs_array) {
   return(obs_dt)
 }
 
+#' Cohort Matrix Class
+#'
+#' An R6 class for managing cohorts of trees in forest models. This class allows for the initialization, transformation, and manipulation of cohorts represented by arrays of dbh, trees, and species.
+#'
+#' @field dbh A tensor representing the diameter at breast height for each cohort.
+#' @field trees A tensor representing the number of trees in each cohort.
+#' @field species A tensor representing the species of each cohort.
+#' @field dims A vector representing the dimensions of the arrays (sites, patches, cohorts).
+#' @field sp An integer representing the number of species.
+#' @field device A character string specifying the device to use ('cpu' or 'cuda').
+#'
+#' @export
 CohortMat = R6::R6Class("CohortMat", public = list(
   dbh=NULL,
   trees=NULL,
