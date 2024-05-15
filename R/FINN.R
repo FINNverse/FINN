@@ -1,192 +1,44 @@
-#' Sample poisson relaxed
-#'
-#' @param lmbd lambda
-#' @param num_samples number of samples
-#' @param temperature temperature
-#'
-#' @export
-sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
-  t = (torch::torch_rand(c(num_samples,lmbd$shape))$log()$negative()/lmbd)$cumsum(dim=1L)
-  relaxed_indicator = torch_sigmoid((1.0 - t) / temperature)
-  N = relaxed_indicator$sum(1)
-  return(N)
+np_runif = function(low, high, size) {
+  N = prod(size)  # Calculate total number of values to generate
+  array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
 }
 
 
-#' Basal aera multiplied with number of species
+#' Calculate the BA_stemsal area of a tree given the diameter at breast height (dbh).
 #'
-#' @param dbh dbh
-#' @param nTree number of Trees
-#'
-#' @export
-BA_T_P = function(dbh, nTree) {
-  return(pi*(dbh/100./2.)$pow(2.0)*nTree)
-}
-
-#' Index species
-#'
-#' @param pred predictions
-#' @param species species index vector, must be int64
-#'
-#' @export
-index_species = function(pred, species) {
-  shapes = pred$shape
-  X_expanded = pred$unsqueeze(2)$expand(c(shapes[1], species$shape[2], shapes[2]))
-  pred = torch_gather(X_expanded, 3, species)
-  return(pred)
-}
-
-
-#' Sample from binomial with gradient
-#'
-#' @param n number of trials
-#' @param p probability of success
-#' @param sample_size sample size
-#'
-#' @export
-binomial_from_gamma = function(n, p, sample_size=1) {
-  mean = n * p
-  variance = n * p * (1 - p)
-  alpha = mean**2 / variance
-  beta = mean / variance
-  gamma_dist = torch::distr_gamma(alpha, beta)
-  samples_gamma = gamma_dist$rsample(sample_size)$squeeze(1)
-  return(samples_gamma)
-}
-
-#' Mortality
-#'
-#' @param dbh dbh
-#' @param species species
-#' @param nTree nTree
-#' @param parMort parMort
-#' @param pred predictions
-#' @param AL available light
-#'
-#' @export
-mortFP = function(dbh, species, nTree, parMort, pred, AL) {
-  shade = 1-torch_sigmoid((AL + (1-parMort[,1][species]) - 1)/1e-2)
-  environment = index_species(pred, species)
-  gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
-  predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
-  #mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
-  mort = binomial_from_gamma(nTree, predM)
-  return( mort + mort$round()$detach() - mort$detach() )
-}
-
-
-#' Aggregate function
-#'
-#' @param labels labels
-#' @param samples samples
-#' @param Results Results
-#'
-#' @export
-aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
-
-  if(drop_rows) {
-    # Drop rows for speed up - memory intensive
-    if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2]) # Not good, better to pass sp_max to function!
-
-    old_shape = labels$shape
-
-    labels_new = (labels + torch::torch_tensor(seq(1, by = sp_max, length.out = labels$shape[1])-1,
-                                               dtype = torch_int64(),
-                                               device = labels$device)$reshape(c(labels$shape[1], 1L, 1L))$expand(labels$shape))$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3]))
-
-    samples_new = lapply(samples, function(sample) {
-      return(sample$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3])))
-    })
-    Results_new = lapply(Results, function(result) {
-      return(result$reshape(c(1, labels$shape[1]*sp_max)))
-    })
-    Results = Results_new
-    labels = labels_new
-    samples = samples_new
-  }
-
-  for(k in 1:labels$shape[1]) {
-    #samples_tmp = [sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)) for sample in samples]
-    samples_tmp = lapply(samples, function(sample) sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)))
-
-    results = groupby_mean(samples_tmp, labels[k,,,drop=FALSE]$flatten())
-    values = results[[1]]
-    positions = results[[2]]
-
-    for( v in 1:length(samples)) {
-      Results[[v]][k,positions] = Results[[v]][k,positions] + values[[v]]$squeeze()
-    }
-  }
-
-  if(drop_rows) {
-    Results = lapply(Results, function(result) {
-      return(result$reshape(c(old_shape[1], sp_max)))
-    })
-  }
-
-  return(Results)
-}
-
-#' group by mean
-#'
-#' @param values list of value tensors
-#' @param labels labels
-#'
-#' @export
-groupby_mean = function(values, labels) {
-  uniques = unique(as.matrix(labels))
-  key_val = 1:length(uniques)
-  names(key_val) = val_key = sort(uniques)
-  names(val_key) = 1:length(uniques)
-  labels2 = as.matrix(labels)[,1]
-  labels = torch_tensor(key_val[as.character(labels2)],  dtype = torch_int64(), device = values[[1]]$device)
-  labels = labels$view(c(labels$size(1), 1))$expand(c(-1, values[[1]]$size(2)))
-  unique_labels_r = matrix(sort(unique(as.matrix(labels))), ncol = 1L)
-  unique_labels = torch_tensor(unique_labels_r, dtype = torch_int64())
-  results = lapply(values, function(value) torch_zeros_like(unique_labels, dtype = value$dtype, device = values[[1]]$device)$scatter_add_(1, labels, value))
-  new_position = torch_tensor(val_key[as.character(unique_labels_r[,1])], device = values[[1]]$device,  dtype = torch_int64())
-  return(list(results, new_position))
-}
-
-
-A = torch_ones(10, 2)
-A$split(dim = 1L, split_size = 10L)
-
-
-pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
-  # KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), split_size = org_dim[1]*org_dim[2], dim = 1) TODO does not work...bug?!
-  KK = value$flatten(start_dim = 1, end_dim = 2)$split(1, 1)
-  KK_new = vector("list", length = length(KK))
-  for( i in 1:indices$shape[1]) {
-    KK_new[[i]] = KK[[i]][1, indices[i, ]$detach()]
-  }
-  return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE, padding_value = const))
-}
-
-
-#' Calculate the basal area of a tree given the diameter at breast height (dbh).
-#'
-#' This function calculates the basal area of a tree given the diameter at breast height (dbh).
+#' This function calculates the BA_stemsal area of a tree given the diameter at breast height (dbh).
 #'
 #' @param dbh torch.Tensor The diameter at breast height of the tree.
 #'
-#' @return torch.Tensor The basal area of the tree.
+#' @return torch.Tensor The BA_stemsal area of the tree.
 #'
 #' @examples
 #' dbh = torch::torch_tensor(50)
-#' basal_area = BA_P(dbh)
-#' print(basal_area)
+#' BA_stemsal_area = BA_stem(dbh)
+#' print(BA_stemsal_area)
 #'
 #' @import torch
 #' @export
-BA_P = function(dbh) {
+BA_stem = function(dbh) {
   return(pi*(dbh/100./2.)^2.0)
 }
 
 
-#' Calculate the height of a tree based on its diameter at breast height and a global parameter.
+#' BA_stemsal aera multiplied with number of species
 #'
-#' This function calculates the height of a tree based on the diameter at breast height (dbh) and a parameter.
+#' @param dbh dbh
+#' @param trees number of Trees
+#'
+#' @export
+BA_stand = function(dbh, trees, patch_size_ha = 0.1) {
+  return((pi*(dbh/100./2.)$pow(2.0)*trees)/patch_size_ha)
+}
+
+
+
+#' Calculate the height of a tree BA_stemsed on its diameter at breast height and a global parameter.
+#'
+#' This function calculates the height of a tree BA_stemsed on the diameter at breast height (dbh) and a parameter.
 #'
 #' @param dbh A numeric value representing the diameter at breast height of the tree.
 #' @param parHeight A numeric value representing the global parameter used in the height calculation.
@@ -194,69 +46,93 @@ BA_P = function(dbh) {
 #' @return A numeric value representing the calculated height of the tree.
 #'
 #' @examples
-#' height_P(30, 0.5)
+#' height(30, 0.5)
 #'
 #' @export
-height_P = function(dbh, parHeight) {
+height = function(dbh, parHeight) {
   height = (exp((((dbh * parHeight) / (dbh+100))))-1)*100 + 0.001
   return(height)
 }
 
 
-#' Compute the fraction of available light (AL) for each cohort based on the given parameters.
+
+#' Compute the fraction of available light (light) for each cohort BA_stemsed on the given parameters.
 #'
-#' This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
+#' This function calculates the fraction of available light for each cohort of trees BA_stemsed on their diameter at breast height (dbh), species, number of trees, and global parameters.
 #'
 #' @param dbh torch.Tensor Diameter at breast height for each cohort.
 #' @param species torch.Tensor species index for each cohort.
-#' @param nTree Number of trees.
-#' @param parHeight torch.Tensor Global parameters for all species.
+#' @param trees Number of trees.
+#' @param parHeight torch.Tensor global parameters for all species.
 #' @param h torch.Tensor (Optional) Height of each cohort. Defaults to NULL.
 #' @param minLight float (Optional) Minimum light requirement. Defaults to 50.
 #'
-#' @return torch.Tensor Fraction of available light (AL) for each cohort.
+#' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
 #' @examples
-#' compF_P(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
-#'         nTree = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
+#' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
+#'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-compF_P = function(dbh, species, nTree, parHeight, h = NULL, minLight = 50.){
+competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.){
 
-  ba = (BA_P(dbh)*nTree)/0.1
-  cohortHeights = height_P(dbh, parHeight[species])$unsqueeze(4)
+  BA_stem = (BA_stem(dbh)*trees)/0.1
+  cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
-    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
+    BA_stem_height = (BA_stem$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
   }else{
-    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
+    BA_stem_height = (BA_stem$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
   }
-  AL = 1.-BA_height/minLight
-  AL = torch_clamp(AL, min = 0)
-  return(AL)
+  light = 1.-BA_stem_height/minLight
+  light = torch_clamp(light, min = 0)
+  return(light)
 }
+
+
+
+
+#' Mortality
+#'
+#' @param dbh dbh
+#' @param species species
+#' @param trees trees
+#' @param parMort parMort
+#' @param pred predictions
+#' @param light available light
+#'
+#' @export
+mortality = function(dbh, species, trees, parMort, pred, light) {
+  shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
+  environment = index_species(pred, species)
+  gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
+  predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
+  #mort = torch.distributions.Beta(predM*trees+0.00001, trees - predM*trees+0.00001).rsample()*trees
+  mort = binomial_from_gamma(trees, predM)
+  return( mort + mort$round()$detach() - mort$detach() )
+}
+
+
+
 
 #' Calculate growth
 #'
-#' This function calculates growth based on specified parameters.
+#' This function calculates growth BA_stemsed on specified parameters.
 #'
 #' @param dbh torch.Tensor Diameter at breast height.
 #' @param species torch.Tensor species of tree.
 #' @param parGrowth torch.Tensor Growth parameters.
 #' @param parMort torch.Tensor Mortality parameters.
 #' @param pred torch.Tensor Predicted values.
-#' @param AL torch.Tensor Accumulated Light.
+#' @param light torch.Tensor Accumulated Light.
 #'
 #' @return torch.Tensor A tensor representing the forest plot growth.
 #'
 #' @import torch
-#' @importFrom torch nn functional
-#' @importFrom torch nn functional torch_sigmoid
-#' @importFrom torch nn functional torch_clamp
 #'
 #' @export
-growthFP = function(dbh, species, parGrowth, parMort, pred, AL){
+growth = function(dbh, species, parGrowth, parMort, pred, light){
 
-  shade = torch_sigmoid((AL + (1-parGrowth[,1][species]) - 1)/1e-1)
+  shade = torch_sigmoid((light + (1-parGrowth[,1][species]) - 1)/1e-1)
   environment = index_species(pred, species)
   pred = (shade*environment)
   # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
@@ -266,53 +142,29 @@ growthFP = function(dbh, species, parGrowth, parMort, pred, AL){
   return(torch_clamp(growth, min = 0.0))
 }
 
-#' Calculate the regeneration of forest patches based on the input parameters.
+#' Calculate the regeneration of forest patches BA_stemsed on the input parameters.
 #'
-#' This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
+#' This function calculates the regeneration of forest patches BA_stemsed on species information, regeneration parameters, prediction values, and available light.
 #'
 #' @param species torch.Tensor species information.
 #' @param parReg torch.Tensor Regeneration parameters.
 #' @param pred torch.Tensor Prediction values.
-#' @param AL torch.Tensor Available light variable for calculation.
+#' @param light torch.Tensor Available light variable for calculation.
 #'
 #' @return torch.Tensor Regeneration values for forest patches.
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
-regFP = function(species, parReg, pred, AL) {
-  regP = torch_sigmoid((AL + (1-parReg) - 1)/1e-3)
+regeneration = function(species, parReg, pred, light) {
+  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3)
   environment = pred
   regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
   regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
   return(regeneration)
 }
 
-species = torch_randint(1, 5, size = c(10, 5, 2))
-parReg = torch_ones(size = c(5), requires_grad = TRUE)
-pred = torch_rand(size = c(10, 5))
-AL = torch_ones(size = c(10, 5, 1))
-r = regFP(species, parReg, pred, AL)
-r$sum()$backward()
-parReg$grad
-#' Generate random numbers from a uniform distribution
-#'
-#' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.
-#'
-#' @param low numeric Lower bound of the uniform distribution.
-#' @param high numeric Upper bound of the uniform distribution.
-#' @param size numeric Size of the output array.
-#'
-#' @return array A numeric array of random numbers.
-#'
-#' @examples
-#' np_runif(0, 1, c(2, 3))
-#'
-#' @export
-np_runif = function(low, high, size) {
-  N = prod(size)  # Calculate total number of values to generate
-  array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
-}
+
 
 #' Initialize the FINN model with specified parameters.
 #'
@@ -320,7 +172,7 @@ np_runif = function(low, high, size) {
 #'
 #' @param sp integer Number of species.
 #' @param device character Device to use ('cpu' or 'cuda').
-#' @param parHeight torch.Tensor Global parameters.
+#' @param parHeight torch.Tensor global parameters.
 #' @param parGrowth torch.Tensor Growth parameters.
 #' @param parMort torch.Tensor Mortality parameters.
 #' @param parReg torch.Tensor Regeneration parameters.
@@ -496,16 +348,16 @@ build_NN <- function(self,
 }
 
 
-#' Predict the growth and mortality of trees based on the given inputs.
+#' Predict the growth and mortality of trees BA_stemsed on the given inputs.
 #'
-#' This function predicts the growth and mortality of trees based on the given inputs, including diameter at breast height (dbh), number of trees, species, environmental data, and other parameters.
+#' This function predicts the growth and mortality of trees BA_stemsed on the given inputs, including diameter at breast height (dbh), number of trees, species, environmental data, and other parameters.
 #'
 #' @param dbh torch.Tensor (Optional) The diameter at breast height of the trees. If NULL, it will be initialized using CohortMat.
-#' @param nTree torch.Tensor (Optional) The number of trees. If NULL, it will be initialized using CohortMat.
+#' @param trees torch.Tensor (Optional) The number of trees. If NULL, it will be initialized using CohortMat.
 #' @param species torch.Tensor (Optional) The species of the trees. If NULL, it will be initialized using CohortMat.
 #' @param env torch.Tensor The environmental data.
 #' @param record_time integer The time at which to start recording the results.
-#' @param response character The response variable to use for aggregating results. Can be "dbh", "ba", or "ba_p".
+#' @param response character The response variable to use for aggregating results. Can be "dbh", "BA_stem", or "BA_stem".
 #' @param pred_growth torch.Tensor (Optional) The predicted growth values.
 #' @param pred_morth torch.Tensor (Optional) The predicted mortality values.
 #' @param pred_reg torch.Tensor (Optional) The predicted regeneration values.
@@ -517,7 +369,7 @@ build_NN <- function(self,
 #' @export
 predict = function(
             dbh = NULL,
-            nTree = NULL,
+            trees = NULL,
             species = NULL,
             env = NULL,
             record_time = 0L,
@@ -531,7 +383,7 @@ predict = function(
 
   if(is.null(dbh)){
     cohorts = CohortMat$new(dims = c(env$shape[1], patches, self$sp), sp = self$sp, device="cpu")
-    nTree = cohorts$nTree
+    trees = cohorts$trees
     species = cohorts$species
     dbh = cohorts$dbh
   }
@@ -546,19 +398,19 @@ predict = function(
 
   dbh = torch_tensor(dbh, dtype=self$dtype, device=self$device)
 
-  nTree = torch_tensor(nTree, dtype=self$dtype, device=self$device)
+  trees = torch_tensor(trees, dtype=self$dtype, device=self$device)
 
   species = torch_tensor(species, dtype=torch_int64(), device=self$device)
 
   cohort_ids = torch_randint(0, 50000, size=species$shape)
 
   # Result arrays
-  ## dbh / ba / ba*nTRee
+  ## dbh / BA_stem / BA_stem*trees
   Result = torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device) # sites, time, species
   ## number of trees
   Result_T = torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device)
 
-  AL = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
+  light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
   g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
   m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
   r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
@@ -584,18 +436,18 @@ predict = function(
       if(i > record_time){
         if(dbh$shape[3] != 0){
           if(response == "dbh"){
-            ba = dbh
-          }else if(response == "ba"){
-            ba = BA_P(dbh)
+            BA_stem = dbh
+          }else if(response == "BA_stem"){
+            BA_stem = BA_stem(dbh)
           }else{
-            ba = BA_T_P(dbh, nTree)
-            # ba * nTree
+            BA_stem = BA_stand(dbh, trees)
+            # BA_stem * trees
           }
 
           labels = species
           samples = list()
-          samples = c(samples,(ba * torch_sigmoid((nTree - 0.5)/1e-2)))
-          samples = c(samples, (nTree * torch_sigmoid((nTree - 0.5)/1e-2)))
+          samples = c(samples,(BA_stem * torch_sigmoid((trees - 0.5)/1e-2)))
+          samples = c(samples, (trees * torch_sigmoid((trees - 0.5)/1e-2)))
 
           Results_tmp = replicate(length(samples),torch_zeros_like(Result[[1]][,i,]))
           tmp_res = aggregate_results(labels, samples, Results_tmp)
@@ -608,34 +460,34 @@ predict = function(
       # Model
 
     torch::with_no_grad({
-      nTree_clone =  nTree$clone() #torch.zeros_like(nTree).to(self.device)+0
+      trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
     })
 
 
     if(dbh$shape[3] != 0){
-      AL = compF_P(dbh, species, nTree_clone, self$parHeight)
-      g = growthFP(dbh, species, self$parGrowth, self$parMort, pred_growth[,i,], AL)
+      light = competition(dbh, species, trees_clone, self$parHeight)
+      g = growth(dbh, species, self$parGrowth, self$parMort, pred_growth[,i,], light)
       dbh = dbh+g
-      AL = compF_P(dbh, species, nTree_clone, self$parHeight)
+      light = competition(dbh, species, trees_clone, self$parHeight)
 
-      m = mortFP(dbh, species, nTree+0.001, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3) # TODO check!
+      m = mortality(dbh, species, trees+0.001, self$parMort, pred_morth[,i,], light) #.unsqueeze(3) # TODO check!
       #m = torch_ones_like(m)
-      #### TODO if nTree = 0 then NA...prevent!
-      nTree = torch_clamp(nTree - m, min = 0)
+      #### TODO if trees = 0 then NA...prevent!
+      trees = torch_clamp(trees - m, min = 0)
     }
 
 
     torch::with_no_grad({
-      nTree_clone =  nTree$clone() #torch.zeros_like(nTree).to(self.device)+0
+      trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
     })
 
-    AL_reg = compF_P(dbh, species, nTree_clone, self$parHeight, h = torch_zeros(list(1, 1))) # must have dimension = n species in last dim
+    AL_reg = competition(dbh, species, trees_clone, self$parHeight, h = torch_zeros(list(1, 1))) # must have dimension = n species in last dim
 
-    r = regFP(species, self$parReg, pred_reg[,i,], AL_reg)
+    r = regeneration(species, self$parReg, pred_reg[,i,], AL_reg)
 
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
-    new_nTree = r
+    new_trees = r
     new_species = torch_arange(1, sp+1, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
     new_cohort_id = torch_randint(0, 50000, size = list(sp))$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
@@ -647,7 +499,7 @@ predict = function(
       }
 
     samples = list()
-    samples = c(samples, AL)
+    samples = c(samples, light)
     samples = c(samples, g)
     samples = c(samples, m)
     # samples = c(samples, r)
@@ -678,17 +530,17 @@ predict = function(
 
     # Combine
     dbh = torch_cat(list(dbh, new_dbh), 3)
-    nTree = torch_cat(list(nTree, new_nTree), 3)
+    trees = torch_cat(list(trees, new_trees), 3)
     species = torch_cat(list(species, new_species), 3)
     cohort_ids = torch_cat(list(cohort_ids, new_cohort_id), 3)
 
     # Pad tensors, expensive
     if(i %% 10 == 0){
-      indices = (nTree > 0.5)$flatten(start_dim = 1, end_dim = 2)
+      indices = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
       org_dim = species$shape[1:2]
       org_dim_t = torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
       dbh = pad_tensors_speed_up(dbh, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
-      nTree = pad_tensors_speed_up(nTree, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
+      trees = pad_tensors_speed_up(trees, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
       cohort_ids = pad_tensors_speed_up(cohort_ids, indices, org_dim_t)$unflatten(1, org_dim)
       species = pad_tensors_speed_up(species, indices, org_dim_t, 1L)$unflatten(1, org_dim)
     }
@@ -704,17 +556,17 @@ predict = function(
 
 #' Fit the model to the given data.
 #'
-#' This function fits the model to the given data using specified epochs, batch size, learning rate, start time, and response variable.
+#' This function fits the model to the given data using specified epochs, BA_stemtch size, learning rate, start time, and response variable.
 #'
 #' @param X torch.Tensor (Optional) The input data. Default is NULL.
 #' @param Y torch.Tensor (Optional) The target data. Default is NULL.
 #' @param initCohort list (Optional) Initial cohort data. Default is NULL.
 #' @param epochs integer The number of epochs to train the model. Default is 2.
-#' @param batch_size integer The batch size for training. Default is 20.
+#' @param batch_size integer The BA_stemtch size for training. Default is 20.
 #' @param learning_rate float The learning rate for the optimizer. Default is 0.1.
 #' @param start_time float The start time for prediction. Default is 0.5.
 #' @param patches integer The number of patches. Default is 50.
-#' @param response character The response variable. Default is "dbh", other options are 'ba' or 'ba*nT'.
+#' @param response character The response variable. Default is "dbh", other options are 'BA_stem' or 'BA_stem*nT'.
 #'
 #' @return None
 #'
@@ -758,7 +610,8 @@ fit = function(
   self$history = torch_zeros(epochs)
 
 
-  # ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
+
+  # ep_BA_stemr = tqdm(range(epochs),BA_stemr_format= "Iter: {n_fmt}/{total_fmt} {l_BA_stemr}{BA_stemr}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
   for(epoch in 1:epochs){
 
     #for step, (x, y, c, ind) in enumerate(DataLoader):
@@ -771,28 +624,32 @@ fit = function(
       ind = b[[4]]
       self$optimizer$zero_grad()
 
+
       if (is.null(initCohort)) {
         cohorts = CohortMat$new(dims = c(x$shape[1], patches, self$sp),
                                 sp = self$sp,
                                 device=self$device)
-        nTree = cohorts$nTree
+        trees = cohorts$trees
         species = cohorts$species
         dbh = cohorts$dbh
       } else {
-        nTree = (initCohort$nTree[ind,])$to(device = self$device, non_blocking=TRUE)
+        trees = (initCohort$trees[ind,])$to(device = self$device, non_blocking=TRUE)
         species = (initCohort$species[ind,])$to(device = self$device, non_blocking=TRUE)
         dbh = (initCohort$dbh[ind,])$to(device = self$device, non_blocking=TRUE)
       }
 
+
+
+
       x = x$to(device = self$device, non_blocking=TRUE)
       y = y$to(device = self$device, non_blocking=TRUE)
       c = c$to(device = self$device, non_blocking=TRUE)
-      pred = self$predict( dbh, nTree, species, x, start_time, response)
-      loss1 =torch::nnf_mse_loss(y[, start_time:dim(y)[2],,1], pred[[1]][,start_time:dim(y)[2],])$mean() # dbh / ba
-      #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
-      loss2 = torch::distr_poisson(pred[[2]][,start_time:pred[[2]]$shape[2],]+0.001)$log_prob(c[, start_time:c$shape[2],])$mean()$negative() # nTree
+      pred = self$predict( dbh, trees, species, x, start_time, response)
+      loss1 =torch::nnf_mse_loss(y[, start_time:dim(y)[2],,1], pred[[1]][,start_time:dim(y)[2],])$mean() # dbh / BA_stem
+      #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # trees
+      loss2 = torch::distr_poisson(pred[[2]][,start_time:pred[[2]]$shape[2],]+0.001)$log_prob(c[, start_time:c$shape[2],])$mean()$negative() # trees
       loss = (loss1 + loss2)
-      #loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / ba
+      #loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / BA_stem
       loss$backward()
       print(self$parameters[[1]]$grad)
       self$optimizer$step()
@@ -819,7 +676,7 @@ library(R6)
 #' @field np_runif Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.
 #' @field sp integer Number of species.
 #' @field device character Device to use ('cpu' or 'cuda').
-#' @field parHeight torch.Tensor Global parameters.
+#' @field parHeight torch.Tensor global parameters.
 #' @field parGrowth torch.Tensor Growth parameters.
 #' @field parMort torch.Tensor Mortality parameters.
 #' @field parReg torch.Tensor Regeneration parameters.

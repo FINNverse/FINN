@@ -2,84 +2,165 @@
 % Please edit documentation in R/FINN.R
 \name{FINN}
 \alias{FINN}
-\title{FINN model}
-\usage{
-FINN(
-  formula,
-  data = NULL,
-  response = NULL,
-  patches = 10L,
-  epochs = 1L,
-  learning_rate = 1,
-  batch_size = 70L,
-  device = "cpu",
-  start_time = 0.7,
+\title{FINN: Forest Inventory Neural Network}
+\description{
+A class to initialize and train a Forest Inventory Neural Network (FINN) for predicting tree growth, mortality, and regeneration.
+}
+\section{Public fields}{
+\if{html}{\out{<div class="r6-fields">}}
+\describe{
+\item{\code{np_runif}}{Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.}
+
+\item{\code{sp}}{integer Number of species.}
+
+\item{\code{device}}{character Device to use ('cpu' or 'cuda').}
+
+\item{\code{parHeight}}{torch.Tensor global parameters.}
+
+\item{\code{parGrowth}}{torch.Tensor Growth parameters.}
+
+\item{\code{parMort}}{torch.Tensor Mortality parameters.}
+
+\item{\code{parReg}}{torch.Tensor Regeneration parameters.}
+
+\item{\code{parGrowthEnv}}{torch.Tensor Growth environment parameters.}
+
+\item{\code{parMortEnv}}{torch.Tensor Mortality environment parameters.}
+
+\item{\code{parRegEnv}}{torch.Tensor Regeneration environment parameters.}
+
+\item{\code{hidden_growth}}{list Hidden layers for growth model.}
+
+\item{\code{hidden_mort}}{list Hidden layers for mortality model.}
+
+\item{\code{hidden_reg}}{list Hidden layers for regeneration model.}
+}
+\if{html}{\out{</div>}}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{np_runif}}{Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.}
+}
+\if{html}{\out{</div>}}
+}
+\section{Methods}{
+\subsection{Public methods}{
+\itemize{
+\item \href{#method-FINN-np_runif}{\code{FINN$np_runif()}}
+\item \href{#method-FINN-new}{\code{FINN$new()}}
+\item \href{#method-FINN-build_NN}{\code{FINN$build_NN()}}
+\item \href{#method-FINN-predict}{\code{FINN$predict()}}
+\item \href{#method-FINN-fit}{\code{FINN$fit()}}
+\item \href{#method-FINN-clone}{\code{FINN$clone()}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-np_runif"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-np_runif}{}}}
+\subsection{Method \code{np_runif()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$np_runif(low, high, size)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-new"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-new}{}}}
+\subsection{Method \code{new()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$new(
+  sp = self$sp,
+  env = self$env,
+  device = self$device,
+  parHeight = self$parHeight,
+  parGrowth = self$parGrowth,
+  parMort = self$parMort,
+  parReg = self$parReg,
+  parGrowthEnv = self$parGrowthEnv,
+  parMortEnv = self$parMortEnv,
+  parRegEnv = self$parRegEnv,
+  hidden_growth = self$hidden_growth,
+  hidden_mort = self$hidden_mort,
+  hidden_reg = self$hidden_reg,
+  which = "all"
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-build_NN"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-build_NN}{}}}
+\subsection{Method \code{build_NN()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$build_NN(
+  self,
+  input_shape,
+  output_shape,
+  hidden,
+  bias,
+  activation,
+  dropout,
+  last_activation = "sigmoid"
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-predict"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-predict}{}}}
+\subsection{Method \code{predict()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$predict(
+  dbh = NULL,
+  trees = NULL,
+  species = NULL,
+  env = NULL,
+  record_time = 0L,
+  response = "dbh",
+  pred_growth = NULL,
+  pred_morth = NULL,
+  pred_reg = NULL,
+  patches = 50,
+  debug = TRUE
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-fit"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-fit}{}}}
+\subsection{Method \code{fit()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$fit(
   X = NULL,
   Y = NULL,
-  init_global = NULL,
-  init_growth = NULL,
-  init_mort = NULL,
-  init_reg = NULL,
-  init_growth_env = NULL,
-  init_mort_env = NULL,
-  init_reg_env = NULL,
-  hidden_growth = list(),
-  hidden_mort = list(),
-  hidden_reg = list(),
-  simulate = FALSE
-)
+  initCohort = NULL,
+  epochs = 2L,
+  batch_size = 20L,
+  learning_rate = 0.1,
+  start_time = 0.5,
+  patches = 50L,
+  response = "dbh"
+)}\if{html}{\out{</div>}}
 }
-\arguments{
-\item{formula}{formula}
 
-\item{data}{environmental data, must contain the variables timestep and site}
-
-\item{response}{species dbh and number of trees, must contain the variables timestep, site, nTree, and Species}
-
-\item{patches}{number of patches}
-
-\item{epochs}{number of epochs (optimization)}
-
-\item{learning_rate}{learning rate for stochastic gradient descent}
-
-\item{batch_size}{batch_size for stochastic gradient descent}
-
-\item{device}{cpu or cuda, if available}
-
-\item{start_time}{when to record, fractional, from 0 to 1}
-
-\item{X}{alternative parametrization, dims: (site, time, predictors)}
-
-\item{Y}{alternative parametrization, dims: (site, time, species, 2), 2 for dbh/ba/ba*t and number of Trees (must be integers)}
-
-\item{init_global}{Initial values for global parameters (optional).}
-
-\item{init_growth}{Initial values for growth parameters (optional).}
-
-\item{init_mort}{Initial values for mortality parameters (optional).}
-
-\item{init_reg}{Initial values for regeneration parameters (optional).}
-
-\item{init_growth_env}{Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)}
-
-\item{init_mort_env}{Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)}
-
-\item{init_reg_env}{Initial values for NN env, must be a list of matrices (each matrix == one hidden layer)}
-
-\item{hidden_growth}{List of specifications for hidden layers in growth NN (optional).}
-
-\item{hidden_mort}{List of specifications for hidden layers in mort NN (optional).}
-
-\item{hidden_reg}{List of specifications for hidden layers in reg NN (optional)}
-
-\item{simulate}{fit or simulation modus, if simulation, model is not fitted and will be returned}
 }
-\value{
-An object of class `FINN` containing the fitted model, data, and functions to access the model and predictions.
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-clone}{}}}
+\subsection{Method \code{clone()}}{
+The objects of this class are cloneable with this method.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$clone(deep = FALSE)}\if{html}{\out{</div>}}
 }
-\description{
-FINN model
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{deep}}{Whether to make a deep clone.}
 }
-\author{
-Maximilian Pichler
+\if{html}{\out{</div>}}
+}
+}
 }
