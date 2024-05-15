@@ -11,7 +11,7 @@ obsDF2arrays = function(obs_dt) {
   # Initialize arrays
   species_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
   dbh_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
-  nTree_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
+  trees_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
 
   # Populate arrays
   for (i in 1:nrow(obs_dt)) {
@@ -21,14 +21,14 @@ obsDF2arrays = function(obs_dt) {
 
     species_array[site, patch, cohort] <- obs_dt$species[i]
     dbh_array[site, patch, cohort] <- obs_dt$dbh[i]
-    nTree_array[site, patch, cohort] <- obs_dt$nTree[i]
+    trees_array[site, patch, cohort] <- obs_dt$trees[i]
   }
 
   # Return a list of the arrays
   return(list(
     species = species_array,
     dbh = dbh_array,
-    nTree = nTree_array
+    trees = trees_array
   ))
 }
 
@@ -38,7 +38,7 @@ array2obsDF <- function(obs_array) {
 
   species_array = obs_array$species
   dbh_array = obs_array$dbh
-  nTree_array = obs_array$nTree
+  trees_array = obs_array$trees
 
   Nsites <- dim(species_array)[1]
   Npatches <- dim(species_array)[2]
@@ -53,7 +53,7 @@ array2obsDF <- function(obs_array) {
       for (cohort in 1:maxNcohorts) {
         species <- species_array[site, patch, cohort]
         dbh <- dbh_array[site, patch, cohort]
-        nTree <- nTree_array[site, patch, cohort]
+        trees <- trees_array[site, patch, cohort]
 
         # Only add rows where dbh is not NA (assuming NA means no data for that cohort)
         if (!is.na(dbh)) {
@@ -63,7 +63,7 @@ array2obsDF <- function(obs_array) {
             cohortID = cohort,
             species = species,
             dbh = dbh,
-            nTree = nTree
+            trees = trees
           ))
         }
       }
@@ -75,37 +75,37 @@ array2obsDF <- function(obs_array) {
 
 CohortMat = R6::R6Class("CohortMat", public = list(
   dbh=NULL,
-  nTree=NULL,
-  Species=NULL,
+  trees=NULL,
+  species=NULL,
   dims=c(50, 30, 10),
   sp = 10,
   device ='cpu',
-  initialize = function(dbh=self$dbh, nTree=self$nTree, Species=self$Species, dims=self$dims, sp = self$sp, device = self$device, obs_df = NULL) {
+  initialize = function(dbh=self$dbh, trees=self$trees, species=self$species, dims=self$dims, sp = self$sp, device = self$device, obs_df = NULL) {
     if(!is.null(obs_df)){
-      if(all(colnames(obs_df) %in% c("siteID","patchID","species", "dbh", "nTree"))) stop("all(colnames(obs_df) %in% c(\"siteID\",\"patchID\",\"species\",\"dbh\",\"nTree\")) is not TRUE")
+      if(all(colnames(obs_df) %in% c("siteID","patchID","species", "dbh", "trees"))) stop("all(colnames(obs_df) %in% c(\"siteID\",\"patchID\",\"species\",\"dbh\",\"trees\")) is not TRUE")
       obs_array = obsDF2arrays(obs_df)
       dbh = obs_array$dbh
-      nTree = obs_array$nTree
-      Species = obs_array$species
+      trees = obs_array$trees
+      species = obs_array$species
       dims = dim(obs_array$species)
     }
 
     self$dbh = if(is.null(dbh)) array(0.0, dim = dims) else dbh
-    self$nTree = if(is.null(nTree)) array(0.0, dim = dims) else nTree
-    self$Species = if(is.null(Species)) array(sample.int(sp, prod(dims),replace = TRUE), dim = dims) else Species
+    self$trees = if(is.null(trees)) array(0.0, dim = dims) else trees
+    self$species = if(is.null(species)) array(sample.int(sp, prod(dims),replace = TRUE), dim = dims) else species
     self$dims = dims
     self$sp = sp
     self$device = torch::torch_device(device)
 
     if(!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype=torch_float32(), device=self$device)
-    if(!inherits(self$nTree, "torch_tensor")) self$nTree = torch::torch_tensor(self$nTree, dtype=torch_float32(), device=self$device)
-    if(!inherits(self$Species, "torch_tensor")) self$Species = torch::torch_tensor(self$Species, dtype=torch_int64(), device=self$device)
+    if(!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype=torch_float32(), device=self$device)
+    if(!inherits(self$species, "torch_tensor")) self$species = torch::torch_tensor(self$species, dtype=torch_int64(), device=self$device)
 
   },
   # Function to transform obs_dt into three arrays
   obsDF2arrays = obsDF2arrays,
   asDF = function() {
-    array2obsDF(list(dbh = torch::as_array(self$dbh),nTree = torch::as_array(self$nTree),species = torch::as_array(self$Species)))
+    array2obsDF(list(dbh = torch::as_array(self$dbh),trees = torch::as_array(self$trees),species = torch::as_array(self$species)))
     }
 ))
 
