@@ -1,27 +1,25 @@
 # tests/testthat/test-height_P.R
 library(testthat)
-library(data.table)
-library(ggplot2)
 library(FINN)
 
 test_that("height_P calculates heights within a specified range", {
+  # Generate the test data using expand.grid and store as data.frame
+  test_df <- as.data.frame(expand.grid(
+    dbh = seq(0, 500, 1),
+    parHeight = seq(0, 1, 0.1)
+  ))
 
-  test_dt =
-    data.table(
-      expand.grid(
-          list(
-            dbh = seq(0, 500,1),
-            parHeight = seq(0,1,0.1)
-          )
-        )
-      )
-  test_dt$rowID = 1:nrow(test_dt)
+  # Calculate the height and add it to the data frame
+  test_df$height <- with(test_df, height_P(dbh, parHeight))
 
-  min_height = 0   # lower limit of height
-  max_height = 135 # higher limit of height
+  # Define the minimum and maximum height
+  min_height <- 0   # Lower limit of height
+  max_height <- 135 # Upper limit of height
 
-  test_dt[, height := height_P(dbh, parHeight), by = rowID]
+  dbh_height_positive = !any(unlist(by(test_df$height,test_df$parHeight,function(x) diff(x)<0)))
 
-  expect_true(min(test_dt$height) >= min_height, info = "All heights should be greater than or equal to the minimum height")
-  expect_true(max(test_dt$height) <= max_height, info = "All heights should be less than or equal to the maximum height")
+  # Perform the tests
+  expect_true(dbh_height_positive, info = "All heights increase with dbh")
+  expect_true(min(test_df$height) >= min_height, info = "All heights should be greater than or equal to the minimum height")
+  expect_true(max(test_df$height) <= max_height, info = "All heights should be less than or equal to the maximum height")
 })
