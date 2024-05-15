@@ -27,7 +27,8 @@ Imports:
     stats,
     utils,
     data.table,
-    coro
+    coro,
+    R6
 Suggests:
     testthat (>= 3.0.0),
     knitr,

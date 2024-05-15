@@ -107,7 +107,7 @@ mortality = function(dbh, species, trees, parMort, pred, light) {
   gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
   predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
   #mort = torch.distributions.Beta(predM*trees+0.00001, trees - predM*trees+0.00001).rsample()*trees
-  mort = binomial_from_gamma(trees, predM)
+  mort = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
   return( mort + mort$round()$detach() - mort$detach() )
 }
 
@@ -157,7 +157,7 @@ growth = function(dbh, species, parGrowth, parMort, pred, light){
 #' @importFrom torch torch_sigmoid
 #' @export
 regeneration = function(species, parReg, pred, light) {
-  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3)
+  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   environment = pred
   regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
   regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
