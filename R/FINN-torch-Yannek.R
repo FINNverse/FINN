@@ -1,3 +1,168 @@
+#' Sample poisson relaxed
+#'
+#' @param lmbd lambda
+#' @param num_samples number of samples
+#' @param temperature temperature
+#'
+#' @export
+sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
+  t = (torch::torch_rand(c(num_samples,lmbd$shape))$log()$negative()/lmbd)$cumsum(dim=1L)
+  relaxed_indicator = torch_sigmoid((1.0 - t) / temperature)
+  N = relaxed_indicator$sum(1)
+  return(N)
+}
+
+
+#' Basal aera multiplied with number of species
+#'
+#' @param dbh dbh
+#' @param nTree number of Trees
+#'
+#' @export
+BA_T_P = function(dbh, nTree) {
+  return(pi*(dbh/100./2.)$pow(2.0)*nTree)
+}
+
+#' Index species
+#'
+#' @param pred predictions
+#' @param species species index vector, must be int64
+#'
+#' @export
+index_species = function(pred, species) {
+  shapes = pred$shape
+  X_expanded = pred$unsqueeze(2)$expand(c(shapes[1], species$shape[2], shapes[2]))
+  pred = torch_gather(X_expanded, 3, species)
+  return(pred)
+}
+
+
+#' Sample from binomial with gradient
+#'
+#' @param n number of trials
+#' @param p probability of success
+#' @param sample_size sample size
+#'
+#' @export
+binomial_from_gamma = function(n, p, sample_size=1) {
+  mean = n * p
+  variance = n * p * (1 - p)
+  alpha = mean**2 / variance
+  beta = mean / variance
+  gamma_dist = torch::distr_gamma(alpha, beta)
+  samples_gamma = gamma_dist$rsample(sample_size)$squeeze(1)
+  return(samples_gamma)
+}
+
+#' Mortality
+#'
+#' @param dbh dbh
+#' @param species species
+#' @param nTree nTree
+#' @param parMort parMort
+#' @param pred predictions
+#' @param AL available light
+#'
+#' @export
+mortFP = function(dbh, species, nTree, parMort, pred, AL) {
+  shade = 1-torch_sigmoid((AL + (1-parMort[,1][species]) - 1)/1e-2)
+  environment = index_species(pred, species)
+  gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
+  predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
+  #mort = torch.distributions.Beta(predM*nTree+0.00001, nTree - predM*nTree+0.00001).rsample()*nTree
+  mort = binomial_from_gamma(nTree, predM)
+  return( mort + mort$round()$detach() - mort$detach() )
+}
+
+
+#' Aggregate function
+#'
+#' @param labels labels
+#' @param samples samples
+#' @param Results Results
+#'
+#' @export
+aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
+
+  if(drop_rows) {
+    # Drop rows for speed up - memory intensive
+    if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2]) # Not good, better to pass sp_max to function!
+
+    old_shape = labels$shape
+
+    labels_new = (labels + torch::torch_tensor(seq(1, by = sp_max, length.out = labels$shape[1])-1,
+                                               dtype = torch_int64(),
+                                               device = labels$device)$reshape(c(labels$shape[1], 1L, 1L))$expand(labels$shape))$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3]))
+
+    samples_new = lapply(samples, function(sample) {
+      return(sample$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3])))
+    })
+    Results_new = lapply(Results, function(result) {
+      return(result$reshape(c(1, labels$shape[1]*sp_max)))
+    })
+    Results = Results_new
+    labels = labels_new
+    samples = samples_new
+  }
+
+  for(k in 1:labels$shape[1]) {
+    #samples_tmp = [sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)) for sample in samples]
+    samples_tmp = lapply(samples, function(sample) sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)))
+
+    results = groupby_mean(samples_tmp, labels[k,,,drop=FALSE]$flatten())
+    values = results[[1]]
+    positions = results[[2]]
+
+    for( v in 1:length(samples)) {
+      Results[[v]][k,positions] = Results[[v]][k,positions] + values[[v]]$squeeze()
+    }
+  }
+
+  if(drop_rows) {
+    Results = lapply(Results, function(result) {
+      return(result$reshape(c(old_shape[1], sp_max)))
+    })
+  }
+
+  return(Results)
+}
+
+#' group by mean
+#'
+#' @param values list of value tensors
+#' @param labels labels
+#'
+#' @export
+groupby_mean = function(values, labels) {
+  uniques = unique(as.matrix(labels))
+  key_val = 1:length(uniques)
+  names(key_val) = val_key = sort(uniques)
+  names(val_key) = 1:length(uniques)
+  labels2 = as.matrix(labels)[,1]
+  labels = torch_tensor(key_val[as.character(labels2)],  dtype = torch_int64(), device = values[[1]]$device)
+  labels = labels$view(c(labels$size(1), 1))$expand(c(-1, values[[1]]$size(2)))
+  unique_labels_r = matrix(sort(unique(as.matrix(labels))), ncol = 1L)
+  unique_labels = torch_tensor(unique_labels_r, dtype = torch_int64())
+  results = lapply(values, function(value) torch_zeros_like(unique_labels, dtype = value$dtype, device = values[[1]]$device)$scatter_add_(1, labels, value))
+  new_position = torch_tensor(val_key[as.character(unique_labels_r[,1])], device = values[[1]]$device,  dtype = torch_int64())
+  return(list(results, new_position))
+}
+
+
+A = torch_ones(10, 2)
+A$split(dim = 1L, split_size = 10L)
+
+
+pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
+  # KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), split_size = org_dim[1]*org_dim[2], dim = 1) TODO does not work...bug?!
+  KK = value$flatten(start_dim = 1, end_dim = 2)$split(1, 1)
+  KK_new = vector("list", length = length(KK))
+  for( i in 1:indices$shape[1]) {
+    KK_new[[i]] = KK[[i]][1, indices[i, ]$detach()]
+  }
+  return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE, padding_value = const))
+}
+
 
 #' Calculate the basal area of a tree given the diameter at breast height (dbh).
 #'
@@ -43,7 +208,7 @@ height_P = function(dbh, parHeight) {
 #' This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
 #'
 #' @param dbh torch.Tensor Diameter at breast height for each cohort.
-#' @param Species torch.Tensor Species index for each cohort.
+#' @param species torch.Tensor species index for each cohort.
 #' @param nTree Number of trees.
 #' @param parHeight torch.Tensor Global parameters for all species.
 #' @param h torch.Tensor (Optional) Height of each cohort. Defaults to NULL.
@@ -52,18 +217,18 @@ height_P = function(dbh, parHeight) {
 #' @return torch.Tensor Fraction of available light (AL) for each cohort.
 #' @import torch
 #' @examples
-#' compF_P(dbh = torch::torch_tensor(c(10, 15, 20)), Species = torch::torch_tensor(c(1, 2, 1)),
+#' compF_P(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
 #'         nTree = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-compF_P = function(dbh, Species, nTree, parHeight, h = NULL, minLight = 50.){
+compF_P = function(dbh, species, nTree, parHeight, h = NULL, minLight = 50.){
 
   ba = (BA_P(dbh)*nTree)/0.1
-  cohortHeights = height_P(dbh, parHeight[Species])$unsqueeze(4)
+  cohortHeights = height_P(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
-    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-3) )$sum(-2) # AUFPASSEN
+    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
   }else{
-    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-3))$sum(-2)
+    BA_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
   }
   AL = 1.-BA_height/minLight
   AL = torch_clamp(AL, min = 0)
@@ -75,7 +240,7 @@ compF_P = function(dbh, Species, nTree, parHeight, h = NULL, minLight = 50.){
 #' This function calculates growth based on specified parameters.
 #'
 #' @param dbh torch.Tensor Diameter at breast height.
-#' @param Species torch.Tensor Species of tree.
+#' @param species torch.Tensor species of tree.
 #' @param parGrowth torch.Tensor Growth parameters.
 #' @param parMort torch.Tensor Mortality parameters.
 #' @param pred torch.Tensor Predicted values.
@@ -89,14 +254,14 @@ compF_P = function(dbh, Species, nTree, parHeight, h = NULL, minLight = 50.){
 #' @importFrom torch nn functional torch_clamp
 #'
 #' @export
-growthFP = function(dbh, Species, parGrowth, parMort, pred, AL){
+growthFP = function(dbh, species, parGrowth, parMort, pred, AL){
 
-  shade = torch_sigmoid((AL + (1-parGrowth[,1][Species]) - 1)/1e-1)
-  environment = index_species(pred, Species)
+  shade = torch_sigmoid((AL + (1-parGrowth[,1][species]) - 1)/1e-1)
+  environment = index_species(pred, species)
   pred = (shade*environment)
-  # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[Species,1]
-  growth = pred/2 * parGrowth[,2][Species] * ((parMort[,2][Species]-dbh/100) / parMort[,2][Species])^(2)
-  # growth = parGrowth[Species,1]
+  # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
+  growth = pred/2 * parGrowth[,2][species] * ((parMort[,2][species]-dbh/100) / parMort[,2][species])^(2)
+  # growth = parGrowth[species,1]
   # return torch.nn.functional.softplus(growth)
   return(torch_clamp(growth, min = 0.0))
 }
@@ -105,7 +270,7 @@ growthFP = function(dbh, Species, parGrowth, parMort, pred, AL){
 #'
 #' This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 #'
-#' @param Species torch.Tensor Species information.
+#' @param species torch.Tensor species information.
 #' @param parReg torch.Tensor Regeneration parameters.
 #' @param pred torch.Tensor Prediction values.
 #' @param AL torch.Tensor Available light variable for calculation.
@@ -115,14 +280,21 @@ growthFP = function(dbh, Species, parGrowth, parMort, pred, AL){
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
-regFP = function(Species, parReg, pred, AL) {
+regFP = function(species, parReg, pred, AL) {
   regP = torch_sigmoid((AL + (1-parReg) - 1)/1e-3)
   environment = pred
-  regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, Species$shape[2], 1)) + 1e-20)) # TODO, check if exp or not?! lambda should be always positive!
+  regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
   regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
   return(regeneration)
 }
 
+species = torch_randint(1, 5, size = c(10, 5, 2))
+parReg = torch_ones(size = c(5), requires_grad = TRUE)
+pred = torch_rand(size = c(10, 5))
+AL = torch_ones(size = c(10, 5, 1))
+r = regFP(species, parReg, pred, AL)
+r$sum()$backward()
+parReg$grad
 #' Generate random numbers from a uniform distribution
 #'
 #' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.
@@ -330,7 +502,7 @@ build_NN <- function(self,
 #'
 #' @param dbh torch.Tensor (Optional) The diameter at breast height of the trees. If NULL, it will be initialized using CohortMat.
 #' @param nTree torch.Tensor (Optional) The number of trees. If NULL, it will be initialized using CohortMat.
-#' @param Species torch.Tensor (Optional) The species of the trees. If NULL, it will be initialized using CohortMat.
+#' @param species torch.Tensor (Optional) The species of the trees. If NULL, it will be initialized using CohortMat.
 #' @param env torch.Tensor The environmental data.
 #' @param record_time integer The time at which to start recording the results.
 #' @param response character The response variable to use for aggregating results. Can be "dbh", "ba", or "ba_p".
@@ -346,7 +518,7 @@ build_NN <- function(self,
 predict = function(
             dbh = NULL,
             nTree = NULL,
-            Species = NULL,
+            species = NULL,
             env = NULL,
             record_time = 0L,
             response ="dbh",
@@ -360,7 +532,7 @@ predict = function(
   if(is.null(dbh)){
     cohorts = CohortMat$new(dims = c(env$shape[1], patches, self$sp), sp = self$sp, device="cpu")
     nTree = cohorts$nTree
-    Species = cohorts$Species
+    species = cohorts$species
     dbh = cohorts$dbh
   }
 
@@ -371,13 +543,14 @@ predict = function(
   if(is.null(pred_morth)) pred_morth = self$nnMortEnv(env)
   if(is.null(pred_reg)) pred_reg = self$nnRegEnv(env)
 
+
   dbh = torch_tensor(dbh, dtype=self$dtype, device=self$device)
 
   nTree = torch_tensor(nTree, dtype=self$dtype, device=self$device)
 
-  Species = torch_tensor(Species, dtype=torch_int64(), device=self$device)
+  species = torch_tensor(species, dtype=torch_int64(), device=self$device)
 
-  cohort_ids = torch_randint(0, 50000, size=Species$shape)
+  cohort_ids = torch_randint(0, 50000, size=species$shape)
 
   # Result arrays
   ## dbh / ba / ba*nTRee
@@ -405,6 +578,7 @@ predict = function(
 
   # Run over timesteps
   for(i in 1:time){
+
         # aggregate results
         sites = env$shape[1]
       if(i > record_time){
@@ -418,10 +592,10 @@ predict = function(
             # ba * nTree
           }
 
-          labels = Species
+          labels = species
           samples = list()
-          samples = c(samples,(ba * torch_sigmoid((nTree - 0.5)/1e-3)))
-          samples = c(samples, (nTree * torch_sigmoid((nTree - 0.5)/1e-3)))
+          samples = c(samples,(ba * torch_sigmoid((nTree - 0.5)/1e-2)))
+          samples = c(samples, (nTree * torch_sigmoid((nTree - 0.5)/1e-2)))
 
           Results_tmp = replicate(length(samples),torch_zeros_like(Result[[1]][,i,]))
           tmp_res = aggregate_results(labels, samples, Results_tmp)
@@ -437,13 +611,14 @@ predict = function(
       nTree_clone =  nTree$clone() #torch.zeros_like(nTree).to(self.device)+0
     })
 
-    if(dbh$shape[3] != 0){
-      AL = compF_P(dbh, Species, nTree_clone, self$parHeight)
-      g = growthFP(dbh, Species, self$parGrowth, self$parMort, pred_growth[,i,], AL)
-      dbh = dbh+g
-      AL = compF_P(dbh, Species, nTree_clone, self$parHeight)
 
-      m = mortFP(dbh, Species, nTree+0.001, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3) # TODO check!
+    if(dbh$shape[3] != 0){
+      AL = compF_P(dbh, species, nTree_clone, self$parHeight)
+      g = growthFP(dbh, species, self$parGrowth, self$parMort, pred_growth[,i,], AL)
+      dbh = dbh+g
+      AL = compF_P(dbh, species, nTree_clone, self$parHeight)
+
+      m = mortFP(dbh, species, nTree+0.001, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3) # TODO check!
       #m = torch_ones_like(m)
       #### TODO if nTree = 0 then NA...prevent!
       nTree = torch_clamp(nTree - m, min = 0)
@@ -454,19 +629,20 @@ predict = function(
       nTree_clone =  nTree$clone() #torch.zeros_like(nTree).to(self.device)+0
     })
 
-    AL_reg = compF_P(dbh, Species, nTree_clone, self$parHeight, h = torch_zeros(list(1, 1))) # must have dimension = n species in last dim
+    AL_reg = compF_P(dbh, species, nTree_clone, self$parHeight, h = torch_zeros(list(1, 1))) # must have dimension = n species in last dim
 
-    r = regFP(Species, self$parReg, pred_reg[,i,], AL_reg)
+    r = regFP(species, self$parReg, pred_reg[,i,], AL_reg)
+
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
     new_nTree = r
-    new_Species = torch_arange(1, sp+1, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
+    new_species = torch_arange(1, sp+1, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
     new_cohort_id = torch_randint(0, 50000, size = list(sp))$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
 
     if(debug){
       if(dbh$shape[3] != 0){
-        labels = Species
+        labels = species
         }
       }
 
@@ -477,7 +653,7 @@ predict = function(
     # samples = c(samples, r)
 
     # count number of cohorts
-    Sp_tmp = Species$to(dtype = g$dtype)
+    Sp_tmp = species$to(dtype = g$dtype)
     cohort_counts = aggregate_results(labels, list((Sp_tmp+1)/(Sp_tmp+1)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype)))
 
     Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
@@ -490,11 +666,11 @@ predict = function(
     Raw_cohorts = c(Raw_cohorts, cohort_ids)
 
     # reg extra
-    tmp_res = aggregate_results(new_Species, list(r), list(torch_zeros(Result[[1]][,i,]$shape[1], sp )))
+    tmp_res = aggregate_results(new_species, list(r), list(torch_zeros(Result[[1]][,i,]$shape[1], sp )))
     Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/cohort_counts[[1]]/patches
 
     Raw_results = c(Raw_results,
-                    list(as.matrix(Species$cpu())),
+                    list(as.matrix(species$cpu())),
                     list(as.matrix(dbh$cpu())),
                     list(as.matrix(m$cpu())),
                     list(as.matrix(g$cpu())),
@@ -503,24 +679,25 @@ predict = function(
     # Combine
     dbh = torch_cat(list(dbh, new_dbh), 3)
     nTree = torch_cat(list(nTree, new_nTree), 3)
-    Species = torch_cat(list(Species, new_Species), 3)
+    species = torch_cat(list(species, new_species), 3)
     cohort_ids = torch_cat(list(cohort_ids, new_cohort_id), 3)
 
     # Pad tensors, expensive
     if(i %% 10 == 0){
       indices = (nTree > 0.5)$flatten(start_dim = 1, end_dim = 2)
-      org_dim = Species$shape[1:2]
+      org_dim = species$shape[1:2]
       org_dim_t = torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
       dbh = pad_tensors_speed_up(dbh, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
       nTree = pad_tensors_speed_up(nTree, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
       cohort_ids = pad_tensors_speed_up(cohort_ids, indices, org_dim_t)$unflatten(1, org_dim)
-      Species = pad_tensors_speed_up(Species, indices, org_dim_t, 1L)$unflatten(1, org_dim)
+      species = pad_tensors_speed_up(species, indices, org_dim_t, 1L)$unflatten(1, org_dim)
     }
     if(debug){
       Result = c(Result, Raw_results)
       Result = c(Result, Raw_cohorts)
     }
   }
+
   print("Done...")
   return(Result)
 }
@@ -578,11 +755,9 @@ fit = function(
   )
   DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
-
   self$history = torch_zeros(epochs)
 
 
-  #### bis hier habe ich gemacht
   # ep_bar = tqdm(range(epochs),bar_format= "Iter: {n_fmt}/{total_fmt} {l_bar}{bar}| [{elapsed}, {rate_fmt}{postfix}]", file=sys.stdout)
   for(epoch in 1:epochs){
 
@@ -594,7 +769,6 @@ fit = function(
       y = b[[2]]
       c = b[[3]]
       ind = b[[4]]
-      print(x$shape)
       self$optimizer$zero_grad()
 
       if (is.null(initCohort)) {
@@ -602,28 +776,29 @@ fit = function(
                                 sp = self$sp,
                                 device=self$device)
         nTree = cohorts$nTree
-        Species = cohorts$Species
+        species = cohorts$species
         dbh = cohorts$dbh
       } else {
         nTree = (initCohort$nTree[ind,])$to(device = self$device, non_blocking=TRUE)
-        Species = (initCohort$Species[ind,])$to(device = self$device, non_blocking=TRUE)
+        species = (initCohort$species[ind,])$to(device = self$device, non_blocking=TRUE)
         dbh = (initCohort$dbh[ind,])$to(device = self$device, non_blocking=TRUE)
       }
 
       x = x$to(device = self$device, non_blocking=TRUE)
       y = y$to(device = self$device, non_blocking=TRUE)
       c = c$to(device = self$device, non_blocking=TRUE)
-      pred = self$predict( dbh, nTree, Species, x, start_time, response)
+      pred = self$predict( dbh, nTree, species, x, start_time, response)
       loss1 =torch::nnf_mse_loss(y[, start_time:dim(y)[2],,1], pred[[1]][,start_time:dim(y)[2],])$mean() # dbh / ba
       #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # nTree
       loss2 = torch::distr_poisson(pred[[2]][,start_time:pred[[2]]$shape[2],]+0.001)$log_prob(c[, start_time:c$shape[2],])$mean()$negative() # nTree
       loss = (loss1 + loss2)
       #loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / ba
-      print(self$parGrowth)
       loss$backward()
-      print(self$parGrowth)
+      print(self$parameters[[1]]$grad)
       self$optimizer$step()
       batch_loss =  c(batch_loss, loss$item())
+
+      self$param_history = c(self$param_history, list(lapply(self$parameters, function(p) as.matrix(p$cpu()))))
       #sf.scheduler.step()
     })
     bl = mean(batch_loss)
@@ -668,6 +843,7 @@ FINN = R6Class(
     parameters = NULL,
     optimizer = NULL,
     history = NULL,
+    param_history = NULL,
     pred = NULL,
     device = 'cpu',
     parHeight = NULL, # must be dim [species]
