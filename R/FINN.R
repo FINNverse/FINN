@@ -404,58 +404,52 @@ predict = function(
 
   cohort_ids = torch_randint(0, 50000, size=species$shape)
 
-  # Result arrays
-  ## dbh / BA_stem / BA_stem*trees
-  Result = torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device) # sites, time, species
-  ## number of trees
-  Result_T = torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device)
-
   light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
   g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
   m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
   r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
 
 
-  if(debug){
-    Result = lapply(1:6,function(kk) torch_zeros(list(env$shape[1],env$shape[2],  self$sp), device=self$device))
+  Result = lapply(1:6,function(tmp) torch_zeros(list(env$shape[1], env$shape[2], self$sp), device=self$device))
+
+  # Can get memory intensive...
+  if(debug) {
     Raw_results = list()
     Raw_cohorts = list()
-  }else{
-    Result = lapply(1:2,torch_zeros(list(env$shape[1],env$shape[2],  dbh$shape[3]), device=self$sp))
-    }
+  }
 
   time = env$shape[2]
   patches = dbh$shape[2]
   sp = self$sp
+  sites = env$shape[1]
 
   # Run over timesteps
   for(i in 1:time){
 
-        # aggregate results
-        sites = env$shape[1]
-      if(i > record_time){
-        if(dbh$shape[3] != 0){
-          if(response == "dbh"){
-            BA_stem = dbh
-          }else if(response == "BA_stem"){
-            BA_stem = BA_stem(dbh)
-          }else{
-            BA_stem = BA_stand(dbh, trees)
-            # BA_stem * trees
-          }
+    # aggregate results
+    if(i > record_time){
+      if(dbh$shape[3] != 0){
+        if(response == "dbh"){
+          BA_stem = dbh
+        }else if(response == "BA_stem"){
+          BA_stem = BA_stem(dbh)
+        }else{
+          BA_stem = BA_stand(dbh, trees)
+          # BA_stem * trees
+        }
+        labels = species
+        samples = vector("list", 2)
+        samples[[1]] = BA_stem * torch_sigmoid((trees - 0.5)/1e-2)
+        samples[[2]] = trees * torch_sigmoid((trees - 0.5)/1e-2)
+        Results_tmp = replicate(2, torch_zeros_like(Result[[1]][,i,]))
 
-          labels = species
-          samples = list()
-          samples = c(samples,(BA_stem * torch_sigmoid((trees - 0.5)/1e-2)))
-          samples = c(samples, (trees * torch_sigmoid((trees - 0.5)/1e-2)))
-
-          Results_tmp = replicate(length(samples),torch_zeros_like(Result[[1]][,i,]))
-          tmp_res = aggregate_results(labels, samples, Results_tmp)
-          for(v in seq_along(2)){
-            Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v]]/patches
-          }
+        tmp_res = aggregate_results(labels, samples, Results_tmp)
+        # BA and number of trees Result[[1]] and Result[[2]]
+        for(v in seq_along(2)){
+          Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v]]/patches
         }
       }
+    }
 
       # Model
 
@@ -463,26 +457,21 @@ predict = function(
       trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
     })
 
-
-    if(dbh$shape[3] != 0){
+    if(dbh$shape[3] > 0.5){
       light = competition(dbh, species, trees_clone, self$parHeight)
       g = growth(dbh, species, self$parGrowth, self$parMort, pred_growth[,i,], light)
       dbh = dbh+g
+
       light = competition(dbh, species, trees_clone, self$parHeight)
-
       m = mortality(dbh, species, trees+0.001, self$parMort, pred_morth[,i,], light) #.unsqueeze(3) # TODO check!
-      #m = torch_ones_like(m)
-      #### TODO if trees = 0 then NA...prevent!
-      trees = torch_clamp(trees - m, min = 0)
+      trees = torch_clamp(trees - m, min = 0) #### TODO if trees = 0 then NA...prevent!
     }
-
 
     torch::with_no_grad({
       trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
     })
 
-    AL_reg = competition(dbh, species, trees_clone, self$parHeight, h = torch_zeros(list(1, 1))) # must have dimension = n species in last dim
-
+    AL_reg = competition(dbh, species, trees_clone, self$parHeight, h = 1) # must have dimension = n species in last dim
     r = regeneration(species, self$parReg, pred_reg[,i,], AL_reg)
 
     # New recruits
@@ -491,63 +480,61 @@ predict = function(
     new_species = torch_arange(1, sp+1, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
     new_cohort_id = torch_randint(0, 50000, size = list(sp))$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
+    if(dbh$shape[3] != 0){
+      labels = species
 
-    if(debug){
-      if(dbh$shape[3] != 0){
-        labels = species
-        }
+      samples = vector("list", 3)
+      samples[[1]] = light
+      samples[[2]] = g
+      samples[[3]] = m
+
+      # count number of cohorts
+      Sp_tmp = species$to(dtype = g$dtype)
+      cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype)))
+
+      Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
+      tmp_res = aggregate_results(labels, samples, Results_tmp)
+      for(v in c(3,4,5)){
+        Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/cohort_counts[[1]]/patches
       }
 
-    samples = list()
-    samples = c(samples, light)
-    samples = c(samples, g)
-    samples = c(samples, m)
-    # samples = c(samples, r)
+      # cohort ids
+      if(debug) Raw_cohorts = c(Raw_cohorts, cohort_ids)
 
-    # count number of cohorts
-    Sp_tmp = species$to(dtype = g$dtype)
-    cohort_counts = aggregate_results(labels, list((Sp_tmp+1)/(Sp_tmp+1)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype)))
+      # reg extra
+      tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp )))
+      Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/cohort_counts[[1]]/patches
 
-    Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
-    tmp_res = aggregate_results(labels, samples, Results_tmp)
-    for(v in c(3,4,5)){
-      Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/cohort_counts[[1]]/patches
+      if(debug) {
+        Raw_results = c(Raw_results,list(list(as.matrix(species$cpu())),
+                                         list(as.matrix(dbh$cpu())),
+                                         list(as.matrix(m$cpu())),
+                                         list(as.matrix(g$cpu())),
+                                         list(as.matrix(r$cpu()))))
+      }
+
     }
 
-    # cohort ids
-    Raw_cohorts = c(Raw_cohorts, cohort_ids)
-
-    # reg extra
-    tmp_res = aggregate_results(new_species, list(r), list(torch_zeros(Result[[1]][,i,]$shape[1], sp )))
-    Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/cohort_counts[[1]]/patches
-
-    Raw_results = c(Raw_results,
-                    list(as.matrix(species$cpu())),
-                    list(as.matrix(dbh$cpu())),
-                    list(as.matrix(m$cpu())),
-                    list(as.matrix(g$cpu())),
-                    list(as.matrix(r$cpu())))
-
     # Combine
-    dbh = torch_cat(list(dbh, new_dbh), 3)
-    trees = torch_cat(list(trees, new_trees), 3)
-    species = torch_cat(list(species, new_species), 3)
-    cohort_ids = torch_cat(list(cohort_ids, new_cohort_id), 3)
+    dbh = torch::torch_cat(list(dbh, new_dbh), 3)
+    trees = torch::torch_cat(list(trees, new_trees), 3)
+    species = torch::torch_cat(list(species, new_species), 3)
+    cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
 
     # Pad tensors, expensive
     if(i %% 10 == 0){
       indices = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
       org_dim = species$shape[1:2]
-      org_dim_t = torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
+      org_dim_t = torch::torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
       dbh = pad_tensors_speed_up(dbh, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
       trees = pad_tensors_speed_up(trees, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
       cohort_ids = pad_tensors_speed_up(cohort_ids, indices, org_dim_t)$unflatten(1, org_dim)
       species = pad_tensors_speed_up(species, indices, org_dim_t, 1L)$unflatten(1, org_dim)
     }
-    if(debug){
-      Result = c(Result, Raw_results)
-      Result = c(Result, Raw_cohorts)
-    }
+  }
+
+  if(debug){
+    Result = c(Result, Raw_results, Raw_cohorts)
   }
 
   print("Done...")
@@ -607,7 +594,7 @@ fit = function(
   )
   DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
-  self$history = torch_zeros(epochs)
+  self$history = torch::torch_zeros(epochs)
 
 
 
@@ -637,9 +624,6 @@ fit = function(
         species = (initCohort$species[ind,])$to(device = self$device, non_blocking=TRUE)
         dbh = (initCohort$dbh[ind,])$to(device = self$device, non_blocking=TRUE)
       }
-
-
-
 
       x = x$to(device = self$device, non_blocking=TRUE)
       y = y$to(device = self$device, non_blocking=TRUE)
