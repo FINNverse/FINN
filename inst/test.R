@@ -73,17 +73,16 @@ response = "dbh"
 
 mortFP(dbh, Species, nTree+0.00001, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3)
 
-initCohort = CohortMat$new(dims = c(10, 3, 2),
-                           dbh = array(100, dim = c(10, 3, 2)),
-                           nTree = array(50, dim = c(10, 3, 2)),
-                           sp = 3)
+initCohort = CohortMat$new(dims = c(100, 30, 2),
+                           dbh = array(100, dim = c(100, 30, 2)),
+                           trees = array(50, dim = c(100, 30, 2)),
+                           sp = 15)
 
-finn = FINN$new(sp = 5L, env = 2L, device = "cpu", which = "all")
-finn$fit(initCohort = initCohort,epochs = 2,
-         X =  torch::torch_randn(size = c(10, 10, 2)),
-         Y = torch::torch_ones(size = c(10, 10, 3, 2)),batch_size = 10L,
-         patches = 3L, learning_rate = 0.1)
-
+finn = FINN$new(sp = 15L, env = 2L, device = "cpu", which = "all")
+finn$fit(initCohort = initCohort,epochs = 20,
+         X =  torch::torch_randn(size = c(100, 31, 2)),
+         Y = torch::torch_ones(size = c(100, 31, 15, 2)),batch_size = 100L,
+         patches = 30L, learning_rate = 0.1)
 
 
 

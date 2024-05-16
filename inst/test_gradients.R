@@ -1,6 +1,5 @@
 library(torch)
 library(FINN)
-?regeneration()
 
 test_gradients_regeneration = function(
       n_species = 10,
@@ -18,7 +17,7 @@ test_gradients_regeneration = function(
     parReg_multiplied = parReg*multiplier_parReg
     pred = torch::torch_rand(size = c(n_sites, n_species), requires_grad = TRUE)
     pred_multiplied = pred*multiplier_pred
-    light = torch::torch_rand(size = c(n_sites, n_patches, 1))*multiplier_AL
+    light = torch::torch_randn(size = c(n_sites, n_patches, 1))*multiplier_AL
 
     regeneration(species, parReg_multiplied, pred_multiplied, light)$sum()$backward()
     grad_par = as.matrix(parReg$grad)
@@ -28,8 +27,8 @@ test_gradients_regeneration = function(
   return(list(grad_par, grad_pred))
 }
 
-grads = test_gradients_regeneration(n_species = 50L, n_cohort = 20L, multiplier_parReg = 100.001, multiplier_pred = 0.0001)
-hist(as.vector(grads[[2]]))
+grads = test_gradients_regeneration(n_species = 50L, n_cohort = 20L, multiplier_parReg = 100.001, multiplier_pred = 0.1)
+hist(as.vector(grads[[1]]))
 
 
 
@@ -66,8 +65,8 @@ test_gradients_mortality = function(
   return(list(grad_par, grad_pred))
 }
 
-grads = test_gradients_mortality(lambda_trees = 1, multiplier_parMort = 50, multiplier_AL = 1.0)
-hist(as.vector(grads[[2]]))
+grads = test_gradients_mortality(lambda_trees = 1, multiplier_parMort = 50, multiplier_AL = 0.0)
+hist(as.vector(grads[[1]]))
 
 
 
@@ -138,6 +137,6 @@ test_gradients_competition = function(
   return(list(grad_par))
 }
 
-grads = test_gradients_competition(multiplier_dbh = 10, multiplier_parHeight = 1, h = NULL)
+grads = test_gradients_competition(multiplier_dbh = 100,lambda_trees = 100, h = NULL)
 hist(as.vector(grads[[1]]))
 
