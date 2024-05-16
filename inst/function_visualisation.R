@@ -1,6 +1,6 @@
 # Load necessary library
 library(ggplot2)
-
+library(data.table)
 ################################################################################
 ## create pdf file
 ################################################################################
@@ -56,52 +56,43 @@ print(p_BA_P)
 # ################################################################################
 # ## sensitivity of compF_P function
 # ################################################################################
-#
-#   cohort = CohortMat$new(obs_df = data.frame(
-#     siteID = 1,
-#     patchID = 1,
-#     cohortID = 1,
-#     species = 1,
-#     nTree = 1,
-#     dbh = 100
-#   ))
-#
-# cohort$asDF()
-#
-#   data.frame(
-#     dbh = runif(Ncohorts,1,200),
-#     nTree = sample.int(10,Ncohorts,replace = T)
-#   )
-#   array(1:12,dim = c(2,3,2))
-#
-#
-#
-#   test_cohorts = CohortMat$new(dbh = 1:3, nTree = 4:7,Species = rep(1,3) )
-#   # dims:  sites, patches, cohorten
-#   test_cohorts$dbh
-#   test_cohorts$nTree
-#   test_cohorts$Species
-#   compF_P(torch_tensor(dbh), torch_tensor(parHeight),
-#           torch_tensor(nTree), parHeight = torch_tensor(0.5))
-# }
-# CohortMat(1)
-# compF_P()
-# test_dt[, nTree := 100]
-# test_dt[, parHeight := 0.5]
-# test_dt$rowID = 1:nrow(test_dt)
-# test_dt[, AL := as.numeric(compF_P(torch_tensor(dbh), torch_tensor(Species), torch_tensor(nTree), torch_tensor(parHeight))), by = rowID]
-#
-#
-#
-# # Plot
-# p_compF_P <- ggplot(test_dt, aes(x = dbh, y = AL, group = Species, color = as.factor(Species))) +
-#   ggtitle("compF_P", paste0(deparse(compF_P), collapse = "\n")) +
-#   ylab("compF_P(dbh,Species,nTree,parHeight)") +
-#   xlab("dbh [cm]") +
-#   geom_line() +
-#   geom_label(aes(label = Species, color = as.factor(Species)),
-#              test_dt[, .(AL = max(AL), dbh = max(dbh)), by = Species])
-# print(p_compF_P)
+patch_size = 0.1
+
+trees_vec = c(1:99,10^(seq(2,4, length.out = 16)))
+dbh_vec = dbh = seq(1,300, 1)
+
+cohort_df1 =
+  data.frame(
+    patchID = 1,
+    cohortID = 1,
+    species = 1,
+    expand.grid(
+      trees = round(trees_vec*patch_size),
+      dbh = dbh_vec
+    )
+  )
+cohort_df1$siteID = 1:nrow(cohort_df1)
+
+cohort = CohortMat$new(obs_df = cohort_df1)
+
+dbh = cohort$dbh
+species = cohort$species
+trees = cohort$trees
+
+
+comp = competition(cohort$dbh, cohort$species, cohort$trees,
+                   parHeight = torch::torch_tensor(0.5), h=0)
+
+
+cohort_df1$light = torch::as_array(comp)[,1,1]
+
+ggplot(cohort_df1,aes(y = factor(trees/0.1), x = dbh, fill = light))+
+  geom_tile()+
+  ylab("trees/ha [N]")+
+  xlab("mean stand dbh [cm]")+
+  guides(fill=guide_legend(title="light [%]\nat forest floor\n(h=0)"))+
+  ggtitle("competition",paste0(deparse(competition),collapse = "\n"))
+
 #
 # Close the PDF device
 dev.off()
