@@ -233,7 +233,7 @@ init_FINN = function(
   if(is.null(parHeight)){
     self$parHeight = torch_tensor(np_runif(0.3, 0.7, size = self$sp), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }else{
-    parHeight = parHeight$reshape(-1)
+    #parHeight = parHeight$reshape(-1)
     self$parHeight = torch_tensor(parHeight, requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }
 
@@ -432,8 +432,8 @@ predict = function(
         }
         labels = species
         samples = vector("list", 2)
-        samples[[1]] = BA_stem * torch_sigmoid((trees - 0.5)/1e-2)
-        samples[[2]] = trees * torch_sigmoid((trees - 0.5)/1e-2)
+        samples[[1]] = BA_stem * torch_sigmoid((trees - 0.5)/1e-3)
+        samples[[2]] = trees * torch_sigmoid((trees - 0.5)/1e-3)
         Results_tmp = replicate(2, torch_zeros_like(Result[[1]][,i,]))
 
         tmp_res = aggregate_results(labels, samples, Results_tmp)
@@ -466,6 +466,7 @@ predict = function(
 
     AL_reg = competition(dbh, species, trees_clone, self$parHeight, h = 1) # must have dimension = n species in last dim
     r = regeneration(species, self$parReg, pred_reg[,i,], AL_reg)
+    cat("Max reg Tree: " , as.numeric(r$max()), "\n")
 
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
@@ -499,11 +500,12 @@ predict = function(
       Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/cohort_counts[[1]]/patches
 
       if(debug) {
-        Raw_results = c(Raw_results,list(list(as.matrix(species$cpu())),
-                                         list(as.matrix(dbh$cpu())),
-                                         list(as.matrix(m$cpu())),
-                                         list(as.matrix(g$cpu())),
-                                         list(as.matrix(r$cpu()))))
+        Raw_results = c(Raw_results,list(list(list(torch::as_array(species$cpu())),
+                                         list(torch::as_array(trees$cpu())),
+                                         list(torch::as_array(dbh$cpu())),
+                                         list(torch::as_array(m$cpu())),
+                                         list(torch::as_array(g$cpu())),
+                                         list(torch::as_array(r$cpu())))))
       }
 
     }
@@ -511,6 +513,7 @@ predict = function(
     # Combine
     dbh = torch::torch_cat(list(dbh, new_dbh), 3)
     trees = torch::torch_cat(list(trees, new_trees), 3)
+    cat("Max Tree: " , as.numeric(trees$max()), "\n")
     species = torch::torch_cat(list(species, new_species), 3)
     cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
 
@@ -527,7 +530,7 @@ predict = function(
   }
 
   if(debug){
-    Result = c(Result, Raw_results, Raw_cohorts)
+    Result = c(Result, list(Raw_results, Raw_cohorts))
   }
 
   print("Done...")

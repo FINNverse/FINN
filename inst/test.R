@@ -78,15 +78,47 @@ initCohort = CohortMat$new(dims = c(100, 1, 10),
                            trees = array(1, dim = c(100, 1, 10)),
                            sp = 1)
 
-finn = FINN$new(sp = 1L, env = 2L, device = "cpu", which = "all" ,parGrowth = matrix(555, 1, 2), parGrowthEnv = list(matrix(5.0, 1, 2)), parMortEnv = list(matrix(0, 1, 2)), parRegEnv = list(matrix(10, 1, 2)))
+finn = FINN$new(sp = 1L, env = 2L, device = "cpu", which = "all" ,
+                parGrowth = matrix(c(-100, 100), 1, 2),
+                parMort = cbind(0, 1000, 0),
+                parReg = -5,
+                parHeight = 50,
+                parGrowthEnv = list(matrix(5.0, 1, 2)),
+                parMortEnv = list(matrix(-5, 1, 2)),
+                parRegEnv = list(matrix(1000, 1, 2)))
+env = torch::torch_randn(size = c(100, 200, 2))
 pred =
-  finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,
-               env = torch::torch_randn(size = c(100, 200, 2)),patches = 1)
-plot(torch::as_array(pred[[1]]$data())[1,,1])
+  finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,response = "dbh",
+               env = env,patches = 1)
+plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l")
+
+finn$nnRegEnv(env)$max()
+
+library(torch)
+growth = function(dbh, species, parGrowth, parMort, pred, light){
+
+  shade = torch_sigmoid((light + (1-parGrowth[,1][species]) - 1)/1e-1)
+  print(shade)
+  environment = index_species(pred, species)
+  pred = (shade*environment)
+  # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
+  growth = pred/2 * parGrowth[,2][species] * ((parMort[,2][species]-dbh/100) / parMort[,2][species])^(2)
+  # growth = parGrowth[species,1]
+  # return torch.nn.functional.softplus(growth)
+  return(torch_clamp(growth, min = 0.0))
+}
+
+growth(dbh = initCohort$dbh+1000, species = initCohort$species, parMort = cbind(0, 1000, 0)  |> torch_tensor() ,parGrowth = matrix(c(-100, 100), 1, 2) |> torch_tensor(), finn$nnGrowthEnv(env)[,1,], light = torch_ones(100, 1, 1) )$max()
+
+(torch_ones_like(initCohort$dbh)+5 - mortality(dbh = initCohort$dbh+1000, species = initCohort$species, trees = torch_ones_like(initCohort$dbh)+5, parMort = cbind(0, 1000, 0)  |> torch_tensor(), finn$nnMortEnv(env)[,1,], light = torch_ones(100, 1, 1)))
+
+regeneration(initCohort$species, parReg = -torch_ones(1)*50, pred = finn$nnRegEnv(env)[,1,], light = torch_ones(100, 1, 1))$max()
 
 
 
 
+
+growth
 
 
 pred =
