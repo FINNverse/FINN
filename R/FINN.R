@@ -438,7 +438,7 @@ predict = function(
 
         tmp_res = aggregate_results(labels, samples, Results_tmp)
         # BA and number of trees Result[[1]] and Result[[2]]
-        for(v in seq_along(2)){
+        for(v in 1:2){
           Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v]]/patches
         }
       }
@@ -466,7 +466,6 @@ predict = function(
 
     AL_reg = competition(dbh, species, trees_clone, self$parHeight, h = 1) # must have dimension = n species in last dim
     r = regeneration(species, self$parReg, pred_reg[,i,], AL_reg)
-    cat("Max reg Tree: " , as.numeric(r$max()), "\n")
 
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
@@ -513,7 +512,6 @@ predict = function(
     # Combine
     dbh = torch::torch_cat(list(dbh, new_dbh), 3)
     trees = torch::torch_cat(list(trees, new_trees), 3)
-    cat("Max Tree: " , as.numeric(trees$max()), "\n")
     species = torch::torch_cat(list(species, new_species), 3)
     cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
 

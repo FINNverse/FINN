@@ -90,7 +90,7 @@ env = torch::torch_randn(size = c(100, 200, 2))
 pred =
   finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,response = "dbh",
                env = env,patches = 1)
-plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l")
+plot(torch::as_array(pred[[2]]$data())[1,,1], type = "l")
 
 finn$nnRegEnv(env)$max()
 
@@ -112,7 +112,7 @@ growth(dbh = initCohort$dbh+1000, species = initCohort$species, parMort = cbind(
 
 (torch_ones_like(initCohort$dbh)+5 - mortality(dbh = initCohort$dbh+1000, species = initCohort$species, trees = torch_ones_like(initCohort$dbh)+5, parMort = cbind(0, 1000, 0)  |> torch_tensor(), finn$nnMortEnv(env)[,1,], light = torch_ones(100, 1, 1)))
 
-regeneration(initCohort$species, parReg = -torch_ones(1)*50, pred = finn$nnRegEnv(env)[,1,], light = torch_ones(100, 1, 1))$max()
+regeneration(initCohort$species, parReg = -torch_ones(1), pred = finn$nnRegEnv(env)[,1,], light = torch_ones(100, 1, 1))
 
 
 
