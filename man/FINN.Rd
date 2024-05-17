@@ -51,6 +51,9 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
 \item \href{#method-FINN-new}{\code{FINN$new()}}
 \item \href{#method-FINN-build_NN}{\code{FINN$build_NN()}}
 \item \href{#method-FINN-predict}{\code{FINN$predict()}}
+\item \href{#method-FINN-set_weights_nnGrowthEnv}{\code{FINN$set_weights_nnGrowthEnv()}}
+\item \href{#method-FINN-set_weights_nnMortEnv}{\code{FINN$set_weights_nnMortEnv()}}
+\item \href{#method-FINN-set_weights_nnRegEnv}{\code{FINN$set_weights_nnRegEnv()}}
 \item \href{#method-FINN-fit}{\code{FINN$fit()}}
 \item \href{#method-FINN-clone}{\code{FINN$clone()}}
 }
@@ -124,6 +127,33 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
   patches = 50,
   debug = TRUE
 )}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_weights_nnGrowthEnv"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_weights_nnGrowthEnv}{}}}
+\subsection{Method \code{set_weights_nnGrowthEnv()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_weights_nnGrowthEnv(weights)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_weights_nnMortEnv"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_weights_nnMortEnv}{}}}
+\subsection{Method \code{set_weights_nnMortEnv()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_weights_nnMortEnv(weights)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_weights_nnRegEnv"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_weights_nnRegEnv}{}}}
+\subsection{Method \code{set_weights_nnRegEnv()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_weights_nnRegEnv(weights)}\if{html}{\out{</div>}}
 }
 
 }

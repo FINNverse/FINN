@@ -38,5 +38,4 @@ This function builds a neural network with specified input shape, output shape, 
 }
 \examples{
 build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
-
 }

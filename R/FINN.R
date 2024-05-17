@@ -182,8 +182,6 @@ regeneration = function(species, parReg, pred, light) {
 #' @param hidden_growth list Hidden layers for growth model.
 #' @param hidden_mort list Hidden layers for mortality model.
 #' @param hidden_reg list Hidden layers for regeneration model.
-#'
-#' @export
 init_FINN = function(
     sp = self$sp,
     env = self$env,
@@ -259,7 +257,6 @@ init_FINN = function(
   if(is.null(parReg)){
     self$parReg = torch_tensor(np_runif(0, 1, size = self$sp), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }else{
-    parReg = parReg$reshape(-1)
     self$parReg = torch_tensor(parReg, requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }
 
@@ -289,8 +286,6 @@ init_FINN = function(
 #'
 #' @examples
 #' build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
-#'
-#' @export
 build_NN <- function(self,
               input_shape,
               output_shape,
@@ -365,8 +360,6 @@ build_NN <- function(self,
 #' @param debug logical Whether to run in debug mode.
 #'
 #' @return list A list of predicted values for dbh and number of trees for the recorded time points.
-#'
-#' @export
 predict = function(
             dbh = NULL,
             trees = NULL,
@@ -541,6 +534,42 @@ predict = function(
   return(Result)
 }
 
+
+set_weights_nnGrowthEnv = function(weights) {
+
+  self$nnGrowthEnv = set_weights(weights, self$nnGrowthEnv)
+
+}
+
+set_weights_nnMortEnv = function(weights) {
+
+  self$nnMortEnv = set_weights(weights, self$nnMortEnv)
+
+}
+
+set_weights_nnRegEnv = function(weights) {
+
+  self$nnRegEnv  = set_weights(weights, self$nnRegEnv )
+
+}
+
+set_weights = function(weights, NN) {
+  torch::with_no_grad({
+    counter = 1
+    for(i in 1:length(NN)) {
+      if(inherits(NN[[i]], "nn_linear")) {
+        NN$modules[[i]]$parameters$`0.weight`$set_data(weights[[counter]])
+        counter <<- counter + 1
+        if(!is.null(NN[[i]]$bias)) {
+          NN$modules[[i]]$parameters$`0.bias`$set_data(weights[[counter]])
+        }
+      }
+    }
+  })
+  return(NN)
+}
+
+
 #' Fit the model to the given data.
 #'
 #' This function fits the model to the given data using specified epochs, BA_stemtch size, learning rate, start time, and response variable.
@@ -650,7 +679,7 @@ fit = function(
   self$pred = pred
 }
 
-library(R6)
+
 
 
 #' FINN: Forest Inventory Neural Network
@@ -672,7 +701,7 @@ library(R6)
 #' @field hidden_reg list Hidden layers for regeneration model.
 #'
 #' @export
-FINN = R6Class(
+FINN = R6::R6Class(
   classname = 'FINN',
   public = list(
     # helper functions
@@ -704,6 +733,9 @@ FINN = R6Class(
     initialize = init_FINN,
     build_NN = build_NN,
     predict = predict,
-    fit = fit
+    fit = fit,
+    set_weights_nnGrowthEnv = set_weights_nnGrowthEnv,
+    set_weights_nnMortEnv = set_weights_nnMortEnv,
+    set_weights_nnRegEnv = set_weights_nnRegEnv
     ))
 
