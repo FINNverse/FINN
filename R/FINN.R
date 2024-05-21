@@ -491,7 +491,7 @@ predict = function(
       Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
       tmp_res = aggregate_results(labels, samples, Results_tmp)
       for(v in c(3,4,5)){
-        Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/patches # TODO
+        Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches # TODO
       }
 
       # cohort ids
@@ -499,7 +499,7 @@ predict = function(
 
       # reg extra
       tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp )))
-      Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/patches # TODO divide by number of cohorts
+      Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches
 
       if(debug) {
         Raw_results = c(Raw_results,list(list(list(torch::as_array(species$cpu())),
