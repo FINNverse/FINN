@@ -6,7 +6,7 @@
 #'
 #' @export
 sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
-  t = (torch::torch_rand(c(num_samples,lmbd$shape))$log()$negative()/lmbd)$cumsum(dim=1L)
+  t = ((torch::torch_rand(c(num_samples,lmbd$shape))+0.0001)$log()$negative()/lmbd)$cumsum(dim=1L)
   relaxed_indicator = torch_sigmoid((1.0 - t) / temperature)
   N = relaxed_indicator$sum(1)
   return(N)
