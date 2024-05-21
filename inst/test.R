@@ -73,9 +73,9 @@ response = "dbh"
 
 mortFP(dbh, Species, nTree+0.00001, self$parMort, pred_morth[,i,], AL) #.unsqueeze(3)
 
-initCohort = CohortMat$new(dims = c(100, 1, 10),
-                           dbh = array(1, dim = c(100, 1, 10)),
-                           trees = array(1, dim = c(100, 1, 10)),
+initCohort = CohortMat$new(dims = c(100, 10, 10),
+                           dbh = array(1, dim = c(100, 10, 10)),
+                           trees = array(1, dim = c(100, 10, 10)),
                            sp = 1)
 
 finn = FINN$new(sp = 1L, env = 2L, device = "cpu", which = "all" ,
@@ -89,35 +89,71 @@ finn = FINN$new(sp = 1L, env = 2L, device = "cpu", which = "all" ,
 env = torch::torch_randn(size = c(100, 200, 2))
 pred =
   finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,response = "dbh",
-               env = env,patches = 1)
-plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l")
-
-finn$nnRegEnv(env)$max()
+               env = env,patches = 10)
+plot(torch::as_array(pred[[2]]$data())[1,,1], type = "l")
 
 
-
-Y = (torch_cat(list(pred[[1]], pred[[2]]), 3))
+Y = (torch_cat(list(pred[[1]], pred[[2]], pred[[3]], pred[[4]], pred[[5]], pred[[6]]), 3))
 
 Y = Y$unsqueeze(3)
-initCohort2 = CohortMat$new(dims = c(100, 1L, 10),
-                           dbh = array(1, dim = c(100, 1L, 10)),
-                           trees = array(1, dim = c(100, 1L, 10)),
-                           sp = 1)
-with_detect_anomaly({
-finn2 = FINN$new(sp = 1L, env = 2L, device = "cpu", which = "species",
-                 parGrowth = matrix(c(-10, 10), 1, 2),
-                 parMort = cbind(0, 100, 0),
-                 parReg = -5,
-                 parHeight = 5,
-                 parGrowthEnv = list(matrix(5.0, 1, 2)),
-                 parMortEnv = list(matrix(-5, 1, 2)),
-                 parRegEnv = list(matrix(5, 1, 2))
-                 )
+initCohort2 = CohortMat$new(dims = c(100, 20L, 10),
+                            dbh = array(1, dim = c(100, 20L, 10)),
+                            trees = array(1, dim = c(100, 20L, 10)),
+                            sp = 1)
+finn2 = FINN$new(sp = 1L, env = 2L, device = "cpu", which = "all", # all parameters, env, or species
+                 # parGrowth = matrix(c(-10, 10), 1, 2),
+                 # parMort = cbind(0, 100, 0),
+                 # parReg = -5,
+                 # parHeight = 5
+                 # parGrowthEnv = list(matrix(5.0, 1, 2)),
+                 # parMortEnv = list(matrix(-5, 1, 2)),
+                 # parRegEnv = list(matrix(5, 1, 2))
+)
 start = lapply(finn2$parameters, as.matrix)
-finn2$fit(initCohort = initCohort, X = (env),Y = Y, patches = 1L, batch_size = 100L, epochs = 2L, learning_rate = 1.01)
-})
+finn2$fit(initCohort = initCohort, X = (env),Y = Y, patches = 20L, batch_size = 100L, epochs = 200L, learning_rate = 1.1)
 
-regeneration2 = function(species, parReg, pred, light) {
+
+pred2 =
+  finn2$predict(initCohort$dbh, initCohort$trees, initCohort$species,response = "dbh",
+                env = env,patches = 10)
+par(mfrow = c(1, 2))
+plot(torch::as_array(pred2[[1]]$data())[1,,1], type = "l")
+plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l")
+
+
+
+par(mfrow = c(3, 2))
+plot(as.matrix(finn$nnRegEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+plot(as.matrix(finn2$nnRegEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+
+
+plot(as.matrix(finn$nnGrowthEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+plot(as.matrix(finn2$nnGrowthEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+
+
+plot(as.matrix(finn$nnMortEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+plot(as.matrix(finn2$nnMortEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+
+
+
+finn$parGrowth
+finn2$parGrowth
+
+finn$parMort
+finn2$parMort
+
+finn$parReg
+finn2$parReg
+
+
+finn$parHeight
+finn2$parHeight
+
+
+r = torch_tensor(1.0)
+r$names = c()
+
+wregeneration2 = function(species, parReg, pred, light) {
   regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   environment = pred
   regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
@@ -130,52 +166,52 @@ regeneration2 = function(species, parReg, pred, light) {
 
 res = replicate(50, {
 
-for(i in 1:100) {
+  for(i in 1:100) {
 
 
 
-  cat("Regeneration...\n")
-with_detect_anomaly({
+    cat("Regeneration...\n")
+    with_detect_anomaly({
 
-  species = initCohort2$species
-  parReg = finn2$parReg
-  pred = finn2$nnRegEnv(env)[,i,]
-  light = torch_zeros_like(initCohort2$dbh)
+      # species = initCohort2$species
+      # parReg = finn2$parReg
+      # pred = finn2$nnRegEnv(env)[,i,]
+      # light = torch_zeros_like(initCohort2$dbh)
+      #
+      # regP <<- torch_sigmoid((light + (1-parReg) - 1)/1e-7) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+      # environment2 <<- pred
+      # regeneration2 <<- sample_poisson_relaxed((regP*(environment2[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
+      # #regeneration2 = 5*(regP*(environment2[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )
+      # r = regeneration2 + regeneration2$round()$detach() - regeneration2$detach()
 
-  regP <<- torch_sigmoid((light + (1-parReg) - 1)/1e-7) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
-  environment2 <<- pred
-  regeneration2 <<- sample_poisson_relaxed((regP*(environment2[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
-  #regeneration2 = 5*(regP*(environment2[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )
-  r = regeneration2 + regeneration2$round()$detach() - regeneration2$detach()
 
+      r = regeneration(initCohort2$species, finn2$parReg, finn2$nnRegEnv(env)[,i,], torch_zeros_like(initCohort2$dbh))
+      r<<-r
+      cat("R: ", as.numeric(r$sum()))
+      r$sum()$backward()
+      grad_par = as.matrix(finn2$parReg$grad)
+      grad_pred = as.matrix(finn2$nnRegEnv$parameters[[1]]$grad)
+      print(grad_pred)
+      print(grad_par)
+    })
 
-#r = regeneration2(initCohort2$species, finn2$parReg, finn2$nnRegEnv(env)[,i,], torch_zeros_like(initCohort2$dbh))
-r<<-r
-cat("R: ", as.numeric(r$sum()))
-r$sum()$backward()
-grad_par = as.matrix(finn2$parReg$grad)
-grad_pred = as.matrix(finn2$nnRegEnv$parameters[[1]]$grad)
-print(grad_pred)
-print(grad_par)
-})
+    # cat("Mortality...\n")
+    #
+    # with_detect_anomaly({
+    #   mortality(initCohort2$dbh, initCohort2$species, initCohort2$trees, finn2$parMort, finn2$nnMortEnv(env)[,i,], torch_ones_like(initCohort2$dbh))$sum()$backward()
+    #   grad_par = as.matrix(finn2$parMort$grad)
+    #   grad_pred = as.matrix(finn2$nnMortEnv$parameters[[1]]$grad)
+    # })
+    # #
+    # cat("Growth....\n")
+    # with_detect_anomaly({
+    #   growth(initCohort2$dbh, initCohort2$species, finn2$parGrowth,finn2$parMort, finn2$nnGrowthEnv(env)[,i,], torch_zeros_like(initCohort2$dbh))$sum()$backward()
+    #   grad_par = as.matrix(finn2$parMort$grad)
+    #   grad_par = as.matrix(finn2$parGrowth$grad)
+    #   grad_pred = as.matrix(finn2$nnGrowthEnv$parameters[[1]]$grad)
+    # })
 
-# cat("Mortality...\n")
-#
-# with_detect_anomaly({
-#   mortality(initCohort2$dbh, initCohort2$species, initCohort2$trees, finn2$parMort, finn2$nnMortEnv(env)[,i,], torch_ones_like(initCohort2$dbh))$sum()$backward()
-#   grad_par = as.matrix(finn2$parMort$grad)
-#   grad_pred = as.matrix(finn2$nnMortEnv$parameters[[1]]$grad)
-# })
-# #
-# cat("Growth....\n")
-# with_detect_anomaly({
-#   growth(initCohort2$dbh, initCohort2$species, finn2$parGrowth,finn2$parMort, finn2$nnGrowthEnv(env)[,i,], torch_zeros_like(initCohort2$dbh))$sum()$backward()
-#   grad_par = as.matrix(finn2$parMort$grad)
-#   grad_par = as.matrix(finn2$parGrowth$grad)
-#   grad_pred = as.matrix(finn2$nnGrowthEnv$parameters[[1]]$grad)
-# })
-
-}
+  }
 })
 
 
@@ -184,23 +220,23 @@ res = replicate(10000, {
     pars = torch_tensor(0.2, requires_grad = TRUE)
     lmbd = (pars+5-5)*torch_ones(c(200, 200))
 
-      #samples=50
-      temperature = 1e-2
-      num_samples = 1
+    #samples=50
+    temperature = 1e-2
+    num_samples = 1
 
-      samples <<- torch::torch_rand(c(num_samples,lmbd$shape)) #+ 0.001
-      te <<- (samples$log()$negative()/lmbd)$cumsum(dim=1L)
-      print(as.numeric(te$max()))
-      relaxed_indicator <<- torch_sigmoid((1.0 - te)  )#/ temperature)
-      r = relaxed_indicator$sum(1)
-      #r = t$sum(1)
+    samples <<- torch::torch_rand(c(num_samples,lmbd$shape)) #+ 0.001
+    te <<- (samples$log()$negative()/lmbd)$cumsum(dim=1L)
+    print(as.numeric(te$max()))
+    relaxed_indicator <<- torch_sigmoid((1.0 - te)  )#/ temperature)
+    r = relaxed_indicator$sum(1)
+    #r = t$sum(1)
 
     #r = regeneration2 + regeneration2$round()$detach() - regeneration2$detach()
     r$sum()$backward()
     grad_par = as.matrix(pars)
   })
 
-  })
+})
 
 
 
@@ -232,8 +268,8 @@ growth
 
 
 pred =
-finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,
-             env = torch::torch_randn(size = c(100, 31, 2)),patches = 30)
+  finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,
+               env = torch::torch_randn(size = c(100, 31, 2)),patches = 30)
 
 
 finn$fit(initCohort = initCohort,epochs = 20,
