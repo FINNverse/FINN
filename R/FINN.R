@@ -109,6 +109,7 @@ mortality = function(dbh, species, trees, parMort, pred, light) {
   predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
   #mort = torch.distributions.Beta(predM*trees+0.00001, trees - predM*trees+0.00001).rsample()*trees
   mort = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
+  #mort = binomial_from_bernoulli(trees+trees$le(0.5)$float(), torch_clamp(predM, 0.0001, 1- 0.0001))*trees$ge(0.5)$float()
   return( mort + mort$round()$detach() - mort$detach() )
 }
 
@@ -197,6 +198,7 @@ init_FINN = function(
     hidden_growth = self$hidden_growth,
     hidden_mort = self$hidden_mort,
     hidden_reg = self$hidden_reg,
+    bias = self$bias,
     which = "all"
     ){
   self$sp = sp
@@ -218,13 +220,13 @@ init_FINN = function(
   self$env = env
   self$optimizer = NULL
   self$dtype = torch_float32()
-  self$nnRegEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=list(FALSE), dropout=-99, last_activation = "relu")
+  self$nnRegEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "relu")
   self$nnRegEnv$to(device = self$device)
-  self$nnGrowthEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_growth, activation="selu", bias=list(FALSE), dropout=-99)
+  self$nnGrowthEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99)
   self$nnGrowthEnv$to(device = self$device)
 
 
-  self$nnMortEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=list(FALSE), dropout=-99)
+  self$nnMortEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99)
   self$nnMortEnv$to(device = self$device)
 
   if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
@@ -319,7 +321,7 @@ build_NN <- function(self,
   bias = c(FALSE, bias)
 
   if(length(hidden) > 0){
-    for(i in seq_along(hidden)){}
+    for(i in 1:length(hidden)){
       if(i == 1){
         model_list = c(model_list,torch::nn_linear(input_shape, hidden[i], bias=bias[i]))
       }else{
@@ -331,6 +333,7 @@ build_NN <- function(self,
       if(activation[i] == "tanh") model_list = c(model_list, torch::nn_tanh())
       if(activation[i] == "sigmoid") model_list = c(model_list, torch::nn_sigmoid())
       if(dropout > 0.0) model_list = c(model_list, torch::nn_dropout(p=dropout))
+    }
   }
 
   if(length(hidden) > 0){
@@ -489,7 +492,7 @@ predict = function(
       Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
       tmp_res = aggregate_results(labels, samples, Results_tmp)
       for(v in c(3,4,5)){
-        Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/cohort_counts[[1]]/patches
+        Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/patches # TODO
       }
 
       # cohort ids
@@ -497,7 +500,7 @@ predict = function(
 
       # reg extra
       tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp )))
-      Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/cohort_counts[[1]]/patches
+      Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/patches # TODO divide by number of cohorts
 
       if(debug) {
         Raw_results = c(Raw_results,list(list(list(torch::as_array(species$cpu())),
@@ -741,6 +744,7 @@ FINN = R6::R6Class(
     hidden_growth = list(),
     hidden_mort = list(),
     hidden_reg = list(),
+    bias = FALSE,
     #initialisation function
     initialize = init_FINN,
     build_NN = build_NN,
