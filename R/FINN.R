@@ -73,9 +73,10 @@ height = function(dbh, parHeight) {
 #' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
 #'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.){
+competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., path_size_ha = 0.1){
 
-  ba = (BA_stem(dbh)*trees)/0.1
+  # ba = (BA_stem(dbh)*trees)/0.1
+  ba = BA_stand(dbh, trees, path_size_ha)
   cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
