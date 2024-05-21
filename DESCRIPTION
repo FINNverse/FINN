@@ -23,7 +23,6 @@ Imports:
     cli,
     crayon,
     dplyr,
-    reticulate,
     stats,
     utils,
     data.table,

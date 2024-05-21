@@ -240,7 +240,7 @@ init_FINN = function(
   if(is.null(parGrowth)){
     first = np_runif(0, 6, size = c(self$sp,1))
     second = np_runif(0, 6, size = c(self$sp,1))
-    self$parGrowth = torch_tensor(cbind(first, second, 1), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
+    self$parGrowth = torch_tensor(cbind(first, second), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }else{
     self$parGrowth = torch_tensor(parGrowth, requires_grad=TRUE, dtype=torch_float32(), device=self$device)
   }
@@ -248,7 +248,7 @@ init_FINN = function(
   if(is.null(parMort)){
     first = np_runif(0, 2, size = c(self$sp,1))
     second = np_runif(0.1, 5, size = c(self$sp,1))
-    self$parMort = torch_tensor(cbind(first, second, 1), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
+    self$parMort = torch_tensor(cbind(first, second), requires_grad=TRUE, dtype=torch_float32(), device=self$device)
     # self._parMort = torch.tensor(np.random.uniform(0, 500, size = [self.sp,2]), requires_grad=True, dtype=torch.float32, device=self.device)
   }else{
     self$parMort = torch_tensor(parMort, requires_grad=TRUE, dtype=torch_float32(), device=self$device)
@@ -660,10 +660,20 @@ fit = function(
       c = c$to(device = self$device, non_blocking=TRUE)
       pred = self$predict( dbh, trees, species, x, start_time, response)
       loss1 =torch::nnf_mse_loss(y[, start_time:dim(y)[2],,1], pred[[1]][,start_time:dim(y)[2],])$mean() # dbh / BA_stem
-      #loss2 = torch.nn.functional.mse_loss(y[:, start_time:,:,1], pred[1][:,start_time:,:]).mean() # trees
-      loss2 = torch::distr_poisson(pred[[2]][,start_time:pred[[2]]$shape[2],]+0.001)$log_prob(c[, start_time:c$shape[2],])$mean()$negative() # trees
-      loss = (loss1 + loss2)
-      #loss = torch.nn.functional.mse_loss((y[:, start_time:,:,0]+1).log(), (pred[0][:,start_time:,:]*pred[1][:,start_time:,:] + 1).log()).mean() # dbh / BA_stem
+
+      loss = torch_zeros(1L)
+      for(i in 1:6) {
+
+        # 1 -> dbh/ba
+        # 2 -> counts
+        # 3 -> AL
+        # 4 -> growth rates
+        # 5 -> mort rates
+        # 6 -> reg rates
+
+        if(i != 2) loss = loss+torch::nnf_mse_loss(y[, start_time:dim(y)[2],,i], pred[[i]][,start_time:dim(y)[2],])$mean()
+        else loss = loss+torch::distr_poisson(pred[[2]][,start_time:pred[[2]]$shape[2],]+0.001)$log_prob(c[, start_time:c$shape[2],])$mean()$negative()
+      }
       loss$backward()
       print(self$parameters[[1]]$grad)
       self$optimizer$step()
@@ -739,4 +749,5 @@ FINN = R6::R6Class(
     set_weights_nnMortEnv = set_weights_nnMortEnv,
     set_weights_nnRegEnv = set_weights_nnRegEnv
     ))
+
 
