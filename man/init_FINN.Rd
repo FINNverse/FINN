@@ -18,6 +18,7 @@ init_FINN(
   hidden_growth = self$hidden_growth,
   hidden_mort = self$hidden_mort,
   hidden_reg = self$hidden_reg,
+  bias = self$bias,
   which = "all"
 )
 }

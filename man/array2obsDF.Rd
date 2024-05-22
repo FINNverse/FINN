@@ -10,7 +10,7 @@ array2obsDF(obs_array)
 \item{obs_array}{A list containing three arrays: species, dbh, and trees.}
 }
 \value{
-A data.table with columns siteID, patchID, cohortID, species, dbh, and trees.
+A data.frame with columns siteID, patchID, cohortID, species, dbh, and trees.
 }
 \description{
 This function transforms arrays of species, dbh, and trees back into an observation data table.

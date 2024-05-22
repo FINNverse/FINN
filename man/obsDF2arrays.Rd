@@ -7,7 +7,7 @@
 obsDF2arrays(obs_dt)
 }
 \arguments{
-\item{obs_dt}{data.table The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.}
+\item{obs_dt}{data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.}
 }
 \value{
 A list containing three arrays: species, dbh, and trees.
@@ -16,7 +16,7 @@ A list containing three arrays: species, dbh, and trees.
 This function transforms an observation data table into three arrays: species, dbh, and trees.
 }
 \examples{
-obs_dt <- data.table(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
+obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
 result <- obsDF2arrays(obs_dt)
 
 }
