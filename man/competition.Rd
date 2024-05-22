@@ -4,7 +4,15 @@
 \alias{competition}
 \title{Compute the fraction of available light (light) for each cohort BA_stemsed on the given parameters.}
 \usage{
-competition(dbh, species, trees, parHeight, h = NULL, minLight = 50)
+competition(
+  dbh,
+  species,
+  trees,
+  parHeight,
+  h = NULL,
+  minLight = 50,
+  path_size_ha = 0.1
+)
 }
 \arguments{
 \item{dbh}{torch.Tensor Diameter at breast height for each cohort.}

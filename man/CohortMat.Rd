@@ -47,13 +47,13 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CohortMat$new(
+  obs_df = NULL,
   dbh = self$dbh,
   trees = self$trees,
   species = self$species,
   dims = self$dims,
   sp = self$sp,
-  device = self$device,
-  obs_df = NULL
+  device = self$device
 )}\if{html}{\out{</div>}}
 }
 
