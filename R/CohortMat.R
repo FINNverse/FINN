@@ -1,16 +1,16 @@
 library(R6)
-library(data.table)
+# library(data.frame)
 
 #' Transform Observation Data Table to Arrays
 #'
 #' This function transforms an observation data table into three arrays: species, dbh, and trees.
 #'
-#' @param obs_dt data.table The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
+#' @param obs_dt data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
 #'
 #' @return A list containing three arrays: species, dbh, and trees.
 #'
 #' @examples
-#' obs_dt <- data.table(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
+#' obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
 #' result <- obsDF2arrays(obs_dt)
 #'
 #' @export
@@ -50,7 +50,7 @@ obsDF2arrays = function(obs_dt) {
 #'
 #' @param obs_array A list containing three arrays: species, dbh, and trees.
 #'
-#' @return A data.table with columns siteID, patchID, cohortID, species, dbh, and trees.
+#' @return A data.frame with columns siteID, patchID, cohortID, species, dbh, and trees.
 #'
 #' @examples
 #' obs_array <- list(species = array(c("A", "B"), dim = c(2, 2, 2)), dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)), trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
@@ -68,10 +68,10 @@ array2obsDF <- function(obs_array) {
   Npatches <- dim(species_array)[2]
   maxNcohorts <- dim(species_array)[3]
 
-  # Initialize an empty data.table
-  obs_dt <- data.table()
+  # Initialize an empty data.frame
+  obs_dt <- data.frame()
 
-  # Populate data.table
+  # Populate data.frame
   for (site in 1:Nsites) {
     for (patch in 1:Npatches) {
       for (cohort in 1:maxNcohorts) {
@@ -81,20 +81,96 @@ array2obsDF <- function(obs_array) {
 
         # Only add rows where dbh is not NA (assuming NA means no data for that cohort)
         if (!is.na(dbh)) {
-          obs_dt <- rbind(obs_dt, data.table(
-            siteID = site,
-            patchID = patch,
-            cohortID = cohort,
-            species = species,
-            dbh = dbh,
-            trees = trees
-          ))
+          obs_dt <- rbind(
+            obs_dt,
+            data.frame(
+              siteID = site,
+              patchID = patch,
+              cohortID = cohort,
+              species = species,
+              dbh = dbh,
+              trees = trees
+              )
+            )
         }
       }
     }
   }
 
   return(obs_dt)
+}
+
+#' Generate Cohorts Using Weibull Distribution
+#'
+#' This function generates cohort data for tree populations using the Weibull distribution based on specified tree counts, diameter at breast height (DBH) shape, and scale parameters.
+#'
+#' @param trees Integer vector specifying the number of trees for each cohort. If a single integer is provided, it will be replicated for each draw.
+#' @param dbh_shape Numeric vector specifying the shape parameters of the Weibull distribution for DBH for each cohort. If a single numeric value is provided, it will be replicated for each draw.
+#' @param dbh_scale Numeric vector specifying the scale parameters of the Weibull distribution for DBH for each cohort. If a single numeric value is provided, it will be replicated for each draw.
+#' @param dbh_class_range Numeric value specifying the range of DBH classes. Default is 1.
+#' @param siteID Integer vector specifying the site ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.
+#' @param patchID Integer vector specifying the patch ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.
+#' @param species Integer vector specifying the species ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.
+#' @return A data frame containing the cohort data with columns for site ID, patch ID, cohort ID, species, number of trees, and DBH.
+#' @details The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes, and the cohort data is generated accordingly.
+#' @examples
+#' \dontrun{
+#' obs_df <- rweibull_cohorts(
+#'   trees = c(300, 10),
+#'   dbh_shape = c(3, 3),
+#'   dbh_scale = c(1, 50),
+#'   dbh_class_range = 0.1,
+#'   siteID = c(1, 1),
+#'   patchID = c(1, 1),
+#'   species = c(3, 4)
+#' )
+#' CohortMat$new(obs_df = obs_df)
+#' }
+#' @importFrom stats rweibull
+#' @export
+rweibull_cohorts = function(
+  trees = NULL, # integer
+  dbh_shape = NULL, # numeric
+  dbh_scale = NULL, # numeric
+  dbh_class_range = 1, # numeric
+  siteID = 1, # integer
+  patchID = 1, # integer
+  species = 1 # integer
+  ){
+  n_draws = max(unlist(lapply(list(trees, dbh_shape, dbh_scale), length)))
+  if(length(trees) == 1) trees = rep(trees, n_draws)
+  if(length(dbh_shape) == 1) dbh_shape = rep(dbh_shape, n_draws)
+  if(length(dbh_scale) == 1) dbh_scale = rep(dbh_scale, n_draws)
+  if(length(siteID) == 1) siteID = rep(siteID, n_draws)
+  if(length(patchID) == 1) patchID = rep(patchID, n_draws)
+  if(length(species) == 1) species = rep(species, n_draws)
+
+  if(!all(unlist(lapply(list(trees, dbh_shape, dbh_scale), length)) == length(trees))) {
+    stop("inputs must all be of equal length ")
+    }
+  i=1
+  cohortDF <-data.frame()
+  cohortIDs = 0
+  for(i in seq_along(trees)){
+    drawn_pop = rweibull(trees[i], dbh_shape[i], dbh_scale[i])
+    class_ranges = seq(0, ceiling(max(c(dbh_class_range,drawn_pop))), dbh_class_range)
+    dbh_classes <- cut(drawn_pop,breaks = class_ranges)
+    trees_out = table(dbh_classes)
+    cohortDF <-
+      rbind(cohortDF,
+            data.frame(
+              siteID = siteID[i],
+              patchID = patchID[i],
+              species = species[i],
+              trees = as.integer(trees_out[trees_out > 0]),
+              dbh = class_ranges[-1][trees_out > 0]+dbh_class_range
+              )
+        )
+  }
+  # return(list(cohortTensor = CohortMat$new(obs_df = cohortDF), cohortDF = cohortDF))
+  cohortDF$cohortID <- 1:nrow(cohortDF)
+  cohortDF <- cohortDF[,c("siteID","patchID", "cohortID", "species", "dbh", "trees")]
+  return(cohortDF)
 }
 
 #' Cohort Matrix Class
@@ -116,9 +192,9 @@ CohortMat = R6::R6Class("CohortMat", public = list(
   dims=c(50, 30, 10),
   sp = 10,
   device ='cpu',
-  initialize = function(dbh=self$dbh, trees=self$trees, species=self$species, dims=self$dims, sp = self$sp, device = self$device, obs_df = NULL) {
+  initialize = function(obs_df = NULL, dbh=self$dbh, trees=self$trees, species=self$species, dims=self$dims, sp = self$sp, device = self$device) {
     if(!is.null(obs_df)){
-      if(all(colnames(obs_df) %in% c("siteID","patchID","species", "dbh", "trees"))) stop("all(colnames(obs_df) %in% c(\"siteID\",\"patchID\",\"species\",\"dbh\",\"trees\")) is not TRUE")
+      if(!all(c("siteID","patchID","species", "dbh", "trees") %in% colnames(obs_df))) stop("c(\"siteID\",\"patchID\",\"species\",\"dbh\",\"trees\") %in% all(colnames(obs_df)) is not TRUE")
       obs_array = obsDF2arrays(obs_df)
       dbh = obs_array$dbh
       trees = obs_array$trees
@@ -140,6 +216,7 @@ CohortMat = R6::R6Class("CohortMat", public = list(
   },
   # Function to transform obs_dt into three arrays
   obsDF2arrays = obsDF2arrays,
+  # Function to transofrm torch_tensors into data.frame
   asDF = function() {
     array2obsDF(list(dbh = torch::as_array(self$dbh),trees = torch::as_array(self$trees),species = torch::as_array(self$species)))
     }
