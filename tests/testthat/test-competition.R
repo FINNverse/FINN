@@ -29,7 +29,6 @@ trees = cohort$trees
 comp = competition(cohort$dbh, cohort$species, cohort$trees,
                    parHeight = torch::torch_tensor(0.5), h=0)
 
-
 cohort_df1$light = torch::as_array(comp)[,1,1]
 
 ggplot(cohort_df1,aes(y = factor(trees/0.1), x = dbh, fill = light))+
