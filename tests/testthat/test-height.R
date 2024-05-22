@@ -1,8 +1,8 @@
-# tests/testthat/test-height_P.R
+# tests/testthat/test-height.R
 library(testthat)
 library(FINN)
 
-test_that("height_P calculates heights within a specified range", {
+test_that("height calculates heights within a specified range", {
   # Generate the test data using expand.grid and store as data.frame
   test_df <- as.data.frame(expand.grid(
     dbh = seq(0, 500, 1),
@@ -10,7 +10,7 @@ test_that("height_P calculates heights within a specified range", {
   ))
 
   # Calculate the height and add it to the data frame
-  test_df$height <- with(test_df, height_P(dbh, parHeight))
+  test_df$height <- with(test_df, height(dbh, parHeight))
 
   # Define the minimum and maximum height
   min_height <- 0   # Lower limit of height
