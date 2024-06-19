@@ -73,11 +73,11 @@ height = function(dbh, parHeight) {
 #' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
 #'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., path_size_ha = 0.1){
+competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., patch_size_ha = 0.1, ba = NULL, cohortHeights = NULL){
 
   # ba = (BA_stem(dbh)*trees)/0.1
-  ba = BA_stand(dbh, trees, path_size_ha)
-  cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
+  if(is.null(ba)) ba = BA_stand(dbh, trees, patch_size_ha)
+  if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
     ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
@@ -159,8 +159,9 @@ growth = function(dbh, species, parGrowth, parMort, pred, light){
 #' @importFrom torch torch_sigmoid
 #' @export
 regeneration = function(species, parReg, pred, light) {
-  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+  if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = pred
+  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
   regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
   return(regeneration)
@@ -386,6 +387,7 @@ predict = function(
   }
 
   env = torch_tensor(env, dtype=self$dtype, device=self$device)
+
 
   # Predict env niches for all sites and timesteps
   if(is.null(pred_growth)) pred_growth = self$nnGrowthEnv(env)
