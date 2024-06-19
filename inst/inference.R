@@ -8,16 +8,39 @@ sp = 4
 finn = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                 parGrowth = matrix(c(-10, 20), sp, 2, byrow = TRUE),
                 parMort = matrix(c(-3, 100), sp, 2, byrow = TRUE),
-                parReg = rep(-5, sp),
-                parHeight = c(8, 6, 4, 1),
+                parReg = rep(-1, sp), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
+                parHeight = c(0.3, 0.5, 0.7, 0.9), # plausible range is 0 to 1. default should be between 0.3 and 0.7
                 parGrowthEnv = list(matrix(5.0, sp, 2)),
                 parMortEnv = list(matrix(c(0, 0), sp, 2)),
                 parRegEnv = list(matrix(5, sp, 2)))
 env = torch::torch_randn(size = c(100, 200, 2))
-pred =
-  finn$predict(initCohort$dbh, initCohort$trees, initCohort$species,response = "BA*T",
-               env = env, patches = 30)
-plot(torch::as_array(pred[[1]]$data())[1,,3], type = "l")
+
+
+pred = finn$predict(response = "BA*T", env = env, patches = 30)
+par(mfrow = c(2,1))
+plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l", lty = 1)
+lines(torch::as_array(pred[[1]]$data())[1,,2], type = "l", lty = 2)
+lines(torch::as_array(pred[[1]]$data())[1,,3], type = "l", lty = 3)
+lines(torch::as_array(pred[[1]]$data())[1,,4], type = "l", lty = 4)
+
+
+plot(1:200, sin((1:200)/10), type = "l")
+
+env1 <- torch::as_array(env)[1,,1]
+
+plot(env1+(sin((1:200)/30))*10)
+plot()
+
+str(torch::as_array(env))
+
+array(1,)
+
+plot(torch::as_array(env)[1,,1], type = "l", lty = 1, col = "blue")
+lines(torch::as_array(env)[1,,2], type = "l", lty = 2, col = "blue")
+
+dim(torch::as_array(env))
+
+dim(torch::as_array(pred[[1]]$data()))
 
 library(torch)
 Y = (torch_cat(list(pred[[1]]$unsqueeze(4),

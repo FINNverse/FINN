@@ -149,7 +149,9 @@ growth = function(dbh, species, parGrowth, parMort, pred, light){
 #' This function calculates the regeneration of forest patches BA_stemsed on species information, regeneration parameters, prediction values, and available light.
 #'
 #' @param species torch.Tensor species information.
-#' @param parReg torch.Tensor Regeneration parameters.
+#' @param parReg torch.Tensor Regeneration parameters. 0 <= parReg <= 1
+#' This parameter denotes the fraction of light needed for a species to regenerate.
+#' In general low values for high regeneration and high values for low regeneration.
 #' @param pred torch.Tensor Prediction values.
 #' @param light torch.Tensor Available light variable for calculation.
 #'
@@ -162,7 +164,7 @@ regeneration = function(species, parReg, pred, light) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = pred
   regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
-  regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2 )) # TODO, check if exp or not?! lambda should be always positive!
+  regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2), num_samples = 1000) # TODO, check if exp or not?! lambda should be always positive!
   regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
   return(regeneration)
 }
@@ -202,6 +204,11 @@ init_FINN = function(
     bias = self$bias,
     which = "all"
     ){
+
+  # check input parameters
+  if(any(parHeight < 0 | parHeight > 1)) stop("parHeight cannot be <0 or >1")
+  if(any(parReg < 0 | parReg > 1)) stop("parReg cannot be <0 or >1")
+
   self$sp = sp
   self$device = device
   self$parHeight = parHeight
