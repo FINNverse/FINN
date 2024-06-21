@@ -30,7 +30,7 @@ BA_stem = function(dbh) {
 #' @param trees number of Trees
 #'
 #' @export
-BA_stand = function(dbh, trees, patch_size_ha = 0.1) {
+BA_stand = function(dbh, trees, patch_size_ha) {
   return((pi*(dbh/100./2.)$pow(2.0)*trees)/patch_size_ha)
 }
 
@@ -73,10 +73,10 @@ height = function(dbh, parHeight) {
 #' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
 #'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., patch_size_ha = 0.1, ba = NULL, cohortHeights = NULL){
+competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., patch_size_ha, ba = NULL, cohortHeights = NULL){
 
   # ba = (BA_stem(dbh)*trees)/0.1
-  if(is.null(ba)) ba = BA_stand(dbh, trees, patch_size_ha)
+  if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)
   if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
@@ -102,15 +102,17 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
 #' @param light available light
 #'
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light) {
+mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
   shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
   environment = index_species(pred, species)
   gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
   predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
   #mort = torch.distributions.Beta(predM*trees+0.00001, trees - predM*trees+0.00001).rsample()*trees
-  mort = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
+  mort1 = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
   #mort = binomial_from_bernoulli(trees+trees$le(0.5)$float(), torch_clamp(predM, 0.0001, 1- 0.0001))*trees$ge(0.5)$float()
-  return( mort + mort$round()$detach() - mort$detach() )
+  mort2 = mort1 + mort1$round()$detach() - mort1$detach()
+  if(debug == T) out = list(shade = shade, environment = environment, gPSize = gPSize, predM = predM, mort1 = mort1, mort2 = mort2) else out = mort2
+  return(out)
 }
 
 
@@ -160,13 +162,15 @@ growth = function(dbh, species, parGrowth, parMort, pred, light){
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
-regeneration = function(species, parReg, pred, light) {
+regeneration = function(species, parReg, pred, light, patch_size_ha, debug = F) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = pred
   regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
-  regeneration = sample_poisson_relaxed((regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2), num_samples = 1000) # TODO, check if exp or not?! lambda should be always positive!
-  regeneration = regeneration + regeneration$round()$detach() - regeneration$detach()
-  return(regeneration)
+  mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
+  regeneration1 = sample_poisson_relaxed(mean*patch_size_ha, num_samples = 1000) # TODO, check if exp or not?! lambda should be always positive!
+  regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()
+  if(debug == T) out = list(regP = regP, mean = mean, regeneration1 = regeneration1, regeneration2 = regeneration2) else out = regeneration2
+  return(out)
 }
 
 
@@ -202,6 +206,8 @@ init_FINN = function(
     hidden_mort = self$hidden_mort,
     hidden_reg = self$hidden_reg,
     bias = self$bias,
+    patch_size_ha = self$patch_size_ha,
+    minLight = self$minLight,
     which = "all"
     ){
 
@@ -221,6 +227,8 @@ init_FINN = function(
   self$hidden_growth = hidden_growth
   self$hidden_mort = hidden_mort
   self$hidden_reg = hidden_reg
+  self$patch_size_ha = patch_size_ha
+  self$minLight = minLight
 
   self$device = torch_device(device)
   self$sp = sp
@@ -440,7 +448,7 @@ predict = function(
         }else if(response == "BA_stem"){
           BA_stem = BA_stem(dbh)
         }else{
-          BA_stem = BA_stand(dbh, trees)
+          BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
           # BA_stem * trees
         }
         labels = species
@@ -464,12 +472,49 @@ predict = function(
     })
 
     if(dbh$shape[3] > 0.5){
-      light = competition(dbh, species, trees_clone, self$parHeight)
-      g = growth(dbh, species, self$parGrowth, self$parMort, pred_growth[,i,], light)
-      dbh = dbh+g
+      light = competition(
+        dbh = dbh,
+        species = species,
+        trees = trees_clone,
+        parHeight = self$parHeight,
+        h = NULL,
+        minLight = self$minLight,
+        patch_size_ha = self$patch_size_ha,
+        ba = NULL,
+        cohortHeights = NULL
+        )
 
-      light = competition(dbh, species, trees_clone, self$parHeight)
-      m = mortality(dbh, species, trees+0.001, self$parMort, pred_morth[,i,], light) #.unsqueeze(3) # TODO check!
+      g = growth(
+        dbh = dbh,
+        species = species,
+        parGrowth = self$parGrowth,
+        parMort = self$parMort,
+        pred = pred_growth[, i, ],
+        light = light
+      )
+
+      dbh = dbh + g
+
+      light = competition(
+        dbh = dbh,
+        species = species,
+        trees = trees_clone,
+        parHeight = self$parHeight,
+        h = NULL,
+        minLight = self$minLight,
+        patch_size_ha = self$patch_size_ha,
+        ba = NULL,
+        cohortHeights = NULL
+        )
+
+      m = mortality(
+        dbh = dbh,
+        species = species,
+        trees = trees + 0.001,
+        parMort = self$parMort,
+        pred = pred_morth[, i, ],
+        light = light
+      ) #.unsqueeze(3) # TODO check!
       trees = torch_clamp(trees - m, min = 0) #### TODO if trees = 0 then NA...prevent!
     }
 
@@ -477,8 +522,19 @@ predict = function(
       trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
     })
 
-    AL_reg = competition(dbh, species, trees_clone, self$parHeight, h = 1) # must have dimension = n species in last dim
-    r = regeneration(species, self$parReg, pred_reg[,i,], AL_reg)
+    AL_reg = competition( # must have dimension = n species in last dim
+      dbh = dbh,
+      species = species,
+      trees = trees_clone,
+      parHeight = self$parHeight,
+      h = 1,
+      minLight = self$minLight,
+      patch_size_ha = self$patch_size_ha,
+      ba = NULL,
+      cohortHeights = NULL
+    )
+
+    r = regeneration(species = species, parReg = self$parReg, pred = pred_reg[,i,], light = AL_reg, patch_size_ha = self$patch_size_ha)
 
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
@@ -754,6 +810,8 @@ FINN = R6::R6Class(
     hidden_mort = list(),
     hidden_reg = list(),
     bias = FALSE,
+    patch_size_ha = 0.1,
+    minLight = 50,
     #initialisation function
     initialize = init_FINN,
     build_NN = build_NN,
