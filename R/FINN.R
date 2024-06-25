@@ -103,15 +103,16 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
 #'
 #' @export
 mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
-  shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
+  # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
+  shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
   environment = index_species(pred, species)
-  gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
-  predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
+  gPSize = 0.1*(torch_clamp((parMort[,2][species]*100)/dbh, min = 0.00001) )$pow(2.3)
+  predM = torch_clamp((shade*0.5+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
   #mort = torch.distributions.Beta(predM*trees+0.00001, trees - predM*trees+0.00001).rsample()*trees
   mort1 = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
   #mort = binomial_from_bernoulli(trees+trees$le(0.5)$float(), torch_clamp(predM, 0.0001, 1- 0.0001))*trees$ge(0.5)$float()
   mort2 = mort1 + mort1$round()$detach() - mort1$detach()
-  if(debug == T) out = list(shade = shade, environment = environment, gPSize = gPSize, predM = predM, mort1 = mort1, mort2 = mort2) else out = mort2
+  if(debug == T) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM, mort1 = mort1, mort2 = mort2) else out = mort2
   return(out)
 }
 
