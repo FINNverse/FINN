@@ -313,8 +313,8 @@ ggplot(out_dt, aes(x = pred, y = parReg, fill = r2))+
 
 patch_size = 0.1
 # trees_vec = c(1:10,10^(seq(2,4, length.out = 8)))
-trees_vec = c(0:100)
-dbh_vec = 80
+trees_vec = c(50)
+dbh_vec = seq(10,300,10)
 # dbh_vec = dbh = seq(30,100, 10)
 
 cohort_df1 =
@@ -328,6 +328,20 @@ cohort_df1 =
     )
   )
 cohort_df1$siteID = 1:nrow(cohort_df1)
+#
+# cohort_df1b =
+#   data.frame(
+#     patchID = 1,
+#     cohortID = 2,
+#     species = 1,
+#     expand.grid(
+#       trees = round(trees_vec*patch_size),
+#       dbh = dbh_vec+1
+#     )
+#   )
+# cohort_df1b$siteID = 1:nrow(cohort_df1b)
+#
+# cohort_df1 <- data.table(rbind(cohort_df1, cohort_df1b))
 
 cohort = CohortMat$new(obs_df = cohort_df1)
 
@@ -335,76 +349,103 @@ dbh = cohort$dbh
 species = cohort$species
 trees = cohort$trees
 
-light = competition(cohort$dbh, cohort$species, cohort$trees,
-                    parHeight = torch::torch_tensor(0.5), h=0, patch_size_ha = 0.1)
-cohort_df1$light = torch::as_array(light)[,1,1]
-hist(cohort_df1$light)
+# light1 = competition(cohort$dbh, cohort$species, cohort$trees,
+#                     parHeight = torch::torch_tensor(0.5), patch_size_ha = 0.1)
+# dim(torch::as_array(light1))
+# cohort_df1[["light1"]] = c(torch::as_array(light1)[,1,1],torch::as_array(light1)[,1,2])
+# cohort_df1$light2 = torch::as_array(light1)[,1,2]
+# hist(cohort_df1$light1)
+# hist(cohort_df1$light2)
+# hist(cohort_df1[cohortID == 1]$light1)
+# hist(cohort_df1$light2)
+# plot(cohort_df1$light1, cohort_df1$light2, xlim = range(as_array(light1)), ylim = range(as_array(light1)))
+#
+# light2 = competition(cohort$dbh, cohort$species, cohort$trees,
+#                     parHeight = torch::torch_tensor(0.5), patch_size_ha = 0.1)
+# dim(torch::as_array(light1))
+# dim(torch::as_array(light2))
+# cohort_df1$light2 = torch::as_array(light2)[,1,2]
+# hist(cohort_df1$light2)
+# hist(cohort_df1$light)
 
 sim_dt <-
   data.table(
     expand.grid(list(
-      parMort1 = seq(0,1,0.1),
-      parMort2 = seq(0,1,0.1),
-      pred = seq(0,1,10)
+      parMort1 = seq(0,1,0.25),
+      parMort2 = seq(0,4,1),
+      pred = seq(0,1,0.1),
+      light = seq(0,1,0.1)
     ))
   )
 
-# parMort = torch_tensor(cbind(sim_dt[1,]$parMort1,sim_dt[1,]$parMort1), requires_grad=TRUE, dtype=torch_float32())
-# mortality = function(dbh, species, trees, parMort, pred, light) {
-#   shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
-#   environment = index_species(pred, species)
-#   gPSize = 0.1*(torch_clamp(dbh/(parMort[,2][species]*100), min = 0.00001) )$pow(2.3)
-#   predM = torch_clamp((shade*0.1+environment)+gPSize*1, min = 1-0.9999, max = 0.9999)
-#   #mort = torch.distributions.Beta(predM*trees+0.00001, trees - predM*trees+0.00001).rsample()*trees
-#   mort1 = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
-#   #mort = binomial_from_bernoulli(trees+trees$le(0.5)$float(), torch_clamp(predM, 0.0001, 1- 0.0001))*trees$ge(0.5)$float()
-#   mort2 = mort1 + mort1$round()$detach() - mort1$detach()
-#   if(debug == T) out = list(shade = shade, environment = environment, gPSize = gPSize, predM = predM, mort1 = mort1, mort2 = mort2) else out = mort2
-#   return(out)
-# }
 
-# light1 = 0.5
-# parReg = seq(0,1,0.001)
-# plot(parReg,plogis((light1 + (1-parReg) - 1)/1e-2))
-species
-i=1
+i=50
 out_dt <- data.table()
 for (i in 1:nrow(sim_dt)) {
   if(i==1) cat("\n")
   cat("\r", i, "of", nrow(sim_dt))
-  temp_parMort = torch_tensor(cbind(sim_dt[1,]$parMort1,sim_dt[1,]$parMort2), requires_grad=TRUE, dtype=torch_float32())
-  temp_pred = torch_tensor(array(sim_dt[i,]$pred,dim = c(101,1)), requires_grad=TRUE, dtype=torch_float32())
+  temp_parMort = torch_tensor(cbind(sim_dt[i,]$parMort1,sim_dt[i,]$parMort2), requires_grad=TRUE, dtype=torch_float32())
+  temp_pred = torch_tensor(array(sim_dt[i,]$pred,dim = c(length(as_array(cohort$dbh)),1)), requires_grad=TRUE, dtype=torch_float32())
+  light = torch_tensor(array(sim_dt[i,]$light,dim = c(length(as_array(cohort$dbh)),1,1)), requires_grad=TRUE, dtype=torch_float32())
   # r = regeneration(species = cohort$species, parReg = sim_dt[i,]$parReg, pred = array(sim_dt[i,]$pred,dim = c(1,1)), light = comp)
   m = mortality(dbh = cohort$dbh, species = cohort$species, trees = cohort$trees, parMort = temp_parMort, pred = temp_pred, light = light, debug = T)
   cohort_df1$shade = as_array(m$shade)
+  cohort_df1$dbh = as_array(cohort$dbh)
   cohort_df1$environment = as_array(m$environment)
   cohort_df1$gPSize = as_array(m$gPSize)
   cohort_df1$predM = as_array(m$predM)
   cohort_df1$mort1 = as_array(m$mort1)
   cohort_df1$mort2 = as_array(m$mort2)
   cohort_df1$pred = sim_dt[i,]$pred
-  cohort_df1$parMort1 = sim_dt[1,]$parMort1
+  cohort_df1$parMort1 = sim_dt[i,]$parMort1
   cohort_df1$parMort2 = sim_dt[i,]$parMort2
+  cohort_df1$light = sim_dt[i,]$light
   out_dt <- rbind(out_dt, cohort_df1)
   if(i==nrow(sim_dt)) cat("\n")
 }
 
-hist(out_dt$mort1)
-hist(out_dt$predM)
-ggplot(out_dt, aes(x = parMort1, y = parMort2, fill = shade))+
-  geom_tile()+
-  facet_grid(paste0("pred=", cut(pred,10))~paste0("light=", cut(light,10)))+
-  # facet_grid(~paste0("pred=", cut(pred,10)))+
-  theme(legend.position = "top")+
-  guides(fill = guide_colorbar(barwidth = 10, title.position = "top"))
-  # labs(x = "predicted environment effect", y = "parReg (species light requirement for regeneration)", fill = "mort")
+ggplot(out_dt[dbh %in% c(seq(30,300,30))], aes(x = parMort2, y = gPSize, color = factor(dbh), group = dbh))+
+  geom_line()+
+  coord_cartesian(ylim = c(0,2))+
+  geom_hline(yintercept = 0.1, col = "black", lty = 3)+
+  scale_y_continuous(breaks = seq(0,2,0.1))
 
-ggplot(out_dt, aes(x = pred, y = parReg, fill = r2))+
+ggplot(out_dt, aes(x = factor(parMort1), y = shade))+
+  geom_boxplot()+
+  facet_wrap(~cohortID)
+
+ggplot(out_dt[,
+              .(shade = mean(shade)
+              ), by = .(light = cut(light, seq(0, 1, 0.2), ordered_result = T, include.lowest = T), cohortID, parMort1)
+              ], aes(
+  x = parMort1,
+  y = shade,
+  color = light)) +
+  geom_point() +
+  geom_line() +
+  facet_grid(light~ cohortID)
+
+ggplot(out_dt, aes(
+  x = parMort1,
+  y = shade,
+  color = light)) +
+  geom_point() +
+  stat_smooth(se = F) +
+  facet_grid(light~pred)
+
+ggplot(out_dt, aes(x = factor(parMort1), y = predM))+
+  geom_boxplot()
+
+ggplot(out_dt, aes(x = pred, y = predM))+
+  geom_point()
+
+custom_palette <- c("#440154", "#3B528B", "#21918C", "#5DC863", "#FDE725")
+
+ggplot(out_dt[pred == 0.5 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5,0.75, 1)], aes(x = dbh, y = light, fill = predM))+
   geom_tile()+
-  facet_wrap(~paste0("light=", cut(light,6)))+
+  facet_grid(paste0("parMort1=", parMort1)~paste0("parMort2=", parMort2))+
   theme(legend.position = "top")+
   guides(fill = guide_colorbar(barwidth = 10, title.position = "top"))+
-  labs(x = "predicted environment effect", y = "parReg (species light requirement for regeneration)", fill = "simulated regeneration")
-
-
-
+  scale_fill_gradientn(colors = custom_palette)
+  # scale_fill_viridis(option = "viridis", name = "Value")
+  # labs(x = "predicted environment effect", y = "parReg (species light requirement for regeneration)", fill = "mort")
