@@ -374,7 +374,7 @@ sim_dt <-
       parMort1 = seq(0,1,0.25),
       parMort2 = seq(0,4,1),
       pred = seq(0,1,0.1),
-      light = seq(0,1,0.1)
+      light = seq(0,1,0.2)
     ))
   )
 
@@ -404,7 +404,22 @@ for (i in 1:nrow(sim_dt)) {
   if(i==nrow(sim_dt)) cat("\n")
 }
 
+ggplot(out_dt[pred == 10 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5,0.75, 1)],
+       aes(x = dbh, y = light, fill = predM))+
+  geom_tile()+
+  facet_grid(paste0("parMort1=", parMort1)~paste0("parMort2=", parMort2))+
+  theme(legend.position = "top")+
+  guides(fill = guide_colorbar(barwidth = 10, title.position = "top"))+
+  # scale_fill_gradientn(colors = custom_palette)
+  scale_fill_gradientn(colors = custom_palette, limits = c(0,.1), na.value = custom_palette[length(custom_palette)])
+
 ggplot(out_dt[dbh %in% c(seq(30,300,30))], aes(x = parMort2, y = gPSize, color = factor(dbh), group = dbh))+
+  geom_line()+
+  coord_cartesian(ylim = c(0,2))+
+  geom_hline(yintercept = 0.1, col = "black", lty = 3)+
+  scale_y_continuous(breaks = seq(0,2,0.1))
+
+ggplot(out_dt[dbh %in% c(seq(30,300,30))], aes(x = dbh, y = gPSize, color = factor(parMort2)))+
   geom_line()+
   coord_cartesian(ylim = c(0,2))+
   geom_hline(yintercept = 0.1, col = "black", lty = 3)+
