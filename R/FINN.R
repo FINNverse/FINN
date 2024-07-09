@@ -3,7 +3,6 @@ np_runif = function(low, high, size) {
   array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
 }
 
-
 #' Calculate the BA_stemsal area of a tree given the diameter at breast height (dbh).
 #'
 #' This function calculates the BA_stemsal area of a tree given the diameter at breast height (dbh).
@@ -91,7 +90,6 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
 
 
 
-
 #' Mortality
 #'
 #' @param dbh dbh
@@ -171,7 +169,7 @@ regeneration = function(species, parReg, pred, light, patch_size_ha, debug = F) 
   environment = pred
   regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
-  regeneration1 = sample_poisson_relaxed(mean*patch_size_ha, num_samples = 1000) # TODO, check if exp or not?! lambda should be always positive!
+  regeneration1 = sample_poisson_gaussian(mean*patch_size_ha) # TODO, check if exp or not?! lambda should be always positive!
   regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()
   if(debug == T) out = list(regP = regP, mean = mean, regeneration1 = regeneration1, regeneration2 = regeneration2) else out = regeneration2
   return(out)
@@ -285,10 +283,13 @@ init_FINN = function(
 
   if(which == "env"){
     self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+    names(self$parameters) = c("R_E", "G_E", "M_E")
   }else if(which == "species"){
     self$parameters = c(self$parHeight, self$parGrowth, self$parMort, self$parReg)
+    names(self$parameters) = c("H", "G", "M", "R")
   }else{
     self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+    names(self$parameters) = c("H", "G", "M", "R","R_E", "G_E", "M_E" )
   }
   return(self) # Only for testing now
 }
@@ -543,7 +544,7 @@ predict = function(
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
     new_trees = r
-    new_species = torch_arange(1, sp+1, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
+    new_species = torch_arange(1, sp, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
     new_cohort_id = torch_randint(0, 50000, size = list(sp))$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
     if(dbh$shape[3] != 0){
@@ -590,13 +591,24 @@ predict = function(
 
     # Pad tensors, expensive
     if(i %% 10 == 0){
-      indices = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
-      org_dim = species$shape[1:2]
-      org_dim_t = torch::torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
-      dbh = pad_tensors_speed_up(dbh, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
-      trees = pad_tensors_speed_up(trees, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
-      cohort_ids = pad_tensors_speed_up(cohort_ids, indices, org_dim_t)$unflatten(1, org_dim)
-      species = pad_tensors_speed_up(species, indices, org_dim_t, 1L)$unflatten(1, org_dim)
+      torch::with_no_grad({
+        mask = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
+        org_dim = species$shape[1:2]
+        org_dim_t = torch::torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
+
+        non_zero_counts = mask$sum(dim=2)
+        max_non_zeros = non_zero_counts$max()$item()
+        sorted_tensor = torch::torch_sort(mask$float(), dim=2, descending=TRUE)[[2]]
+
+        dbh = dbh$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+        #dbh = pad_tensors_speed_up(dbh$flatten(start_dim = 1, end_dim = 2), indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
+        trees = trees$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+        #trees = pad_tensors_speed_up(trees, indices, org_dim_t)$unflatten(1, org_dim)#$unsqueeze(3)
+        cohort_ids = cohort_ids$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+        #cohort_ids = pad_tensors_speed_up(cohort_ids, indices, org_dim_t)$unflatten(1, org_dim)
+        species = species$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+        #species = pad_tensors_speed_up(species, indices, org_dim_t, 1L)$unflatten(1, org_dim)
+      })
     }
   }
 
@@ -604,7 +616,7 @@ predict = function(
     Result = c(Result, list(Raw_results, Raw_cohorts))
   }
 
-  print("Done...")
+  #print("Done...")
   return(Result)
 }
 
@@ -706,7 +718,7 @@ fit = function(
 
     #for step, (x, y, c, ind) in enumerate(DataLoader):
     coro::loop(for (b in DataLoader) {
-      print("Start")
+      #print("Start")
       batch_loss = c()
       x = b[[1]]
       y = b[[2]]
@@ -732,7 +744,7 @@ fit = function(
       y = y$to(device = self$device, non_blocking=TRUE)
       c = c$to(device = self$device, non_blocking=TRUE)
       pred = self$predict( dbh, trees, species, x, start_time, response)
-      loss1 =torch::nnf_mse_loss(y[, start_time:dim(y)[2],,1], pred[[1]][,start_time:dim(y)[2],])$mean() # dbh / BA_stem
+      #loss1 =torch::nnf_mse_loss(y[, start_time:dim(y)[2],,1], pred[[1]][,start_time:dim(y)[2],])$mean() # dbh / BA_stem
 
       loss = torch_zeros(1L)
       for(i in 1:6) {
@@ -748,7 +760,7 @@ fit = function(
         else loss = loss+torch::distr_poisson(pred[[2]][,start_time:pred[[2]]$shape[2],]+0.001)$log_prob(c[, start_time:c$shape[2],])$mean()$negative()
       }
       loss$backward()
-      print(self$parameters[[1]]$grad)
+      #print(self$parameters[[1]]$grad)
       self$optimizer$step()
       batch_loss =  c(batch_loss, loss$item())
 
@@ -757,6 +769,7 @@ fit = function(
     })
     bl = mean(batch_loss)
     bl = round(bl, 3)
+    cat("Epoch: ", epoch, "Loss: ", bl, "\n")
     self$history[epoch] = bl
   }
   # torch::cuda_empty_cache()
