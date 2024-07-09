@@ -99,3 +99,87 @@ pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
   }
   return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE, padding_value = const))
 }
+
+# pad_tensors_speed_up2 <- function(value, indices, org_dim, const = 0) {
+#   # Flatten the value tensor to 2D
+#   flat_value <- value$flatten(start_dim = 1, end_dim = 2)
+#
+#   # Use the boolean indices to filter out the alive cohorts
+#   alive_cohorts <- flat_value$masked_select(indices$unsqueeze(1))$view(c(indices$sum(dim = 2)$max()$item(), -1))
+#
+#   # Pad the sequences
+#   padded_tensor <- torch::nn_utils_rnn_pad_sequence(list(alive_cohorts), batch_first = TRUE, padding_value = const)
+#
+#   return(padded_tensor)
+# }
+#
+# pad_tensors_speed_up3 <- function(value, indices, org_dim, const = 0) {
+#   # Flatten the value tensor to 2D
+#   flat_value <- value$flatten(start_dim = 1, end_dim = 2)
+#
+#   # Get the shape parameters
+#   sites_patches <- indices$shape[1]
+#   cohorts <- indices$shape[2]
+#
+#   # Calculate the maximum number of alive cohorts
+#   max_alive <- indices$sum(dim = 2)$max()$item()
+#
+#   # Create a tensor to store the padded cohorts
+#   padded_tensor <- torch::torch_full(c(sites_patches, max_alive), const)
+#
+#   # Expand the indices tensor for broadcasting
+#   indices_expanded <- indices$unsqueeze(1)
+#
+#   # Gather the alive cohorts
+#   alive_cohorts <- flat_value$masked_select(indices_expanded)
+#
+#   # Reshape the alive cohorts tensor
+#   alive_cohorts_reshaped <- alive_cohorts$view(c(sites_patches, -1))
+#
+#   # Fill the padded tensor with alive cohorts
+#   padded_tensor[, 1:alive_cohorts_reshaped$shape[2]] <- alive_cohorts_reshaped
+#
+#   return(padded_tensor)
+# }
+# value <- torch_tensor(array(sample(0:5, 10*50*9, replace = TRUE), dim = c(10, 50, 9)), requires_grad = TRUE, dtype = torch_float32()) # [sites, patches, cohorts]
+# indices = (value > 0)$flatten(start_dim = 1, end_dim = 2) # boolean [sites*patches, cohorts], reporting which cohorts are alive or dead
+# org_dim <- c(10, 50, 9)
+#
+# padded_tensor <- pad_tensors_speed_up(value, indices, org_dim) # output [sites*patches, mininum number of cohort dimension required (usually == highest number of alive cohorts in all sites and patches)]
+#
+# padd
+#
+# print(padded_tensor)
+# # in this example: [5,5]
+#
+# indices = (M>0)$flatten(start_dim = 1, end_dim = 2)
+#
+# as_array(pad_tensors_speed_up(M, indices, org_dim = c(1, 10, 5)))
+#
+# M = matrix(sample(c(0, 1), 50, replace = TRUE), 10, 5)
+# M
+#
+# remove_zeros_and_pad(M[1,,])
+#
+#
+#
+# # Print the result tensor
+# print(result_tensor)
+#
+#
+# remove_zeros_and_pad = function(tensor, index) {
+#   mask = index
+#   non_zero_counts = mask$sum(dim=2)
+#   max_non_zeros = non_zero_counts$max()$item()
+#   sorted_tensor = torch_sort(mask$float(), dim=2, descending=TRUE)[[2]]
+#   sorted_tensor = tensor$gather(2, sorted_tensor)[, 1:max_non_zeros]
+#
+#   return(sorted_tensor)
+# }
+#
+# pad_tensors_speed_up(value, indices, org_dim)
+# tensor = value$flatten(start_dim = 1, end_dim = 2)
+# remove_zeros_and_pad(tensor, indices) == pad_tensors_speed_up(value, indices, org_dim)
+#
+#
+# microbenchmark::microbenchmark(remove_zeros_and_pad(tensor, indices) , pad_tensors_speed_up(value, indices, org_dim))

@@ -12,6 +12,34 @@ sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
   return(N)
 }
 
+sample_poisson_gaussian <- function(lmbd) {
+  epsilon <- torch_randn_like(lmbd)
+  poisson_samples <- lmbd + epsilon * lmbd$sqrt()
+  poisson_samples <- poisson_samples$clamp(min = 0)$floor()
+  return(poisson_samples)
+}
+
+sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
+  # Ensure lambda is a tensor
+
+  # Generate Gaussian noise
+  epsilon <- torch_randn_like(lmbd)
+
+  # Compute Gaussian approximation
+  gaussian_samples <- lmbd + epsilon * lmbd$sqrt()
+
+  # Apply sigmoid function to smooth transition between small and large lambda
+  smooth_transition = torch_sigmoid((lmbd - 2) / temperature)
+
+  # Use Poisson approximation for small lambda and Gaussian approximation for large lambda
+  poisson_samples_small_lambda = torch_poisson(lmbd)
+  poisson_samples_large_lambda = gaussian_samples$clamp(min = 0)$floor()
+
+  # Interpolate between the two approaches
+  poisson_samples = smooth_transition * poisson_samples_large_lambda + (1 - smooth_transition) * poisson_samples_small_lambda
+
+  return(poisson_samples)
+}
 
 #' Sample from binomial with gradient
 #'
@@ -55,7 +83,18 @@ binomial_from_bernoulli = function(n, p) {
   return(binomial_samples)
 }
 
-binomial_from_gamma(torch_ones(c(2, 2), requires_grad = TRUE)+8, p = torch_ones(c(2,2))-0.5)
+
+
+sample_poisson_gumbel <- function(lmbd, num_samples=50, temperature = 1e-2) {
+  shape <- lmbd$shape
+  gumbels <- -torch::torch_log(-torch::torch_log(torch::torch_rand(c(num_samples, shape))))
+  logits <- lmbd$log()
+  poisson_samples <- (logits + gumbels) / temperature
+  poisson_samples <- poisson_samples$exp()$cumsum(dim=1L)
+  relaxed_indicator <- torch_sigmoid((1.0 - poisson_samples) / temperature)
+  N <- relaxed_indicator$sum(1)
+  return(N)
+}
 
 
 

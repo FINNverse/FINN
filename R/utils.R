@@ -16,3 +16,4 @@ np_runif = function(low, high, size) {
   N = prod(size)  # Calculate total number of values to generate
   array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
 }
+
