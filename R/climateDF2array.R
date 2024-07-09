@@ -19,6 +19,9 @@
 #' result <- climateDF2array(climate_dt, include_month = TRUE)
 #'
 #' @export
+library(Rcpp)
+sourceCpp("inst/rcpp_functions.cpp")
+
 climateDF2array <- function(climate_dt, include_month = FALSE) {
   # Retrieve dimensions from climate_dt
   Nsites <- length(unique(climate_dt$uniquePLOTid))
@@ -31,27 +34,48 @@ climateDF2array <- function(climate_dt, include_month = FALSE) {
 
   if (include_month) {
     Nmonths <- 12
-    # Initialize array with dimensions (sites, year, month, Nenv)
-    env_array <- array(NA, dim = c(Nsites, Nyears, Nmonths, Nenv))
   } else {
-    # Initialize array with dimensions (sites, year, Nenv)
-    env_array <- array(NA, dim = c(Nsites, Nyears, Nenv))
+    Nmonths <- 1
   }
 
-  # Populate the array
-  for (i in 1:nrow(climate_dt)) {
-    site <- which(site_ids == climate_dt$uniquePLOTid[i])
-    year <- which(year_ids == climate_dt$year[i])
-    env_values <- as.numeric(climate_dt[i, -(1:3)])  # Excluding year, month, and uniquePLOTid columns
+  # Start time for ETA calculation
+  start_time <- Sys.time()
+  total_rows <- nrow(climate_dt)
 
-    if (include_month) {
-      month <- climate_dt$month[i]
-      env_array[site, year, month, ] <- env_values
-    } else {
-      env_array[site, year, ] <- env_values
-    }
+  # Convert climate_dt to a matrix for Rcpp
+  climate_matrix <- as.matrix(climate_dt)
+
+  # Call the Rcpp function
+  env_array <- populate_array(climate_matrix, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv)
+
+  # Reshape the resulting vector into the appropriate array dimensions
+  if (include_month) {
+    env_array <- array(env_array, dim = c(Nsites, Nyears, Nmonths, Nenv))
+  } else {
+    env_array <- array(env_array, dim = c(Nsites, Nyears, Nenv))
   }
 
+  # Calculate elapsed time and estimate remaining time
+  elapsed_time <- Sys.time() - start_time
+  avg_time_per_iteration <- elapsed_time / total_rows
+  remaining_time <- avg_time_per_iteration * (total_rows - total_rows)
+  percentage_done <- (total_rows / total_rows) * 100
+
+  # Overwrite previous console output with estimated remaining time and percentage
+  cat(sprintf("\r%d of %d - %.2f%% - Elapsed time: %.2f secs, Estimated remaining time: %.2f secs",
+              total_rows, total_rows, percentage_done, as.numeric(elapsed_time, units = "secs"), as.numeric(remaining_time, units = "secs")))
+
+  cat("\n")
   return(env_array)
 }
 
+# # Example usage
+# climate_dt <- data.frame(
+#   year = rep(1960:1961, each = 2),
+#   month = rep(1:2, times = 2),
+#   uniquePLOTid = 1:4,
+#   tmp = runif(4, -10, 30),
+#   pre = runif(4, 0, 200)
+# )
+# result <- climateDF2array(climate_dt, include_month = TRUE)
+# print(result)
