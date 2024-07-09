@@ -4,8 +4,8 @@
 ## Date: Mon Jul  8 09:17:04 2024
 ## Author: Yannek Kaeber <y.kaeber@posteo.de>
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-
 library(data.table)
+source("R/climateDF2array.R")
 
 # Load data
 plot_dt <- fread("data/calibration-data/FIA/prepared/plot_dt.csv")
@@ -35,12 +35,10 @@ cohort_dt <-
     cohortID = uniqueTREEid,
     species = species,
     dbh = DBH,
-    trees = TPA_UNADJ
+    trees = round(TPA_UNADJ)
     )]
 
 climate_array <- climateDF2array(selected_climate_dt)
 dim(climate_array)
 climate_array2 <- climateDF2array(selected_climate_dt, include_month = T)
 dim(climate_array2)
-cohort_array <- FINN::obsDF2arrays(cohort_dt)
-dim(cohort_array)
