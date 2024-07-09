@@ -20,7 +20,7 @@ tiff_dir <- "data/calibration-data/CRUTS/tiffs"
 chunk_size <- 2000000
 
 # Specify the minimum and maximum year for extraction
-min_year <- 1980  # Set the minimum year
+min_year <- 1960  # Set the minimum year
 max_year <- 2023  # Set the maximum year
 
 
