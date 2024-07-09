@@ -35,6 +35,7 @@ cohort_dt <-
     cohortID = uniqueTREEid,
     species = species,
     dbh = DBH,
+    fresh_dead,
     trees = round(TPA_UNADJ)
     )]
 
