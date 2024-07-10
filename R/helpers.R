@@ -21,7 +21,7 @@ index_species = function(pred, species) {
 #' @param Results Results
 #'
 #' @export
-aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
+aggregate_results_old = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
 
   if(drop_rows) {
     # Drop rows for speed up - memory intensive
@@ -64,6 +64,22 @@ aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max 
   }
 
   return(Results)
+}
+
+
+
+aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
+
+  if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
+  old_shape = labels$shape
+  labels = labels$flatten(start_dim=1, end_dim = 2)
+
+  for( v in 1:length(samples)) {
+    da = samples[[v]]$flatten(start_dim=1, end_dim=2)
+    Results[[v]]$add_(torch::torch_zeros(da$shape[1], sp_max, dtype=da$dtype, device = da$device)$scatter_add(2, labels, da$expand(c(da$shape[1], -1)))$view(c(old_shape[1:2], sp_max))$sum(dim = 2))
+  }
+  return(Results)
+
 }
 
 #' group by mean

@@ -416,13 +416,9 @@ predict = function(
 
 
   dbh = torch_tensor(dbh, dtype=self$dtype, device=self$device)
-
   trees = torch_tensor(trees, dtype=self$dtype, device=self$device)
-
   species = torch_tensor(species, dtype=torch_int64(), device=self$device)
-
-  cohort_ids = torch_randint(0, 50000, size=species$shape)
-
+  cohort_ids = torch_randint(0, 50000, size=species$shape, device="cpu")
   light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
   g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
   m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
@@ -470,7 +466,7 @@ predict = function(
       }
     }
 
-      # Model
+    # Model
 
     torch::with_no_grad({
       trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
