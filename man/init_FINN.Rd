@@ -19,6 +19,8 @@ init_FINN(
   hidden_mort = self$hidden_mort,
   hidden_reg = self$hidden_reg,
   bias = self$bias,
+  patch_size_ha = self$patch_size_ha,
+  minLight = self$minLight,
   which = "all"
 )
 }

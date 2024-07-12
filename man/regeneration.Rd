@@ -4,12 +4,14 @@
 \alias{regeneration}
 \title{Calculate the regeneration of forest patches BA_stemsed on the input parameters.}
 \usage{
-regeneration(species, parReg, pred, light)
+regeneration(species, parReg, pred, light, patch_size_ha, debug = F)
 }
 \arguments{
 \item{species}{torch.Tensor species information.}
 
-\item{parReg}{torch.Tensor Regeneration parameters.}
+\item{parReg}{torch.Tensor Regeneration parameters. 0 <= parReg <= 1
+This parameter denotes the fraction of light needed for a species to regenerate.
+In general low values for high regeneration and high values for low regeneration.}
 
 \item{pred}{torch.Tensor Prediction values.}
 

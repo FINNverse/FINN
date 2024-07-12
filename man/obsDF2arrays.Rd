@@ -2,7 +2,7 @@
 % Please edit documentation in R/CohortMat.R
 \name{obsDF2arrays}
 \alias{obsDF2arrays}
-\title{Transform Observation Data Table to Arrays}
+\title{Convert observation data frame to arrays}
 \usage{
 obsDF2arrays(obs_dt)
 }
@@ -10,13 +10,12 @@ obsDF2arrays(obs_dt)
 \item{obs_dt}{data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.}
 }
 \value{
-A list containing three arrays: species, dbh, and trees.
+A list of arrays for species, dbh, and trees
 }
 \description{
-This function transforms an observation data table into three arrays: species, dbh, and trees.
+Convert observation data frame to arrays
 }
 \examples{
 obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
 result <- obsDF2arrays(obs_dt)
-
 }
