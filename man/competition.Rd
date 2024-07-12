@@ -11,7 +11,9 @@ competition(
   parHeight,
   h = NULL,
   minLight = 50,
-  path_size_ha = 0.1
+  patch_size_ha,
+  ba = NULL,
+  cohortHeights = NULL
 )
 }
 \arguments{

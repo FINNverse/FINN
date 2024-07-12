@@ -1,42 +1,26 @@
 library(R6)
-# library(data.frame)
 
-#' Transform Observation Data Table to Arrays
-#'
-#' This function transforms an observation data table into three arrays: species, dbh, and trees.
+#' @useDynLib FINN, .registration = TRUE
+#' @importFrom Rcpp evalCpp
+NULL
+
+#' Convert observation data frame to arrays
 #'
 #' @param obs_dt data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
-#'
-#' @return A list containing three arrays: species, dbh, and trees.
-#'
+#' @return A list of arrays for species, dbh, and trees
 #' @examples
 #' obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
 #' result <- obsDF2arrays(obs_dt)
-#'
 #' @export
-obsDF2arrays = function(obs_dt) {
-  # Retrieve dimensions from obs_dt
-  Nsites <- length(unique(obs_dt$siteID))
-  Npatches <- length(unique(obs_dt$patchID))
-  maxNcohorts <- max(obs_dt$cohortID)
+obsDF2arrays <- function(obs_dt) {
+  result <- obsDF2arraysCpp(obs_dt)
 
-  # Initialize arrays
-  species_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
-  dbh_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
-  trees_array <- array(NA, dim = c(Nsites, Npatches, maxNcohorts))
+  # Reshape vectors to arrays
+  dim <- result$dim
+  species_array <- array(result$species, dim = dim)
+  dbh_array <- array(result$dbh, dim = dim)
+  trees_array <- array(result$trees, dim = dim)
 
-  # Populate arrays
-  for (i in 1:nrow(obs_dt)) {
-    site <- obs_dt$siteID[i]
-    patch <- obs_dt$patchID[i]
-    cohort <- obs_dt$cohortID[i]
-
-    species_array[site, patch, cohort] <- obs_dt$species[i]
-    dbh_array[site, patch, cohort] <- obs_dt$dbh[i]
-    trees_array[site, patch, cohort] <- obs_dt$trees[i]
-  }
-
-  # Return a list of the arrays
   return(list(
     species = species_array,
     dbh = dbh_array,

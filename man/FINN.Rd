@@ -87,6 +87,8 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
   hidden_mort = self$hidden_mort,
   hidden_reg = self$hidden_reg,
   bias = self$bias,
+  patch_size_ha = self$patch_size_ha,
+  minLight = self$minLight,
   which = "all"
 )}\if{html}{\out{</div>}}
 }

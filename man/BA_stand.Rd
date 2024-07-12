@@ -4,7 +4,7 @@
 \alias{BA_stand}
 \title{BA_stemsal aera multiplied with number of species}
 \usage{
-BA_stand(dbh, trees, patch_size_ha = 0.1)
+BA_stand(dbh, trees, patch_size_ha)
 }
 \arguments{
 \item{dbh}{dbh}

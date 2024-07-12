@@ -1,3 +1,7 @@
+#' @useDynLib FINN, .registration = TRUE
+#' @importFrom Rcpp evalCpp
+NULL
+
 #' Transform Climate Data Table to Arrays
 #'
 #' This function transforms a climate data table into an array with dimensions for sites, year, and Nenv.
@@ -19,8 +23,6 @@
 #' result <- climateDF2array(climate_dt, include_month = TRUE)
 #'
 #' @export
-library(Rcpp)
-sourceCpp("inst/rcpp_functions.cpp")
 
 climateDF2array <- function(climate_dt, include_month = FALSE) {
   # Retrieve dimensions from climate_dt
@@ -46,7 +48,7 @@ climateDF2array <- function(climate_dt, include_month = FALSE) {
   climate_matrix <- as.matrix(climate_dt)
 
   # Call the Rcpp function
-  env_array <- populate_array(climate_matrix, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv)
+  env_array <- climateDF2arrayCpp(climate_matrix, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv)
 
   # Reshape the resulting vector into the appropriate array dimensions
   if (include_month) {
