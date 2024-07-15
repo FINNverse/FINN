@@ -98,6 +98,8 @@ selected_climate_dt <- selected_climate_dt[
     year <= max(cohort_dt$year)
 ]
 
+selected_climate_dt <- merge(selected_climate_dt, unique(cohort_dt[,.(uniquePLOTid, siteID)]), by = "uniquePLOTid")
+
 # Add running month column
 selected_climate_dt[, year2 := as.integer(factor(year, ordered = TRUE))]
 selected_climate_dt[, running_month := (12 * year2 - 12) + month]
@@ -109,7 +111,7 @@ max(cohort_dt$time_of_death_months)
 # Convert climate data to array
 climate_array <- climateDF2array(
   climate_dt = selected_climate_dt[, .(
-    uniquePLOTid = as.integer(factor(uniquePLOTid)),
+    siteID,
     year = running_month,
     pre = round(pre, 2),
     tmp = round(tmp),

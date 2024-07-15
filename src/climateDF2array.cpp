@@ -17,7 +17,7 @@ NumericVector climateDF2arrayCpp(NumericMatrix climate_dt, IntegerVector site_id
     int year = -1;
 
     for (int j = 0; j < site_ids.size(); ++j) {
-      if (site_ids[j] == climate_dt(i, 1)) { // uniquePLOTid is the 2nd column (index 1)
+      if (site_ids[j] == climate_dt(i, 1)) { // siteID is the 2nd column (index 1)
         site = j;
         break;
       }
