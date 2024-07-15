@@ -61,30 +61,39 @@ mort_calib_data[, yearDead := min(year[y == 1], na.rm = TRUE), by = uniqueTREEid
 mort_calib_data2 <- mort_calib_data[year <= yearDead]
 mort_calib_data2[, time_of_death_years := yearDead - 1959]
 mort_calib_data2[, time_of_death_months := time_of_death_years * 12]
+mort_calib_data2[, DBH := DBH_before,]
 
 # Calculate patch area in hectares
 acre_to_0.067haPatch <- (1 / representated_area_ha) * sampled_area_ha
 
 # Create cohort data table
-cohort_dt <- mort_calib_data2[DBH >= 12.7, .(
+cohort_dt <- copy(mort_calib_data2[(DBH >= 12.7 & y == 0) | y == 1, .(
   uniquePLOTid,
   siteID = as.integer(as.factor(uniquePLOTid)),
   patchID = 1,
   uniqueTREEid,
   species = species,
+  species = as.integer(factor(species)),
   dbh = DBH,
   y,
-  trees = round(trees_acre * acre_to_0.067haPatch),
+  trees = 1,
   time_of_death_years,
   time_of_death_months,
+  height = actualHeight,
   year
-)]
-cohort_dt[, cohortID := as.integer(factor(uniqueTREEid, ordered = TRUE)), by = .(siteID)]
+)])
+
+cohort_dt[, cohortID := 1:.N, by = .(siteID)]
 
 # Convert cohort data to arrays
-cohort_array <- obsDF2arrays(cohort_dt, additional_cols = c("time_of_death_months", "y"))
-dim(cohort_array$trees)
+cohort_array <- obsDF2arrays(cohort_dt, additional_cols = c("time_of_death_months", "y", "height"))
+sum(!is.na(cohort_array$trees),na.rm = T)
+sum(!is.na(cohort_array$species),na.rm = T)
+sum(!is.na(cohort_array$dbh),na.rm = T)
+sum(!is.na(cohort_array$time_of_death_months),na.rm = T)
+sum(!is.na(cohort_array$height),na.rm = T)
 dim(cohort_array$species)
+dim(cohort_array$height)
 dim(cohort_array$dbh)
 dim(cohort_array$time_of_death_months)
 dim(cohort_array$y)
@@ -120,7 +129,6 @@ climate_array <- climateDF2array(
   include_month = F,
   env_vars = c("pre", "tmp")
 )
-
 
 # This is the climate array
 dim(climate_array)
