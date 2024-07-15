@@ -82,11 +82,12 @@ cohort_dt <- mort_calib_data2[DBH >= 12.7, .(
 cohort_dt[, cohortID := as.integer(factor(uniqueTREEid, ordered = TRUE)), by = .(siteID)]
 
 # Convert cohort data to arrays
-cohort_array <- obsDF2arrays(cohort_dt, additional_cols = "time_of_death_months")
+cohort_array <- obsDF2arrays(cohort_dt, additional_cols = c("time_of_death_months", "y"))
 dim(cohort_array$trees)
 dim(cohort_array$species)
 dim(cohort_array$dbh)
 dim(cohort_array$time_of_death_months)
+dim(cohort_array$y)
 
 # Calibrate height parameters
 heightPars_dt <- calibrate_height(mort_calib_data)
