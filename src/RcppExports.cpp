@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // climateDF2arrayCpp
-NumericVector climateDF2arrayCpp(NumericMatrix climate_dt, IntegerVector site_ids, IntegerVector year_ids, bool include_month, int Nsites, int Nyears, int Nmonths, int Nenv);
-RcppExport SEXP _FINN_climateDF2arrayCpp(SEXP climate_dtSEXP, SEXP site_idsSEXP, SEXP year_idsSEXP, SEXP include_monthSEXP, SEXP NsitesSEXP, SEXP NyearsSEXP, SEXP NmonthsSEXP, SEXP NenvSEXP) {
+NumericVector climateDF2arrayCpp(NumericMatrix climate_dt, IntegerVector site_ids, IntegerVector year_ids, bool include_month, int Nsites, int Nyears, int Nmonths, int Nenv, CharacterVector env_vars);
+RcppExport SEXP _FINN_climateDF2arrayCpp(SEXP climate_dtSEXP, SEXP site_idsSEXP, SEXP year_idsSEXP, SEXP include_monthSEXP, SEXP NsitesSEXP, SEXP NyearsSEXP, SEXP NmonthsSEXP, SEXP NenvSEXP, SEXP env_varsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,25 +24,27 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type Nyears(NyearsSEXP);
     Rcpp::traits::input_parameter< int >::type Nmonths(NmonthsSEXP);
     Rcpp::traits::input_parameter< int >::type Nenv(NenvSEXP);
-    rcpp_result_gen = Rcpp::wrap(climateDF2arrayCpp(climate_dt, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv));
+    Rcpp::traits::input_parameter< CharacterVector >::type env_vars(env_varsSEXP);
+    rcpp_result_gen = Rcpp::wrap(climateDF2arrayCpp(climate_dt, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv, env_vars));
     return rcpp_result_gen;
 END_RCPP
 }
 // obsDF2arraysCpp
-List obsDF2arraysCpp(DataFrame obs_dt);
-RcppExport SEXP _FINN_obsDF2arraysCpp(SEXP obs_dtSEXP) {
+List obsDF2arraysCpp(DataFrame obs_dt, CharacterVector extra_cols);
+RcppExport SEXP _FINN_obsDF2arraysCpp(SEXP obs_dtSEXP, SEXP extra_colsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type obs_dt(obs_dtSEXP);
-    rcpp_result_gen = Rcpp::wrap(obsDF2arraysCpp(obs_dt));
+    Rcpp::traits::input_parameter< CharacterVector >::type extra_cols(extra_colsSEXP);
+    rcpp_result_gen = Rcpp::wrap(obsDF2arraysCpp(obs_dt, extra_cols));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_FINN_climateDF2arrayCpp", (DL_FUNC) &_FINN_climateDF2arrayCpp, 8},
-    {"_FINN_obsDF2arraysCpp", (DL_FUNC) &_FINN_obsDF2arraysCpp, 1},
+    {"_FINN_climateDF2arrayCpp", (DL_FUNC) &_FINN_climateDF2arrayCpp, 9},
+    {"_FINN_obsDF2arraysCpp", (DL_FUNC) &_FINN_obsDF2arraysCpp, 2},
     {NULL, NULL, 0}
 };
 

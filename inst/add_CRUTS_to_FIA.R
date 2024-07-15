@@ -89,4 +89,4 @@ plot_cruts_climate_dt <- merge(
   pre[,.(uniquePLOTid,year,month,pre = value)],
   by = c("year","month","uniquePLOTid"))
 
-fwrite(plot_cruts_climate_dt, "data/calibration-data/FIA/prepared/plot_cruts_climate_dt.csv")
+fwrite(plot_cruts_climate_dt, "data/calibration-data/FIA/preparedV3/plot_cruts_climate_dt.csv")

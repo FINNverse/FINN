@@ -7,13 +7,14 @@ NULL
 #' Convert observation data frame to arrays
 #'
 #' @param obs_dt data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
-#' @return A list of arrays for species, dbh, and trees
+#' @param additional_cols character vector Optional. Additional columns to be included as arrays.
+#' @return A list of arrays for species, dbh, trees, and additional columns.
 #' @examples
-#' obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150))
-#' result <- obsDF2arrays(obs_dt)
+#' obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c("A", "B", "A"), dbh = c(10, 20, 30), trees = c(100, 200, 150), height = c(5, 10, 15))
+#' result <- obsDF2arrays(obs_dt, additional_cols = c("height"))
 #' @export
-obsDF2arrays <- function(obs_dt) {
-  result <- obsDF2arraysCpp(obs_dt)
+obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
+  result <- obsDF2arraysCpp(obs_dt, additional_cols)
 
   # Reshape vectors to arrays
   dim <- result$dim
@@ -21,12 +22,20 @@ obsDF2arrays <- function(obs_dt) {
   dbh_array <- array(result$dbh, dim = dim)
   trees_array <- array(result$trees, dim = dim)
 
-  return(list(
+  # Handle additional arrays
+  additional_arrays <- lapply(additional_cols, function(col) {
+    array(result[[col]], dim = dim)
+  })
+  names(additional_arrays) <- additional_cols
+
+  return(c(list(
     species = species_array,
     dbh = dbh_array,
     trees = trees_array
-  ))
+  ), additional_arrays))
 }
+
+
 
 #' Transform Arrays to Observation Data Table
 #'

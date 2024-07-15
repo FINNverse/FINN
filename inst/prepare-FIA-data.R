@@ -143,6 +143,8 @@ mort_calib_data <- selected_trees_dt[STATUSCD == 1 | STATUSCD_before == 1,.(
   DBHchange,
   DBHchange_before,
   height = ft2m(HT),
+  actualHeight = ft2m(ACTUALHT),
+  HTCD = HTCD,
   BA_total = BA,
   N_total = N,
   y = as.integer(fresh_dead)
@@ -166,7 +168,7 @@ cohort_mort_calib_data_dt <-
                     DBHclass = as.numeric(as.character(cut(DBH, breaks = DBHclasses, labels = DBHclassesLabels)))
                     )]
 
-outputDir <- "data/calibration-data/FIA/preparedV3"
+outputDir <- "data/calibration-data/FIA/preparedV3/"
 if(!dir.exists(outputDir)) {
   dir.create(outputDir)
 }
