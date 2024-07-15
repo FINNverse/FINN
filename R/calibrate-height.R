@@ -37,7 +37,7 @@ optimHeight <- function(par, data) {
   predicted_height <- FINN::height(data$DBH, par)
 
   # Calculate the residuals
-  residuals <- data$ACTUALHTm - predicted_height
+  residuals <- data$actualHeight - predicted_height
 
   # Calculate the sum of squared residuals
   sum_sq_residuals <- sum(residuals^2, na.rm = T)
@@ -79,7 +79,7 @@ calibrate_height <- function(treevars_dt){
       CI_lower = result$ci_results$CI_lower,
       CI_upper = result$ci_results$CI_upper,
       status = result$error,
-      N = nrow(data[!is.na(ACTUALHTm)])
+      N = nrow(data[!is.na(actualHeight)])
     ))
 
     # Calculate elapsed time and estimate remaining time

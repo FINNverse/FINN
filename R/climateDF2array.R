@@ -7,8 +7,9 @@ NULL
 #' This function transforms a climate data table into an array with dimensions for sites, year, and Nenv.
 #' Optionally, it can create an array with dimensions for sites, year, month, and Nenv.
 #'
-#' @param climate_dt data.frame The climate data table containing year, month, uniquePLOTid, and environmental variables (e.g., tmp, pre) columns.
+#' @param climate_dt data.frame The climate data table containing year, month (optional), uniquePLOTid, and environmental variables (e.g., tmp, pre) columns.
 #' @param include_month logical Whether to include the month dimension in the output array. Defaults to FALSE.
+#' @param env_vars character vector A vector of column names representing environmental variables in the climate data table.
 #'
 #' @return An array with dimensions for sites, year, and Nenv (or optionally, sites, year, month, and Nenv).
 #'
@@ -20,15 +21,26 @@ NULL
 #'   tmp = runif(4, -10, 30),
 #'   pre = runif(4, 0, 200)
 #' )
-#' result <- climateDF2array(climate_dt, include_month = TRUE)
+#' result <- climateDF2array(climate_dt, include_month = TRUE, env_vars = c("tmp", "pre"))
 #'
 #' @export
+climateDF2array <- function(climate_dt, include_month = FALSE, env_vars) {
+  # Ensure correct order in climate_dt
+  climate_dt <- data.frame(climate_dt)
+  if (include_month) {
+    selected_cols <- c("year", "month", "uniquePLOTid",  env_vars)
+    climate_dt <- climate_dt[, selected_cols]
+    climate_dt <- climate_dt[order(climate_dt$uniquePLOTid, climate_dt$year, climate_dt$month), ]
+  } else {
+    selected_cols <- c("year", "uniquePLOTid", env_vars)
+    climate_dt <- climate_dt[, selected_cols]
+    climate_dt <- climate_dt[order(climate_dt$uniquePLOTid, climate_dt$year), ]
+  }
 
-climateDF2array <- function(climate_dt, include_month = FALSE) {
   # Retrieve dimensions from climate_dt
   Nsites <- length(unique(climate_dt$uniquePLOTid))
   Nyears <- length(unique(climate_dt$year))
-  Nenv <- ncol(climate_dt) - 3  # Subtracting columns for year, month, and uniquePLOTid
+  Nenv <- length(env_vars)
 
   # Get unique ids for dimensions
   site_ids <- unique(climate_dt$uniquePLOTid)
@@ -40,15 +52,11 @@ climateDF2array <- function(climate_dt, include_month = FALSE) {
     Nmonths <- 1
   }
 
-  # Start time for ETA calculation
-  start_time <- Sys.time()
-  total_rows <- nrow(climate_dt)
-
   # Convert climate_dt to a matrix for Rcpp
   climate_matrix <- as.matrix(climate_dt)
 
   # Call the Rcpp function
-  env_array <- climateDF2arrayCpp(climate_matrix, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv)
+  env_array <- climateDF2arrayCpp(climate_matrix, as.integer(site_ids), as.integer(year_ids), include_month, Nsites, Nyears, Nmonths, Nenv, env_vars)
 
   # Reshape the resulting vector into the appropriate array dimensions
   if (include_month) {
@@ -57,21 +65,10 @@ climateDF2array <- function(climate_dt, include_month = FALSE) {
     env_array <- array(env_array, dim = c(Nsites, Nyears, Nenv))
   }
 
-  # Calculate elapsed time and estimate remaining time
-  elapsed_time <- Sys.time() - start_time
-  avg_time_per_iteration <- elapsed_time / total_rows
-  remaining_time <- avg_time_per_iteration * (total_rows - total_rows)
-  percentage_done <- (total_rows / total_rows) * 100
-
-  # Overwrite previous console output with estimated remaining time and percentage
-  cat(sprintf("\r%d of %d - %.2f%% - Elapsed time: %.2f secs, Estimated remaining time: %.2f secs",
-              total_rows, total_rows, percentage_done, as.numeric(elapsed_time, units = "secs"), as.numeric(remaining_time, units = "secs")))
-
-  cat("\n")
   return(env_array)
 }
 
-# # Example usage
+# Example usage
 # climate_dt <- data.frame(
 #   year = rep(1960:1961, each = 2),
 #   month = rep(1:2, times = 2),
@@ -79,5 +76,5 @@ climateDF2array <- function(climate_dt, include_month = FALSE) {
 #   tmp = runif(4, -10, 30),
 #   pre = runif(4, 0, 200)
 # )
-# result <- climateDF2array(climate_dt, include_month = TRUE)
+# result <- climateDF2array(climate_dt, include_month = TRUE, env_vars = c("tmp", "pre"))
 # print(result)
