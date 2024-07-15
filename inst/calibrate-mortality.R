@@ -61,20 +61,21 @@ mort_calib_data[, yearDead := min(year[y == 1], na.rm = TRUE), by = uniqueTREEid
 mort_calib_data2 <- mort_calib_data[year <= yearDead]
 mort_calib_data2[, time_of_death_years := yearDead - 1959]
 mort_calib_data2[, time_of_death_months := time_of_death_years * 12]
-mort_calib_data2[, DBH := DBH_before,]
+# mort_calib_data2[, DBH := DBH_before,]
 
 # Calculate patch area in hectares
 acre_to_0.067haPatch <- (1 / representated_area_ha) * sampled_area_ha
 
 # Create cohort data table
-cohort_dt <- copy(mort_calib_data2[(DBH >= 12.7 & y == 0) | y == 1, .(
+cohort_dt <- copy(mort_calib_data2[!is.na(DBH_before) & (DBH_before >= 12.7 & y == 0) | y == 1, .(
   uniquePLOTid,
-  siteID = as.integer(as.factor(uniquePLOTid)),
+  # siteID = as.integer(as.factor(uniquePLOTid)),
+  siteID = as.integer(as.factor(paste0(uniquePLOTid,year))),
   patchID = 1,
   uniqueTREEid,
   species = species,
   species = as.integer(factor(species)),
-  dbh = DBH,
+  dbh = DBH_before,
   y,
   trees = 1,
   time_of_death_years,
@@ -95,6 +96,8 @@ sum(!is.na(cohort_array$height),na.rm = T)
 dim(cohort_array$species)
 dim(cohort_array$height)
 dim(cohort_array$dbh)
+hist(cohort_array$dbh)
+hist(cohort_array$dbh)
 dim(cohort_array$time_of_death_months)
 dim(cohort_array$y)
 
@@ -107,24 +110,23 @@ selected_climate_dt <- selected_climate_dt[
     year <= max(cohort_dt$year)
 ]
 
-selected_climate_dt <- merge(selected_climate_dt, unique(cohort_dt[,.(uniquePLOTid, siteID)]), by = "uniquePLOTid")
+selected_climate_dt2 <- merge(selected_climate_dt, unique(cohort_dt[,.(uniquePLOTid, siteID)]), by = "uniquePLOTid", allow.cartesian=TRUE)
 
 # Add running month column
-selected_climate_dt[, year2 := as.integer(factor(year, ordered = TRUE))]
-selected_climate_dt[, running_month := (12 * year2 - 12) + month]
+selected_climate_dt2[, year2 := as.integer(factor(year, ordered = TRUE))]
+selected_climate_dt2[, running_month := (12 * year2 - 12) + month]
 
 # Check max running month
-max(selected_climate_dt$running_month)
+max(selected_climate_dt2$running_month)
 max(cohort_dt$time_of_death_months)
 
 # Convert climate data to array
 climate_array <- climateDF2array(
-  climate_dt = selected_climate_dt[, .(
+  climate_dt = selected_climate_dt2[, .(
     siteID,
     year = running_month,
-    pre = round(pre, 2),
-    tmp = round(tmp),
-    2
+    pre = round(pre, 1),
+    tmp = round(tmp, 1)
   )],
   include_month = F,
   env_vars = c("pre", "tmp")
