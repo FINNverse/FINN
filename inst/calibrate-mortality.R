@@ -121,8 +121,7 @@ climate_array <- climateDF2array(
 
 
 # This is the climate array
-dim(climate_array$pre)
-dim(climate_array$tmp)
+dim(climate_array)
 
 # Those are the cohort arrays
 dim(cohort_array$species)
