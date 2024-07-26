@@ -39,7 +39,10 @@ plot_dt <- merge(plot_dt, state_dt[, .(STATECD = FIPS_Code, State_Name)], by = "
 mort_calib_data <- merge(mort_calib_data, unique(plot_dt[, .(uniquePLOTid, State_Name)]), by = "uniquePLOTid")
 
 # Select specific states
+# select the states based on the state code
+# the selected states are Oregon, Florida, California, Colorado, and Maine
 selected_plot_dt <- plot_dt[STATECD %in% c(41, 12, 06, 08, 23)]
+
 
 # Filter plots based on criteria
 selected_plot_dt <- selected_plot_dt[
@@ -58,7 +61,10 @@ mort_calib_data <- mort_calib_data[uniquePLOTid %in% selected_plot_dt$uniquePLOT
 mort_calib_data[, yearDead := min(year[y == 1], na.rm = TRUE), by = uniqueTREEid]
 
 # Filter data based on death year
-mort_calib_data2 <- mort_calib_data[year <= yearDead]
+mort_calib_data2 <- mort_calib_data[year <= yearDead | y == 0]
+table(mort_calib_data2$y)/sum(table(mort_calib_data2$y))
+
+
 mort_calib_data2[, time_of_death_years := yearDead - 1959]
 mort_calib_data2[, time_of_death_months := time_of_death_years * 12]
 # mort_calib_data2[, DBH := DBH_before,]
@@ -67,13 +73,13 @@ mort_calib_data2[, time_of_death_months := time_of_death_years * 12]
 acre_to_0.067haPatch <- (1 / representated_area_ha) * sampled_area_ha
 
 # Create cohort data table
-cohort_dt <- copy(mort_calib_data2[!is.na(DBH_before) & (DBH_before >= 12.7 & y == 0) | y == 1, .(
+cohort_dt <- copy(mort_calib_data2[!is.na(DBH_before) & (DBH_before >= 12.7), .(
   uniquePLOTid,
   # siteID = as.integer(as.factor(uniquePLOTid)),
   siteID = as.integer(as.factor(paste0(uniquePLOTid,year))),
   patchID = 1,
   uniqueTREEid,
-  species = species,
+  SPCD = species,
   species = as.integer(factor(species)),
   dbh = DBH_before,
   y,
@@ -83,6 +89,15 @@ cohort_dt <- copy(mort_calib_data2[!is.na(DBH_before) & (DBH_before >= 12.7 & y 
   height = actualHeight,
   year
 )])
+
+table(cohort_dt$y)/sum(table(cohort_dt$y))
+
+cohort_dt <- merge(cohort_dt, species_dt[,.(SPCD, SCIENTIFIC_NAME)], by = "SPCD", all.x = TRUE)
+View(cohort_dt[, .(
+  N = .N,
+  "0" = sum(y == 0),
+  "1" = sum(y == 1)
+  ), by = .(SPCD, species, SCIENTIFIC_NAME)][order(-N)])
 
 cohort_dt[, cohortID := 1:.N, by = .(siteID)]
 
