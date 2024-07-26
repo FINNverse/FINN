@@ -87,6 +87,7 @@ cohort_dt <- copy(mort_calib_data2[!is.na(DBH_before) & (DBH_before >= 12.7), .(
   time_of_death_years,
   time_of_death_months,
   height = actualHeight,
+  ba = BA_total,
   year
 )])
 
@@ -102,7 +103,7 @@ View(cohort_dt[, .(
 cohort_dt[, cohortID := 1:.N, by = .(siteID)]
 
 # Convert cohort data to arrays
-cohort_array <- obsDF2arrays(cohort_dt, additional_cols = c("time_of_death_months", "y", "height"))
+cohort_array <- obsDF2arrays(cohort_dt, additional_cols = c("time_of_death_months", "y", "height", "ba"))
 sum(!is.na(cohort_array$trees),na.rm = T)
 sum(!is.na(cohort_array$species),na.rm = T)
 sum(!is.na(cohort_array$dbh),na.rm = T)
