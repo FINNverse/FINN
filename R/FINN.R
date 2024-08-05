@@ -75,13 +75,24 @@ height = function(dbh, parHeight) {
 competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., patch_size_ha, ba = NULL, cohortHeights = NULL){
 
   # ba = (BA_stem(dbh)*trees)/0.1
+  # if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)
+  # if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
+  # if(is.null(h)) {
+  #   h = cohortHeights
+  #   ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
+  # }else{
+  #   ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
+  # }
+  # light = 1.-ba_height/minLight
+  # light = torch_clamp(light, min = 0)
+  # return(light)
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)
   if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
-    ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2) )$sum(-2) # AUFPASSEN
+    ba_height = (ba$unsqueeze_(4)$multiply(((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2)$sigmoid_() ))$sum(-2) # AUFPASSEN
   }else{
-    ba_height = (ba$unsqueeze(4)*torch_sigmoid((cohortHeights - 0.1)/1e-2))$sum(-2)
+    ba_height = (ba$unsqueeze_(4)$multiply_(((cohortHeights - 0.1)/1e-2)$sigmoid_() ))$sum(-2)
   }
   light = 1.-ba_height/minLight
   light = torch_clamp(light, min = 0)
@@ -104,7 +115,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
   # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
   shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
   # environment = 1-2*(torch_sigmoid(index_species(pred, species))-0.5)
-  environment = torch_sigmoid(index_species(pred, species))
+  environment = index_species(pred, species)
   gPSize = 0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3)
   gPSize = 2*(torch_sigmoid(gPSize)-0.5)
   # predM = torch_clamp(((environment+shade+gPSize)/3)*torch_greater(1-gPSize,0)*torch_greater(1-shade,0.01)*torch_greater(1-environment,0.01), min = 0.0001, max = 0.9999)
@@ -210,6 +221,7 @@ init_FINN = function(
     bias = self$bias,
     patch_size_ha = self$patch_size_ha,
     minLight = self$minLight,
+    disturbance = self$disturbance,
     which = "all"
     ){
 
@@ -440,10 +452,19 @@ predict = function(
 
   # Run over timesteps
   for(i in 1:time){
+    # # cat("Time: ", i, "\n")
+    light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
+    g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+    m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+    r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+
 
     # aggregate results
     if(i > record_time){
       if(dbh$shape[3] != 0){
+
+        # cat("First section \n")
+
         if(response == "dbh"){
           BA_stem = dbh
         }else if(response == "BA_stem"){
@@ -461,7 +482,7 @@ predict = function(
         tmp_res = aggregate_results(labels, samples, Results_tmp)
         # BA and number of trees Result[[1]] and Result[[2]]
         for(v in 1:2){
-          Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v]]/patches
+          Result[[v]][,i,]$add_(tmp_res[[v]]/patches)
         }
       }
     }
@@ -473,6 +494,7 @@ predict = function(
     })
 
     if(dbh$shape[3] > 0.5){
+      # cat("Second section  A\n")
       light = competition(
         dbh = dbh,
         species = species,
@@ -484,7 +506,6 @@ predict = function(
         ba = NULL,
         cohortHeights = NULL
         )
-
       g = growth(
         dbh = dbh,
         species = species,
@@ -495,7 +516,7 @@ predict = function(
       )
 
       dbh = dbh + g
-
+      # cat("Second section  B\n")
       light = competition(
         dbh = dbh,
         species = species,
@@ -522,7 +543,7 @@ predict = function(
     torch::with_no_grad({
       trees_clone =  trees$clone() #torch.zeros_like(trees).to(self.device)+0
     })
-
+    # cat("Second section  C\n")
     AL_reg = competition( # must have dimension = n species in last dim
       dbh = dbh,
       species = species,
@@ -538,12 +559,16 @@ predict = function(
     r = regeneration(species = species, parReg = self$parReg, pred = pred_reg[,i,], light = AL_reg, patch_size_ha = self$patch_size_ha)
 
     # New recruits
+    # cat("Second section  D\n")
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
     new_trees = r
     new_species = torch_arange(1, sp, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
     new_cohort_id = torch_randint(0, 50000, size = list(sp))$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
     if(dbh$shape[3] != 0){
+
+      # cat("Third section \n")
+
       labels = species
 
       samples = vector("list", 3)
@@ -558,7 +583,7 @@ predict = function(
       Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
       tmp_res = aggregate_results(labels, samples, Results_tmp)
       for(v in c(3,4,5)){
-        Result[[v]][,i,] = Result[[v]][,i,] + tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches # TODO
+        Result[[v]][,i,]$add_(tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches) # TODO
       }
 
       # cohort ids
@@ -566,7 +591,8 @@ predict = function(
 
       # reg extra
       tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp )))
-      Result[[6]][,i,] = Result[[6]][,i,] + tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches
+      Result[[6]][,i,]$add_(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches)
+
 
       if(debug) {
         Raw_results = c(Raw_results,list(list(list(torch::as_array(species$cpu())),
@@ -577,6 +603,13 @@ predict = function(
                                          list(torch::as_array(r$cpu())))))
       }
 
+      rm(light)
+      rm(AL_reg)
+      rm(m)
+      rm(g)
+      rm(r)
+
+
     }
 
     # Combine
@@ -584,9 +617,13 @@ predict = function(
     trees = torch::torch_cat(list(trees, new_trees), 3)
     species = torch::torch_cat(list(species, new_species), 3)
     cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
+    rm(new_dbh,new_trees,new_species,new_cohort_id )
 
     # Pad tensors, expensive
-    if(i %% 10 == 0){
+    if(i %% 1 == 0){
+
+      # cat("Fourth section \n")
+
       torch::with_no_grad({
         mask = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
         org_dim = species$shape[1:2]
@@ -825,6 +862,7 @@ FINN = R6::R6Class(
     bias = FALSE,
     patch_size_ha = 0.1,
     minLight = 50,
+    disturbance = 0.0,
     #initialisation function
     initialize = init_FINN,
     build_NN = build_NN,

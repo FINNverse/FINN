@@ -1,24 +1,53 @@
 library(FINN)
-initCohort = CohortMat$new(dims = c(100, 30, 10),
-                           dbh = array(1, dim = c(100, 30, 10)),
-                           trees = array(1, dim = c(100, 30, 10)),
-                           sp = 4)
+#torch::torch_set_num_interop_threads(1L)
+#torch::torch_set_num_threads(1L)
+sp = 5L
+patches = 20L
+sites = 200L
+initCohort = CohortMat$new(dims = c(sites, patches, 10),
+                           dbh = array(1, dim = c(sites, patches, 10)),
+                           trees = array(1, dim = c(sites, patches, 10)),
+                           sp = sp)
 
-sp = 4
+
 finn = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                 parGrowth = matrix(c(1, 20), sp, 2, byrow = TRUE),
                 parMort = matrix(c(0.25, 100), sp, 2, byrow = TRUE),
-                parReg = c(0.1,0.2,0.3,0.4), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
-                parHeight = c(0.3, 0.5, 0.7, 0.9), # plausible range is 0 to 1. default should be between 0.3 and 0.7
+                parReg = runif(sp), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
+                parHeight = runif(sp, 0.3, 0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
                 parGrowthEnv = list(matrix(0, sp, 2)),
                 parMortEnv = list(matrix(c(0, 0), sp, 2)),
-                parRegEnv = list(matrix(0, sp, 2)), patch_size_ha = 0.1)
+                parRegEnv = list(matrix(0, sp, 2)),
+                patch_size_ha = 0.1)
 # env = torch::torch_randn(size = c(100, 200, 2))
-env = torch::torch_zeros(size = c(100, 200, 2))
+env = torch::torch_zeros(size = c(sites, 50L, 2))
 self = finn
-pred = finn$predict(response = "BA*T", env = env, patches = 30)
+
+system.time({
+
+pred = FINN:::predict(dbh = initCohort$dbh,
+                    trees = initCohort$trees,
+                    species = initCohort$species,
+                    response = "BA*T", env = env, patches = patches, debug = FALSE)
+
+})
+profvis::profvis({
+pred = finn$predict(dbh = initCohort$dbh,
+                    trees = initCohort$trees,
+                    species = initCohort$species,
+                    response = "BA*T", env = env, patches = patches, debug = FALSE)
+})
+
+system.time({
+pred = finn$predict(dbh = initCohort$dbh,
+                    trees = initCohort$trees,
+                    species = initCohort$species,
+                    response = "BA*T", env = env, patches = patches, debug = FALSE)
+
+})
+
 par(mfrow = c(1,1))
-plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l", col = "blue")
+plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l", col = "blue", ylim = c(0, 50))
 lines(torch::as_array(pred[[1]]$data())[1,,2], type = "l", col = "green")
 lines(torch::as_array(pred[[1]]$data())[1,,3], type = "l", col = "yellow")
 lines(torch::as_array(pred[[1]]$data())[1,,4], type = "l", col = "red")
@@ -58,29 +87,33 @@ Y = (torch_cat(list(pred[[1]]$unsqueeze(4),
                     pred[[6]]$unsqueeze(4)), 4))
 
 #Y = Y$unsqueeze(3)
-initCohort2 = CohortMat$new(dims = c(100, 20L, 10),
-                            dbh = array(1, dim = c(100, 20L, 10)),
-                            trees = array(1, dim = c(100, 20L, 10)),
+patches = 50L
+initCohort2 = CohortMat$new(dims = c(sites, patches, 10),
+                            dbh = array(1, dim = c(sites, patches, 10)),
+                            trees = array(1, dim = c(sites, patches, 10)),
                             sp = sp)
-finn2 = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all"
-                 #hidden_growth = c(10L, 10L),
-                 #hidden_mort = c(10L, 10L),
-                 #hidden_reg = c(10L, 10L),  # all parameters, env, or species
-                 # parGrowth = matrix(c(-10, 10), 1, 2),
-                 # parMort = cbind(0, 100, 0),
-                 # parReg = -5,
-                 # parHeight = 5
-                 # parGrowthEnv = list(matrix(5.0, 1, 2)),
-                 # parMortEnv = list(matrix(-5, 1, 2)),
-                 # parRegEnv = list(matrix(5, 1, 2))
-)
-start = lapply(finn2$parameters, as.matrix)
-finn2$fit(initCohort = initCohort, X = (env),Y = Y, patches = 20L, batch_size = 100L, epochs = 200L, learning_rate = 1., response = "BA*T")
 
+finn2 = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
+                 parGrowth = matrix(c(0.5, 15), sp, 2, byrow = TRUE),
+                 parMort = matrix(c(0.20, 90), sp, 2, byrow = TRUE),
+                 parReg = rep(0.5, sp), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
+                 parHeight = rep(0.6, sp), # plausible range is 0 to 1. default should be between 0.3 and 0.7
+                 parGrowthEnv = list(matrix(0, sp, 2)),
+                 parMortEnv = list(matrix(c(0, 0), sp, 2)),
+                 parRegEnv = list(matrix(0, sp, 2)),
+                 patch_size_ha = 0.1)
+start = lapply(finn2$parameters, as.matrix)
+finn2$optimizer = NULL
+finn2$fit(initCohort = initCohort, X = (env),Y = Y, patches = patches, batch_size = 100L, epochs = 20L, learning_rate = 0.1, response = "BA*T")
+
+
+profvis::profvis({
+  finn2$fit(initCohort = initCohort, X = (env),Y = Y, patches = patches, batch_size = 100L, epochs = 2L, learning_rate = 1., response = "BA*T")
+})
 
 pred2 =
   finn2$predict(initCohort$dbh, initCohort$trees, initCohort$species,response = "ba*T",
-                env = env,patches = 1L)
+                env = env,patches = patches)
 par(mfrow = c(1, 2))
 plot(torch::as_array(pred2[[1]]$data())[1,,1], type = "l")
 plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l")
@@ -88,8 +121,8 @@ plot(torch::as_array(pred[[1]]$data())[1,,1], type = "l")
 
 
 par(mfrow = c(1, 1))
-plot(as.matrix(finn$nnRegEnv(env)[,1,])[order(as.matrix(env[,2,]))])
-plot(as.matrix(finn2$nnRegEnv(env)[,1,])[order(as.matrix(env[,2,]))])
+plot(as.matrix(finn$nnRegEnv(env)[,1,])[order(as.matrix(env[,1,]))])
+plot(as.matrix(finn2$nnRegEnv(env)[,1,])[order(as.matrix(env[,1,]))])
 
 
 plot(as.matrix(finn$nnGrowthEnv(env)[,1,2])[order(as.matrix(env[,1,]))])
