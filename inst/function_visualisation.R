@@ -404,6 +404,8 @@ for (i in 1:nrow(sim_dt)) {
   if(i==nrow(sim_dt)) cat("\n")
 }
 
+custom_palette <- c("#440154", "#3B528B", "#21918C", "#5DC863", "#FDE725")
+
 ggplot(out_dt[pred == 10 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5,0.75, 1)],
        aes(x = dbh, y = light, fill = predM))+
   geom_tile()+
@@ -454,7 +456,6 @@ ggplot(out_dt, aes(x = factor(parMort1), y = predM))+
 ggplot(out_dt, aes(x = pred, y = predM))+
   geom_point()
 
-custom_palette <- c("#440154", "#3B528B", "#21918C", "#5DC863", "#FDE725")
 
 ggplot(out_dt[pred == 0.5 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5,0.75, 1)], aes(x = dbh, y = light, fill = predM))+
   geom_tile()+
@@ -464,3 +465,6 @@ ggplot(out_dt[pred == 0.5 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.
   scale_fill_gradientn(colors = custom_palette)
   # scale_fill_viridis(option = "viridis", name = "Value")
   # labs(x = "predicted environment effect", y = "parReg (species light requirement for regeneration)", fill = "mort")
+
+
+FINN::growth

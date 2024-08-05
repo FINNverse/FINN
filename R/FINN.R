@@ -23,11 +23,73 @@ BA_stem = function(dbh) {
 }
 
 
-#' BA_stemsal aera multiplied with number of species
+#' Calculate the Basal Area of a Stand
 #'
-#' @param dbh dbh
-#' @param trees number of Trees
+#' This function calculates the basal area of a stand based on the diameter at breast height (dbh), the number of trees, and the patch size in hectares.
 #'
+#' @param dbh A torch tensor or numeric vector representing the diameter at breast height of the trees in centimeters.
+#' @param trees A torch tensor or numeric vector representing the number of trees.
+#' @param patch_size_ha A numeric value representing the size of the patch in hectares.
+#'
+#' @details
+#'
+#' The basal area of a stand is the cross-sectional area of all trees in a stand per unit area. This function calculates the basal area per ha using the formula:
+#' \deqn{BA = \left( \frac{\pi \left( \frac{\text{dbh}}{100} \right)^2}{4} \right) \times \text{trees} \div \text{patch\_size\_ha}},
+#'
+#' The formula takes into account the diameter at breast height (dbh) in centimeters, the number of trees, and the size of the patch in hectares to calculate the basal area in square meters per hectare.
+#'
+#' This plot illustrates the basal area for different combinations of dbh and number of trees.
+#' <br>
+#' <img src="figures/BA_stand_plot2.png" alt="dbh, trees, basal area" style="max-width:70%;"/>
+#'
+#' <br>
+#' This plot illustrates the sensitvity of basal area for different combinations of dbh, number of trees to patch size.
+#' <br>
+#' <img src="figures/BA_stand_plot1.png" alt="Patch size, dbh, trees, basal area" style="max-width:70%;"/>
+#'
+#' @return A numeric value representing the basal area of the stand in square meters per hectare.
+#' @examples
+#' # Example usage
+#' dbh_vec <- seq(1, 200, 1)
+#' trees_vec <- c(0:500, 10^(seq(2, 4, length.out = 20)))
+#'
+#' # Generate test data for a patch size of 0.1
+#' patch_size <- 0.1
+#' cohort_df1 <- expand.grid(
+#'   trees_ha = trees_vec,
+#'   patch_size_ha = patch_size,
+#'   dbh = dbh_vec
+#' )
+#'
+#' cohort_df1 <- data.frame(
+#'   patchID = 1,
+#'   cohortID = 1,
+#'   species = 1,
+#'   cohort_df1
+#' )
+#'
+#' cohort_df1$siteID <- 1:nrow(cohort_df1)
+#' cohort_df1$trees <- round(cohort_df1$trees_ha * patch_size)
+#'
+#' cohort <- CohortMat$new(obs_df = cohort_df1)
+#'
+#' cohort_df1$basal_area <- torch::as_array(BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
+#'
+#' # View the first few rows of the resulting data frame
+#' head(cohort_df1)
+#'
+#' # Basic plot showing the function of trees and dbh for basal area
+#'
+#' # only keep rows with basal area <100
+#' cohort_df1 <- cohort_df1[cohort_df1$basal_area < 100,]
+#'
+#' library(ggplot2)
+#' ggplot(cohort_df1, aes(x = dbh, y = basal_area, color = trees, group = trees)) +
+#'   geom_line() +
+#'   ylab("Basal Area (m^2/ha)") +
+#'   xlab("Diameter at Breast Height (cm)") +
+#'   scale_color_viridis_c(name = "Trees per ha", trans = "log10", option = "magma", direction = -1) +
+#'   ggtitle("Basal Area as a Function of Trees and DBH")
 #' @export
 BA_stand = function(dbh, trees, patch_size_ha) {
   return((pi*(dbh/100./2.)$pow(2.0)*trees)/patch_size_ha)
@@ -35,24 +97,37 @@ BA_stand = function(dbh, trees, patch_size_ha) {
 
 
 
-#' Calculate the height of a tree BA_stemsed on its diameter at breast height and a global parameter.
+#' Calculate the height of a tree based on its diameter at breast height and an alometry parameter.
 #'
-#' This function calculates the height of a tree BA_stemsed on the diameter at breast height (dbh) and a parameter.
+#' @param dbh A numeric value representing the diameter at breast height of the tree in cm.
+#' @param parHeight A numeric value representing the species height alometry.
 #'
-#' @param dbh A numeric value representing the diameter at breast height of the tree.
-#' @param parHeight A numeric value representing the global parameter used in the height calculation.
+#' @details
+#'
+#' This function calculates the height of a tree based on the diameter at breast height (dbh) and a parameter parHeight.
+#'
+#' The height is calculated using the formula:
+#' \deqn{height = \left( \exp \left( \frac{(\text{dbh} \times \text{parHeight})}{(\text{dbh} + 100)} \right) - 1 \right) \times 100 + 0.001}
+#' where dbh is the diameter at breast height of the tree in cm and parHeight is an alometric species specific parameter.
+#'
+#' All parameters of parHeight from 0 to 1 result in physiologicaly plausible heights.
+#' The range from 0.3 to 0.9 results in realistic tree heights.
+#' Values of parHeight close to 1 are physiologically almost impossible, below 0.3 is suitable for small tree species and shrubs.
+#'
+#' <br>
+#' <img src="figures/height_plot1.png" alt="Parameter range" style="max-width:70%;"/>
 #'
 #' @return A numeric value representing the calculated height of the tree.
-#'
 #' @examples
 #' height(30, 0.5)
+#' height(c(30), c(0.5,0.3))
+#' height(c(30,20), c(0.5))
 #'
 #' @export
 height = function(dbh, parHeight) {
   height = (exp((((dbh * parHeight) / (dbh+100))))-1)*100 + 0.001
   return(height)
 }
-
 
 
 #' Compute the fraction of available light (light) for each cohort BA_stemsed on the given parameters.
