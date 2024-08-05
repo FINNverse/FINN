@@ -19,7 +19,7 @@ test_gradients_regeneration = function(
     pred_multiplied = pred*multiplier_pred
     light = torch::torch_randn(size = c(n_sites, n_patches, 1))*multiplier_AL
 
-    regeneration(species, parReg_multiplied, pred_multiplied, light)$sum()$backward()
+    regeneration(species, parReg_multiplied, pred_multiplied, light, patch_size_ha= 0.1)$sum()$backward()
     grad_par = as.matrix(parReg$grad)
     grad_pred = as.matrix(pred$grad)
 
@@ -129,7 +129,7 @@ test_gradients_competition = function(
     parHeight = torch::torch_randn(size = c(n_species), requires_grad = TRUE)
     parHeight_multiplied = parHeight*multiplier_parHeight
 
-    competition(dbh, species, trees, parHeight, h)$sum()$backward()
+    competition(dbh, species, trees, parHeight, h, patch_size_ha = 0.1)$sum()$backward()
 
     grad_par = cbind(as.matrix(parHeight$grad))
 
