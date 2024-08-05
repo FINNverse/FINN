@@ -1,0 +1,42 @@
+---
+title: "Documentation"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+f1 = function(dbh) ((200-dbh) / 200)^3
+dbh = seq(0,200,0.01)
+plot(dbh, f1(dbh))
+plot(dbh, f1(dbh))
+
+
+plot(dbh, 4*(f1(dbh)^2))
+dbh = 1
+for(t in 1:200){
+  dbh = c(dbh, dbh[t] + f1(dbh[t])*4)
+}
+plot(1:201, dbh)
+max(dbh)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
