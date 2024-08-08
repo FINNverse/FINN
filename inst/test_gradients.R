@@ -13,13 +13,13 @@ test_gradients_regeneration = function(
   torch::with_detect_anomaly({
 
     species = torch::torch_randint(1, n_species, size = c(n_sites, n_patches, n_cohort), dtype = torch::torch_int64())
-    parReg = torch::torch_randn(size = c(n_species), requires_grad = TRUE)
-    parReg_multiplied = parReg*multiplier_parReg
-    pred = torch::torch_rand(size = c(n_sites, n_species), requires_grad = TRUE)
+    parReg = torch::torch_rand(size = c(n_species), requires_grad = TRUE)
+    parReg_multiplied = parReg
+    pred = torch::torch_randn(size = c(n_sites, n_species), requires_grad = TRUE)
     pred_multiplied = pred*multiplier_pred
     light = torch::torch_randn(size = c(n_sites, n_patches, 1))*multiplier_AL
 
-    regeneration(species, parReg_multiplied, pred_multiplied, light, patch_size_ha= 0.1)$sum()$backward()
+    regeneration(species, parReg_multiplied*0, pred_multiplied+100, light, patch_size_ha= 10.1)$sum()$backward()
     grad_par = as.matrix(parReg$grad)
     grad_pred = as.matrix(pred$grad)
 
@@ -29,6 +29,24 @@ test_gradients_regeneration = function(
 
 grads = test_gradients_regeneration(n_species = 50L, n_cohort = 20L, multiplier_parReg = 100.001, multiplier_pred = 0.1)
 hist(as.vector(grads[[1]]))
+
+regeneration(species, parReg_multiplied, pred_multiplied, torch_ones_like(light), patch_size_ha= 0.1)$max()
+
+parReg = torch_tensor(10.0, requires_grad = TRUE)
+environment = pred_multiplied+100.
+regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.001)
+regeneration1 = FINN:::sample_poisson_relaxed(mean*patch_size_ha) # TODO, check if exp or not?! lambda should be always positive!
+mean$sum()$backward()
+regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()
+regeneration1$sum()$backward()
+parReg$grad
+
+parReg = torch_tensor(0.0, requires_grad = TRUE)
+light = 1.0
+rr = torch_sigmoid((light + (1-parReg) - 1)/1e-5)
+rr$sum()$backward()
+parReg$grad
 
 
 
