@@ -458,27 +458,25 @@ predict = function(
   sp = self$sp
   sites = env$shape[1]
 
-  predGrowthGlobal = self$nnGrowthEnv(env)
-  predMortGlobal = self$nnMortEnv(env)
-  predRegGlobal = self$nnRegEnv(env)
-  predGrowthGlobal = torch::torch_split(predGrowthGlobal,split_size = 1, dim = 2L)
-  predMortGlobal = torch::torch_split(predMortGlobal,split_size = 1, dim = 2L)
-  predRegGlobal = torch::torch_split(predRegGlobal,split_size = 1, dim = 2L)
-
+  if(is.null(y)) {
+    predGrowthGlobal = self$nnGrowthEnv(env)
+    predMortGlobal = self$nnMortEnv(env)
+    predRegGlobal = self$nnRegEnv(env)
+  }
 
   # Run over timesteps
   for(i in 1:time){
-    # cat("Time: ", i, "\n")
 
-     pred_growth = self$nnGrowthEnv(env[,i,])
-    # pred_growth = predGrowthGlobal[,i,]
-     pred_morth = self$nnMortEnv(env[,i,])
-    # pred_morth = predMortGlobal[,i,]
-     pred_reg = self$nnRegEnv(env[,i,])
-    # pred_reg = predRegGlobal[,i,]
-    # pred_growth = predGrowthGlobal[[i]]$squeeze(dim = 2L)
-    # pred_morth = predMortGlobal[[i]]$squeeze(dim = 2L)
-    # pred_reg = predRegGlobal[[i]]$squeeze(dim = 2L)
+    # Only necessary if gradients are needed
+    if(!is.null(y)) {
+      pred_growth = self$nnGrowthEnv(env[,i,])
+      pred_morth = self$nnMortEnv(env[,i,])
+      pred_reg = self$nnRegEnv(env[,i,])
+    } else {
+      pred_growth = predGrowthGlobal[,i,]
+      pred_morth = predMortGlobal[,i,]
+      pred_reg = predRegGlobal[,i,]
+    }
 
     light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
     g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
@@ -786,7 +784,6 @@ fit = function(
         species = initCohort$species$to(device = self$device, non_blocking=TRUE)[ind,]
         dbh = initCohort$dbh$to(device = self$device, non_blocking=TRUE)[ind,]
       }
-
 
       pred_tmp = self$predict( dbh, trees, species, x, start_time = start_time, response = response, y = y, c = c, update_step = update_step)
       pred = pred_tmp[[1]]
