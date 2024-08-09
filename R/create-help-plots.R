@@ -1,17 +1,5 @@
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-## Project: FINN
-## Script purpose: create plots for the roxygen documentation of each function
-## Date: Mon Aug  5 13:56:54 2024
-## Author: Yannek Kaeber <y.kaeber@posteo.de>
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-
-
 create_help_plots <- function(){
   dir.create("man/figures", showWarnings = FALSE, recursive = TRUE)
-  library(ggplot2)
-  library(viridis)
-  library(data.table)
-
   #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
   ## height ####
   #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
@@ -158,6 +146,9 @@ create_help_plots <- function(){
     # average light over round(basal_area), species, parHeight with base r
     cohort_dt_out <- data.table(cohort_dt_out)
     cohort_dt_out <- cohort_dt_out[, .(light = mean(light)), by = .(species, parHeight, basal_area = round(basal_area))]
+    # make the same like above but without data.table
+    # cohort_dt_out <- aggregate(cohort_dt_out$light, by = list(cohort_dt_out$species, cohort_dt_out$parHeight, cohort_dt_out$basal_area), mean)
+
 
 
     p_competition1 <- ggplot(
