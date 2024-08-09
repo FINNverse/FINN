@@ -47,25 +47,24 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-FINN-np_runif}{\code{FINN$np_runif()}}
 \item \href{#method-FINN-new}{\code{FINN$new()}}
 \item \href{#method-FINN-build_NN}{\code{FINN$build_NN()}}
 \item \href{#method-FINN-predict}{\code{FINN$predict()}}
+\item \href{#method-FINN-fit}{\code{FINN$fit()}}
+\item \href{#method-FINN-np_runif}{\code{FINN$np_runif()}}
 \item \href{#method-FINN-set_weights_nnGrowthEnv}{\code{FINN$set_weights_nnGrowthEnv()}}
 \item \href{#method-FINN-set_weights_nnMortEnv}{\code{FINN$set_weights_nnMortEnv()}}
 \item \href{#method-FINN-set_weights_nnRegEnv}{\code{FINN$set_weights_nnRegEnv()}}
-\item \href{#method-FINN-fit}{\code{FINN$fit()}}
+\item \href{#method-FINN-get_parMort}{\code{FINN$get_parMort()}}
+\item \href{#method-FINN-get_parGrowth}{\code{FINN$get_parGrowth()}}
+\item \href{#method-FINN-get_parHeight}{\code{FINN$get_parHeight()}}
+\item \href{#method-FINN-get_parReg}{\code{FINN$get_parReg()}}
+\item \href{#method-FINN-set_parMort}{\code{FINN$set_parMort()}}
+\item \href{#method-FINN-set_parGrowth}{\code{FINN$set_parGrowth()}}
+\item \href{#method-FINN-set_parHeight}{\code{FINN$set_parHeight()}}
+\item \href{#method-FINN-set_parReg}{\code{FINN$set_parReg()}}
 \item \href{#method-FINN-clone}{\code{FINN$clone()}}
 }
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-np_runif"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-np_runif}{}}}
-\subsection{Method \code{np_runif()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$np_runif(low, high, size)}\if{html}{\out{</div>}}
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINN-new"></a>}}
@@ -89,7 +88,8 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
   bias = self$bias,
   patch_size_ha = self$patch_size_ha,
   minLight = self$minLight,
-  which = "all"
+  disturbance = self$disturbance,
+  which = c("all", "env", "species")
 )}\if{html}{\out{</div>}}
 }
 
@@ -122,14 +122,46 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
   trees = NULL,
   species = NULL,
   env = NULL,
-  record_time = 0L,
+  start_time = 1L,
   response = "dbh",
   pred_growth = NULL,
   pred_morth = NULL,
   pred_reg = NULL,
   patches = 50,
-  debug = TRUE
+  debug = TRUE,
+  y = NULL,
+  c = NULL,
+  update_step = 1L
 )}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-fit"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-fit}{}}}
+\subsection{Method \code{fit()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$fit(
+  X = NULL,
+  Y = NULL,
+  initCohort = NULL,
+  epochs = 2L,
+  batch_size = 20L,
+  learning_rate = 0.1,
+  start_time = 1,
+  patches = 50L,
+  response = "dbh",
+  update_step = 1L
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-np_runif"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-np_runif}{}}}
+\subsection{Method \code{np_runif()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$np_runif(low, high, size)}\if{html}{\out{</div>}}
 }
 
 }
@@ -161,21 +193,74 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-fit"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-fit}{}}}
-\subsection{Method \code{fit()}}{
+\if{html}{\out{<a id="method-FINN-get_parMort"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-get_parMort}{}}}
+\subsection{Method \code{get_parMort()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$fit(
-  X = NULL,
-  Y = NULL,
-  initCohort = NULL,
-  epochs = 2L,
-  batch_size = 20L,
-  learning_rate = 0.1,
-  start_time = 0.5,
-  patches = 50L,
-  response = "dbh"
-)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{FINN$get_parMort()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-get_parGrowth"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-get_parGrowth}{}}}
+\subsection{Method \code{get_parGrowth()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$get_parGrowth()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-get_parHeight"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-get_parHeight}{}}}
+\subsection{Method \code{get_parHeight()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$get_parHeight()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-get_parReg"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-get_parReg}{}}}
+\subsection{Method \code{get_parReg()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$get_parReg()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_parMort"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_parMort}{}}}
+\subsection{Method \code{set_parMort()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_parMort(value)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_parGrowth"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_parGrowth}{}}}
+\subsection{Method \code{set_parGrowth()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_parGrowth(value)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_parHeight"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_parHeight}{}}}
+\subsection{Method \code{set_parHeight()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_parHeight(value)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-set_parReg"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-set_parReg}{}}}
+\subsection{Method \code{set_parReg()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$set_parReg(value)}\if{html}{\out{</div>}}
 }
 
 }
