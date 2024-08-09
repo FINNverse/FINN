@@ -56,37 +56,37 @@ set_weights = function(weights, NN) {
 
 
 get_parMort =  function() {
-  #return(torch::torch_cat(list(self$parMort[,1,drop=FALSE]$sigmoid(), self$parMort[,2,drop=FALSE]$sigmoid()*4.0), dim = 2L ))
-  return(torch::torch_cat(list(self$parMort[,1,drop=FALSE]$clamp(min = 0., max = 1.0), self$parMort[,2,drop=FALSE]$clamp(min = 0.0, max = 4.0)), dim = 2L ))
+  return(torch::torch_cat(list(self$parMort[,1,drop=FALSE]$sigmoid(), self$parMort[,2,drop=FALSE]$sigmoid()*4.0), dim = 2L ))
+  #return(torch::torch_cat(list(self$parMort[,1,drop=FALSE]$clamp(min = 0., max = 1.0), self$parMort[,2,drop=FALSE]$clamp(min = 0.0, max = 4.0)), dim = 2L ))
 }
 get_parGrowth =  function() {
-  #return(torch::torch_cat(list(self$parGrowth[,1,drop=FALSE]$sigmoid(), self$parGrowth[,2,drop=FALSE]$exp()), dim = 2L ))
-  return(torch::torch_cat(list(self$parGrowth[,1,drop=FALSE]$clamp(min = 0.0, max = 1.0), self$parGrowth[,2,drop=FALSE]$clamp(min = 0.0)), dim = 2L ))
+  return(torch::torch_cat(list(self$parGrowth[,1,drop=FALSE]$sigmoid(), self$parGrowth[,2,drop=FALSE]$exp()), dim = 2L ))
+  #return(torch::torch_cat(list(self$parGrowth[,1,drop=FALSE]$clamp(min = 0.0, max = 1.0), self$parGrowth[,2,drop=FALSE]$clamp(min = 0.0)), dim = 2L ))
 }
 get_parHeight =  function() {
-  # return(self$parHeight$sigmoid())
-  return(self$parHeight$clamp(min = 0.0, max = 1.0))
+   return(self$parHeight$sigmoid())
+  #return(self$parHeight$clamp(min = 0.0, max = 1.0))
 }
 get_parReg = function() {
-  #return(self$parReg$sigmoid())
-  return(self$parReg$clamp(min = 0.0, max = 1.0))
+  return(self$parReg$sigmoid())
+  #return(self$parReg$clamp(min = 0.0, max = 1.0))
 }
 
 
 set_parMort =  function(value) {
   #return(cbind(binomial()$linkfun(value[,1]), binomial()$linkfun(value[,2]/4.0)))
-  #self$parMort = torch::torch_tensor(cbind(stats::binomial()$linkfun(value[,1]), stats::binomial()$linkfun(value[,2]/4.0)), requires_grad = TRUE, device = self$device, dtype=self$dtype)
-  self$parMort = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
+  self$parMort = torch::torch_tensor(cbind(stats::binomial()$linkfun(value[,1]), stats::binomial()$linkfun(value[,2]/4.0)), requires_grad = TRUE, device = self$device, dtype=self$dtype)
+  #self$parMort = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
 }
 set_parGrowth =  function(value) {
-  #self$parGrowth = torch::torch_tensor(cbind(stats::binomial()$linkfun(value[,1]), log(value[,2])), requires_grad = TRUE, device = self$device, dtype=self$dtype)
-  self$parGrowth = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
+  self$parGrowth = torch::torch_tensor(cbind(stats::binomial()$linkfun(value[,1]), log(value[,2])), requires_grad = TRUE, device = self$device, dtype=self$dtype)
+  #self$parGrowth = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
 }
 set_parHeight =  function(value) {
-  #self$parHeight = torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype=self$dtype )
-  self$parHeight = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
+  self$parHeight = torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype=self$dtype )
+  #self$parHeight = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
 }
 set_parReg = function(value) {
-  #self$parReg = torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype=self$dtype )
-  self$parReg = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
+  self$parReg = torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype=self$dtype )
+  #self$parReg = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
 }

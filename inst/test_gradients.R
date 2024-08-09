@@ -15,26 +15,28 @@ test_gradients_regeneration = function(
     species = torch::torch_randint(1, n_species, size = c(n_sites, n_patches, n_cohort), dtype = torch::torch_int64())
     parReg = torch::torch_rand(size = c(n_species), requires_grad = TRUE)
     parReg_multiplied = parReg
-    pred = torch::torch_randn(size = c(n_sites, n_species), requires_grad = TRUE)
+    pred = torch::torch_rand(size = c(n_sites, n_species), requires_grad = F)+3
     pred_multiplied = pred*multiplier_pred
-    light = torch::torch_randn(size = c(n_sites, n_patches, 1))*multiplier_AL
+    light = 1
 
-    regeneration(species, parReg_multiplied*0, pred_multiplied+100, light, patch_size_ha= 10.1)$sum()$backward()
-    grad_par = as.matrix(parReg$grad)
-    grad_pred = as.matrix(pred$grad)
+    regeneration(species, parReg, pred_multiplied, 0.3, patch_size_ha= 1)$sum()$backward()
+    (grad_par = as.matrix(parReg$grad))
+    (grad_pred = as.matrix(pred$grad))
 
   })
   return(list(grad_par, grad_pred))
 }
 
-grads = test_gradients_regeneration(n_species = 50L, n_cohort = 20L, multiplier_parReg = 100.001, multiplier_pred = 0.1)
+grads = test_gradients_regeneration(n_species = 50L, n_cohort = 20L, multiplier_parReg = 100.001, multiplier_pred = 1.1)
 hist(as.vector(grads[[1]]))
 
 regeneration(species, parReg_multiplied, pred_multiplied, torch_ones_like(light), patch_size_ha= 0.1)$max()
 
-parReg = torch_tensor(10.0, requires_grad = TRUE)
+
+
+parReg = torch_tensor(1.0, requires_grad = TRUE)
 environment = pred_multiplied+100.
-regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg)))) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
 mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.001)
 regeneration1 = FINN:::sample_poisson_relaxed(mean*patch_size_ha) # TODO, check if exp or not?! lambda should be always positive!
 mean$sum()$backward()
@@ -42,11 +44,51 @@ regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$d
 regeneration1$sum()$backward()
 parReg$grad
 
-parReg = torch_tensor(0.0, requires_grad = TRUE)
-light = 1.0
-rr = torch_sigmoid((light + (1-parReg) - 1)/1e-5)
-rr$sum()$backward()
+
+library(torch)
+pars = seq(0, 1, length.out = 20)
+func_reg = function(light = 0.7) {
+  res =
+  sapply(pars, function(p) {
+    parReg = torch_tensor(p, requires_grad = TRUE)
+    rr = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
+
+    rr$sum()$backward()
+    c(as.numeric(parReg$grad), as.numeric(rr))
+  })
+  return(t(res))
+}
+par
+plot(pars, func_reg(light = 0.7)[,1], xlab = "parsReg", ylim = c(0, 1), type = "l")
+points(pars, func_reg(light = 0.2)[,2], col = "red", type = "l")
+points(pars, func_reg(light = 0.9)[,2], col = "green", type = "l")
+legend("topright", legend = c( 0.2, 0.7, 0.9), col = c("red", "black", "green"), pch = 15)
+
+
+
+n_species = 2
+n_sites = 1
+n_patches = 1
+n_cohort = 1
+species = torch::torch_randint(1, n_species, size = c(n_sites, n_patches, n_cohort), dtype = torch::torch_int64())
+parReg = torch::torch_rand(size = c(n_species), requires_grad = TRUE)
+parReg_multiplied = parReg
+pred = torch::torch_rand(size = c(n_sites, n_species), requires_grad = F)+3
+light = 1
+
+environment = pred
+regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
+#regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
+regeneration1 = sample_poisson_gaussian(mean*1) # TODO, check if exp or not?! lambda should be always positive!
+regeneration1$sum()$backward(retain_graph = TRUE)
 parReg$grad
+regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()
+regeneration2$sum()$backward(retain_graph = TRUE)
+parReg$grad
+if(debug == T) out = list(regP = regP, mean = mean, regeneration1 = regeneration1, regeneration2 = regeneration2) else out = regeneration2
+return(out)
+
 
 
 

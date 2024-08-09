@@ -15,7 +15,7 @@ sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
 sample_poisson_gaussian <- function(lmbd) {
   epsilon <- torch_randn_like(lmbd)
   poisson_samples <- lmbd + epsilon * lmbd$sqrt()
-  poisson_samples <- poisson_samples$clamp(min = 0)$floor()
+  poisson_samples <- poisson_samples$clamp(min = 0)
   return(poisson_samples)
 }
 
