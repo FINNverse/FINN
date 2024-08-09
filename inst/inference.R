@@ -1,9 +1,9 @@
 library(FINN)
 #torch::torch_set_num_interop_threads(1L)
 #torch::torch_set_num_threads(1L)
-sp = 3L
-patches = 40L
-sites = 100L
+sp = 2L
+patches = 10L
+sites = 50L
 initCohort = CohortMat$new(dims = c(sites, patches, 10),
                            dbh = array(1, dim = c(sites, patches, 10)),
                            trees = array(1, dim = c(sites, patches, 10)),
@@ -27,7 +27,7 @@ system.time({
 pred = finn$predict(dbh = initCohort$dbh,
                     trees = initCohort$trees,
                     species = initCohort$species,
-                    response = "BA*T", env = env, patches = patches, debug = FALSE)
+                    response = "BA*T", env = env, patches = patches, debug = FALSE, verbose = TRUE)
 })
 
 # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
@@ -106,13 +106,13 @@ Y = (torch_cat(list(pred[[1]]$unsqueeze(4),
                     pred[[6]]$unsqueeze(4)), 4))
 
 #Y = Y$unsqueeze(3)
-patches = 20L
+patches = 5L
 initCohort2 = CohortMat$new(dims = c(sites, patches, 10),
                             dbh = array(1, dim = c(sites, patches, 10)),
                             trees = array(1, dim = c(sites, patches, 10)),
                             sp = sp)
 
-finn2 = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
+finn2 = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                  parGrowth = matrix(c(0.5, 12), sp, 2, byrow = TRUE),
                  parMort = matrix(c(0.0, 2.5), sp, 2, byrow = TRUE),
                  parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
@@ -124,7 +124,7 @@ finn2 = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
 start = lapply(finn2$parameters, as.matrix)
 finn2$optimizer = NULL
 system.time({
-finn2$fit(initCohort = initCohort, X = (env)[,1:60,],Y = Y, patches = patches, batch_size = 30L, epochs = 200L, learning_rate = 0.03, response = "BA*T", update_step = 1L)
+finn2$fit(initCohort = initCohort, X = (env)[,1:60,],Y = Y, patches = patches, batch_size = 50L, epochs = 200L, learning_rate = 0.03, response = "BA*T", update_step = 1L)
 })
 
  matplot(sapply(1:length(finn2$param_history), function(i) plogis(finn2$param_history[[i]]$H)) %>% t(), type = "l")

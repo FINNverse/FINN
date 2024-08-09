@@ -2,168 +2,223 @@
 % Please edit documentation in R/FINN.R
 \name{FINN}
 \alias{FINN}
-\title{FINN: Forest Inventory Neural Network}
+\title{FINN: Forest Informed Neural Network}
 \description{
-A class to initialize and train a Forest Inventory Neural Network (FINN) for predicting tree growth, mortality, and regeneration.
+The \code{FINN} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
+}
+\section{Super class}{
+\code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINN}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{np_runif}}{Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.}
+\item{\code{sp}}{integer. Number of species.}
 
-\item{\code{sp}}{integer Number of species.}
+\item{\code{device}}{character. Device to use ('cpu' or 'cuda').}
 
-\item{\code{device}}{character Device to use ('cpu' or 'cuda').}
+\item{\code{parHeight}}{torch.Tensor. Global parameters for height.}
 
-\item{\code{parHeight}}{torch.Tensor global parameters.}
+\item{\code{parGrowth}}{torch.Tensor. Growth parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
 
-\item{\code{parGrowth}}{torch.Tensor Growth parameters.}
+\item{\code{parMort}}{torch.Tensor. Mortality parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
 
-\item{\code{parMort}}{torch.Tensor Mortality parameters.}
+\item{\code{parReg}}{torch.Tensor. Regeneration parameters with dimensions \link{species}.}
 
-\item{\code{parReg}}{torch.Tensor Regeneration parameters.}
+\item{\code{parGrowthEnv}}{torch.Tensor. Growth environment parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
 
-\item{\code{parGrowthEnv}}{torch.Tensor Growth environment parameters.}
+\item{\code{parMortEnv}}{torch.Tensor. Mortality environment parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
 
-\item{\code{parMortEnv}}{torch.Tensor Mortality environment parameters.}
+\item{\code{parRegEnv}}{torch.Tensor. Regeneration environment parameters with dimensions \link{species}.}
 
-\item{\code{parRegEnv}}{torch.Tensor Regeneration environment parameters.}
+\item{\code{hidden_growth}}{list. Hidden layers for the growth model.}
 
-\item{\code{hidden_growth}}{list Hidden layers for growth model.}
+\item{\code{hidden_mort}}{list. Hidden layers for the mortality model.}
 
-\item{\code{hidden_mort}}{list Hidden layers for mortality model.}
-
-\item{\code{hidden_reg}}{list Hidden layers for regeneration model.}
-}
-\if{html}{\out{</div>}}
-}
-\section{Active bindings}{
-\if{html}{\out{<div class="r6-active-bindings">}}
-\describe{
-\item{\code{np_runif}}{Function to generate random numbers from a uniform distribution similar to np.random.uniform in Python.}
+\item{\code{hidden_reg}}{list. Hidden layers for the regeneration model.}
 }
 \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-FINN-np_runif}{\code{FINN$np_runif()}}
 \item \href{#method-FINN-new}{\code{FINN$new()}}
-\item \href{#method-FINN-build_NN}{\code{FINN$build_NN()}}
 \item \href{#method-FINN-predict}{\code{FINN$predict()}}
-\item \href{#method-FINN-set_weights_nnGrowthEnv}{\code{FINN$set_weights_nnGrowthEnv()}}
-\item \href{#method-FINN-set_weights_nnMortEnv}{\code{FINN$set_weights_nnMortEnv()}}
-\item \href{#method-FINN-set_weights_nnRegEnv}{\code{FINN$set_weights_nnRegEnv()}}
 \item \href{#method-FINN-fit}{\code{FINN$fit()}}
-\item \href{#method-FINN-clone}{\code{FINN$clone()}}
 }
 }
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-np_runif"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-np_runif}{}}}
-\subsection{Method \code{np_runif()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$np_runif(low, high, size)}\if{html}{\out{</div>}}
-}
-
-}
+\if{html}{\out{
+<details><summary>Inherited methods</summary>
+<ul>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="build_NN"><a href='../../FINN/html/FINNbase.html#method-FINNbase-build_NN'><code>FINN::FINNbase$build_NN()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parGrowth'><code>FINN::FINNbase$get_parGrowth()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parHeight'><code>FINN::FINNbase$get_parHeight()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parMort'><code>FINN::FINNbase$get_parMort()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parReg'><code>FINN::FINNbase$get_parReg()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="np_runif"><a href='../../FINN/html/FINNbase.html#method-FINNbase-np_runif'><code>FINN::FINNbase$np_runif()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parGrowth'><code>FINN::FINNbase$set_parGrowth()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parHeight'><code>FINN::FINNbase$set_parHeight()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parMort'><code>FINN::FINNbase$set_parMort()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parReg'><code>FINN::FINNbase$set_parReg()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights'><code>FINN::FINNbase$set_weights()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnGrowthEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnGrowthEnv'><code>FINN::FINNbase$set_weights_nnGrowthEnv()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnMortEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnMortEnv'><code>FINN::FINNbase$set_weights_nnMortEnv()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnRegEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnRegEnv'><code>FINN::FINNbase$set_weights_nnRegEnv()</code></a></span></li>
+</ul>
+</details>
+}}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINN-new"></a>}}
 \if{latex}{\out{\hypertarget{method-FINN-new}{}}}
 \subsection{Method \code{new()}}{
+Initializes the FINN model with the specified parameters.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINN$new(
-  sp = self$sp,
-  env = self$env,
-  device = self$device,
-  parHeight = self$parHeight,
-  parGrowth = self$parGrowth,
-  parMort = self$parMort,
-  parReg = self$parReg,
-  parGrowthEnv = self$parGrowthEnv,
-  parMortEnv = self$parMortEnv,
-  parRegEnv = self$parRegEnv,
-  hidden_growth = self$hidden_growth,
-  hidden_mort = self$hidden_mort,
-  hidden_reg = self$hidden_reg,
-  bias = self$bias,
-  patch_size_ha = self$patch_size_ha,
-  minLight = self$minLight,
-  which = "all"
+  sp = NULL,
+  env = NULL,
+  dtype = NULL,
+  parameters = NULL,
+  optimizer = NULL,
+  history = NULL,
+  param_history = NULL,
+  pred = NULL,
+  device = "cpu",
+  parHeight = NULL,
+  parGrowth = NULL,
+  parMort = NULL,
+  parReg = NULL,
+  parGrowthEnv = NULL,
+  parMortEnv = NULL,
+  parRegEnv = NULL,
+  nnRegEnv = NULL,
+  nnGrowthEnv = NULL,
+  nnMortEnv = NULL,
+  hidden_growth = list(),
+  hidden_mort = list(),
+  hidden_reg = list(),
+  bias = FALSE,
+  patch_size_ha = 0.1,
+  minLight = 50,
+  disturbance = 0,
+  which = c("all", "env", "species")
 )}\if{html}{\out{</div>}}
 }
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-build_NN"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-build_NN}{}}}
-\subsection{Method \code{build_NN()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$build_NN(
-  self,
-  input_shape,
-  output_shape,
-  hidden,
-  bias,
-  activation,
-  dropout,
-  last_activation = "sigmoid"
-)}\if{html}{\out{</div>}}
-}
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sp}}{integer. Number of species.}
 
+\item{\code{device}}{character. Device to use ('cpu' or 'cuda').}
+
+\item{\code{parHeight}}{torch.Tensor. Global parameters for height.}
+
+\item{\code{parGrowth}}{torch.Tensor. Growth parameters with dimensions \link{species, 2}.}
+
+\item{\code{parMort}}{torch.Tensor. Mortality parameters with dimensions \link{species, 2}.}
+
+\item{\code{parReg}}{torch.Tensor. Regeneration parameters with dimensions \link{species}.}
+
+\item{\code{parGrowthEnv}}{torch.Tensor. Growth environment parameters with dimensions \link{species, 2}.}
+
+\item{\code{parMortEnv}}{torch.Tensor. Mortality environment parameters with dimensions \link{species, 2}.}
+
+\item{\code{parRegEnv}}{torch.Tensor. Regeneration environment parameters with dimensions \link{species}.}
+
+\item{\code{hidden_growth}}{list. Hidden layers for the growth model.}
+
+\item{\code{hidden_mort}}{list. Hidden layers for the mortality model.}
+
+\item{\code{hidden_reg}}{list. Hidden layers for the regeneration model.}
+
+\item{\code{bias}}{logical. Whether to include a bias term in the neural networks.}
+
+\item{\code{patch_size_ha}}{numeric. Patch size in hectares.}
+
+\item{\code{minLight}}{numeric. Minimum light level.}
+
+\item{\code{disturbance}}{numeric. Disturbance level.}
+
+\item{\code{which}}{character. Specifies which parameters to include ("all", "env", "species").}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Invisible self.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINN-predict"></a>}}
 \if{latex}{\out{\hypertarget{method-FINN-predict}{}}}
 \subsection{Method \code{predict()}}{
+Predicts the growth, mortality, and regeneration of trees based on the given inputs.
+
+The \code{predict} method generates predictions for tree growth, mortality, and regeneration for the specified species across different environmental conditions. It uses the initialized model parameters and can handle optional input tensors like diameter at breast height (dbh), number of trees, and species. If these are not provided, they will be initialized internally.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINN$predict(
   dbh = NULL,
   trees = NULL,
   species = NULL,
   env = NULL,
-  record_time = 0L,
+  start_time = 1L,
   response = "dbh",
   pred_growth = NULL,
   pred_morth = NULL,
   pred_reg = NULL,
   patches = 50,
-  debug = TRUE
+  debug = TRUE,
+  y = NULL,
+  c = NULL,
+  update_step = 1L,
+  verbose = TRUE
 )}\if{html}{\out{</div>}}
 }
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-set_weights_nnGrowthEnv"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-set_weights_nnGrowthEnv}{}}}
-\subsection{Method \code{set_weights_nnGrowthEnv()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$set_weights_nnGrowthEnv(weights)}\if{html}{\out{</div>}}
-}
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{dbh}}{torch.Tensor (Optional). Diameter at breast height of the trees.}
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-set_weights_nnMortEnv"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-set_weights_nnMortEnv}{}}}
-\subsection{Method \code{set_weights_nnMortEnv()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$set_weights_nnMortEnv(weights)}\if{html}{\out{</div>}}
-}
+\item{\code{trees}}{torch.Tensor (Optional). Number of trees.}
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-set_weights_nnRegEnv"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-set_weights_nnRegEnv}{}}}
-\subsection{Method \code{set_weights_nnRegEnv()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$set_weights_nnRegEnv(weights)}\if{html}{\out{</div>}}
-}
+\item{\code{species}}{torch.Tensor (Optional). Species of the trees.}
 
+\item{\code{env}}{torch.Tensor. Environmental data.}
+
+\item{\code{start_time}}{integer. Time at which to start recording the results.}
+
+\item{\code{response}}{character. Response variable for aggregating results ("dbh", "BA_stem", or "BA_stem*nT").}
+
+\item{\code{pred_growth}}{torch.Tensor (Optional). Predicted growth values.}
+
+\item{\code{pred_morth}}{torch.Tensor (Optional). Predicted mortality values.}
+
+\item{\code{pred_reg}}{torch.Tensor (Optional). Predicted regeneration values.}
+
+\item{\code{patches}}{numeric. Number of patches.}
+
+\item{\code{debug}}{logical. Run in debug mode if TRUE.}
+
+\item{\code{y}}{torch.Tensor. Response tensor for target data.}
+
+\item{\code{c}}{torch.Tensor. Number of tree tensor.}
+
+\item{\code{update_step}}{integer. Backpropagation step length.}
+
+\item{\code{verbose}}{logical. Print progress if TRUE.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+list. A list of predicted values for dbh, number of trees, and other recorded time points. If \code{debug} is TRUE, raw results and cohorts are also returned.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINN-fit"></a>}}
 \if{latex}{\out{\hypertarget{method-FINN-fit}{}}}
 \subsection{Method \code{fit()}}{
+Fits the FINN model to the provided training data.
+
+The \code{fit} method trains the FINN model using the input (X) and target (Y) data. It iteratively adjusts the model parameters to minimize the loss over the specified number of epochs. This method also supports customizing batch size, learning rate, and the starting time for predictions.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINN$fit(
   X = NULL,
@@ -172,28 +227,40 @@ A class to initialize and train a Forest Inventory Neural Network (FINN) for pre
   epochs = 2L,
   batch_size = 20L,
   learning_rate = 0.1,
-  start_time = 0.5,
+  start_time = 1,
   patches = 50L,
-  response = "dbh"
+  response = "dbh",
+  update_step = 1L
 )}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINN-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-FINN-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINN$clone(deep = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{deep}}{Whether to make a deep clone.}
+\item{\code{X}}{torch.Tensor (Optional). Input data, typically environmental variables over time.}
+
+\item{\code{Y}}{torch.Tensor (Optional). Target data, representing observed tree metrics.}
+
+\item{\code{initCohort}}{list (Optional). Initial cohort data, including initial dbh, trees, and species information.}
+
+\item{\code{epochs}}{integer. Number of epochs to train the model. Default is 2.}
+
+\item{\code{batch_size}}{integer. Batch size for training. Default is 20.}
+
+\item{\code{learning_rate}}{float. Learning rate for the optimizer. Default is 0.1.}
+
+\item{\code{start_time}}{float. The starting time for predictions. Default is 1.}
+
+\item{\code{patches}}{integer. Number of patches in the dataset. Default is 50.}
+
+\item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
+
+\item{\code{update_step}}{integer. Backpropagation step length.}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None. The trained model is stored within the class instance.
 }
 }
 }
