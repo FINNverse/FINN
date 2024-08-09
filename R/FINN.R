@@ -32,19 +32,17 @@ BA_stem = function(dbh) {
 #' @param patch_size_ha A numeric value representing the size of the patch in hectares.
 #'
 #' @details
-#'
 #' The basal area of a stand is the cross-sectional area of all trees in a stand per unit area. This function calculates the basal area per ha using the formula:
-#' \deqn{BA = \left( \frac{\pi \left( \frac{\text{dbh}}{100} \right)^2}{4} \right) \times \text{trees} \div \text{patch\_size\_ha}},
+#' \deqn{BA = \left( \frac{\pi \left( \frac{\text{dbh}}{100} \right)^2}{4} \right) \times \text{trees} \div \text{patch\_size\_ha}}
 #'
 #' The formula takes into account the diameter at breast height (dbh) in centimeters, the number of trees, and the size of the patch in hectares to calculate the basal area in square meters per hectare.
 #'
 #' This plot illustrates the basal area for different combinations of dbh and number of trees.
-#' <br>
+#'
 #' <img src="figures/BA_stand_plot2.png" alt="dbh, trees, basal area" style="max-width:70%;"/>
 #'
-#' <br>
-#' This plot illustrates the sensitvity of basal area for different combinations of dbh, number of trees to patch size.
-#' <br>
+#' Sensitivity of basal area for different combinations of dbh, number of trees to patch size.
+#'
 #' <img src="figures/BA_stand_plot1.png" alt="Patch size, dbh, trees, basal area" style="max-width:70%;"/>
 #'
 #' @return A numeric value representing the basal area of the stand in square meters per hectare.
@@ -91,8 +89,8 @@ BA_stem = function(dbh) {
 #'   scale_color_viridis_c(name = "Trees per ha", trans = "log10", option = "magma", direction = -1) +
 #'   ggtitle("Basal Area as a Function of Trees and DBH")
 #' @export
-BA_stand = function(dbh, trees, patch_size_ha) {
-  return((pi*(dbh/100./2.)$pow(2.0)*trees)/patch_size_ha)
+BA_stand <- function(dbh, trees, patch_size_ha) {
+  return((pi * (dbh / 100 / 2)^2 * trees) / patch_size_ha)
 }
 
 
@@ -178,6 +176,10 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
 mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
   # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/1e-2)
   shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
+  # light = 1-light
+  # parMort1 = 1-parMort[,1][species]
+  # shade = 1-((1 / (1 + torch_exp(-10 * (light - parMort1))) - 1 / (1 + torch_exp(10 * parMort1))) / (1 - 1 / (1 + torch_exp(10 * (1 - parMort1)))))
+  # shade = (1 / (1 + torch_exp(-10 * (light - parMort[,1][species]))) - 1 / (1 + torch_exp(10 * parMort[,1][species]))) / (1 - 1 / (1 + torch_exp(10 * (1 - parMort[,1][species]))))
   # environment = 1-2*(torch_sigmoid(index_species(pred, species))-0.5)
   environment = torch_sigmoid(index_species(pred, species))
   gPSize = 0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3)
@@ -242,7 +244,8 @@ growth = function(dbh, species, parGrowth, parMort, pred, light){
 regeneration = function(species, parReg, pred, light, patch_size_ha, debug = F) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = pred
-  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+  #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+  regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
   regeneration1 = sample_poisson_gaussian(mean*patch_size_ha) # TODO, check if exp or not?! lambda should be always positive!
   regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()

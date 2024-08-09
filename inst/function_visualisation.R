@@ -277,9 +277,60 @@ sim_dt <-
 
 light1 = 0.5
 parReg = seq(0,1,0.001)
-plot(parReg,plogis((light1 + (1-parReg) - 1)/1e-2))
+plot(parReg,plogis((light1 + (1-parReg) - 1)/1e-1))
+plot(parReg,(light1 + (1-parReg) - 1), ylim = c(0,1))
+
+ffun <- function(light, parMort1) {
+  # light=1-light
+  # parMort1 = 1-parMort1
+  # 1-(1-(1 / (1 + exp(-10 * (light - parMort1))) - 1 / (1 + exp(10 * parMort1))) / (1 - 1 / (1 + exp(10 * (1 - parMort1)))))
+  # 1 - ((1 / (1 + exp(-10 * (light - parMort1))) - 1 / (1 + exp(10 * parMort1))) / (1 / (1 + exp(-10 * (1 - parMort1))) - 1 / (1 + exp(10 * parMort1))))
+  1 - ((1 / (1 + exp(-20 * (light - parMort1))) - 1 / (1 + exp(20 * parMort1))) / (1 / (1 + exp(-20 * (1 - parMort1))) - 1 / (1 + exp(20 * parMort1))))
+}
+ffun <- function(light, parMort1, steepness = 100) {
+  1 - ((1 / (1 + exp(-steepness * (light - parMort1))) - 1 / (1 + exp(steepness * parMort1))) /
+         (1 / (1 + exp(-steepness * (1 - parMort1))) - 1 / (1 + exp(steepness * parMort1))))
+}
+
+ffun <- function(light, parMort1, base_steepness = 10) {
+  # Scale steepness towards the edges
+  scaled_steepness <- base_steepness / (0.5 - abs(parMort1 - 0.5))
+
+  1 - ((1 / (1 + exp(-scaled_steepness * (light - parMort1))) - 1 / (1 + exp(scaled_steepness * parMort1))) /
+         (1 / (1 + exp(-scaled_steepness * (1 - parMort1))) - 1 / (1 + exp(scaled_steepness * parMort1))))
+}
+
+# Test the function
+light = seq(0, 1, 0.01)
+plot(light, ffun(light, 0.5, 10), ylim = c(0, 1), type = "l", xlab = "light", ylab = "output")
+lines(light, ffun(light, 0.1, 10), col = "red")
+lines(light, ffun(light, 0.2, 10), col = "blue")
+lines(light, ffun(light, 0.9, 10), col = "orange")
+lines(light, ffun(light, 0.4, 10), col = "green")
+
+# Add legend for each par and color on top left
+legend("bottomleft", title = "parReg", legend = c("0.5", "0.1", "0.2", "0.9", "0.4"), col = c("black", "red", "blue", "orange", "green"), lty = 1)
+
+light = seq(0,1,0.01)
+plot(light,fun(light,0.5), ylim = c(0,1), type = "l", xlab = "light")
+lines(light,fun(light,.1), col = "red")
+lines(light,fun(light,.2), col = "blue")
+lines(light,fun(light,.9), col = "orange")
+lines(light,fun(light,0.4), col = "green")
+# add legend for each par and color on top left
+legend("topleft", title = "parReg", legend = c("0.5","0.1","0.2","0.9","0.4"), col = c("black","red","blue","orange","green"), lty = 1)
+
+# legend("topleft", title = "parReg", legend = c("0.5","0.1","0.2","0.8","0.9"), col = c("black","red","blue","orange","green"), lty = 1)
+
+
+
+plot(x,smooth_transition(x,0.9), col = "green")
+smooth_transition(x,.001)
+
+plot(x,exp(1/x))
 
 i=1
+library(torch)
 out_dt <- data.table()
 for (i in 1:nrow(sim_dt)) {
   # r = regeneration(species = cohort$species, parReg = sim_dt[i,]$parReg, pred = array(sim_dt[i,]$pred,dim = c(1,1)), light = comp)
@@ -310,7 +361,7 @@ ggplot(out_dt, aes(x = pred, y = parReg, fill = r2))+
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## mortality ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-
+library(torch)
 patch_size = 0.1
 # trees_vec = c(1:10,10^(seq(2,4, length.out = 8)))
 trees_vec = c(50)
@@ -371,9 +422,9 @@ trees = cohort$trees
 sim_dt <-
   data.table(
     expand.grid(list(
-      parMort1 = seq(0,1,0.25),
+      parMort1 = seq(0,1,0.1),
       parMort2 = seq(0,4,1),
-      pred = seq(0,1,0.1),
+      pred = seq(0,1,0.25),
       light = seq(0,1,0.2)
     ))
   )
@@ -404,6 +455,17 @@ for (i in 1:nrow(sim_dt)) {
   if(i==nrow(sim_dt)) cat("\n")
 }
 
+ggplot(out_dt[pred == 0,
+              .(shade = mean(shade)
+              ), by = .(light = cut(light, seq(0, 1, 0.2), ordered_result = T, include.lowest = T), cohortID, parMort1)
+              ], aes(
+  x = parMort1,
+  y = shade,
+  color = light)) +
+  geom_point() +
+  geom_line() +
+  facet_grid(light~ cohortID)
+
 custom_palette <- c("#440154", "#3B528B", "#21918C", "#5DC863", "#FDE725")
 
 ggplot(out_dt[pred == 10 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5,0.75, 1)],
@@ -431,16 +493,6 @@ ggplot(out_dt, aes(x = factor(parMort1), y = shade))+
   geom_boxplot()+
   facet_wrap(~cohortID)
 
-ggplot(out_dt[,
-              .(shade = mean(shade)
-              ), by = .(light = cut(light, seq(0, 1, 0.2), ordered_result = T, include.lowest = T), cohortID, parMort1)
-              ], aes(
-  x = parMort1,
-  y = shade,
-  color = light)) +
-  geom_point() +
-  geom_line() +
-  facet_grid(light~ cohortID)
 
 ggplot(out_dt, aes(
   x = parMort1,
@@ -467,4 +519,18 @@ ggplot(out_dt[pred == 0.5 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.
   # labs(x = "predicted environment effect", y = "parReg (species light requirement for regeneration)", fill = "mort")
 
 
-FINN::growth
+fun <- function(light, parMort1) {
+  light = 1-light
+  ((((1 / (1 + torch_exp(-10 * (light - parMort1))) - 1 / (1 + torch_exp(10 * parMort1))) / (1 - 1 / (1 + torch_exp(10 * (1 - parMort1)))))) * (1 - light) + light)
+}
+
+light = seq(0,1,0.01)
+plot(light,fun(light,0.5), ylim = c(0,1), type = "l", xlab = "light", ylab = "shade induced mortality")
+legend("topright", title = "parMort1", legend = c("0.5","0.1","0.2","0.8","0.9"), col = c("black","red","blue","orange","green"), lty = 1)
+lines(light,fun(light,.1), ylim = c(0,1), col = "red")
+lines(light,fun(light,.2), ylim = c(0,1), col = "blue")
+lines(light,fun(light,.8), ylim = c(0,1), col = "orange")
+lines(light,fun(light,0.9), ylim = c(0,1), col = "green")
+# add legend for each par and color on top left
+
+
