@@ -1,6 +1,6 @@
 Package: FINN
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Forest Informed Neural Networks
 Version: 0.0.900
 Authors@R: 
     c(person(given = "Maximilian",
@@ -43,11 +43,12 @@ RdMacros: mathjaxr
 Config/testthat/edition: 3
 Collate: 
     'CohortMat.R'
-    'getter_setter.R'
+    'FINNbase.R'
     'FINN.R'
+    'Processes.R'
     'RcppExports.R'
     'calibrate-height.R'
     'climateDF2array.R'
-    'distributions.R'
-    'helpers.R'
+    'create-help-plots.R'
     'utils.R'
+    'zzz.R'

@@ -1,0 +1,248 @@
+#' FINNbase class
+#'
+#' @description
+#' The `FINNbase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
+#'
+#' @export
+FINNbase <- R6::R6Class(
+  classname = "FINNbase",
+  public = list(
+
+    #' Build a neural network
+    #'
+    #' This function builds a neural network with specified input shape, output shape, hidden layers, bias, activation functions, dropout rate, and last activation function.
+    #'
+    #' @param input_shape integer. Number of predictors.
+    #' @param output_shape integer. Number of species.
+    #' @param hidden vector. List of hidden layers.
+    #' @param bias vector. Boolean values indicating whether to use bias in hidden layers.
+    #' @param activation vector. List of activation functions.
+    #' @param dropout float. Dropout rate.
+    #' @param last_activation character. Last activation function.
+    #'
+    #' @return torch.nn.modules.container.Sequential. Sequential neural network object.
+    #'
+    #' @examples
+    #' build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
+    build_NN = function(self,
+                        input_shape,
+                        output_shape,
+                        hidden, # vector
+                        bias, # vector
+                        activation, # vector
+                        dropout,
+                        last_activation = "sigmoid") {
+      # Build neural network
+      #
+      # Args:
+      # input_shape (int): Number of predictors
+      # output_shape (int): Number of species
+      # hidden (vector): List of hidden layers
+      # bias (vector[bool]): Biases in hidden layers
+      # activation (vector[str]): List of activation functions
+      # dropout (float): Dropout rate
+      #
+      # Returns:
+      # torch.nn.modules.container.Sequential: Sequential neural network object
+
+      model_list <- list()
+      if (length(hidden) != length(activation)) {
+        activation <- rep(activation[1], length(hidden))
+      }
+
+      if (length(bias) == 1) {
+        bias <- rep(bias[1], length(hidden))
+      }
+      bias <- c(FALSE, bias)
+
+      if (length(hidden) > 0) {
+        for (i in 1:length(hidden)) {
+          if (i == 1) {
+            model_list <- c(model_list, torch::nn_linear(input_shape, hidden[i], bias = bias[i]))
+          } else {
+            model_list <- c(model_list, torch::nn_linear(hidden[i - 1], hidden[i], bias = bias[i]))
+          }
+          if (activation[i] == "relu") model_list <- c(model_list, torch::nn_relu())
+          if (activation[i] == "selu") model_list <- c(model_list, torch::nn_selu())
+          if (activation[i] == "leakyrelu") model_list <- c(model_list, torch::nn_leaky_relu())
+          if (activation[i] == "tanh") model_list <- c(model_list, torch::nn_tanh())
+          if (activation[i] == "sigmoid") model_list <- c(model_list, torch::nn_sigmoid())
+          if (dropout > 0.0) model_list <- c(model_list, torch::nn_dropout(p = dropout))
+        }
+      }
+
+      if (length(hidden) > 0) {
+        model_list <- c(model_list, torch::nn_linear(hidden[length(hidden)], output_shape, bias = bias[length(hidden)]))
+      } else {
+        model_list <- c(model_list, torch::nn_linear(input_shape, output_shape, bias = FALSE))
+      }
+      if (last_activation == "sigmoid") model_list <- c(model_list, torch::nn_sigmoid())
+      if (last_activation == "relu") model_list <- c(model_list, torch::nn_relu())
+      return(do.call(torch::nn_sequential, model_list))
+    },
+
+
+    #' Generate random numbers from a uniform distribution
+    #'
+    #' This function generates random numbers from a uniform distribution with specified low and high values and size similar to `np.random.uniform` in Python.
+    #'
+    #' @param low numeric. Lower bound of the uniform distribution.
+    #' @param high numeric. Upper bound of the uniform distribution.
+    #' @param size numeric. Size of the output array.
+    #'
+    #' @return array. A numeric array of random numbers.
+    #'
+    #' @examples
+    #' np_runif(0, 1, c(2, 3))
+    np_runif = function(low, high, size) {
+      N <- prod(size) # Calculate total number of values to generate
+      array(runif(N, low, high), dim = size) # Generate random numbers and reshape into desired size
+    },
+
+    #' Set weights for the Growth Environment Neural Network
+    #'
+    #' This function assigns the specified weights to the growth environment neural network.
+    #'
+    #' @param weights list. A list of weight tensors to be set.
+    #'
+    #' @return None. The weights are set in the neural network.
+    set_weights_nnGrowthEnv = function(weights) {
+      self$nnGrowthEnv <- self$set_weights(weights, self$nnGrowthEnv)
+    },
+
+    #' Set weights for the Mortality Environment Neural Network
+    #'
+    #' This function assigns the specified weights to the mortality environment neural network.
+    #'
+    #' @param weights list. A list of weight tensors to be set.
+    #'
+    #' @return None. The weights are set in the neural network.
+    set_weights_nnMortEnv = function(weights) {
+      self$nnMortEnv <- self$set_weights(weights, self$nnMortEnv)
+    },
+
+    #' Set weights for the Regeneration Environment Neural Network
+    #'
+    #' This function assigns the specified weights to the regeneration environment neural network.
+    #'
+    #' @param weights list. A list of weight tensors to be set.
+    #'
+    #' @return None. The weights are set in the neural network.
+    set_weights_nnRegEnv = function(weights) {
+      self$nnRegEnv <- self$set_weights(weights, self$nnRegEnv)
+    },
+
+    #' Set weights for a specified Neural Network
+    #'
+    #' This function assigns the specified weights to a given neural network model.
+    #'
+    #' @param weights list. A list of weight tensors to be set.
+    #' @param NN torch.nn.modules.container.Sequential. The neural network model to set weights for.
+    #'
+    #' @return torch.nn.modules.container.Sequential. The neural network with updated weights.
+    set_weights = function(weights, NN) {
+      torch::with_no_grad({
+        counter <- 1
+        for (i in 1:length(NN)) {
+          if (inherits(NN[[i]], "nn_linear")) {
+            NN$modules[[i]]$parameters$`0.weight`$set_data(weights[[counter]])
+            counter <<- counter + 1
+            if (!is.null(NN[[i]]$bias)) {
+              NN$modules[[i]]$parameters$`0.bias`$set_data(weights[[counter]])
+            }
+          }
+        }
+      })
+      return(NN)
+    },
+
+    #' Get Mortality Parameters
+    #'
+    #' This function retrieves the mortality parameters with appropriate transformations applied.
+    #'
+    #' @return torch.Tensor. The processed mortality parameters.
+    get_parMort = function() {
+      return(torch::torch_cat(list(self$parMort[, 1, drop = FALSE]$sigmoid(), self$parMort[, 2, drop = FALSE]$sigmoid() * 4.0), dim = 2L))
+      # return(torch::torch_cat(list(self$parMort[,1,drop=FALSE]$clamp(min = 0., max = 1.0), self$parMort[,2,drop=FALSE]$clamp(min = 0.0, max = 4.0)), dim = 2L ))
+    },
+
+    #' Get Growth Parameters
+    #'
+    #' This function retrieves the growth parameters with appropriate transformations applied.
+    #'
+    #' @return torch.Tensor. The processed growth parameters.
+    get_parGrowth = function() {
+      return(torch::torch_cat(list(self$parGrowth[, 1, drop = FALSE]$sigmoid(), self$parGrowth[, 2, drop = FALSE]$exp()), dim = 2L))
+      # return(torch::torch_cat(list(self$parGrowth[,1,drop=FALSE]$clamp(min = 0.0, max = 1.0), self$parGrowth[,2,drop=FALSE]$clamp(min = 0.0)), dim = 2L ))
+    },
+
+    #' Get Height Parameters
+    #'
+    #' This function retrieves the height parameters with appropriate transformations applied.
+    #'
+    #' @return torch.Tensor. The processed height parameters.
+    get_parHeight = function() {
+      return(self$parHeight$sigmoid())
+      # return(self$parHeight$clamp(min = 0.0, max = 1.0))
+    },
+
+    #' Get Regeneration Parameters
+    #'
+    #' This function retrieves the regeneration parameters with appropriate transformations applied.
+    #'
+    #' @return torch.Tensor. The processed regeneration parameters.
+    get_parReg = function() {
+      return(self$parReg$sigmoid())
+      # return(self$parReg$clamp(min = 0.0, max = 1.0))
+    },
+
+    #' Set Mortality Parameters
+    #'
+    #' This function sets the mortality parameters after applying the appropriate transformations.
+    #'
+    #' @param value matrix. A matrix of mortality parameters.
+    #'
+    #' @return None. The mortality parameters are set in the model.
+    set_parMort = function(value) {
+      # return(cbind(binomial()$linkfun(value[,1]), binomial()$linkfun(value[,2]/4.0)))
+      self$parMort <- torch::torch_tensor(cbind(stats::binomial()$linkfun(value[, 1]), stats::binomial()$linkfun(value[, 2] / 4.0)), requires_grad = TRUE, device = self$device, dtype = self$dtype)
+      # self$parMort = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
+    },
+
+    #' Set Growth Parameters
+    #'
+    #' This function sets the growth parameters after applying the appropriate transformations.
+    #'
+    #' @param value matrix. A matrix of growth parameters.
+    #'
+    #' @return None. The growth parameters are set in the model.
+    set_parGrowth = function(value) {
+      self$parGrowth <- torch::torch_tensor(cbind(stats::binomial()$linkfun(value[, 1]), log(value[, 2])), requires_grad = TRUE, device = self$device, dtype = self$dtype)
+      # self$parGrowth = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
+    },
+
+    #' Set Height Parameters
+    #'
+    #' This function sets the height parameters after applying the appropriate transformations.
+    #'
+    #' @param value numeric. A numeric vector of height parameters.
+    #'
+    #' @return None. The height parameters are set in the model.
+    set_parHeight = function(value) {
+      self$parHeight <- torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype = self$dtype)
+      # self$parHeight = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
+    },
+
+    #' Set Regeneration Parameters
+    #'
+    #' This function sets the regeneration parameters after applying the appropriate transformations.
+    #'
+    #' @param value numeric. A numeric vector of regeneration parameters.
+    #'
+    #' @return None. The regeneration parameters are set in the model.
+    set_parReg = function(value) {
+      self$parReg <- torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype = self$dtype)
+      # self$parReg = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
+    }
+  )
+)

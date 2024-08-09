@@ -22,3 +22,10 @@ src/*.dll
 src/*.dylib
 data
 
+*.so
+*.o
+*.so
+src/climateDF2array.o
+src/FINN.so
+src/obsDF2arrays.o
+src/RcppExports.o
