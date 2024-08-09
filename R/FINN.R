@@ -79,7 +79,7 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
     h = cohortHeights
 
     # TODO:
-    # Rework the height comparison, the sigmoid function perserves the gradients but they are not great (either -1 or 1)
+    # Rework the height comparison, the sigmoid function preserves the gradients but they are not great (either -1 or 1)
 
     ba_height = (ba$unsqueeze_(4)$multiply(((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2)$sigmoid_() ))$sum(-2) # AUFPASSEN
   }else{
@@ -103,6 +103,7 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
 #'
 #' @export
 mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
+  # TODO remove constant part
   shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
   environment = index_species(pred, species)
   gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
@@ -170,7 +171,8 @@ growth = function(dbh, species, parGrowth, parMort, pred, light){
 regeneration = function(species, parReg, pred, light, patch_size_ha, debug = F) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = pred
-  regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+  regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
+  #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
   regeneration1 = sample_poisson_gaussian(mean*patch_size_ha) # TODO, check if exp or not?! lambda should be always positive!
   regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()
@@ -456,30 +458,47 @@ predict = function(
   sp = self$sp
   sites = env$shape[1]
 
+  predGrowthGlobal = self$nnGrowthEnv(env)
+  predMortGlobal = self$nnMortEnv(env)
+  predRegGlobal = self$nnRegEnv(env)
+  predGrowthGlobal = torch::torch_split(predGrowthGlobal,split_size = 1, dim = 2L)
+  predMortGlobal = torch::torch_split(predMortGlobal,split_size = 1, dim = 2L)
+  predRegGlobal = torch::torch_split(predRegGlobal,split_size = 1, dim = 2L)
+
 
   # Run over timesteps
   for(i in 1:time){
-    #cat("Time: ", i, "\n")
+    # cat("Time: ", i, "\n")
+
+     pred_growth = self$nnGrowthEnv(env[,i,])
+    # pred_growth = predGrowthGlobal[,i,]
+     pred_morth = self$nnMortEnv(env[,i,])
+    # pred_morth = predMortGlobal[,i,]
+     pred_reg = self$nnRegEnv(env[,i,])
+    # pred_reg = predRegGlobal[,i,]
+    # pred_growth = predGrowthGlobal[[i]]$squeeze(dim = 2L)
+    # pred_morth = predMortGlobal[[i]]$squeeze(dim = 2L)
+    # pred_reg = predRegGlobal[[i]]$squeeze(dim = 2L)
 
     light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
     g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
     m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
     r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
 
-    dbh = dbh$detach()
-    trees = trees$detach()
-    species = species$detach()
-    cohort_ids = cohort_ids$detach()
+    dbh=dbh$detach()
+    trees=trees$detach()
+    species=species$detach()
+    cohort_ids=cohort_ids$detach()
 
     # Model
-
+    parHeight = self$get_parHeight()
+    parMort = self$get_parMort()
+    parGrowth = self$get_parGrowth()
+    parReg = self$get_parReg()
     if(dbh$shape[3] > 0.5){
 
       # get Parameters parameter constrains
-      parHeight = self$get_parHeight()
-      parMort = self$get_parMort()
-      parGrowth = self$get_parGrowth()
-      parReg = self$get_parReg()
+
 
       light = competition(
         dbh = dbh,
@@ -498,7 +517,7 @@ predict = function(
         species = species,
         parGrowth = parGrowth,
         parMort = parMort,
-        pred = pred_growth[, i, ],
+        pred = pred_growth,
         light = light
       )
 
@@ -521,7 +540,7 @@ predict = function(
         species = species,
         trees = trees + 0.001,
         parMort = parMort,
-        pred = pred_morth[, i, ],
+        pred = pred_morth,
         light = light
       ) #.unsqueeze(3) # TODO check!
       #trees$sub_(m)$clamp_(min = 0.0)
@@ -540,7 +559,11 @@ predict = function(
       ba = NULL,
       cohortHeights = NULL
     )
-    r = regeneration(species = species, parReg = parReg, pred = pred_reg[,i,], light = AL_reg, patch_size_ha = self$patch_size_ha)
+    r = regeneration(species = species,
+                     parReg = parReg,
+                     pred = pred_reg,
+                     light = AL_reg,
+                     patch_size_ha = self$patch_size_ha)
 
     # New recruits
     new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
@@ -562,7 +585,7 @@ predict = function(
       Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
       tmp_res = aggregate_results(labels, samples, Results_tmp)
       for(v in c(3,4,5)){
-        Result[[v]][,i,]$add_(tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches) # TODO
+        Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches) # TODO
       }
 
       # cohort ids
@@ -570,7 +593,7 @@ predict = function(
 
       # reg extra
       tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-      Result[[6]][,i,]$add_(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches)
+      Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches)
 
 
       if(debug) {
@@ -581,7 +604,6 @@ predict = function(
                                               list(torch::as_array(g$cpu())),
                                               list(torch::as_array(r$cpu())))))
       }
-
     }
 
     # Combine
@@ -595,7 +617,7 @@ predict = function(
     if(i %% 1 == 0){
 
       # Gradient shouldn't be required, also expensive for backpropagation because of reshape/view operations!
-      torch::with_no_grad({
+      #torch::with_no_grad({
         # Masks to find alive cohorts
         mask = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
         org_dim = species$shape[1:2]
@@ -610,13 +632,13 @@ predict = function(
         trees = trees$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
         cohort_ids = cohort_ids$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
         species = species$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
-      })
+     # })
     }
 
 
     # aggregate results
     # TODO: Position of the first block?
-    if(i > start_time){
+    if(i > 0){
       if(dbh$shape[3] != 0){
         if(response == "dbh"){
           BA_stem = dbh
@@ -635,14 +657,17 @@ predict = function(
         tmp_res = aggregate_results(labels, samples, Results_tmp)
         # BA and number of trees Result[[1]] and Result[[2]]
         for(v in 1:2){
-          Result[[v]][,i,]$add_(tmp_res[[v]]$div_(patches))
+          Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
         }
+        rm(BA_stem)
       }
     }
 
 
+
+
     loss = torch_zeros(1L, device = self$device)
-    if(i > 2 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
+    if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
       for(j in 1:6) {
         # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
         if(j != 2) {
@@ -651,9 +676,18 @@ predict = function(
           loss = loss+torch::distr_poisson(Result[[2]][,i,]+0.001)$log_prob(c[, i,])$mean()$negative()
         }
       }
-      loss$backward(retain_graph=TRUE)
-      Result[[j]]$detach_()
+      loss$backward()
+      # cat("Backprop....\n")
+      for(j in 1:6) Result[[j]] = Result[[j]]$detach()
     }
+    loss$detach_()
+    # predGrowthGlobal[,i,] = predGrowthGlobal[,i,]$detach()
+    # predMortGlobal[,i,] = predMortGlobal[,i,]$detach()
+    # predRegGlobal[,i,] = predRegGlobal[,i,]$detach()
+
+    # predGrowthGlobal[[i]] = predGrowthGlobal[[i]]$detach()
+    # predMortGlobal[[i]] = predMortGlobal[[i]]$detach()
+    # predRegGlobal[[i]] = predRegGlobal[[i]]$detach()
 
   }
 
