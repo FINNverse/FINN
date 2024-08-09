@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // climateDF2arrayCpp
-NumericVector climateDF2arrayCpp(NumericMatrix climate_dt, IntegerVector site_ids, IntegerVector year_ids, bool include_month, int Nsites, int Nyears, int Nmonths, int Nenv, CharacterVector env_vars);
-RcppExport SEXP _FINN_climateDF2arrayCpp(SEXP climate_dtSEXP, SEXP site_idsSEXP, SEXP year_idsSEXP, SEXP include_monthSEXP, SEXP NsitesSEXP, SEXP NyearsSEXP, SEXP NmonthsSEXP, SEXP NenvSEXP, SEXP env_varsSEXP) {
+NumericVector climateDF2arrayCpp(NumericMatrix climate_dt, IntegerVector site_ids, IntegerVector year_ids, bool include_month, bool include_day, int Nsites, int Nyears, int Nmonths, int Ndays, int Nenv, CharacterVector env_vars);
+RcppExport SEXP _FINN_climateDF2arrayCpp(SEXP climate_dtSEXP, SEXP site_idsSEXP, SEXP year_idsSEXP, SEXP include_monthSEXP, SEXP include_daySEXP, SEXP NsitesSEXP, SEXP NyearsSEXP, SEXP NmonthsSEXP, SEXP NdaysSEXP, SEXP NenvSEXP, SEXP env_varsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -20,12 +20,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type site_ids(site_idsSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type year_ids(year_idsSEXP);
     Rcpp::traits::input_parameter< bool >::type include_month(include_monthSEXP);
+    Rcpp::traits::input_parameter< bool >::type include_day(include_daySEXP);
     Rcpp::traits::input_parameter< int >::type Nsites(NsitesSEXP);
     Rcpp::traits::input_parameter< int >::type Nyears(NyearsSEXP);
     Rcpp::traits::input_parameter< int >::type Nmonths(NmonthsSEXP);
+    Rcpp::traits::input_parameter< int >::type Ndays(NdaysSEXP);
     Rcpp::traits::input_parameter< int >::type Nenv(NenvSEXP);
     Rcpp::traits::input_parameter< CharacterVector >::type env_vars(env_varsSEXP);
-    rcpp_result_gen = Rcpp::wrap(climateDF2arrayCpp(climate_dt, site_ids, year_ids, include_month, Nsites, Nyears, Nmonths, Nenv, env_vars));
+    rcpp_result_gen = Rcpp::wrap(climateDF2arrayCpp(climate_dt, site_ids, year_ids, include_month, include_day, Nsites, Nyears, Nmonths, Ndays, Nenv, env_vars));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -43,7 +45,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_FINN_climateDF2arrayCpp", (DL_FUNC) &_FINN_climateDF2arrayCpp, 9},
+    {"_FINN_climateDF2arrayCpp", (DL_FUNC) &_FINN_climateDF2arrayCpp, 11},
     {"_FINN_obsDF2arraysCpp", (DL_FUNC) &_FINN_obsDF2arraysCpp, 2},
     {NULL, NULL, 0}
 };
