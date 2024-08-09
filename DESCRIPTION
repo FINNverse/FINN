@@ -37,7 +37,7 @@ Suggests:
     knitr,
     rmarkdown
 RoxygenNote: 7.3.2
-Roxygen: list(old_usage = FALSE)
+Roxygen: list(old_usage = FALSE, markdown = TRUE)
 VignetteBuilder: knitr
 RdMacros: mathjaxr
 Config/testthat/edition: 3
