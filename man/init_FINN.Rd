@@ -21,7 +21,8 @@ init_FINN(
   bias = self$bias,
   patch_size_ha = self$patch_size_ha,
   minLight = self$minLight,
-  which = "all"
+  disturbance = self$disturbance,
+  which = c("all", "env", "species")
 )
 }
 \arguments{

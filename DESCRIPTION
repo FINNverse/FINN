@@ -31,7 +31,9 @@ Imports:
     R6,
     Rcpp,
     mathjaxr,
-    torch
+    torch,
+    ggplot2,
+    viridis
 Suggests:
     testthat (>= 3.0.0),
     knitr,
@@ -48,6 +50,7 @@ Collate:
     'RcppExports.R'
     'calibrate-height.R'
     'climateDF2array.R'
+    'create-help-plots.R'
     'distributions.R'
     'helpers.R'
     'utils.R'

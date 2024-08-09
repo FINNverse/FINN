@@ -11,9 +11,10 @@ fit(
   epochs = 2L,
   batch_size = 20L,
   learning_rate = 0.1,
-  start_time = 0.5,
+  start_time = 1,
   patches = 50L,
-  response = "dbh"
+  response = "dbh",
+  update_step = 1L
 )
 }
 \arguments{
@@ -34,6 +35,8 @@ fit(
 \item{patches}{integer The number of patches. Default is 50.}
 
 \item{response}{character The response variable. Default is "dbh", other options are 'BA_stem' or 'BA_stem*nT'.}
+
+\item{update_step}{backpropagation step length}
 }
 \value{
 None

@@ -9,13 +9,16 @@ predict(
   trees = NULL,
   species = NULL,
   env = NULL,
-  record_time = 0L,
+  start_time = 1L,
   response = "dbh",
   pred_growth = NULL,
   pred_morth = NULL,
   pred_reg = NULL,
   patches = 50,
-  debug = TRUE
+  debug = TRUE,
+  y = NULL,
+  c = NULL,
+  update_step = 1L
 )
 }
 \arguments{
@@ -27,7 +30,7 @@ predict(
 
 \item{env}{torch.Tensor The environmental data.}
 
-\item{record_time}{integer The time at which to start recording the results.}
+\item{start_time}{integer The time at which to start recording the results.}
 
 \item{response}{character The response variable to use for aggregating results. Can be "dbh", "BA_stem", or "BA_stem".}
 
@@ -40,6 +43,12 @@ predict(
 \item{patches}{float (Optional) The number of patches.}
 
 \item{debug}{logical Whether to run in debug mode.}
+
+\item{y}{response tensor}
+
+\item{c}{number of tree tensor}
+
+\item{update_step}{backpropagation step length}
 }
 \value{
 list A list of predicted values for dbh and number of trees for the recorded time points.
