@@ -29,13 +29,25 @@ Imports:
     data.table,
     coro,
     R6,
-    Rcpp
+    Rcpp,
+    mathjaxr,
+    torch
 Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown
-RoxygenNote: 7.3.1
-Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Roxygen: list(old_usage = FALSE, markdown = TRUE)
 VignetteBuilder: knitr
 RdMacros: mathjaxr
 Config/testthat/edition: 3
+Collate: 
+    'CohortMat.R'
+    'getter_setter.R'
+    'FINN.R'
+    'RcppExports.R'
+    'calibrate-height.R'
+    'climateDF2array.R'
+    'distributions.R'
+    'helpers.R'
+    'utils.R'
