@@ -160,7 +160,6 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
   species = NULL,
   env = NULL,
   start_time = 1L,
-  response = "dbh",
   pred_growth = NULL,
   pred_morth = NULL,
   pred_reg = NULL,
@@ -169,7 +168,8 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
   y = NULL,
   c = NULL,
   update_step = 1L,
-  verbose = TRUE
+  verbose = TRUE,
+  weights = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -185,8 +185,6 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
 \item{\code{env}}{torch.Tensor. Environmental data.}
 
 \item{\code{start_time}}{integer. Time at which to start recording the results.}
-
-\item{\code{response}}{character. Response variable for aggregating results ("dbh", "BA_stem", or "BA_stem*nT").}
 
 \item{\code{pred_growth}}{torch.Tensor (Optional). Predicted growth values.}
 
@@ -205,6 +203,8 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
 \item{\code{update_step}}{integer. Backpropagation step length.}
 
 \item{\code{verbose}}{logical. Print progress if TRUE.}
+
+\item{\code{weights}}{weights for reweighting the loss}
 }
 \if{html}{\out{</div>}}
 }
@@ -229,8 +229,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   learning_rate = 0.1,
   start_time = 1,
   patches = 50L,
-  response = "dbh",
-  update_step = 1L
+  update_step = 1L,
+  reweight = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -253,9 +253,11 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 
 \item{\code{patches}}{integer. Number of patches in the dataset. Default is 50.}
 
-\item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
-
 \item{\code{update_step}}{integer. Backpropagation step length.}
+
+\item{\code{reweight}}{reweight likelihood}
+
+\item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
 }
 \if{html}{\out{</div>}}
 }

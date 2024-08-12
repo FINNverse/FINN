@@ -26,9 +26,9 @@ system.time({
 
 pred = finn$predict(dbh = initCohort$dbh,
                     trees = initCohort$trees,
-                    species = initCohort$species,
-                    response = "BA*T", env = env, patches = patches, debug = FALSE, verbose = TRUE)
+                    species = initCohort$species, env = env, patches = patches, debug = FALSE, verbose = TRUE)
 })
+
 
 # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
 plot(pred[[1]][1,,1] , type = "l")
@@ -103,7 +103,8 @@ Y = (torch_cat(list(pred[[1]]$unsqueeze(4),
                     pred[[3]]$unsqueeze(4),
                     pred[[4]]$unsqueeze(4),
                     pred[[5]]$unsqueeze(4),
-                    pred[[6]]$unsqueeze(4)), 4))
+                    pred[[6]]$unsqueeze(4),
+                    pred[[7]]$unsqueeze(4)), 4))
 
 #Y = Y$unsqueeze(3)
 patches = 5L
@@ -124,7 +125,7 @@ finn2 = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
 start = lapply(finn2$parameters, as.matrix)
 finn2$optimizer = NULL
 system.time({
-finn2$fit(initCohort = initCohort, X = (env)[,1:60,],Y = Y, patches = patches, batch_size = 50L, epochs = 200L, learning_rate = 0.03, response = "BA*T", update_step = 1L)
+finn2$fit(initCohort = initCohort, X = (env)[,1:60,],Y = Y, patches = patches, batch_size = 50L, epochs = 200L, learning_rate = 0.001,update_step = 1L, reweight = FALSE)
 })
 
  matplot(sapply(1:length(finn2$param_history), function(i) plogis(finn2$param_history[[i]]$H)) %>% t(), type = "l")
