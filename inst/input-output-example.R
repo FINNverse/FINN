@@ -1,8 +1,9 @@
 library(FINN)
 library(data.table)
+library(ggplot2)
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-## 1. env data input ####
+## env data input ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # Define the number of days in each month
 days_in_month <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -57,97 +58,119 @@ climate_dt_year <- climate_dt[, .(tmp = mean(tmp), pre = sum(pre)), by = .(siteI
 resultYear <- climateDF2array(climate_dt = climate_dt_year, env_vars = c("tmp", "pre"))
 str(resultYear)
 
-# Create arrays
-resultDay <- climateDF2array(climate_dt, env_vars = c("tmp", "pre"))
-resultMonth <- climateDF2array(climate_dt[, .(tmp = mean(tmp), pre = sum(pre)), by = .(siteID, year, month)], env_vars = c("tmp", "pre"))
-resultYear <- climateDF2array(climate_dt[, .(tmp = mean(tmp), pre = sum(pre)), by = .(siteID, year)], env_vars = c("tmp", "pre"))
-
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 2. simulate data ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 sp = 3L
-patches = 40L
-sites = 20L
-initCohort = CohortMat$new(dims = c(sites, patches, 10),
-                           dbh = array(1, dim = c(sites, patches, 10)),
-                           trees = array(1, dim = c(sites, patches, 10)),
-                           sp = sp)
-
-
+patches = 5L
+sites = 10L
+# initCohort = CohortMat$new(dims = c(sites, patches, 10),
+#                            dbh = array(1, dim = c(sites, patches, 10)),
+#                            trees = array(1, dim = c(sites, patches, 10)),
+#                            sp = sp)
+# torch::as_array(initCohort$dbh)
 finn = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                 parGrowth = matrix(c(0.1, 5), sp, 2, byrow = TRUE),
                 parMort = matrix(c(runif(sp), runif(sp, 1, 4)), sp, 2, byrow = FALSE),
                 parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
-                # parHeight = runif(sp, 0.3, 0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
-                parHeight = c(0.6,0.6,0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
+                parHeight = runif(sp, 0.3, 0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
+                # parHeight = c(0.6,0.6,0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
                 parGrowthEnv = list(matrix(c(10, 10, -5), sp, 2)),
                 parMortEnv = list(matrix(c(-1, -1, 1)*0, sp, 2)),
                 parRegEnv = list(matrix(c(1, 2, 3), sp, 2)),
                 patch_size_ha = 0.1)
-env = torch::torch_randn(size = c(sites, 2000L, 2))
-# env = torch::torch_zeros(size = c(sites, 100, 2))
+
+env = torch::torch_randn(size = c(sites, 100L, 2))*0+1
+
+str(finn$device)
+
+CohortMat$new(dims = c(env$shape[1], patches, sp), sp = sp, device=finn$device)
 
 system.time({
-  pred = finn$predict(dbh = initCohort$dbh,
-                      trees = initCohort$trees,
-                      species = initCohort$species,
-                      response = "BA*T", env = env, patches = patches, debug = FALSE)
+  pred = finn$predict(
+    dbh = NULL,
+    trees = NULL,
+    species = NULL,
+    response = "BA*T", env = env, patches = patches, debug = FALSE)
 })
+
+system.time({
+pred2 = finn$predict(
+  dbh = NULL,
+  trees = NULL,
+  species = NULL,
+  response = "BA*T", env = env, patches = patches, debug = T)
+})
+
+str(pred2)
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 3. model output --> inventory data.frame ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
-# 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
+length(pred2$Predictions)
+length(pred2$Predictions[[1]])
+str(pred2$Predictions[[1]])
 
-# Example structure of `pred` and `out_names`
-# Assuming pred is already defined as given in the question.
-out_names <- c("dbh_ba", "trees", "AL", "growth", "mort", "reg")
+str(pred2$loss)
+length(pred)
 
-# Initialize an empty data.table to store the final result
-inventory_dt <- NULL
+pred2DF <- function(pred, format = "wide"){
+  # Example structure of `pred` and `out_names`
+  # Assuming pred is already defined as given in the question.
+  out_names <- c("dbh_ba", "trees", "AL", "growth", "mort", "reg")
+  # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
+  # Initialize an empty data.table to store the final result
+  inventory_dt <- NULL
+  # Loop through pred and convert each to a data frame using array2DF
+  for (i in seq_along(pred)) {
+    i_name <- out_names[i]
 
-# Loop through pred and convert each to a data frame using array2DF
-for (i in seq_along(pred)) {
-  i_name <- out_names[i]
+    # Convert array to a data frame using array2DF
+    df <- data.table(
+      array2DF(
+        torch::as_array(pred[[i]]),
+        responseName = i_name, base = c("siteID", "year", "species"),
+        simplify = F, allowLong = T)
+      )
 
-  # Convert array to a data frame using array2DF
-  df <- data.table(
-    array2DF(
-      torch::as_array(pred[[i]]),
-      responseName = i_name, base = c("siteID", "year", "species"),
-      simplify = F, allowLong = T)
-    )
+    # Rename the dimension columns to match siteID, year, species
+    setnames(df, old = c("Var1", "Var2", "Var3"), new = c("siteID", "year", "species"))
 
-  # Rename the dimension columns to match siteID, year, species
-  setnames(df, old = c("Var1", "Var2", "Var3"), new = c("siteID", "year", "species"))
+    # Convert siteID, year, species to numeric (or integer)
+    df[, siteID := as.integer(gsub("siteID","",siteID))+1]
+    df[is.na(siteID), siteID := 1]
+    df[, year := as.integer(gsub("year","",year))+1]
+    df[is.na(year), year := 1]
+    df[, species := as.integer(gsub("species","",species))+1]
+    df[is.na(species), species := 1]
 
-  # Convert siteID, year, species to numeric (or integer)
-  df[, siteID := as.integer(gsub("siteID","",siteID))+1]
-  df[is.na(siteID), siteID := 1]
-  df[, year := as.integer(gsub("year","",year))+1]
-  df[is.na(year), year := 1]
-  df[, species := as.integer(gsub("species","",species))+1]
-  df[is.na(species), species := 1]
-
-  # If inventory_dt is NULL, initialize it with the first data frame
-  if (is.null(inventory_dt)) {
-    inventory_dt <- df
-  } else {
-    # Otherwise, merge the new data frame with the existing inventory_dt
-    inventory_dt <- merge(inventory_dt, df, by = c("siteID", "year", "species"))
+    # If inventory_dt is NULL, initialize it with the first data frame
+    if (is.null(inventory_dt)) {
+      inventory_dt <- df
+    } else {
+      # Otherwise, merge the new data frame with the existing inventory_dt
+      inventory_dt <- merge(inventory_dt, df, by = c("siteID", "year", "species"))
+    }
+  }
+  if(format == "long"){
+    # Convert the wide format to long format
+    inventory_dt <- melt(inventory_dt, id.vars = c("siteID", "year", "species"), variable.name = "variable")
+    return(inventory_dt)
+  }else if(format == "wide"){
+    return(inventory_dt)
+  }else{
+    stop("Invalid format argument. Use either 'long' or 'wide'")
   }
 }
 
-# Show the structure of inventory_dt to confirm
-summary(inventory_dt)
+inventory_dt <- pred2DF(pred, format = "long")
 
-melt_dt <- melt(inventory_dt, id.vars = c("siteID","year", "species"), measure.vars = out_names)
 
-ggplot(melt_dt[, .(value = mean(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
+ggplot(inventory_dt[, .(value = mean(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
   geom_line() +
   labs(x = "Year",
-       y = out_names[i]) +
+       y = "value") +
   theme_minimal()+
   facet_wrap(~variable, scales = "free_y")
 
@@ -170,6 +193,8 @@ ggplot(melt_dt[, .(value = mean(value) ), by = .(year, species, variable)], aes(
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 5. fit model  ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+
+
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 6. true vs. fitted  ####
