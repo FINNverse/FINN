@@ -402,7 +402,7 @@ FINN = R6::R6Class(
 
           # reg extra
           tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-          Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches)
+          Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0))
 
 
           if(debug) {
