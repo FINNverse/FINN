@@ -200,7 +200,7 @@ CohortMat = R6::R6Class("CohortMat", public = list(
     self$species = if(is.null(species)) array(sample.int(sp, prod(dims),replace = TRUE), dim = dims) else species
     self$dims = dims
     self$sp = sp
-    self$device = torch::torch_device(device)
+    if(!("torch_device" %in% class(device))) self$device = torch::torch_device(device)
 
     if(!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype=torch_float32(), device=self$device)
     if(!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype=torch_float32(), device=self$device)
