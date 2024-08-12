@@ -196,7 +196,6 @@ FINN = R6::R6Class(
     #' @param species torch.Tensor (Optional). Species of the trees.
     #' @param env torch.Tensor. Environmental data.
     #' @param start_time integer. Time at which to start recording the results.
-    #' @param response character. Response variable for aggregating results ("dbh", "BA_stem", or "BA_stem*nT").
     #' @param pred_growth torch.Tensor (Optional). Predicted growth values.
     #' @param pred_morth torch.Tensor (Optional). Predicted mortality values.
     #' @param pred_reg torch.Tensor (Optional). Predicted regeneration values.
@@ -206,13 +205,13 @@ FINN = R6::R6Class(
     #' @param c torch.Tensor. Number of tree tensor.
     #' @param update_step integer. Backpropagation step length.
     #' @param verbose logical. Print progress if TRUE.
+    #' @param weights weights for reweighting the loss
     #' @return list. A list of predicted values for dbh, number of trees, and other recorded time points. If `debug` is TRUE, raw results and cohorts are also returned.
     predict = function(dbh = NULL,
                        trees = NULL,
                        species = NULL,
                        env = NULL,
                        start_time = 1L,
-                       response ="dbh",
                        pred_growth = NULL,
                        pred_morth = NULL,
                        pred_reg = NULL,
@@ -221,7 +220,8 @@ FINN = R6::R6Class(
                        y = NULL,
                        c = NULL,
                        update_step = 1L,
-                       verbose = TRUE){
+                       verbose = TRUE,
+                       weights = NULL){
 
 
       if(is.null(dbh)){
@@ -236,6 +236,10 @@ FINN = R6::R6Class(
 
       if(is.null(y)) {
         lapply(self$parameters, function(p) p$requires_grad_(FALSE) )
+      }
+
+      if(!is.null(y)) {
+        if(is.null(weights)) weights = torch_ones(dim(y)[4], dtype = self$dtype, device = self$device)
       }
 
 
@@ -254,7 +258,7 @@ FINN = R6::R6Class(
       m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
       r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
 
-      Result = lapply(1:6,function(tmp) torch_zeros(list(env$shape[1], env$shape[2], self$sp), device=self$device))
+      Result = lapply(1:7,function(tmp) torch_zeros(list(env$shape[1], env$shape[2], self$sp), device=self$device))
 
       # Can get memory intensive...
       if(debug) {
@@ -299,16 +303,13 @@ FINN = R6::R6Class(
         species=species$detach()
         cohort_ids=cohort_ids$detach()
 
-        # Model
+        # Model - get Parameters parameter constrains
         parHeight = self$get_parHeight()
         parMort = self$get_parMort()
         parGrowth = self$get_parGrowth()
         parReg = self$get_parReg()
+
         if(dbh$shape[3] > 0.5){
-
-          # get Parameters parameter constrains
-
-
           light = competition(
             dbh = dbh,
             species = species,
@@ -393,8 +394,8 @@ FINN = R6::R6Class(
 
           Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
           tmp_res = aggregate_results(labels, samples, Results_tmp)
-          for(v in c(3,4,5)){
-            Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)) # TODO
+          for(v in c(4,5,6)){
+            Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-3]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)) # TODO
           }
 
           # cohort ids
@@ -449,23 +450,18 @@ FINN = R6::R6Class(
         # TODO: Position of the first block?
         if(i > 0){
           if(dbh$shape[3] != 0){
-            if(response == "dbh"){
-              BA_stem = dbh
-            }else if(response == "BA_stem"){
-              BA_stem = BA_stem(dbh)
-            }else{
-              BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
-              # BA_stem * trees
-            }
+            BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
             labels = species
-            samples = vector("list", 2)
-            samples[[1]] = BA_stem * torch_sigmoid((trees - 0.5)/1e-3)
-            samples[[2]] = trees * torch_sigmoid((trees - 0.5)/1e-3)
-            Results_tmp = replicate(2, torch_zeros_like(Result[[1]][,i,]))
+            samples = vector("list", 3)
+            mask = trees$gt(0.5)
+            samples[[1]] = dbh * mask
+            samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
+            samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
+            Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
 
             tmp_res = aggregate_results(labels, samples, Results_tmp)
             # BA and number of trees Result[[1]] and Result[[2]]
-            for(v in 1:2){
+            for(v in 1:3){
               Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
             }
             rm(BA_stem)
@@ -474,17 +470,17 @@ FINN = R6::R6Class(
 
         loss = torch_zeros(1L, device = self$device)
         if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
-          for(j in 1:6) {
-            # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
-            if(j != 2) {
-              loss = loss+torch::nnf_mse_loss(y[, i,,j], Result[[j]][,i,])$mean()
+          for(j in 1:7) {
+            # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
+            if(j != 3) {
+              loss = loss+torch::nnf_mse_loss(y[, i,,j], Result[[j]][,i,])$mean()*(weights[j]+0.0001)
             } else {
-              loss = loss+torch::distr_poisson(Result[[2]][,i,]+0.001)$log_prob(c[, i,])$mean()$negative()
+              loss = loss+torch::distr_poisson(Result[[2]][,i,]+0.001)$log_prob(c[, i,])$mean()$negative()*(weights[j]+0.0001)
             }
           }
           loss$backward()
           # cat("Backprop....\n")
-          for(j in 1:6) Result[[j]] = Result[[j]]$detach()
+          for(j in 1:7) Result[[j]] = Result[[j]]$detach()
         }
         loss$detach_()
 
@@ -518,6 +514,7 @@ FINN = R6::R6Class(
     #' @param patches integer. Number of patches in the dataset. Default is 50.
     #' @param response character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".
     #' @param update_step integer. Backpropagation step length.
+    #' @param reweight reweight likelihood
     #' @return None. The trained model is stored within the class instance.
     fit = function(
           X = NULL,
@@ -528,8 +525,8 @@ FINN = R6::R6Class(
           learning_rate = 0.1,
           start_time = 1,
           patches = 50L,
-          response = "dbh",
-          update_step = 1L){
+          update_step = 1L,
+          reweight = FALSE){
 
         if(is.null(self$optimizer)){
           self$optimizer = optim_adagrad(params = self$parameters, lr = learning_rate) # AdaBound was also good
@@ -555,6 +552,11 @@ FINN = R6::R6Class(
         DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
         self$history = torch::torch_zeros(epochs)
+
+        weights = torch::torch_ones(dim(Y)[1], dtype = self$dtype, device = self$device)
+        if(reweight) {
+          weights = torch::torch_cat(lapply(1:dim(Y)[4], function(i) Y[,,,i]$max()$reshape(c(1, 1))))
+        }
 
         cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} Loss: {bl}", total = epochs, clear = FALSE)
 
@@ -587,11 +589,11 @@ FINN = R6::R6Class(
                                     species,
                                     x,
                                     start_time = start_time,
-                                    response = response,
                                     y = y,
                                     c = c,
                                     update_step = update_step,
-                                    verbose = FALSE)
+                                    verbose = FALSE,
+                                    weights = weights)
             pred = pred_tmp[[1]]
             loss = pred_tmp[[2]]
 
