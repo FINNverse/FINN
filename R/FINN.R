@@ -394,7 +394,7 @@ FINN = R6::R6Class(
           Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
           tmp_res = aggregate_results(labels, samples, Results_tmp)
           for(v in c(3,4,5)){
-            Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches) # TODO
+            Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-2]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)) # TODO
           }
 
           # cohort ids
