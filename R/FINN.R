@@ -299,16 +299,13 @@ FINN = R6::R6Class(
         species=species$detach()
         cohort_ids=cohort_ids$detach()
 
-        # Model
+        # Model - get Parameters parameter constrains
         parHeight = self$get_parHeight()
         parMort = self$get_parMort()
         parGrowth = self$get_parGrowth()
         parReg = self$get_parReg()
+
         if(dbh$shape[3] > 0.5){
-
-          # get Parameters parameter constrains
-
-
           light = competition(
             dbh = dbh,
             species = species,
