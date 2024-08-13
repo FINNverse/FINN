@@ -62,12 +62,12 @@ str(resultYear)
 ## 2. simulate data ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 sp = 3L
-patches = 5L
+patches = 5
 sites = 10L
-# initCohort = CohortMat$new(dims = c(sites, patches, 10),
-#                            dbh = array(1, dim = c(sites, patches, 10)),
-#                            trees = array(1, dim = c(sites, patches, 10)),
-#                            sp = sp)
+initCohort = CohortMat$new(dims = c(sites, patches, 10),
+                           dbh = array(1, dim = c(sites, patches, 10)),
+                           trees = array(1, dim = c(sites, patches, 10)),
+                           sp = sp)
 # torch::as_array(initCohort$dbh)
 finn = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                 parGrowth = matrix(c(0.1, 5), sp, 2, byrow = TRUE),
@@ -80,94 +80,55 @@ finn = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                 parRegEnv = list(matrix(c(1, 2, 3), sp, 2)),
                 patch_size_ha = 0.1)
 
-env = torch::torch_randn(size = c(sites, 100L, 2))*0+1
+env = torch::torch_randn(size = c(sites, 7L, 2))*0+1
 
 str(finn$device)
 
-CohortMat$new(dims = c(env$shape[1], patches, sp), sp = sp, device=finn$device)
+# CohortMat$new(dims = c(env$shape[1], patches, sp), sp = sp, device=finn$device)
 
 system.time({
-  pred = finn$predict(
+  FINN.seed(1)
+  pred1 = finn$predict(
+    # dbh = initCohort$dbh,
+    # trees = initCohort$trees,
+    # species = initCohort$species,
     dbh = NULL,
     trees = NULL,
     species = NULL,
-    response = "BA*T", env = env, patches = patches, debug = FALSE)
+    env = env, patches = patches, debug = FALSE)
 })
 
 system.time({
-pred2 = finn$predict(
-  dbh = NULL,
-  trees = NULL,
-  species = NULL,
-  response = "BA*T", env = env, patches = patches, debug = T)
+  FINN.seed(1)
+  pred2 = finn$predict(
+    # dbh = initCohort$dbh,
+    # trees = initCohort$trees,
+    # species = initCohort$species,
+    dbh = NULL,
+    trees = NULL,
+    species = NULL,
+    env = env, patches = patches, debug = T)
 })
-
-str(pred2)
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 3. model output --> inventory data.frame ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+pred = pred2
 
-length(pred2$Predictions)
-length(pred2$Predictions[[1]])
-str(pred2$Predictions[[1]])
+results <- pred2DF(pred, format = "long")
 
-str(pred2$loss)
-length(pred)
+str(results$site)
+str(results$patch)
+str(results$cohort)
 
-pred2DF <- function(pred, format = "wide"){
-  # Example structure of `pred` and `out_names`
-  # Assuming pred is already defined as given in the question.
-  out_names <- c("dbh_ba", "trees", "AL", "growth", "mort", "reg")
-  # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
-  # Initialize an empty data.table to store the final result
-  inventory_dt <- NULL
-  # Loop through pred and convert each to a data frame using array2DF
-  for (i in seq_along(pred)) {
-    i_name <- out_names[i]
+ggplot(results$site[, .(value = max(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
+  geom_line() +
+  labs(x = "Year",
+       y = "value") +
+  theme_minimal()+
+  facet_wrap(~variable, scales = "free_y")
 
-    # Convert array to a data frame using array2DF
-    df <- data.table(
-      array2DF(
-        torch::as_array(pred[[i]]),
-        responseName = i_name, base = c("siteID", "year", "species"),
-        simplify = F, allowLong = T)
-      )
-
-    # Rename the dimension columns to match siteID, year, species
-    setnames(df, old = c("Var1", "Var2", "Var3"), new = c("siteID", "year", "species"))
-
-    # Convert siteID, year, species to numeric (or integer)
-    df[, siteID := as.integer(gsub("siteID","",siteID))+1]
-    df[is.na(siteID), siteID := 1]
-    df[, year := as.integer(gsub("year","",year))+1]
-    df[is.na(year), year := 1]
-    df[, species := as.integer(gsub("species","",species))+1]
-    df[is.na(species), species := 1]
-
-    # If inventory_dt is NULL, initialize it with the first data frame
-    if (is.null(inventory_dt)) {
-      inventory_dt <- df
-    } else {
-      # Otherwise, merge the new data frame with the existing inventory_dt
-      inventory_dt <- merge(inventory_dt, df, by = c("siteID", "year", "species"))
-    }
-  }
-  if(format == "long"){
-    # Convert the wide format to long format
-    inventory_dt <- melt(inventory_dt, id.vars = c("siteID", "year", "species"), variable.name = "variable")
-    return(inventory_dt)
-  }else if(format == "wide"){
-    return(inventory_dt)
-  }else{
-    stop("Invalid format argument. Use either 'long' or 'wide'")
-  }
-}
-
-inventory_dt <- pred2DF(pred, format = "long")
-
-
-ggplot(inventory_dt[, .(value = mean(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
+ggplot(results$site[, .(value = max(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
   geom_line() +
   labs(x = "Year",
        y = "value") +
