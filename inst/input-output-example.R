@@ -139,6 +139,10 @@ ggplot(results$site[, .(value = max(value) ), by = .(year, species, variable)], 
 ## 4. inventory data.frame --> model input ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
+results <- pred2DF(pred, format = "wide")
+names(results$cohort) = c("siteID", "patchID", "species", "cohortID" ,"year", "trees", "dbh", "m", "g")
+FINN::obsDF2arrays(results$cohort)
+
 ## 4.1 calculate response variables ####
 
 # growth rates
