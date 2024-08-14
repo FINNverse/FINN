@@ -1,12 +1,19 @@
-#' FINNbase class
+#' FINNbase Class
 #'
 #' @description
-#' The `FINNbase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
+#' The `FINNbase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, setting and getting model parameters, and managing weights in neural networks.
 #'
 #' @export
 FINNbase <- R6::R6Class(
   classname = "FINNbase",
   public = list(
+    parHeight_r = NULL, # must be dim [species]
+    parGrowth_r = NULL, # must be dim [species, 2], first for shade tolerance
+    parMort_r = NULL, # must be dim [species, 2], first for shade tolerance,
+    parReg_r = NULL, # must be dim [species]
+    parGrowthEnv_r = NULL, # must be dim [species, 2], first for shade tolerance
+    parMortEnv_r = NULL, # must be dim [species, 2], first for shade tolerance,
+    parRegEnv_r = NULL, # must be dim [species]
 
     #' Build a neural network
     #'
@@ -243,6 +250,64 @@ FINNbase <- R6::R6Class(
     set_parReg = function(value) {
       self$parReg <- torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype = self$dtype)
       # self$parReg = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
+    },
+
+    parameter_to_r = function() {
+      self$parHeight_r = self$parHeight |> as.numeric()
+      self$parGrowth_r = self$parGrowth |> as.matrix()
+      self$parMort_r = self$parMort |> as.matrix()
+      self$parReg_r = self$parReg |> as.numeric()
+      self$parGrowthEnv_r = lapply(self$parGrowthEnv, function(p) p$data() |> as.matrix())
+      self$parMortEnv_r = lapply(self$parMortEnv, function(p) p$data() |> as.matrix())
+      self$parRegEnv_r = lapply(self$parRegEnv, function(p) p$data() |> as.matrix())
+    },
+
+    check = function(device = NULL) {
+      if(is.null(device)) device = self$device_r
+
+      self$device = torch::torch_device(device)
+      self$dtype = torch::torch_float32()
+
+      if(self$which %in% c("all", "species")) requires_grad = TRUE
+      else requires_grad = FALSE
+
+      self$parHeight = check_and_recreate(self$parHeight, self$parHeight_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
+      self$parGrowth = check_and_recreate(self$parGrowth, self$parGrowth_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
+      self$parMort = check_and_recreate(self$parMort, self$parMort_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
+      self$parReg = check_and_recreate(self$parReg, self$parReg_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
+
+      # rebuild NN - if necessary? How to check?
+      pointer_check <- tryCatch(torch::as_array(self$nnMortEnv$parameters[[1]]), error = function(e) e)
+      if(inherits(pointer_check,"error")){
+
+        if(self$which %in% c("all", "env")) requires_grad = TRUE
+        else requires_grad = FALSE
+
+        self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
+        self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
+        self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
+
+        # and set weights
+        .null = sapply(1:length(self$nnMortEnv$parameters), function(i) self$nnMortEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parMortEnv_r[[i]], dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)))
+        .null = sapply(1:length(self$nnGrowthEnv$parameters), function(i) self$nnGrowthEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parGrowthEnv_r[[i]], dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)))
+        .null = sapply(1:length(self$nnRegEnv$parameters), function(i) self$nnRegEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parRegEnv_r[[i]], dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)))
+
+        self$parGrowthEnv = self$nnGrowthEnv$parameters
+        self$parMortEnv = self$nnMortEnv$parameters
+        self$parRegEnv = self$nnRegEnv$parameters
+      }
+
+      if(self$which == "env"){
+        self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+        names(self$parameters) = c("R_E", "G_E", "M_E")
+      }else if(self$which == "species"){
+        self$parameters = c(self$parHeight, self$parGrowth, self$parMort, self$parReg)
+        names(self$parameters) = c("H", "G", "M", "R")
+      }else{
+        self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+        names(self$parameters) = c("H", "G", "M", "R","R_E", "G_E", "M_E" )
+      }
     }
+
   )
 )

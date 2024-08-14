@@ -33,7 +33,8 @@ Imports:
     mathjaxr,
     torch,
     ggplot2,
-    viridis
+    viridis,
+    parallel
 Suggests:
     testthat (>= 3.0.0),
     knitr,
@@ -47,6 +48,7 @@ Collate:
     'CohortMat.R'
     'FINNbase.R'
     'FINN.R'
+    'FINNinterface.R'
     'Processes.R'
     'RcppExports.R'
     'calibrate-height.R'
