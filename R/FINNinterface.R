@@ -288,6 +288,10 @@ finn = function(data = NULL,
                 ...
 ) {
 
+  if(is.null(data)) {
+    cli::text
+  }
+
   out = list()
   device = match.arg(device)
   if(is.null(mortalityProcess)) mortalityProcess = createProcess(formula = ~., func = mortality)
