@@ -300,18 +300,23 @@ FINN = R6::R6Class(
       dbh = torch_tensor(dbh, dtype=self$dtype, device=self$device)
       trees = torch_tensor(trees, dtype=self$dtype, device=self$device)
       species = torch_tensor(species, dtype=torch_int64(), device=self$device)
-      cohort_ids = torch_randint(0, 50000, size=species$shape, device=self$device)
-      light = torch_zeros(list(sites, time,  dbh$shape[3]), device=self$device)
-      g = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
-      m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
-      r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
+
+      cohort_ids = torch_tensor(array(
+        1:(prod(species$shape)+1),
+        dim = species$shape), dtype=torch_int64(), device = "cpu"
+      )
+      light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
+      g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+      m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+      r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
 
       Result = lapply(1:7,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
 
       # Can get memory intensive...
       if(debug) {
-        Raw_results = list()
-        Raw_cohorts = list()
+        Raw_cohort_results = list()
+        Raw_cohort_ids = list()
+        Raw_patch_results = list()
       }
 
 
@@ -424,7 +429,11 @@ FINN = R6::R6Class(
         new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
         new_trees = r
         new_species = torch_arange(1, sp, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
-        new_cohort_id = torch_randint(0, 50000, size = list(sp), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
+        max_id <- max(c(1,as_array(cohort_ids), na.rm = TRUE))
+        new_cohort_id = torch_tensor(array(
+          (max_id+1):(max_id+prod(r$shape)+1),
+          dim = r$shape), dtype=torch_int64(), device = "cpu"
+        ) #TODO check for performance
 
         if(dbh$shape[3] != 0){
           labels = species
@@ -443,21 +452,23 @@ FINN = R6::R6Class(
             Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-3]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)) # TODO
           }
 
-          # cohort ids
-          if(debug) Raw_cohorts = c(Raw_cohorts, cohort_ids)
-
           # reg extra
           tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-          Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0)/patches)
+          Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]]/torch::torch_clamp(cohort_counts[[1]], min = 1.0))
 
 
-          if(debug) {
-            Raw_results = c(Raw_results,list(list(list(torch::as_array(species$cpu())),
-                                                  list(torch::as_array(trees$cpu())),
-                                                  list(torch::as_array(dbh$cpu())),
-                                                  list(torch::as_array(m$cpu())),
-                                                  list(torch::as_array(g$cpu())),
-                                                  list(torch::as_array(r$cpu())))))
+          if (debug) {
+            Raw_cohort_results[[i]] = list(
+              "species" = torch::as_array(species$cpu()),
+              "trees" = torch::as_array(trees$cpu()),
+              "dbh" = torch::as_array(dbh$cpu()),
+              "m" = torch::as_array(m$cpu()),
+              "g" = torch::as_array(g$cpu())
+            )
+            Raw_patch_results[[i]] = list(
+              "r" = torch::as_array(r$cpu())
+            )
+            Raw_cohort_ids[[i]] = cohort_ids
           }
         }
 
@@ -533,8 +544,19 @@ FINN = R6::R6Class(
 
       }
 
+      names(Result) =  c("dbh","ba", "trees", "AL", "growth", "mort", "reg")
       if(debug){
-        Result = list(Predictions = c(Result, list(Raw_results, Raw_cohorts)), loss = loss)
+        Result_out = list(
+          Predictions = list(
+            Site = lapply(Result, function(x) as_array(x)),
+            Patch = Raw_patch_results,
+            Cohort = list(
+              cohortStates = Raw_cohort_results,
+              cohortID = lapply(Raw_cohort_ids, function(x) as_array(x)))
+            ),
+          loss = loss)
+      }else if(!debug){
+        Result_out = list(Predictions = list(Site = lapply(Result, function(x) as_array(x))))
       }
 
 
@@ -542,7 +564,7 @@ FINN = R6::R6Class(
         lapply(self$parameters, function(p) p$requires_grad_(TRUE) )
       }
 
-      return(Result)
+      return(Result_out)
     },
     #' @description
     #' Fits the FINN model to the provided training data.

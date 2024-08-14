@@ -54,4 +54,5 @@ Collate:
     'calibrate-height.R'
     'climateDF2array.R'
     'create-help-plots.R'
+    'pred2DF.R'
     'utils.R'
