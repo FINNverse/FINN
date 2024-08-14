@@ -137,9 +137,9 @@ pred2DF <- function(pred, format = "wide") {
 
   # Convert to long format if specified
   if(format == "long") {
-    site_dt <- melt(site_dt, id.vars = c("siteID", "year", "species"), variable.name = "variable")
-    patch_dt <- melt(patch_dt, id.vars = c("siteID", "patchID", "year", "species"), variable.name = "variable")
-    cohort_dt <- melt(cohort_dt, id.vars = c("siteID", "patchID", "year", "species", "cohortID"), variable.name = "variable")
+    if(exists("site_dt")) site_dt <- melt(site_dt, id.vars = c("siteID", "year", "species"), variable.name = "variable")
+    if(exists("patch_dt")) patch_dt <- melt(patch_dt, id.vars = c("siteID", "patchID", "year", "species"), variable.name = "variable")
+    if(exists("cohort_dt")) cohort_dt <- melt(cohort_dt, id.vars = c("siteID", "patchID", "year", "species", "cohortID"), variable.name = "variable")
   } else if(format != "wide") {
     stop("Invalid format argument. Use either 'long' or 'wide'")
   }
