@@ -4,6 +4,11 @@
 \alias{CohortMat}
 \title{Cohort Matrix Class}
 \description{
+Cohort Matrix Class
+
+Cohort Matrix Class
+}
+\details{
 An R6 class for managing cohorts of trees in forest models. This class allows for the initialization, transformation, and manipulation of cohorts represented by arrays of dbh, trees, and species.
 }
 \section{Public fields}{
@@ -20,6 +25,14 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \item{\code{sp}}{An integer representing the number of species.}
 
 \item{\code{device}}{A character string specifying the device to use ('cpu' or 'cuda').}
+
+\item{\code{dbh_r}}{A numeric array representing the diameter at breast height in R array format.}
+
+\item{\code{trees_r}}{A numeric array representing the number of trees in R array format.}
+
+\item{\code{species_r}}{An integer array representing the species in R array format.}
+
+\item{\code{device_r}}{A character string specifying the device in R format ('cpu' or 'cuda').}
 }
 \if{html}{\out{</div>}}
 }
@@ -46,6 +59,7 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \if{html}{\out{<a id="method-CohortMat-new"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortMat-new}{}}}
 \subsection{Method \code{new()}}{
+Initialize the CohortMat class
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CohortMat$new(
   obs_df = NULL,
@@ -58,6 +72,27 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{obs_df}}{A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.}
+
+\item{\code{dbh}}{A tensor or array representing the diameter at breast height. Defaults to \code{self$dbh}.}
+
+\item{\code{trees}}{A tensor or array representing the number of trees. Defaults to \code{self$trees}.}
+
+\item{\code{species}}{A tensor or array representing the species. Defaults to \code{self$species}.}
+
+\item{\code{dims}}{A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to \code{self$dims}.}
+
+\item{\code{sp}}{An integer representing the number of species. Defaults to \code{self$sp}.}
+
+\item{\code{device}}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.
+Check and reinitialize tensors if necessary
+Transform an observation data frame into three arrays}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortMat-check"></a>}}
@@ -76,6 +111,14 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \if{html}{\out{<div class="r">}}\preformatted{CohortMat$asDF()}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{obs_df}}{A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees".
+Convert the tensors to a data frame format}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortMat-clone"></a>}}
