@@ -125,10 +125,10 @@ FINN = R6::R6Class(
       if(is.null(parMort)) parMort = cbind(runif(sp, min = 0.21, 0.22), runif(sp, 2.45, 2.55))
       if(is.null(parReg)) parReg = runif(sp, min = 0.19, max = 0.21)
 
-      self$parHeight = parHeight
-      self$parGrowth = parGrowth
-      self$parMort = parMort
-      self$parReg = parReg
+      self$set_parHeight(parHeight)
+      self$set_parGrowth(parGrowth)
+      self$set_parMort(parMort)
+      self$set_parReg(parReg)
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
       self$parRegEnv = parRegEnv
@@ -147,10 +147,10 @@ FINN = R6::R6Class(
       self$dtype = torch_float32()
 
       self$nnMortConfig = list(input_shape=env[1], output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99)
-      self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
+      self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig) # sigmoid
 
       self$nnGrowthConfig = list(input_shape=env[2], output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99)
-      self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
+      self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig) # sigmoid
 
       self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "relu")
       self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
@@ -334,8 +334,8 @@ FINN = R6::R6Class(
       }
 
       if(is.null(y)) {
-        predGrowthGlobal = self$nnMortEnv(env[[1]])
-        predMortGlobal = self$nnGrowthEnv(env[[2]])
+        predGrowthGlobal = self$nnGrowthEnv(env[[1]])
+        predMortGlobal = self$nnMortEnv(env[[2]])
         predRegGlobal = self$nnRegEnv(env[[3]])
       }
 
