@@ -172,11 +172,18 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
 #' @param light available light
 #'
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
+mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 10, debug = F) {
   # TODO remove constant part
-  shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
+  # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
+
+  # Scale steepness towards the edges
+  scaled_steepness <- base_steepness / (0.5 - abs(parMort[,1][species] - 0.5))
+  shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))) /
+         (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))))
+
   environment = index_species(pred, species)
-  gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
+  # gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
+  gPSize = (1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))^1))
   # gPSize = torch_sigmoid(gPSize)
   # TODO
   # clamp can lead to vanishing gradients, sigmoid is not perfect but probably better here!
@@ -184,7 +191,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, debug = F) {
   # gPsize -> [0, 1]
   # environment -> [0, 1]
   # -> raw pred -> [0, 5]
-  predM = torch_clamp((environment*(shade+gPSize) + shade*gPSize + shade + gPSize), min = 0.0001, max = 0.9999)
+  predM = environment*((shade*gPSize + shade + gPSize)/3)
   # predM = torch_sigmoid((environment*(shade+gPSize) + shade*gPSize + shade + gPSize -1.5)*2 )
   mort1 = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
   mort2 = mort1 + mort1$round()$detach() - mort1$detach()

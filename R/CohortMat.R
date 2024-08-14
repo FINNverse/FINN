@@ -14,6 +14,18 @@ NULL
 #' result <- obsDF2arrays(obs_dt, additional_cols = c("height"))
 #' @export
 obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
+  if(!identical(sort(as.integer(obs_dt$cohortID)), sort(as.integer(as.factor(obs_dt$cohortID))))) {
+    obs_dt$cohortID = as.integer(as.factor(obs_dt$cohortID))
+    warning("cohortID must be a complete sequence of integers starting from 1. Cohort IDs were reassigned.")
+  }
+  if(!identical(sort(as.integer(obs_dt$siteID)), sort(as.integer(as.factor(obs_dt$siteID))))) {
+    obs_dt$siteID = as.integer(as.factor(obs_dt$siteID))
+    warning("siteID must be a complete sequence of integers starting from 1. Site IDs were reassigned.")
+  }
+  if(!identical(sort(as.integer(obs_dt$patchID)), sort(as.integer(as.factor(obs_dt$patchID))))) {
+    obs_dt$patchID = as.integer(as.factor(obs_dt$patchID))
+    warning("patchID must be a complete sequence of integers starting from 1. Patch IDs were reassigned.")
+  }
   result <- obsDF2arraysCpp(obs_dt, additional_cols)
 
   # Reshape vectors to arrays
@@ -107,6 +119,63 @@ rweibull_cohorts = function(
   cohortDF <- cohortDF[,c("siteID","patchID", "cohortID", "species", "dbh", "trees")]
   return(cohortDF)
 }
+
+#' Transform Arrays to Observation Data Table
+#'
+#' This function transforms arrays of species, dbh, and trees back into an observation data table.
+#'
+#' @param obs_array A list containing three arrays: species, dbh, and trees.
+#'
+#' @return A data.frame with columns siteID, patchID, cohortID, species, dbh, and trees.
+#'
+#' @examples
+#' obs_array <- list(species = array(c("A", "B"), dim = c(2, 2, 2)), dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)), trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
+#' result <- array2obsDF(obs_array)
+#'
+#' @export
+array2obsDF <- function(obs_array) {
+  # Retrieve dimensions
+
+  species_array = obs_array$species
+  dbh_array = obs_array$dbh
+  trees_array = obs_array$trees
+
+  Nsites <- dim(species_array)[1]
+  Npatches <- dim(species_array)[2]
+  maxNcohorts <- dim(species_array)[3]
+
+  # Initialize an empty data.frame
+  obs_dt <- data.frame()
+
+  # Populate data.frame
+  for (site in 1:Nsites) {
+    for (patch in 1:Npatches) {
+      for (cohort in 1:maxNcohorts) {
+        species <- species_array[site, patch, cohort]
+        dbh <- dbh_array[site, patch, cohort]
+        trees <- trees_array[site, patch, cohort]
+
+        # Only add rows where dbh is not NA (assuming NA means no data for that cohort)
+        if (!is.na(dbh)) {
+          obs_dt <- rbind(
+            obs_dt,
+            data.frame(
+              siteID = site,
+              patchID = patch,
+              cohortID = cohort,
+              species = species,
+              dbh = dbh,
+              trees = trees
+            )
+          )
+        }
+      }
+    }
+  }
+
+  return(obs_dt)
+}
+
 
 #' Cohort Matrix Class
 #'
