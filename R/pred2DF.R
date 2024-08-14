@@ -115,7 +115,8 @@ pred2DF <- function(pred, format = "wide") {
       for(dim_i in dim_names) cohort_temp_dt[[dim_i]] <- as.integer(cohort_temp_dt[[dim_i]])
 
       # Remove rows where cohortID equals 0
-      cohort_temp_dt <- cohort_temp_dt[cohortID != 0]
+      #cohort_temp_dt <- cohort_temp_dt[cohortID != 0]
+      cohort_temp_dt <- cohort_temp_dt[cohort_temp_dt$cohortID != 0,]
 
       # Get the indices of the cohortID in the cohort array
       idx_mat <- matrix(nrow = 0, ncol = 3)
