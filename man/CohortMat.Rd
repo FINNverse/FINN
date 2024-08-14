@@ -28,6 +28,7 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \itemize{
 \item \href{#method-CohortMat-obsDF2arrays}{\code{CohortMat$obsDF2arrays()}}
 \item \href{#method-CohortMat-new}{\code{CohortMat$new()}}
+\item \href{#method-CohortMat-check}{\code{CohortMat$check()}}
 \item \href{#method-CohortMat-asDF}{\code{CohortMat$asDF()}}
 \item \href{#method-CohortMat-clone}{\code{CohortMat$clone()}}
 }
@@ -55,6 +56,15 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
   sp = self$sp,
   device = self$device
 )}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-CohortMat-check"></a>}}
+\if{latex}{\out{\hypertarget{method-CohortMat-check}{}}}
+\subsection{Method \code{check()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{CohortMat$check()}\if{html}{\out{</div>}}
 }
 
 }
