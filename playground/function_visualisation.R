@@ -300,16 +300,24 @@ ffun <- function(light, parMort1, base_steepness = 10) {
          (1 / (1 + exp(-scaled_steepness * (1 - parMort1))) - 1 / (1 + exp(scaled_steepness * parMort1))))
 }
 
+steep_plot = 10
+
 # Test the function
-light = seq(0, 1, 0.01)
-plot(light, ffun(light, 0.5, 10), ylim = c(0, 1), type = "l", xlab = "light", ylab = "output")
-lines(light, ffun(light, 0.1, 10), col = "red")
-lines(light, ffun(light, 0.2, 10), col = "blue")
-lines(light, ffun(light, 0.9, 10), col = "orange")
-lines(light, ffun(light, 0.4, 10), col = "green")
+# Sorted parReg values
+sorted_parReg <- c(0.1, 0.2, 0.4, 0.5, 0.9)
+sorted_colors <- c("red", "blue", "green", "black", "orange")  # Corresponding sorted colors
+
+# Test the function with sorted values
+light <- seq(0, 1, 0.01)
+plot(light, ffun(light, sorted_parReg[4], steep_plot), ylim = c(0, 1), type = "l", xlab = "light", ylab = "output", col = sorted_colors[4])
+lines(light, ffun(light, sorted_parReg[1], steep_plot), col = sorted_colors[1])
+lines(light, ffun(light, sorted_parReg[2], steep_plot), col = sorted_colors[2])
+lines(light, ffun(light, sorted_parReg[5], steep_plot), col = sorted_colors[5])
+lines(light, ffun(light, sorted_parReg[3], steep_plot), col = sorted_colors[3])
 
 # Add legend for each par and color on top left
-legend("bottomleft", title = "parReg", legend = c("0.5", "0.1", "0.2", "0.9", "0.4"), col = c("black", "red", "blue", "orange", "green"), lty = 1)
+legend("bottomleft", title = "parMort1", legend = sorted_parReg, col = sorted_colors, lty = 1)
+
 
 light = seq(0,1,0.01)
 plot(light,fun(light,0.5), ylim = c(0,1), type = "l", xlab = "light")
@@ -362,6 +370,9 @@ ggplot(out_dt, aes(x = pred, y = parReg, fill = r2))+
 ## mortality ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 library(torch)
+library(FINN)
+library(data.table)
+library(ggplot2)
 patch_size = 0.1
 # trees_vec = c(1:10,10^(seq(2,4, length.out = 8)))
 trees_vec = c(50)
@@ -419,13 +430,40 @@ trees = cohort$trees
 # hist(cohort_df1$light2)
 # hist(cohort_df1$light)
 
+# gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
+# 1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))^1)
+# # calculate gPsizes without torch_clamp
+# gPSize = (dbh/(parMort[,2][species]*100)^(2.3)
+#
+#
+#
+dbh = seq(0,400,1)
+parMort2 = seq(0,.4,0.1)
+fun <- function(dbh,parMort2) (dbh/(parMort2*0.1*100))^(2.3)
+
+fun <- function(dbh, parMort2) {
+  0.1*(1-exp(-(dbh / (parMort2 * 100))^1))
+}
+
+plot(dbh,fun(dbh,1), ylim = c(0,2), type = "l", xlab = "dbh", ylab = "gPSize")
+lines(dbh,fun(dbh,0.1), col = "red")
+lines(dbh,fun(dbh,0.5), col = "blue")
+lines(dbh,fun(dbh,1), col = "green")
+lines(dbh,fun(dbh,2), col = "orange")
+lines(dbh,fun(dbh,3), col = "black")
+lines(dbh,fun(dbh,4), col = "purple")
+abline(h = 1, col = "black", lty = 3)
+# add legend for each par and color on top left
+legend("topright", title = "parMort2", legend = c("1","0.1","0.5","2","3","4"), col = c("black","red","blue","orange","green","purple"), lty = 1)
+
+
 sim_dt <-
   data.table(
     expand.grid(list(
-      parMort1 = seq(0,1,0.1),
+      parMort1 = c(0.01,seq(0.2,0.8,0.2),0.99),
       parMort2 = seq(0,4,1),
-      pred = seq(0,1,0.25),
-      light = seq(0,1,0.2)
+      pred = seq(0,1,0.1),
+      light = seq(0,1,0.1)
     ))
   )
 
@@ -475,6 +513,16 @@ ggplot(out_dt[pred == 10 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5
   theme(legend.position = "top")+
   guides(fill = guide_colorbar(barwidth = 10, title.position = "top"))+
   # scale_fill_gradientn(colors = custom_palette)
+  scale_fill_gradientn(colors = custom_palette, limits = c(0,1), na.value = custom_palette[length(custom_palette)])
+
+summary(out_dt$predM)
+ggplot(out_dt,
+       aes(x = pred, y = light, fill = predM))+
+  geom_tile()+
+  facet_grid(paste0("parMort1=", parMort1)~paste0("parMort2=", parMort2))+
+  theme(legend.position = "top")+
+  guides(fill = guide_colorbar(barwidth = 10, title.position = "top"))+
+  # scale_fill_gradientn(colors = custom_palette)
   scale_fill_gradientn(colors = custom_palette, limits = c(0,.1), na.value = custom_palette[length(custom_palette)])
 
 ggplot(out_dt[dbh %in% c(seq(30,300,30))], aes(x = parMort2, y = gPSize, color = factor(dbh), group = dbh))+
@@ -496,17 +544,19 @@ ggplot(out_dt, aes(x = factor(parMort1), y = shade))+
 
 ggplot(out_dt, aes(
   x = parMort1,
-  y = shade,
-  color = light)) +
+  y = predM,
+  color = pred, group = pred)) +
   geom_point() +
-  stat_smooth(se = F) +
-  facet_grid(light~pred)
+  # stat_smooth(se = F) +
+  geom_line() +
+  facet_grid(paste0("env=",environment)~paste0("light=",light))
+  # facet_wrap(~paste0("light=",light))
 
 ggplot(out_dt, aes(x = factor(parMort1), y = predM))+
   geom_boxplot()
 
-ggplot(out_dt, aes(x = pred, y = predM))+
-  geom_point()
+ggplot(out_dt, aes(x = factor(environment), y = predM))+
+  geom_boxplot()
 
 
 ggplot(out_dt[pred == 0.5 & parMort2 %in% c(1,2,3,4) & parMort1 %in% c(0,0.25,0.5,0.75, 1)], aes(x = dbh, y = light, fill = predM))+
