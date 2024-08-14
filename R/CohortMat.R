@@ -26,6 +26,9 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
     obs_dt$patchID = as.integer(as.factor(obs_dt$patchID))
     warning("patchID must be a complete sequence of integers starting from 1. Patch IDs were reassigned.")
   }
+  obs_dt$dbh = round(obs_dt$dbh, 4)
+  obs_dt$trees = as.integer(round(obs_dt$trees))
+
   result <- obsDF2arraysCpp(obs_dt, additional_cols)
 
   # Reshape vectors to arrays
@@ -33,6 +36,10 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
   species_array <- array(result$species, dim = dim)
   dbh_array <- array(result$dbh, dim = dim)
   trees_array <- array(result$trees, dim = dim)
+
+  species_array[species_array == "NA"] <- 1
+  dbh_array[is.na(dbh_array)] <- 0
+  trees_array[is.na(trees_array)] <- 0
 
   # Handle additional arrays
   additional_arrays <- lapply(additional_cols, function(col) {
