@@ -1,5 +1,36 @@
+library(FINN)
+library(data.table)
 
 # one species, 100 patches, 50 sites, 1 env
+
+Nsp = 1
+Npatches = 100
+Nsites = 50
+
+site_dt <-
+  data.table(
+    expand.grid(
+      list(
+        species = 1:Nsp,
+        siteID = 1:Nsites
+        )
+      )
+    )
+
+env_dt <- data.table(
+  expand.grid(
+    list(
+      env1 = seq(-2,2,length.out = Nsites)
+    )
+  )
+)
+env_dt$siteID <- 1:nrow(env_dt)
+
+sim_dt <- merge(site_dt, env_dt, by = "siteID")
+
+
+
+climateDF2array(env_dt, env_vars = "env1")
 
 finn = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
                 # parGrowth = matrix(c(0.8, 15), sp, 2, byrow = TRUE),
