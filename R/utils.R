@@ -335,4 +335,29 @@ sample_poisson_gumbel <- function(lmbd, num_samples=50, temperature = 1e-2) {
 }
 
 
-
+#' Set Seed for Reproducibility in R and Torch
+#'
+#' This function sets the seed for both R's random number generator and Torch's random number generator,
+#' ensuring reproducibility across operations that involve both R and Torch.
+#'
+#' @param seed An integer value to set as the seed for both R and Torch. This ensures that random operations
+#'     in both environments produce consistent results.
+#'
+#' @return This function does not return a value. It sets the seed internally for both R and Torch.
+#'
+#' @details The function calls `set.seed()` to set the seed for R's random number generator and
+#'     `torch::torch_manual_seed()` to set the seed for Torch's random number generator. This is useful
+#'     for ensuring reproducibility in scripts that rely on both R and Torch for random operations.
+#'
+#' @examples
+#' \dontrun{
+#' FINN.seed(123)
+#' # Now both R and Torch are seeded with 123, ensuring reproducible results
+#' }
+#'
+#' @import torch
+#' @export
+FINN.seed <- function(seed) {
+  set.seed(seed)
+  torch::torch_manual_seed(seed)
+}
