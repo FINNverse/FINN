@@ -592,7 +592,7 @@ library(data.table)
 library(ggplot2)
 patch_size = 0.1
 # trees_vec = c(1:10,10^(seq(2,4, length.out = 8)))
-trees_vec = c(50)
+trees_vec = c(5)
 dbh_vec = seq(10,300,10)
 # dbh_vec = dbh = seq(30,100, 10)
 
@@ -684,6 +684,12 @@ ggplot(out_dt[dbh %in% c(seq(30,300,30))], aes(x = parMort2, y = gPSize, color =
 ggplot(out_dt[pred == 1], aes(x = dbh, y = growth, color = factor(parMort2)))+
   # geom_line()+
   geom_point()+
+  facet_grid(paste0("2=",parGrowth2)~paste0("1=",parGrowth1))
+
+ggplot(out_dt, aes(x = factor(dbh), y = growth))+
+  # geom_line()+
+  geom_point()+
+  geom_boxplot()+
   facet_grid(paste0("2=",parGrowth2)~paste0("1=",parGrowth1))
 
 ggplot(out_dt, aes(x = factor(light), y = growth))+
