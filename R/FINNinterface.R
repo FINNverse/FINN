@@ -92,6 +92,7 @@ extract_env = function(process, env) {
 #'
 #' @export
 simulateForest = function(env,
+                          disturbance = NULL,
                           mortalityProcess = NULL,
                           growthProcess = NULL,
                           regenerationProcess = NULL,
@@ -122,6 +123,12 @@ simulateForest = function(env,
   mortality_env = extract_env(mortalityProcess, env)
   growth_env = extract_env(growthProcess, env)
   regeneration_env = extract_env(regenerationProcess, env)
+
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  }
 
 
   sites = dim(mortality_env)[1] # TODO check that all env arrays have the same sites and timesteps
@@ -182,6 +189,7 @@ simulateForest = function(env,
                                 env = list(torch::torch_tensor(mortality_env),
                                            torch::torch_tensor(growth_env),
                                            torch::torch_tensor(regeneration_env)),
+                                disturbance = disturbance_T,
                                 patches = patches,
                                 debug = FALSE,
                                 verbose = TRUE)
@@ -277,6 +285,7 @@ simulateForest = function(env,
 #' @export
 finn = function(data = NULL,
                 env,
+                disturbance = NULL,
                 mortalityProcess = NULL,
                 growthProcess = NULL,
                 regenerationProcess = NULL,
@@ -336,14 +345,20 @@ finn = function(data = NULL,
   #### Prepare response ####
   # TODO: improve!!!
   response = list(
-    dbh = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+dbh), data[data$species==i,])), along = 3L),
-    ba = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+ba), data[data$species==i,])), along = 3L),
-    trees = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+trees), data[data$species==i,])), along = 3L),
-    AL = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+AL), data[data$species==i,])), along = 3L),
-    growth = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+growth), data[data$species==i,])), along = 3L),
-    mort = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+mort), data[data$species==i,])), along = 3L),
-    reg = abind::abind(lapply(1:sp, function(i) FINN:::extract_env(list(formula=~0+reg), data[data$species==i,])), along = 3L)
+    dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), data[data$species==i,])), along = 3L),
+    ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), data[data$species==i,])), along = 3L),
+    trees = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+trees), data[data$species==i,])), along = 3L),
+    AL = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+AL), data[data$species==i,])), along = 3L),
+    growth = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+growth), data[data$species==i,])), along = 3L),
+    mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), data[data$species==i,])), along = 3L),
+    reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), data[data$species==i,])), along = 3L)
   )
+
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  }
 
   response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
 
@@ -416,6 +431,7 @@ finn = function(data = NULL,
                        torch::torch_tensor(growth_env),
                        torch::torch_tensor(regeneration_env)),
               Y = response_T,
+              disturbance = disturbance_T,
               patches = patches,
               batch_size = batchsize,
               epochs = epochs,
@@ -496,6 +512,7 @@ finn = function(data = NULL,
                              torch::torch_tensor(growth_env[indices,,,drop=FALSE]),
                              torch::torch_tensor(regeneration_env[indices,,,drop=FALSE])),
                     Y = response_T,
+                    disturbance = disturbance_T,
                     patches = patches,
                     batch_size = batchsize,
                     epochs = epochs,
@@ -560,6 +577,7 @@ finn = function(data = NULL,
                                  torch::torch_tensor(growth_env[indices,,,drop=FALSE]),
                                  torch::torch_tensor(regeneration_env[indices,,,drop=FALSE])),
                         Y = response_T,
+                        disturbance = disturbance_T,
                         patches = patches,
                         batch_size = batchsize,
                         epochs = epochs,
@@ -575,6 +593,7 @@ finn = function(data = NULL,
           out$regenerationProcess = regenerationProcess
           out$competition = competitionProcess
           out$response = response
+          out$disturbance = disturbance
           out$env = list(mortality_env = mortality_env,
                          growth_env = growth_env,
                          regeneration_env = regeneration_env)
@@ -597,7 +616,7 @@ finn = function(data = NULL,
 #' @param ... currently ignored
 #'
 #' @export
-predict.finnModel = function(object, init = NULL, env = NULL, ...) {
+predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL, ...) {
   object$model$check()
   object$init$check()
 
@@ -610,6 +629,18 @@ predict.finnModel = function(object, init = NULL, env = NULL, ...) {
     growth_env = extract_env(object$growthProcess, env)
     regeneration_env = extract_env(object$regenerationProcess, env)
   }
+
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  } else {
+    disturbance = object$disturbance
+    if(!is.null(disturbance)) {
+      disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+    }
+  }
+
 
   if(is.null(init)) {
     init = object$init
@@ -625,6 +656,7 @@ predict.finnModel = function(object, init = NULL, env = NULL, ...) {
       trees = init$trees,
       species = init$species,
       env = X,
+      disturbance = disturbance_T,
       patches = init$dbh$shape[2],
       debug = FALSE
     )

@@ -253,6 +253,7 @@ FINN = R6::R6Class(
                        trees = NULL,
                        species = NULL,
                        env = NULL,
+                       disturbance = NULL,
                        start_time = 1L,
                        pred_growth = NULL,
                        pred_morth = NULL,
@@ -279,6 +280,7 @@ FINN = R6::R6Class(
         env = lapply(1:3, function(i) torch_tensor(env, dtype=self$dtype, device=self$device))
       }
 
+
       sites = env[[1]]$shape[1]
       time =  env[[1]]$shape[2]
       patches = dbh$shape[2]
@@ -288,11 +290,17 @@ FINN = R6::R6Class(
       # for(site_i in 1:sites){
       #   for(year_i in 1:timesteps){
       #     dist_site_year = rbinom(n = 1, size = 1, prob = self$disturbance_frequency)
-      #     disturbances[site_i, year_i, ] = dist_site_year*rbinom(n = patches, size = 1, prob = self$disturbance_intensity)
+      #     disturbances[site_i, year_i, ] = dist_site_year*rbinom(n = patches, size = 1, prob = self$disturbance_intensity) # []
       #   }
       # }
       # disturbances = 1*(disturbances == 0)
       # disturbances_tens <- torch::torch_tensor(disturbances, device = self$device, dtype = self$dtype)
+
+      if(!is.null(disturbance)) {
+        disturbance = disturbance$to(dtype=self$dtype, device=self$device)
+        disturbances_tens = torch::distr_bernoulli(probs = disturbance$squeeze(3L))$sample(patches)$permute(c(2, 3, 1))
+        disturbances_tens = 1*(disturbances_tens==0)
+      }
 
       if(is.null(y)) {
         lapply(self$parameters, function(p) p$requires_grad_(FALSE) )
@@ -358,6 +366,9 @@ FINN = R6::R6Class(
         cohort_ids=cohort_ids$detach()
 
         # Disturbance
+        if(!is.null(disturbance)) {
+          trees = trees*disturbances_tens[,i,]$unsqueeze(3L)
+        }
         # trees*disturbances_tens[,i,]$unsqueeze(3L)
 
         # Model - get Parameters parameter constrains
@@ -593,6 +604,7 @@ FINN = R6::R6Class(
     fit = function(
           X = NULL,
           Y = NULL,
+          disturbance = NULL,
           initCohort = NULL,
           epochs = 2L,
           batch_size = 20L,
@@ -619,13 +631,24 @@ FINN = R6::R6Class(
           pin_memory = TRUE
         }
         Counts = (Y[,,,3])$round() # Trees!!!
-        data = tensor_dataset(torch_tensor(X[[1]], dtype=self$dtype, device=torch_device('cpu')),
-                              torch_tensor(X[[2]], dtype=self$dtype, device=torch_device('cpu')),
-                              torch_tensor(X[[3]], dtype=self$dtype, device=torch_device('cpu')),
-                              torch_tensor(Y[,,,], dtype=self$dtype, device=torch_device('cpu')),
-                              torch_tensor(Counts, dtype=torch_int64(), device=torch_device('cpu')),
-                              torch_arange(1, X[[1]]$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu'))
-        )
+        if(is.null(disturbance)) {
+          data = tensor_dataset(torch_tensor(X[[1]], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(X[[2]], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(X[[3]], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(Y[,,,], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(Counts, dtype=torch_int64(), device=torch_device('cpu')),
+                                torch_arange(1, X[[1]]$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu'))
+          )
+        } else {
+          data = tensor_dataset(torch_tensor(X[[1]], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(X[[2]], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(X[[3]], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(Y[,,,], dtype=self$dtype, device=torch_device('cpu')),
+                                torch_tensor(Counts, dtype=torch_int64(), device=torch_device('cpu')),
+                                torch_arange(1, X[[1]]$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu')),
+                                torch_tensor(disturbance, dtype=self$dtype, device=torch_device('cpu'))
+          )
+        }
         DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
         self$history = torch::torch_zeros(epochs)
@@ -649,6 +672,8 @@ FINN = R6::R6Class(
             y = b[[4]]$to(device = self$device, non_blocking=TRUE)
             c = b[[5]]$to(device = self$device, non_blocking=TRUE)
             ind = b[[6]]$to(device = self$device, non_blocking=TRUE)
+            dist = NULL
+            if(!is.null(disturbance)) dist = b[[7]]$to(device = self$device, non_blocking=TRUE)
             self$optimizer$zero_grad()
 
 
@@ -669,6 +694,7 @@ FINN = R6::R6Class(
                                     trees = trees,
                                     species = species,
                                     env = list(x_mort, x_growth, x_reg),
+                                    disturbance = dist,
                                     start_time = start_time,
                                     y = y,
                                     c = c,
