@@ -124,9 +124,13 @@ CohortMat = R6::R6Class("CohortMat", public = list(
   dbh=NULL,
   trees=NULL,
   species=NULL,
+  dbh_r=NULL,
+  trees_r=NULL,
+  species_r=NULL,
   dims=c(50, 30, 10),
   sp = 10,
   device ='cpu',
+  device_r = "cpu",
   initialize = function(obs_df = NULL, dbh=self$dbh, trees=self$trees, species=self$species, dims=self$dims, sp = self$sp, device = self$device) {
     if(!is.null(obs_df)){
       if(!all(c("siteID","patchID","species", "dbh", "trees") %in% colnames(obs_df))) stop("c(\"siteID\",\"patchID\",\"species\",\"dbh\",\"trees\") %in% all(colnames(obs_df)) is not TRUE")
@@ -142,13 +146,28 @@ CohortMat = R6::R6Class("CohortMat", public = list(
     self$species = if(is.null(species)) array(sample.int(sp, prod(dims),replace = TRUE), dim = dims) else species
     self$dims = dims
     self$sp = sp
+    self$device_r = device
     if(!("torch_device" %in% class(device))) self$device = torch::torch_device(device)
 
-    if(!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype=torch_float32(), device=self$device)
-    if(!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype=torch_float32(), device=self$device)
-    if(!inherits(self$species, "torch_tensor")) self$species = torch::torch_tensor(self$species, dtype=torch_int64(), device=self$device)
+    if(!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype=torch::torch_float32(), device=self$device)
+    if(!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype=torch::torch_float32(), device=self$device)
+    if(!inherits(self$species, "torch_tensor")) self$species = torch::torch_tensor(self$species, dtype=torch::torch_int64(), device=self$device)
+
+
+    self$dbh_r = torch::as_array(self$dbh)
+    self$trees_r = torch::as_array(self$trees)
+    self$species_r = torch::as_array(self$species)
+
 
   },
+
+  check = function() {
+    self$device = torch::torch_device(self$device_r)
+    self$dbh = check_and_recreate(self$dbh, self$dbh_r, dtype=torch::torch_float32(), device = self$device_r)
+    self$trees = check_and_recreate(self$trees, self$trees_r, dtype=torch::torch_float32(), device = self$device_r)
+    self$species = check_and_recreate(self$species, self$species_r, dtype=torch::torch_int64(), device = self$device_r)
+  },
+
   # Function to transform obs_dt into three arrays
   obsDF2arrays = obsDF2arrays,
   # Function to transofrm torch_tensors into data.frame
