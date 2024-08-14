@@ -21,7 +21,6 @@
 FINN = R6::R6Class(
   classname = 'FINN',
   inherit = FINNbase,
-  cloneable=FALSE,
   public = list(
     # helper functions
     # default model parameters
@@ -34,6 +33,7 @@ FINN = R6::R6Class(
     param_history = NULL,
     pred = NULL,
     device = 'cpu',
+    device_r = "cpu",
     parHeight = NULL, # must be dim [species]
     parGrowth = NULL, # must be dim [species, 2], first for shade tolerance
     parMort = NULL, # must be dim [species, 2], first for shade tolerance,
@@ -51,6 +51,14 @@ FINN = R6::R6Class(
     patch_size_ha = 0.1,
     minLight = 50,
     disturbance = 0.0,
+    growthFunction = NULL,
+    mortalityFunction = NULL,
+    regenerationFunction = NULL,
+    competitionFunction = NULL,
+    nnMortConfig = NULL,
+    nnGrowthConfig = NULL,
+    nnRegConfig = NULL,
+    which = NULL,
 
 
     #' @description
@@ -100,6 +108,10 @@ FINN = R6::R6Class(
                   patch_size_ha = 0.1,
                   minLight = 50,
                   disturbance = 0.0,
+                  growthFunction = NULL,
+                  mortalityFunction = NULL,
+                  regenerationFunction = NULL,
+                  competitionFunction = NULL,
                   which = c("all", "env", "species")
       ){
 
@@ -110,6 +122,13 @@ FINN = R6::R6Class(
       which = match.arg(which)
       self$sp = sp
       self$device = device
+
+      ###### Defaults #####
+      if(is.null(parHeight)) parHeight = runif(sp, min = 0.69, max = 0.71)
+      if(is.null(parGrowth)) parGrowth = cbind(runif(sp, min = 0.51, 0.52), runif(sp, 3.45, 3.55))
+      if(is.null(parMort)) parMort = cbind(runif(sp, min = 0.21, 0.22), runif(sp, 2.45, 2.55))
+      if(is.null(parReg)) parReg = runif(sp, min = 0.19, max = 0.21)
+
       self$parHeight = parHeight
       self$parGrowth = parGrowth
       self$parMort = parMort
@@ -122,23 +141,47 @@ FINN = R6::R6Class(
       self$hidden_reg = hidden_reg
       self$patch_size_ha = patch_size_ha
       self$minLight = minLight
+      self$device_r = device
       self$device = torch_device(device)
       self$sp = sp
       self$pred = NULL
+      if(length(env) == 1) env = rep(env, 3)
       self$env = env
       self$optimizer = NULL
       self$dtype = torch_float32()
-      self$nnRegEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "relu")
-      self$nnGrowthEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99)
-      self$nnMortEnv = self$build_NN(input_shape=env, output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99)
+
+      self$nnMortConfig = list(input_shape=env[1], output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99)
+      self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
+
+      self$nnGrowthConfig = list(input_shape=env[2], output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99)
+      self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
+
+      self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "relu")
+      self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
+
       if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
       if(!is.null(parMortEnv)) self$set_weights_nnMortEnv(parMortEnv)
       if(!is.null(parRegEnv)) self$set_weights_nnRegEnv(parRegEnv)
 
+      if(is.null(growthFunction)) self$growthFunction = growth
+      else self$growthFunction = growthFunction
+
+      if(is.null(mortalityFunction)) self$mortalityFunction = mortality
+      else self$mortalityFunction = mortalityFunction
+
+      if(is.null(regenerationFunction)) self$regenerationFunction = regeneration
+      else self$regenerationFunction = regenerationFunction
+
+      if(is.null(competitionFunction)) self$competitionFunction = competition
+      else self$competitionFunction = competitionFunction
 
       self$nnMortEnv$to(device = self$device)
       self$nnGrowthEnv$to(device = self$device)
       self$nnRegEnv$to(device = self$device)
+
+      self$parGrowthEnv = self$nnGrowthEnv$parameters
+      self$parMortEnv = self$nnMortEnv$parameters
+      self$parRegEnv = self$nnRegEnv$parameters
 
       if(is.null(parHeight)){
         parHeight = np_runif(0.3, 0.7, size = self$sp)
@@ -182,6 +225,9 @@ FINN = R6::R6Class(
         self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
         names(self$parameters) = c("H", "G", "M", "R","R_E", "G_E", "M_E" )
       }
+      self$which = which
+      self$parameter_to_r()
+
       return(invisible(self)) # Only for testing now
     },
 
@@ -231,8 +277,16 @@ FINN = R6::R6Class(
         dbh = cohorts$dbh
       }
 
-      env = torch_tensor(env, dtype=self$dtype, device=self$device)
+      if(is.list(env)) {
+        env = lapply(env, function(e) torch_tensor(e, dtype=self$dtype, device=self$device))
+      } else {
+        env = lapply(1:3, function(i) torch_tensor(env, dtype=self$dtype, device=self$device))
+      }
 
+      sites = env[[1]]$shape[1]
+      time =  env[[1]]$shape[2]
+      patches = dbh$shape[2]
+      sp = self$sp
 
       if(is.null(y)) {
         lapply(self$parameters, function(p) p$requires_grad_(FALSE) )
@@ -243,15 +297,10 @@ FINN = R6::R6Class(
       }
 
 
-      # Predict env niches for all sites and timesteps
-      if(is.null(pred_growth)) pred_growth = self$nnGrowthEnv(env)
-      if(is.null(pred_morth)) pred_morth = self$nnMortEnv(env)
-      if(is.null(pred_reg)) pred_reg = self$nnRegEnv(env)
-
-
       dbh = torch_tensor(dbh, dtype=self$dtype, device=self$device)
       trees = torch_tensor(trees, dtype=self$dtype, device=self$device)
       species = torch_tensor(species, dtype=torch_int64(), device=self$device)
+
       cohort_ids = torch_tensor(array(
         1:(prod(species$shape)+1),
         dim = species$shape), dtype=torch_int64(), device = "cpu"
@@ -261,7 +310,7 @@ FINN = R6::R6Class(
       m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
       r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
 
-      Result = lapply(1:7,function(tmp) torch_zeros(list(env$shape[1], env$shape[2], self$sp), device=self$device))
+      Result = lapply(1:7,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
 
       # Can get memory intensive...
       if(debug) {
@@ -270,15 +319,12 @@ FINN = R6::R6Class(
         Raw_patch_results = list()
       }
 
-      time = env$shape[2]
-      patches = dbh$shape[2]
-      sp = self$sp
-      sites = env$shape[1]
+
 
       if(is.null(y)) {
-        predGrowthGlobal = self$nnGrowthEnv(env)
-        predMortGlobal = self$nnMortEnv(env)
-        predRegGlobal = self$nnRegEnv(env)
+        predGrowthGlobal = self$nnMortEnv(env[[1]])
+        predMortGlobal = self$nnGrowthEnv(env[[2]])
+        predRegGlobal = self$nnRegEnv(env[[3]])
       }
 
       # Run over timesteps
@@ -288,19 +334,19 @@ FINN = R6::R6Class(
 
         # Only necessary if gradients are needed
         if(!is.null(y)) {
-          pred_growth = self$nnGrowthEnv(env[,i,])
-          pred_morth = self$nnMortEnv(env[,i,])
-          pred_reg = self$nnRegEnv(env[,i,])
+          pred_morth = self$nnMortEnv(env[[1]][,i,])
+          pred_growth = self$nnGrowthEnv(env[[2]][,i,])
+          pred_reg = self$nnRegEnv(env[[3]][,i,])
         } else {
           pred_growth = predGrowthGlobal[,i,]
           pred_morth = predMortGlobal[,i,]
           pred_reg = predRegGlobal[,i,]
         }
 
-        light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
-        g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
-        m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
-        r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+        light = torch_zeros(list(sites, time,  dbh$shape[3]), device=self$device)
+        g = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
+        m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
+        r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
 
         dbh=dbh$detach()
         trees=trees$detach()
@@ -314,7 +360,7 @@ FINN = R6::R6Class(
         parReg = self$get_parReg()
 
         if(dbh$shape[3] > 0.5){
-          light = competition(
+          light = self$competitionFunction(
             dbh = dbh,
             species = species,
             trees = trees,
@@ -326,7 +372,7 @@ FINN = R6::R6Class(
             cohortHeights = NULL
           )
 
-          g = growth(
+          g = self$growthFunction(
             dbh = dbh,
             species = species,
             parGrowth = parGrowth,
@@ -337,7 +383,7 @@ FINN = R6::R6Class(
 
           dbh = dbh + g
 
-          light = competition(
+          light = self$competitionFunction(
             dbh = dbh,
             species = species,
             trees = trees,
@@ -349,7 +395,7 @@ FINN = R6::R6Class(
             cohortHeights = NULL
           )
           # cat("Second section  B2\n")
-          m = mortality(
+          m = self$mortalityFunction(
             dbh = dbh,
             species = species,
             trees = trees + 0.001,
@@ -362,7 +408,7 @@ FINN = R6::R6Class(
         }
 
 
-        AL_reg = competition( # must have dimension = n species in last dim
+        AL_reg = self$competitionFunction( # must have dimension = n species in last dim
           dbh = dbh,
           species = species,
           trees = trees,
@@ -373,7 +419,7 @@ FINN = R6::R6Class(
           ba = NULL,
           cohortHeights = NULL
         )
-        r = regeneration(species = species,
+        r = self$regenerationFunction(species = species,
                          parReg = parReg,
                          pred = pred_reg,
                          light = AL_reg,
@@ -387,7 +433,7 @@ FINN = R6::R6Class(
         new_cohort_id = torch_tensor(array(
           (max_id+1):(max_id+prod(r$shape)+1),
           dim = r$shape), dtype=torch_int64(), device = "cpu"
-        )
+        ) #TODO check for performance
 
         if(dbh$shape[3] != 0){
           labels = species
@@ -535,7 +581,7 @@ FINN = R6::R6Class(
     #' @param patches integer. Number of patches in the dataset. Default is 50.
     #' @param response character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".
     #' @param update_step integer. Backpropagation step length.
-    #' @param reweight reweight likelihood
+    #' @param weights reweight likelihood
     #' @return None. The trained model is stored within the class instance.
     fit = function(
           X = NULL,
@@ -547,7 +593,7 @@ FINN = R6::R6Class(
           start_time = 1,
           patches = 50L,
           update_step = 1L,
-          reweight = FALSE){
+          weights = NULL){
 
         if(is.null(self$optimizer)){
           self$optimizer = optim_adagrad(params = self$parameters, lr = learning_rate) # AdaBound was also good
@@ -574,9 +620,11 @@ FINN = R6::R6Class(
 
         self$history = torch::torch_zeros(epochs)
 
-        weights = torch::torch_ones(dim(Y)[1], dtype = self$dtype, device = self$device)
-        if(reweight) {
-          weights = torch::torch_cat(lapply(1:dim(Y)[4], function(i) Y[,,,i]$max()$reshape(c(1, 1))))
+
+        if(!is.null(weights)) {
+          weights = torch::torch_ones(weights, dtype = self$dtype, device = self$device)
+        } else {
+          weights = torch::torch_ones(dim(Y)[1], dtype = self$dtype, device = self$device)
         }
 
         cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} Loss: {bl}", total = epochs, clear = FALSE)

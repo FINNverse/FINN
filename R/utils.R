@@ -18,6 +18,14 @@ np_runif = function(low, high, size) {
 }
 
 
+check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), device="cpu", requires_grad = FALSE) {
+  pointer_check <- tryCatch(torch::as_array(tensor), error = function(e) e)
+  if(inherits(pointer_check,"error")){
+    tensor = torch::torch_tensor(r_obj, dtype=dtype, device=device, requires_grad = requires_grad)
+  }
+  return(tensor)
+}
+
 
 #' Index species
 #'

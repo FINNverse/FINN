@@ -1,33 +1,162 @@
 library(FINN)
+library(data.table)
+library(ggplot2)
+
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+## env data input ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+# Define the number of days in each month
+days_in_month <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
+# Define the years and site IDs
+years <- 1970:2019
+site_ids <- 1:10
+
+# Create an empty list to store data
+climate_data_list <- list()
+
+# Loop over each year, month, and site to generate data
+for (site_id in site_ids) {
+  for (year in years) {
+    for (month in 1:12) {
+      days <- 1:days_in_month[month]
+
+      # Handle leap years
+      if (month == 2 && (year %% 4 == 0 && (year %% 100 != 0 || year %% 400 == 0))) {
+        days <- 1:29
+      }
+
+      # Create a data frame for the current site, year, and month
+      climate_data <- data.frame(
+        siteID = site_id,
+        year = year,
+        month = month,
+        day = days,
+        tmp = runif(length(days), -10, 30),  # Random temperature values
+        pre = runif(length(days), 0, 200)    # Random precipitation values
+      )
+
+      # Add to the list
+      climate_data_list <- append(climate_data_list, list(climate_data))
+    }
+  }
+}
+
+# Combine the list into a single data frame
+climate_dt <- rbindlist(climate_data_list)
+
+# Use the function to create the array
+climate_dt_day <- climate_dt
+resultDay <- climateDF2array(climate_dt_day, env_vars = c("tmp", "pre"))
+str(resultDay)
+
+climate_dt_month <- climate_dt[, .(tmp = mean(tmp), pre = sum(pre)), by = .(siteID,year,month)]
+resultMonth <- climateDF2array(climate_dt = data.frame(climate_dt_month), env_vars = c("tmp", "pre"))
+str(resultMonth)
+
+climate_dt_year <- climate_dt[, .(tmp = mean(tmp), pre = sum(pre)), by = .(siteID,year)]
+resultYear <- climateDF2array(climate_dt = climate_dt_year, env_vars = c("tmp", "pre"))
+str(resultYear)
+
+
+library(FINN)
+
+env = data.table(siteID = rep(1:50000, each = 50), year = rep(1:50, 50000), tmp = runif(50000*50), pre = runif(50000*50))
+system.time({
+simulateForest(env,
+               sp = 15L,
+               batchsize = 50L, patches=50L
+               ,device = "gpu", NGPU = 4, parallel = 16)
+})
+
+
+
+library(parallel)
+library(FINN)
+cl = makeCluster(3L)
+sp = 3L
+patches = 100L
+sites = 500L
+initCohort = CohortMat$new(dims = c(sites, patches, 10),
+                           dbh = array(1, dim = c(sites, patches, 10)),
+                           trees = array(1, dim = c(sites, patches, 10)),
+                           sp = sp)
+
+parallel::clusterEvalQ(cl, {library(torch);library(FINN)})
+k = parallel::clusterExport(cl, "initCohort")
+k = parallel::clusterEvalQ(cl, {initCohort$check()})
+
+parallel::clusterEvalQ(cl, {rr = CohortMat$new(dims = c(10, 4, 10),
+                                          dbh = array(1, dim = c(10, 4, 10)),
+                                          trees = array(1, dim = c(10, 4, 10)),
+                                          sp = 3)})
+
+parallel::clusterEvalQ(cl, {initCohort$check()})
+parLapply(cl, 1:3, fun = function(i) {
+  p = initCohort$check()
+  return(as_array(initCohort$dbh))
+})
+
+
+library(FINN)
 #torch::torch_set_num_interop_threads(1L)
 #torch::torch_set_num_threads(1L)
-sp = 2L
-patches = 10L
-sites = 50L
+sp = 3L
+patches = 100L
+sites = 500L
 initCohort = CohortMat$new(dims = c(sites, patches, 10),
                            dbh = array(1, dim = c(sites, patches, 10)),
                            trees = array(1, dim = c(sites, patches, 10)),
                            sp = sp)
 
 
-finn = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
-                parGrowth = matrix(c(0.8, 15), sp, 2, byrow = TRUE),
-                parMort = matrix(c(runif(sp), runif(sp, 1, 4)), sp, 2, byrow = FALSE),
-                parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
-                parHeight = runif(sp, 0.3, 0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
-                parGrowthEnv = list(matrix(c(10, 10, -5), sp, 2)),
-                parMortEnv = list(matrix(c(-1, -1, 1)*0, sp, 2)),
-                parRegEnv = list(matrix(c(1, 2, 3), sp, 2)),
+finn = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
+                # parGrowth = matrix(c(0.8, 15), sp, 2, byrow = TRUE),
+                # parMort = matrix(c(runif(sp), runif(sp, 1, 4)), sp, 2, byrow = FALSE),
+                # parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
+                # parHeight = runif(sp, 0.3, 0.7), # plausible range is 0 to 1. default should be between 0.3 and 0.7
+                # parGrowthEnv = list(matrix(c(10, 10, -5), sp, 2)),
+                # parMortEnv = list(matrix(c(-1, -1, 1)*0, sp, 2)),
+                # parRegEnv = list(matrix(c(1, 2, 3), sp, 2)),
+                hidden_growth = c(5L, 5L),
                 patch_size_ha = 0.1)
  env = torch::torch_randn(size = c(sites, 60L, 2))
 # env = torch::torch_zeros(size = c(sites, 100, 2))
 
 system.time({
 
-pred = finn$predict(dbh = initCohort$dbh,
-                    trees = initCohort$trees,
-                    species = initCohort$species, env = env, patches = patches, debug = FALSE, verbose = TRUE)
+pred = finn$predict(dbh = initCohort$dbh[,,],
+                    trees = initCohort$trees[,,],
+                    species = initCohort$species[,,], env = env[,,], patches = patches, debug = FALSE, verbose = TRUE)
 })
+
+finn$check()
+
+library(FINN)
+library(parallel)
+cl = makeCluster(10L)
+
+parallel::clusterEvalQ(cl, {library(torch);library(FINN)})
+k = parallel::clusterExport(cl, c("initCohort", "finn"))
+
+system.time({
+parLapply(cl, 1:7, fun = function(i) {
+  initCohort$check()
+  finn$check()
+  patches = 100L
+  sites = 50L
+  env = torch::torch_randn(size = c(sites, 60L, 2))
+  pred = finn$predict(dbh = initCohort$dbh[1:50,,],
+                      trees = initCohort$trees[1:50,,],
+                      species = initCohort$species[1:50,,], env = env[1:50,,], patches = patches, debug = FALSE, verbose = TRUE)
+  return(1)
+})
+})
+parallel::stopCluster(cl)
+parallel::clusterEvalQ(cl, {finn})
+
+library(FINN)
+finn$check()
 
 
 # 1 -> dbh/ba, 2 -> counts, 3 -> AL, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
@@ -113,7 +242,7 @@ initCohort2 = CohortMat$new(dims = c(sites, patches, 10),
                             trees = array(1, dim = c(sites, patches, 10)),
                             sp = sp)
 
-finn2 = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
+finn2 = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
                  parGrowth = matrix(c(0.5, 12), sp, 2, byrow = TRUE),
                  parMort = matrix(c(0.0, 2.5), sp, 2, byrow = TRUE),
                  parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
@@ -121,11 +250,11 @@ finn2 = FINN$new(sp = sp, env = 2L, device = "cpu", which = "all" ,
                  parGrowthEnv = list(matrix(c(0.1, 0.1, 0.1), sp, 2)),
                  parMortEnv = list(matrix(c(0.1, 0.1), sp, 2)),
                  parRegEnv = list(matrix(1, sp, 2)),
-                 patch_size_ha = 200.1)
+                 patch_size_ha = 0.01)
 start = lapply(finn2$parameters, as.matrix)
 finn2$optimizer = NULL
 system.time({
-finn2$fit(initCohort = initCohort, X = (env)[,1:60,],Y = Y, patches = patches, batch_size = 50L, epochs = 200L, learning_rate = 0.001,update_step = 1L, reweight = FALSE)
+finn2$fit(initCohort = initCohort, X = (env)[,1:60,],Y = Y, patches = patches, batch_size = 50L, epochs = 200L, learning_rate = 0.01,update_step = 1L, weights = NULL)
 })
 
  matplot(sapply(1:length(finn2$param_history), function(i) plogis(finn2$param_history[[i]]$H)) %>% t(), type = "l")
