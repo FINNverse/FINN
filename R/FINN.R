@@ -58,7 +58,6 @@ FINN = R6::R6Class(
     nnMortConfig = NULL,
     nnGrowthConfig = NULL,
     nnRegConfig = NULL,
-    which = NULL,
 
 
     #' @description
@@ -79,7 +78,6 @@ FINN = R6::R6Class(
     #' @param patch_size_ha numeric. Patch size in hectares.
     #' @param minLight numeric. Minimum light level.
     #' @param disturbance numeric. Disturbance level.
-    #' @param which character. Specifies which parameters to include ("all", "env", "species").
     #' @return Invisible self.
     initialize = function(
                   sp = NULL,
@@ -111,15 +109,13 @@ FINN = R6::R6Class(
                   growthFunction = NULL,
                   mortalityFunction = NULL,
                   regenerationFunction = NULL,
-                  competitionFunction = NULL,
-                  which = c("all", "env", "species")
+                  competitionFunction = NULL
       ){
 
       # check input parameters
       if(any(parHeight < 0 | parHeight > 1)) stop("parHeight cannot be <0 or >1")
       if(any(parReg < 0 | parReg > 1)) stop("parReg cannot be <0 or >1")
 
-      which = match.arg(which)
       self$sp = sp
       self$device = device
 
@@ -207,25 +203,24 @@ FINN = R6::R6Class(
       self$set_parMort(parMort)
       self$set_parReg(parReg)
 
-      if(which == "env"){
-        self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-        self$parHeight$requires_grad_(FALSE)
-        self$parGrowth$requires_grad_(FALSE)
-        self$parMort$requires_grad_(FALSE)
-        self$parReg$requires_grad_(FALSE)
-        names(self$parameters) = c("R_E", "G_E", "M_E")
-      }else if(which == "species"){
-        self$parameters = c(self$parHeight, self$parGrowth, self$parMort, self$parReg)
-        names(self$parameters) = c("H", "G", "M", "R")
-        .n = lapply(self$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
-        .n = lapply(self$nnGrowtEnv$parameters, function(p) p$requires_grad_(FALSE))
-        .n = lapply(self$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
-
-      }else{
-        self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-        names(self$parameters) = c("H", "G", "M", "R","R_E", "G_E", "M_E" )
-      }
-      self$which = which
+      # if(which == "env"){
+      #   self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+      #   self$parHeight$requires_grad_(FALSE)
+      #   self$parGrowth$requires_grad_(FALSE)
+      #   self$parMort$requires_grad_(FALSE)
+      #   self$parReg$requires_grad_(FALSE)
+      #   names(self$parameters) = c("R_E", "G_E", "M_E")
+      # }else if(which == "species"){
+      #   self$parameters = c(self$parHeight, self$parGrowth, self$parMort, self$parReg)
+      #   names(self$parameters) = c("H", "G", "M", "R")
+      #   .n = lapply(self$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
+      #   .n = lapply(self$nnGrowtEnv$parameters, function(p) p$requires_grad_(FALSE))
+      #   .n = lapply(self$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
+      #
+      # }else{
+      self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+      names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort")
+      # }
       self$parameter_to_r()
 
       return(invisible(self)) # Only for testing now
@@ -598,9 +593,10 @@ FINN = R6::R6Class(
           # TODO scheduler implementieren
           # self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
         }
-        time = X$shape[2]
 
-        stepSize = floor(X$shape[1] / batch_size) # type: ignore
+        if(!is.list(X)) X = list(X, X, X)
+        stepSize = floor(X[[1]]$shape[1] / batch_size)
+        time = X[[1]]$shape[2]
 
         if(self$device$type == 'cuda'){
           #torch.cuda.set_device(self$device)
@@ -608,11 +604,13 @@ FINN = R6::R6Class(
         }else{
           pin_memory = TRUE
         }
-        Counts = (Y[,,,2])$round()
-        data = tensor_dataset(torch_tensor(X, dtype=self$dtype, device=torch_device('cpu')),
+        Counts = (Y[,,,3])$round() # Trees!!!
+        data = tensor_dataset(torch_tensor(X[[1]], dtype=self$dtype, device=torch_device('cpu')),
+                              torch_tensor(X[[2]], dtype=self$dtype, device=torch_device('cpu')),
+                              torch_tensor(X[[3]], dtype=self$dtype, device=torch_device('cpu')),
                               torch_tensor(Y[,,,], dtype=self$dtype, device=torch_device('cpu')),
                               torch_tensor(Counts, dtype=torch_int64(), device=torch_device('cpu')),
-                              torch_arange(1, X$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu'))
+                              torch_arange(1, X[[1]]$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu'))
         )
         DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
@@ -631,10 +629,12 @@ FINN = R6::R6Class(
 
           coro::loop(for (b in DataLoader) {
             batch_loss = c()
-            x = b[[1]]$to(device = self$device, non_blocking=TRUE)
-            y = b[[2]]$to(device = self$device, non_blocking=TRUE)
-            c = b[[3]]$to(device = self$device, non_blocking=TRUE)
-            ind = b[[4]]$to(device = self$device, non_blocking=TRUE)
+            x_mort = b[[1]]$to(device = self$device, non_blocking=TRUE)
+            x_growth = b[[2]]$to(device = self$device, non_blocking=TRUE)
+            x_reg = b[[3]]$to(device = self$device, non_blocking=TRUE)
+            y = b[[4]]$to(device = self$device, non_blocking=TRUE)
+            c = b[[5]]$to(device = self$device, non_blocking=TRUE)
+            ind = b[[6]]$to(device = self$device, non_blocking=TRUE)
             self$optimizer$zero_grad()
 
 
@@ -651,10 +651,10 @@ FINN = R6::R6Class(
               dbh = initCohort$dbh$to(device = self$device, non_blocking=TRUE)[ind,]
             }
 
-            pred_tmp = self$predict(dbh,
-                                    trees,
-                                    species,
-                                    x,
+            pred_tmp = self$predict(dbh = dbh,
+                                    trees = trees,
+                                    species = species,
+                                    env = list(x_mort, x_growth, x_reg),
                                     start_time = start_time,
                                     y = y,
                                     c = c,
@@ -677,6 +677,8 @@ FINN = R6::R6Class(
           cli::cli_progress_update()
         }
         cli::cli_progress_done()
+
+        self$parameter_to_r()
 
         # torch::cuda_empty_cache()
         self$pred = pred
