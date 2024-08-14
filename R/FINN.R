@@ -303,12 +303,12 @@ FINN = R6::R6Class(
 
       cohort_ids = torch_tensor(array(
         1:(prod(species$shape)+1),
-        dim = species$shape), dtype=torch_int64(), device = "cpu"
+        dim = species$shape), dtype=torch_int32(), device = self$device
       )
-      light = torch_zeros(list(env$shape[1], env$shape[2],  dbh$shape[3]), device=self$device)
-      g = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
-      m = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
-      r = torch_zeros(list(env$shape[1], env$shape[2], dbh$shape[3]), device=self$device)
+      light = torch_zeros(list(sites, time,  dbh$shape[3]), device=self$device)
+      g = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
+      m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
+      r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
 
       Result = lapply(1:7,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
 
@@ -318,8 +318,6 @@ FINN = R6::R6Class(
         Raw_cohort_ids = list()
         Raw_patch_results = list()
       }
-
-
 
       if(is.null(y)) {
         predGrowthGlobal = self$nnMortEnv(env[[1]])
@@ -432,7 +430,7 @@ FINN = R6::R6Class(
         max_id <- max(c(1,as_array(cohort_ids), na.rm = TRUE))
         new_cohort_id = torch_tensor(array(
           (max_id+1):(max_id+prod(r$shape)+1),
-          dim = r$shape), dtype=torch_int64(), device = "cpu"
+          dim = r$shape), dtype=torch_int32(), device = self$device
         ) #TODO check for performance
 
         if(dbh$shape[3] != 0){
@@ -552,11 +550,11 @@ FINN = R6::R6Class(
             Patch = Raw_patch_results,
             Cohort = list(
               cohortStates = Raw_cohort_results,
-              cohortID = lapply(Raw_cohort_ids, function(x) as_array(x)))
+              cohortID = lapply(Raw_cohort_ids, function(x) torch::as_array(x)))
             ),
           loss = loss)
       }else if(!debug){
-        Result_out = list(Predictions = list(Site = lapply(Result, function(x) as_array(x))))
+        Result_out = list(Predictions = list(Site = lapply(Result, function(x) torch::as_array(x))))
       }
 
 
