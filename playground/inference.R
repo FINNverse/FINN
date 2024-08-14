@@ -61,13 +61,87 @@ str(resultYear)
 
 library(FINN)
 
-env = data.table(siteID = rep(1:500, each = 50), year = rep(1:50, 500), tmp = runif(500*50), pre = runif(500*50))
+env = data.table(siteID = rep(1:50, each = 20), year = rep(1:20, 50), tmp = runif(50*20), pre = runif(50*20))
 system.time({
+
+  predictions =
 simulateForest(env,
-               sp = 15L,
+               sp = 2L,
                 patches=50L
                ,device = "gpu")
 })
+
+
+system.time({
+
+  predictions =
+    simulateForest(env,
+                   disturbance = disturbance,
+                   sp = 2L,
+                   patches=50L
+                   ,device = "gpu")
+})
+
+
+plot(predictions$Predictions$Site$dbh[1,,2])
+
+data <- pred2DF(predictions, format = "wide")$site
+head(data)
+env
+library(FINN)
+result = finn(data = data, env = env, device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L, parallel=10L, NGPU = 4L, bootstrap = 10L)
+result$model$get_parGrowth()
+result$models_list[[1]]$model$check()
+result$models_list[[1]]$model$parameters
+
+result = finn(data = data,
+              env = env,
+              mortalityProcess = createProcess(~., optimizeAllometric = TRUE, optimizeEnv = FALSE, func = mortality),
+              device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L)
+result$model$parameters
+preds = predict(result)
+
+
+result$model$get_parHeight()
+matplot(sapply(1:5, function(i) result$model$param_history[[i]]$parHeight) |> t(), type = "l")
+preds = predict(result, env = env)
+library(dplyr)
+tmp = preds |> filter(species ==2) |> filter(siteID == 1)
+plot(dbh~year, data = tmp)
+
+
+
+rr=
+sapply(result$models_list, function(m) {
+  m = m$model
+  m$check()
+  return(as.matrix(m$parGrowthEnv[[1]][1,1]))
+})
+apply(rr, 1, mean)
+apply(rr, 1, sd)
+mean(rr)
+sd(rr)
+hist(rnorm(1000, mean(rr), sd(rr)))
+result$models_list[[1]]$model
+
+# with disturbance
+disturbance = data.table(siteID = rep(1:50, each = 20), year = rep(1:20, 50), intensity = sample(c(0.0, 0.2), size = 20*50, replace = TRUE) )
+
+result = finn(data = data,
+              env = env,
+              patches = 1L,
+              disturbance = disturbance,
+              mortalityProcess = createProcess(~., optimizeAllometric = TRUE, optimizeEnv = FALSE, func = mortality),
+              device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L)
+result$model$parameters
+preds = predict(result)
+preds
+
+tmp = preds |> filter(species ==2) |> filter(siteID == 6)
+plot(trees~year, data = tmp)
+
+
+
 
 
 
@@ -103,15 +177,15 @@ library(FINN)
 #torch::torch_set_num_interop_threads(1L)
 #torch::torch_set_num_threads(1L)
 sp = 3L
-patches = 100L
-sites = 500L
+patches = 10L
+sites = 50L
 initCohort = CohortMat$new(dims = c(sites, patches, 10),
                            dbh = array(1, dim = c(sites, patches, 10)),
                            trees = array(1, dim = c(sites, patches, 10)),
                            sp = sp)
 
 
-finn = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
+finn = FINN$new(sp = sp, env = 2L, device = "cuda:0",
                 # parGrowth = matrix(c(0.8, 15), sp, 2, byrow = TRUE),
                 # parMort = matrix(c(runif(sp), runif(sp, 1, 4)), sp, 2, byrow = FALSE),
                 # parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
@@ -128,8 +202,12 @@ system.time({
 
 pred = finn$predict(dbh = initCohort$dbh[,,],
                     trees = initCohort$trees[,,],
-                    species = initCohort$species[,,], env = env[,,], patches = patches, debug = FALSE, verbose = TRUE)
+                    species = initCohort$species[,,], env = env[,,],
+                    disturbance = torch::torch_rand(sites, 60L, 1L)$to(device = "cuda:0"),
+                    patches = patches, debug = FALSE, verbose = TRUE)
 })
+
+
 
 finn$check()
 

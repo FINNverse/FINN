@@ -47,6 +47,7 @@ This function assigns the specified weights to the growth environment neural net
 \item \href{#method-FINNbase-set_parReg}{\code{FINNbase$set_parReg()}}
 \item \href{#method-FINNbase-parameter_to_r}{\code{FINNbase$parameter_to_r()}}
 \item \href{#method-FINNbase-check}{\code{FINNbase$check()}}
+\item \href{#method-FINNbase-update_parameters}{\code{FINNbase$update_parameters()}}
 \item \href{#method-FINNbase-clone}{\code{FINNbase$clone()}}
 }
 }
@@ -387,6 +388,15 @@ None. The regeneration parameters are set in the model.
 \subsection{Method \code{check()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNbase$check(device = NULL)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINNbase-update_parameters"></a>}}
+\if{latex}{\out{\hypertarget{method-FINNbase-update_parameters}{}}}
+\subsection{Method \code{update_parameters()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINNbase$update_parameters()}\if{html}{\out{</div>}}
 }
 
 }
