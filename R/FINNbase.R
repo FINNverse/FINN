@@ -253,13 +253,14 @@ FINNbase <- R6::R6Class(
     },
 
     parameter_to_r = function() {
-      self$parHeight_r = self$parHeight |> as.numeric()
-      self$parGrowth_r = self$parGrowth |> as.matrix()
-      self$parMort_r = self$parMort |> as.matrix()
-      self$parReg_r = self$parReg |> as.numeric()
-      self$parGrowthEnv_r = lapply(self$parGrowthEnv, function(p) p$data() |> as.matrix())
-      self$parMortEnv_r = lapply(self$parMortEnv, function(p) p$data() |> as.matrix())
-      self$parRegEnv_r = lapply(self$parRegEnv, function(p) p$data() |> as.matrix())
+
+      self$parHeight_r = to_r(self$parHeight, TRUE)
+      self$parGrowth_r = to_r(self$parGrowth)
+      self$parMort_r = to_r(self$parMort)
+      self$parReg_r = to_r(self$parReg, TRUE)
+      self$parGrowthEnv_r = lapply(self$parGrowthEnv, function(p) to_r(p))
+      self$parMortEnv_r = lapply(self$parMortEnv, function(p) to_r(p))
+      self$parRegEnv_r = lapply(self$parRegEnv, function(p) to_r(p))
     },
 
     check = function(device = NULL) {
@@ -268,46 +269,65 @@ FINNbase <- R6::R6Class(
       self$device = torch::torch_device(device)
       self$dtype = torch::torch_float32()
 
-      if(self$which %in% c("all", "species")) requires_grad = TRUE
-      else requires_grad = FALSE
-
-      self$parHeight = check_and_recreate(self$parHeight, self$parHeight_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
-      self$parGrowth = check_and_recreate(self$parGrowth, self$parGrowth_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
-      self$parMort = check_and_recreate(self$parMort, self$parMort_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
-      self$parReg = check_and_recreate(self$parReg, self$parReg_r, dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)
+      pars = list()
+      self$parHeight = check_and_recreate(self$parHeight, self$parHeight_r, dtype=torch::torch_float32(), device=self$device)
+      self$parGrowth = check_and_recreate(self$parGrowth, self$parGrowth_r, dtype=torch::torch_float32(), device=self$device)
+      self$parMort = check_and_recreate(self$parMort, self$parMort_r, dtype=torch::torch_float32(), device=self$device)
+      self$parReg = check_and_recreate(self$parReg, self$parReg_r, dtype=torch::torch_float32(), device=self$device)
 
       # rebuild NN - if necessary? How to check?
       pointer_check <- tryCatch(torch::as_array(self$nnMortEnv$parameters[[1]]), error = function(e) e)
       if(inherits(pointer_check,"error")){
-
-        if(self$which %in% c("all", "env")) requires_grad = TRUE
-        else requires_grad = FALSE
 
         self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
         self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
         self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
 
         # and set weights
-        .null = sapply(1:length(self$nnMortEnv$parameters), function(i) self$nnMortEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parMortEnv_r[[i]], dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)))
-        .null = sapply(1:length(self$nnGrowthEnv$parameters), function(i) self$nnGrowthEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parGrowthEnv_r[[i]], dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)))
-        .null = sapply(1:length(self$nnRegEnv$parameters), function(i) self$nnRegEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parRegEnv_r[[i]], dtype=torch::torch_float32(), device=self$device, requires_grad=requires_grad)))
+        .null = sapply(1:length(self$nnMortEnv$parameters), function(i) self$nnMortEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parMortEnv_r[[i]], dtype=torch::torch_float32(), device=self$device)))
+        .null = sapply(1:length(self$nnGrowthEnv$parameters), function(i) self$nnGrowthEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parGrowthEnv_r[[i]], dtype=torch::torch_float32(), device=self$device)))
+        .null = sapply(1:length(self$nnRegEnv$parameters), function(i) self$nnRegEnv$parameters[[i]]$set_data( torch::torch_tensor(self$parRegEnv_r[[i]], dtype=torch::torch_float32(), device=self$device)))
 
         self$parGrowthEnv = self$nnGrowthEnv$parameters
+        .null = lapply(self$parGrowthEnv, function(p) p$requires_grad_(attr(self$parGrowthEnv_r[[1]], "requires_grad")) )
         self$parMortEnv = self$nnMortEnv$parameters
+        .null = lapply(self$parMortEnv, function(p) p$requires_grad_(attr(self$parMortEnv_r[[1]], "requires_grad")) )
         self$parRegEnv = self$nnRegEnv$parameters
+        .null = lapply(self$parRegEnv, function(p) p$requires_grad_(attr(self$parRegEnv_r[[1]], "requires_grad")))
+
+
+        if(!attr(self$parMortEnv_r[[1]], "requires_grad")) .n = lapply(self$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
+        if(!attr(self$parGrowthEnv_r[[1]], "requires_grad")) .n = lapply(self$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
+        if(!attr(self$parRegEnv_r[[1]], "requires_grad")) .n = lapply(self$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
+
+        self$update_parameters()
+
       }
 
-      if(self$which == "env"){
-        self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-        names(self$parameters) = c("R_E", "G_E", "M_E")
-      }else if(self$which == "species"){
-        self$parameters = c(self$parHeight, self$parGrowth, self$parMort, self$parReg)
-        names(self$parameters) = c("H", "G", "M", "R")
-      }else{
-        self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-        names(self$parameters) = c("H", "G", "M", "R","R_E", "G_E", "M_E" )
-      }
+    },
+
+    update_parameters = function() {
+      pars = list()
+      if(self$parHeight$requires_grad) pars = c(pars, parHeight = self$parHeight)
+      if(self$parGrowth$requires_grad) pars = c(pars, parGrowth = self$parGrowth)
+      if(self$parReg$requires_grad) pars = c(pars, parReg = self$parReg)
+      if(self$parMort$requires_grad) pars = c(pars, parMort = self$parMort)
+      if(self$nnRegEnv$parameters[[1]]$requires_grad) pars = c(pars, nnReg = self$nnRegEnv$parameters)
+      if(self$nnGrowthEnv$parameters[[1]]$requires_grad) pars = c(pars, nnGrowth = self$nnGrowthEnv$parameters)
+      if(self$nnMortEnv$parameters[[1]]$requires_grad) pars = c(pars, nnMort = self$nnMortEnv$parameters)
+      self$parameters = pars
     }
 
   )
 )
+
+
+to_r = function(par, numeric = FALSE) {
+  if(numeric) {
+    tmp = par |> as.numeric()
+  } else {
+    tmp = par |> as.matrix()
+  }
+  attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
+  return(tmp)
+}
