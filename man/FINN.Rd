@@ -44,17 +44,20 @@ The \code{FINN} class provides tools to initialize, train, and predict using a F
 \item \href{#method-FINN-new}{\code{FINN$new()}}
 \item \href{#method-FINN-predict}{\code{FINN$predict()}}
 \item \href{#method-FINN-fit}{\code{FINN$fit()}}
+\item \href{#method-FINN-clone}{\code{FINN$clone()}}
 }
 }
 \if{html}{\out{
 <details><summary>Inherited methods</summary>
 <ul>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="build_NN"><a href='../../FINN/html/FINNbase.html#method-FINNbase-build_NN'><code>FINN::FINNbase$build_NN()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="check"><a href='../../FINN/html/FINNbase.html#method-FINNbase-check'><code>FINN::FINNbase$check()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parGrowth'><code>FINN::FINNbase$get_parGrowth()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parHeight'><code>FINN::FINNbase$get_parHeight()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parMort'><code>FINN::FINNbase$get_parMort()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parReg'><code>FINN::FINNbase$get_parReg()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="np_runif"><a href='../../FINN/html/FINNbase.html#method-FINNbase-np_runif'><code>FINN::FINNbase$np_runif()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="parameter_to_r"><a href='../../FINN/html/FINNbase.html#method-FINNbase-parameter_to_r'><code>FINN::FINNbase$parameter_to_r()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parGrowth'><code>FINN::FINNbase$set_parGrowth()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parHeight'><code>FINN::FINNbase$set_parHeight()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parMort'><code>FINN::FINNbase$set_parMort()</code></a></span></li>
@@ -99,6 +102,10 @@ Initializes the FINN model with the specified parameters.
   patch_size_ha = 0.1,
   minLight = 50,
   disturbance = 0,
+  growthFunction = NULL,
+  mortalityFunction = NULL,
+  regenerationFunction = NULL,
+  competitionFunction = NULL,
   which = c("all", "env", "species")
 )}\if{html}{\out{</div>}}
 }
@@ -230,7 +237,7 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   start_time = 1,
   patches = 50L,
   update_step = 1L,
-  reweight = FALSE
+  weights = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -255,7 +262,7 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 
 \item{\code{update_step}}{integer. Backpropagation step length.}
 
-\item{\code{reweight}}{reweight likelihood}
+\item{\code{weights}}{reweight likelihood}
 
 \item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
 }
@@ -263,6 +270,23 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 }
 \subsection{Returns}{
 None. The trained model is stored within the class instance.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINN-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-FINN-clone}{}}}
+\subsection{Method \code{clone()}}{
+The objects of this class are cloneable with this method.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINN$clone(deep = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{deep}}{Whether to make a deep clone.}
+}
+\if{html}{\out{</div>}}
 }
 }
 }
