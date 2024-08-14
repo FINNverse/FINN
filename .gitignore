@@ -1,6 +1,7 @@
 # Ignore object files
 
 # Ignore compiled shared libraries
+*.o
 *.so
 *.dll
 *.dylib

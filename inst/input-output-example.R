@@ -140,8 +140,10 @@ ggplot(results$site[, .(value = max(value) ), by = .(year, species, variable)], 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
 results <- pred2DF(pred, format = "wide")
-names(results$cohort) = c("siteID", "patchID", "species", "cohortID" ,"year", "trees", "dbh", "m", "g")
-FINN::obsDF2arrays(results$cohort)
+CohortMat$new(results$cohort[year == max(year)])
+
+max(results$cohort$cohortID)
+
 
 ## 4.1 calculate response variables ####
 
