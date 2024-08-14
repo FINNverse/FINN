@@ -68,11 +68,11 @@ pred2DF <- function(pred, format = "wide") {
   # Process patch-level predictions if available
   if("Patch" %in% names(pred$Predictions)) {
     patch_dt <- data.table()
-    for(i in names(pred$Predictions$Patch[[year_i]])) {
+    for(i in names(pred$Predictions$Patch[[1]])) {
       patch_temp_dt2 <- data.table()
       for(year_i in seq_along(pred$Predictions$Patch)) {
         # Set dimension names
-        dim_names = c("siteID", "patch", "species")
+        dim_names = c("siteID", "patchID", "species")
         # Convert the patch-level array to a data frame
         patch_temp_dt <- data.table(
           as.data.frame.table(
@@ -85,12 +85,12 @@ pred2DF <- function(pred, format = "wide") {
         for(dim_i in dim_names) patch_temp_dt[[dim_i]] <- as.integer(patch_temp_dt[[dim_i]])
         patch_temp_dt$year = year_i
         patch_temp_dt2 <- rbind(patch_temp_dt2, patch_temp_dt)
-        setcolorder(patch_temp_dt, c("siteID", "patch", "species", "year", i))
+        setcolorder(patch_temp_dt, c("siteID", "patchID", "species", "year", i))
       }
       if(nrow(patch_dt) == 0) {
         patch_dt <- patch_temp_dt2
       } else {
-        patch_dt <- merge(patch_dt, patch_temp_dt, by = c("siteID", "patch", "species", "year"))
+        patch_dt <- merge(patch_dt, patch_temp_dt, by = c("siteID", "patchID", "species", "year"))
       }
     }
   }
@@ -102,7 +102,7 @@ pred2DF <- function(pred, format = "wide") {
       # Select the cohort array for the current year
       cohorts_array_i = pred$Predictions$Cohort$cohortID[[year_i]]
       # Set dimension names
-      dim_names = c("siteID", "patch", "species")
+      dim_names = c("siteID", "patchID", "species")
       # Convert the cohort-level array to a data frame
       cohort_temp_dt <- data.table(
         as.data.frame.table(
@@ -137,8 +137,8 @@ pred2DF <- function(pred, format = "wide") {
   # Convert to long format if specified
   if(format == "long") {
     site_dt <- melt(site_dt, id.vars = c("siteID", "year", "species"), variable.name = "variable")
-    patch_dt <- melt(patch_dt, id.vars = c("siteID", "patch", "year", "species"), variable.name = "variable")
-    cohort_dt <- melt(cohort_dt, id.vars = c("siteID", "patch", "year", "species", "cohortID"), variable.name = "variable")
+    patch_dt <- melt(patch_dt, id.vars = c("siteID", "patchID", "year", "species"), variable.name = "variable")
+    cohort_dt <- melt(cohort_dt, id.vars = c("siteID", "patchID", "year", "species", "cohortID"), variable.name = "variable")
   } else if(format != "wide") {
     stop("Invalid format argument. Use either 'long' or 'wide'")
   }
