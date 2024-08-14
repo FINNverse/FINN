@@ -45,6 +45,8 @@ This function assigns the specified weights to the growth environment neural net
 \item \href{#method-FINNbase-set_parGrowth}{\code{FINNbase$set_parGrowth()}}
 \item \href{#method-FINNbase-set_parHeight}{\code{FINNbase$set_parHeight()}}
 \item \href{#method-FINNbase-set_parReg}{\code{FINNbase$set_parReg()}}
+\item \href{#method-FINNbase-parameter_to_r}{\code{FINNbase$parameter_to_r()}}
+\item \href{#method-FINNbase-check}{\code{FINNbase$check()}}
 \item \href{#method-FINNbase-clone}{\code{FINNbase$clone()}}
 }
 }
@@ -369,6 +371,24 @@ This function sets the regeneration parameters after applying the appropriate tr
 \subsection{Returns}{
 None. The regeneration parameters are set in the model.
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINNbase-parameter_to_r"></a>}}
+\if{latex}{\out{\hypertarget{method-FINNbase-parameter_to_r}{}}}
+\subsection{Method \code{parameter_to_r()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINNbase$parameter_to_r()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINNbase-check"></a>}}
+\if{latex}{\out{\hypertarget{method-FINNbase-check}{}}}
+\subsection{Method \code{check()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINNbase$check(device = NULL)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-clone"></a>}}
