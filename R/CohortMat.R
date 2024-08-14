@@ -187,61 +187,83 @@ array2obsDF <- function(obs_array) {
 #' @field dims A vector representing the dimensions of the arrays (sites, patches, cohorts).
 #' @field sp An integer representing the number of species.
 #' @field device A character string specifying the device to use ('cpu' or 'cuda').
+#' @field dbh_r A numeric array representing the diameter at breast height in R array format.
+#' @field trees_r A numeric array representing the number of trees in R array format.
+#' @field species_r An integer array representing the species in R array format.
+#' @field device_r A character string specifying the device in R format ('cpu' or 'cuda').
+#'
+#' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
+#' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
+#' @param trees A tensor or array representing the number of trees. Defaults to `self$trees`.
+#' @param species A tensor or array representing the species. Defaults to `self$species`.
+#' @param dims A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to `self$dims`.
+#' @param sp An integer representing the number of species. Defaults to `self$sp`.
+#' @param device A character string specifying the device to use ('cpu' or 'cuda'). Defaults to `self$device`.
 #'
 #' @export
 CohortMat = R6::R6Class("CohortMat", public = list(
-  dbh=NULL,
-  trees=NULL,
-  species=NULL,
-  dbh_r=NULL,
-  trees_r=NULL,
-  species_r=NULL,
-  dims=c(50, 30, 10),
+  dbh = NULL,
+  trees = NULL,
+  species = NULL,
+  dbh_r = NULL,
+  trees_r = NULL,
+  species_r = NULL,
+  dims = c(50, 30, 10),
   sp = 10,
-  device ='cpu',
+  device = 'cpu',
   device_r = "cpu",
-  initialize = function(obs_df = NULL, dbh=self$dbh, trees=self$trees, species=self$species, dims=self$dims, sp = self$sp, device = self$device) {
-    if(!is.null(obs_df)){
-      if(!all(c("siteID","patchID","species", "dbh", "trees") %in% colnames(obs_df))) stop("c(\"siteID\",\"patchID\",\"species\",\"dbh\",\"trees\") %in% all(colnames(obs_df)) is not TRUE")
-      obs_array = obsDF2arrays(obs_df)
+
+  #' @description
+  #' Initialize the CohortMat class
+  #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
+  #' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
+  #' @param trees A tensor or array representing the number of trees. Defaults to `self$trees`.
+  #' @param species A tensor or array representing the species. Defaults to `self$species`.
+  #' @param dims A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to `self$dims`.
+  #' @param sp An integer representing the number of species. Defaults to `self$sp`.
+  #' @param device A character string specifying the device to use ('cpu' or 'cuda'). Defaults to `self$device`.
+  initialize = function(obs_df = NULL, dbh = self$dbh, trees = self$trees, species = self$species, dims = self$dims, sp = self$sp, device = self$device) {
+    if (!is.null(obs_df)) {
+      if (!all(c("siteID", "patchID", "species", "dbh", "trees") %in% colnames(obs_df)))
+        stop('c("siteID", "patchID", "species", "dbh", "trees") %in% all(colnames(obs_df)) is not TRUE')
+      obs_array = self$obsDF2arrays(obs_df)
       dbh = obs_array$dbh
       trees = obs_array$trees
       species = obs_array$species
       dims = dim(obs_array$species)
     }
 
-    self$dbh = if(is.null(dbh)) array(0.0, dim = dims) else dbh
-    self$trees = if(is.null(trees)) array(0.0, dim = dims) else trees
-    self$species = if(is.null(species)) array(sample.int(sp, prod(dims),replace = TRUE), dim = dims) else species
+    self$dbh = if (is.null(dbh)) array(0.0, dim = dims) else dbh
+    self$trees = if (is.null(trees)) array(0.0, dim = dims) else trees
+    self$species = if (is.null(species)) array(sample.int(sp, prod(dims), replace = TRUE), dim = dims) else species
     self$dims = dims
     self$sp = sp
     self$device_r = device
-    if(!("torch_device" %in% class(device))) self$device = torch::torch_device(device)
+    if (!("torch_device" %in% class(device))) self$device = torch::torch_device(device)
 
-    if(!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype=torch::torch_float32(), device=self$device)
-    if(!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype=torch::torch_float32(), device=self$device)
-    if(!inherits(self$species, "torch_tensor")) self$species = torch::torch_tensor(self$species, dtype=torch::torch_int64(), device=self$device)
-
+    if (!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype = torch::torch_float32(), device = self$device)
+    if (!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype = torch::torch_float32(), device = self$device)
+    if (!inherits(self$species, "torch_tensor")) self$species = torch::torch_tensor(self$species, dtype = torch::torch_int64(), device = self$device)
 
     self$dbh_r = torch::as_array(self$dbh)
     self$trees_r = torch::as_array(self$trees)
     self$species_r = torch::as_array(self$species)
-
-
   },
 
+  #' Check and reinitialize tensors if necessary
   check = function() {
     self$device = torch::torch_device(self$device_r)
-    self$dbh = check_and_recreate(self$dbh, self$dbh_r, dtype=torch::torch_float32(), device = self$device_r)
-    self$trees = check_and_recreate(self$trees, self$trees_r, dtype=torch::torch_float32(), device = self$device_r)
-    self$species = check_and_recreate(self$species, self$species_r, dtype=torch::torch_int64(), device = self$device_r)
+    self$dbh = check_and_recreate(self$dbh, self$dbh_r, dtype = torch::torch_float32(), device = self$device_r)
+    self$trees = check_and_recreate(self$trees, self$trees_r, dtype = torch::torch_float32(), device = self$device_r)
+    self$species = check_and_recreate(self$species, self$species_r, dtype = torch::torch_int64(), device = self$device_r)
   },
 
-  # Function to transform obs_dt into three arrays
+  #' Transform an observation data frame into three arrays
+  #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees".
   obsDF2arrays = obsDF2arrays,
-  # Function to transofrm torch_tensors into data.frame
-  asDF = function() {
-    array2obsDF(list(dbh = torch::as_array(self$dbh),trees = torch::as_array(self$trees),species = torch::as_array(self$species)))
-    }
-))
 
+  #' Convert the tensors to a data frame format
+  asDF = function() {
+    array2obsDF(list(dbh = torch::as_array(self$dbh), trees = torch::as_array(self$trees), species = torch::as_array(self$species)))
+  }
+))
