@@ -4,7 +4,7 @@
 \alias{predict.finnModel}
 \title{Predict Forest Dynamics}
 \usage{
-\method{predict}{finnModel}(object, init = NULL, env = NULL, ...)
+\method{predict}{finnModel}(object, init = NULL, env = NULL, disturbance = NULL, ...)
 }
 \arguments{
 \item{object}{object of class 'finnModel' created by \code{finn()}}

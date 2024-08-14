@@ -66,6 +66,7 @@ The \code{FINN} class provides tools to initialize, train, and predict using a F
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnGrowthEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnGrowthEnv'><code>FINN::FINNbase$set_weights_nnGrowthEnv()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnMortEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnMortEnv'><code>FINN::FINNbase$set_weights_nnMortEnv()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnRegEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnRegEnv'><code>FINN::FINNbase$set_weights_nnRegEnv()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="update_parameters"><a href='../../FINN/html/FINNbase.html#method-FINNbase-update_parameters'><code>FINN::FINNbase$update_parameters()</code></a></span></li>
 </ul>
 </details>
 }}
@@ -101,12 +102,10 @@ Initializes the FINN model with the specified parameters.
   bias = FALSE,
   patch_size_ha = 0.1,
   minLight = 50,
-  disturbance = 0,
   growthFunction = NULL,
   mortalityFunction = NULL,
   regenerationFunction = NULL,
-  competitionFunction = NULL,
-  which = c("all", "env", "species")
+  competitionFunction = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -144,8 +143,6 @@ Initializes the FINN model with the specified parameters.
 \item{\code{minLight}}{numeric. Minimum light level.}
 
 \item{\code{disturbance}}{numeric. Disturbance level.}
-
-\item{\code{which}}{character. Specifies which parameters to include ("all", "env", "species").}
 }
 \if{html}{\out{</div>}}
 }
@@ -166,6 +163,7 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
   trees = NULL,
   species = NULL,
   env = NULL,
+  disturbance = NULL,
   start_time = 1L,
   pred_growth = NULL,
   pred_morth = NULL,
@@ -230,6 +228,7 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 \if{html}{\out{<div class="r">}}\preformatted{FINN$fit(
   X = NULL,
   Y = NULL,
+  disturbance = NULL,
   initCohort = NULL,
   epochs = 2L,
   batch_size = 20L,

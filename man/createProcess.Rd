@@ -7,10 +7,11 @@
 createProcess(
   formula = NULL,
   func,
-  optimize = FALSE,
   initAllometric = NULL,
   initEnv = NULL,
-  hidden = list()
+  hidden = list(),
+  optimizeAllometric = FALSE,
+  optimizeEnv = TRUE
 )
 }
 \arguments{
@@ -18,13 +19,13 @@ createProcess(
 
 \item{func}{A custom function to define the process. This is a required parameter.}
 
-\item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
-
 \item{initAllometric}{Initial allometric parameters for the process. Default is \code{NULL}.}
 
 \item{initEnv}{Initial environmental parameters for the process. Default is \code{NULL}.}
 
 \item{hidden}{A list specifying the hidden layers for neural network models. Default is an empty list.}
+
+\item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 }
 \value{
 A list of class "process" containing the process definition and associated parameters.

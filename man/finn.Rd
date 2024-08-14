@@ -7,11 +7,13 @@
 finn(
   data = NULL,
   env,
+  disturbance = NULL,
   mortalityProcess = NULL,
   growthProcess = NULL,
   regenerationProcess = NULL,
   competitionProcess = NULL,
   height = NULL,
+  optimizeHeight = TRUE,
   patches = 10L,
   patch_size = 0.1,
   init = NULL,

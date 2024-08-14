@@ -6,6 +6,7 @@
 \usage{
 simulateForest(
   env,
+  disturbance = NULL,
   mortalityProcess = NULL,
   growthProcess = NULL,
   regenerationProcess = NULL,
