@@ -1,5 +1,4 @@
 # Ignore object files
-*.o
 
 # Ignore compiled shared libraries
 *.so
@@ -16,17 +15,6 @@
 .DS_Store
 
 # Ignore specific directories
-src/*.o
-src/*.so
-src/*.dll
-src/*.dylib
 data
 
 *.so
-*.o
-*.so
-src/climateDF2array.o
-src/FINN.so
-src/obsDF2arrays.o
-src/RcppExports.o
-*.o
