@@ -63,11 +63,19 @@ library(FINN)
 
 env = data.table(siteID = rep(1:500, each = 50), year = rep(1:50, 500), tmp = runif(500*50), pre = runif(500*50))
 system.time({
+
+  predictions =
 simulateForest(env,
                sp = 15L,
                 patches=50L
                ,device = "gpu")
 })
+
+
+
+ predictions$Predictions
+
+
 
 
 

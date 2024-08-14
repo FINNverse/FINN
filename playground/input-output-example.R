@@ -87,7 +87,7 @@ str(finn$device)
 # CohortMat$new(dims = c(env$shape[1], patches, sp), sp = sp, device=finn$device)
 
 system.time({
-  FINN.seed(1)
+  #FINN.seed(1)
   pred1 = finn$predict(
     # dbh = initCohort$dbh,
     # trees = initCohort$trees,
@@ -99,7 +99,7 @@ system.time({
 })
 
 system.time({
-  FINN.seed(1)
+#  FINN.seed(1)
   pred2 = finn$predict(
     # dbh = initCohort$dbh,
     # trees = initCohort$trees,
@@ -115,7 +115,7 @@ system.time({
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 pred = pred2
 
-results <- pred2DF(pred, format = "long")
+results <- pred2DF(pred1, format = "long")
 
 str(results$site)
 str(results$patch)
