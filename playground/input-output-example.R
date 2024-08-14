@@ -1,6 +1,7 @@
 library(FINN)
 library(data.table)
 library(ggplot2)
+library(torch)
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## env data input ####
@@ -58,6 +59,8 @@ climate_dt_year <- climate_dt[, .(tmp = mean(tmp), pre = sum(pre)), by = .(siteI
 resultYear <- climateDF2array(climate_dt = climate_dt_year, env_vars = c("tmp", "pre"))
 str(resultYear)
 
+
+
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 2. simulate data ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
@@ -113,9 +116,13 @@ system.time({
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## 3. model output --> inventory data.frame ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-pred = pred2
+# pred = pred2
 
-results <- pred2DF(pred, format = "long")
+results <- pred2DF(pred1, format = "long")
+results <- pred2DF(pred2, format = "long")
+
+results <- pred2DF(pred1, format = "long")
+results <- pred2DF(pred2, format = "long")
 
 str(results$site)
 str(results$patch)
@@ -139,13 +146,68 @@ ggplot(results$site[, .(value = max(value) ), by = .(year, species, variable)], 
 ## 4. inventory data.frame --> model input ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
-results <- pred2DF(pred, format = "wide")
-CohortMat$new(results$cohort[year == max(year)])
+results <- pred2DF(pred2, format = "wide")
+
+
+
+test_cohort <- CohortMat$new(results$cohort[trees > 0 & year == max(year)])
+
+# results$cohort[trees > 0]$cohortID
+
+test_cohort$trees
+
+test_cohort$asDF()
+
+dim(torch::as_array(test_cohort$trees))
+
+dim(test_cohort$trees)
+summary(test_cohort$trees)
+
+disturbance_intensity = 0.5
+disturbance_frequency = 0.02
+
+disturbances = array(NA_integer_, dim = c(sites, timesteps, patches))
+dim(disturbances)
+for(site_i in 1:sites){
+  for(year_i in 1:timesteps){
+    dist_site_year = rbinom(n = 1, size = 1, prob = frequency)
+    disturbances[site_i, year_i, ] = dist_site_year*rbinom(n = patches, size = 1, prob = intensity)
+  }
+}
+
+disturbances = 1*(disturbances == 0)
+disturbances_tens <- torch::torch_tensor(disturbances, device = "cpu")
+
+test_cohort$trees*disturbances_tens[,1,]$unsqueeze(3L)
+
+
+dim(disturbances_tens)
+
+as_array(initCohort$trees)*disturbances[1, 1,] # site_i, year_i, patch_i
+as_array(initCohort$trees)*disturbances[1, 1,] # site_i, year_i, patch_i
+
+initCohort$trees*disturbances[1, 1,] # site_i, year_i, patch_i
+
+dim(test_cohort$trees)
+dim(disturbances_tens) # site_i, year_i, patch_i
+dim(test_cohort$trees[,,])
+dim(disturbances_tens[,1,]) # site_i, year_i, patch_i
+
+test_cohort$trees[,,]*disturbances_tens[,1,] # site_i, year_i, patch_i
+
+
+results$site
 
 max(results$cohort$cohortID)
 
 
 ## 4.1 calculate response variables ####
+results <- pred2DF(pred1, format = "wide")
+
+
+climateDF2array(results$site, env_vars = c("dbh", "trees", "species", "ba"))
+
+
 
 # growth rates
 
