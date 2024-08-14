@@ -6,13 +6,16 @@ library(data.table)
 Nsp = 1
 Npatches = 100
 Nsites = 50
+Ntimesteps = 100
 
 site_dt <-
   data.table(
     expand.grid(
       list(
         species = 1:Nsp,
-        siteID = 1:Nsites
+        siteID = 1:Nsites,
+        year = 1:Ntimesteps,
+        intensity = rbinom(Ntimesteps, 1, 0.1)*rbeta(Ntimesteps, 2, 2)
         )
       )
     )
@@ -27,12 +30,25 @@ env_dt <- data.table(
 env_dt$siteID <- 1:nrow(env_dt)
 
 sim_dt <- merge(site_dt, env_dt, by = "siteID")
+dist_dt <- site_dt
+
+disturbance = rbinom(Ntimesteps, 1, 0.1)*rbeta(Ntimesteps, 2, 2)
+
+system.time({
+  predictions =
+    simulateForest(env = sim_dt,
+                   disturbance = dist_dt,
+                   sp = 1L,
+                   patches=100L
+                   ,device = "cpu")
+})
+
+
+FINN::simulateForest()
 
 
 
-climateDF2array(env_dt, env_vars = "env1")
-
-finn = FINN$new(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
+finn = f(sp = sp, env = 2L, device = "cuda:0", which = "all" ,
                 # parGrowth = matrix(c(0.8, 15), sp, 2, byrow = TRUE),
                 # parMort = matrix(c(runif(sp), runif(sp, 1, 4)), sp, 2, byrow = FALSE),
                 # parReg = runif(sp, 0.8, 0.9), # any value between 0 and 1. 0 = species needs no light for regeneration, 1 = species needs full light for regeneration
