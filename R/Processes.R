@@ -183,7 +183,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 
   environment = index_species(pred, species)
   # gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
-  gPSize = (1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))^1))
+  gPSize = (1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))))
   # gPSize = torch_sigmoid(gPSize)
   # TODO
   # clamp can lead to vanishing gradients, sigmoid is not perfect but probably better here!
@@ -217,16 +217,18 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 #' @import torch
 #'
 #' @export
-growth = function(dbh, species, parGrowth, parMort, pred, light){
+growth = function(dbh, species, parGrowth, parMort, pred, light, light_steepness = 10, debug = F){
 
-  shade = torch_sigmoid((light + (1-parGrowth[,1][species]) - 1)/1e-1)
+  # shade = torch_sigmoid((light + (1-parGrowth[,1][species]) - 1)/1e-1)
+  shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
+         (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
   environment = index_species(pred, species)
-  pred = (shade*environment)
   # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
-  growth = pred/2 * parGrowth[,2][species] * ((parMort[,2][species]-dbh/100) / parMort[,2][species])^(2)
+  growth = shade*environment * parGrowth[,2][species] * (torch::torch_exp(-(dbh / (parMort[,2][species] * 100))))
   # growth = parGrowth[species,1]
   # return torch.nn.functional.softplus(growth)
-  return(torch_clamp(growth, min = 0.0))
+  if(debug == TRUE) out = list(shade = shade, light = light, environment = environment,growth = growth) else out = growth
+  return(out)
 }
 
 #' Calculate the regeneration of forest patches BA_stemsed on the input parameters.
