@@ -115,7 +115,7 @@ system.time({
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 pred = pred2
 
-results <- pred2DF(pred1, format = "long")
+results <- pred2DF(pred1, format = "wide")
 
 str(results$site)
 str(results$patch)

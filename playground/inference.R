@@ -61,23 +61,55 @@ str(resultYear)
 
 library(FINN)
 
-env = data.table(siteID = rep(1:500, each = 50), year = rep(1:50, 500), tmp = runif(500*50), pre = runif(500*50))
+env = data.table(siteID = rep(1:50, each = 20), year = rep(1:20, 50), tmp = runif(50*20), pre = runif(50*20))
 system.time({
 
   predictions =
 simulateForest(env,
-               sp = 15L,
+               sp = 2L,
                 patches=50L
                ,device = "gpu")
 })
 
 
 
- predictions$Predictions
+plot(predictions$Predictions$Site$dbh[1,,3])
 
+data <- pred2DF(predictions, format = "wide")$site
+head(data)
+env
+library(FINN)
+result = finn(data = data, env = env, device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L, parallel=10L, NGPU = 4L, bootstrap = 10L)
+result$model$get_parGrowth()
+result$models_list[[1]]$model$check()
+result$models_list[[1]]$model$parameters
 
+result = finn(data = data,
+              env = env,
+              mortalityProcess = createProcess(~., optimizeAllometric = TRUE, optimizeEnv = FALSE, func = mortality),
+              device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L)
+result$model$parameters
+predict(result)
 
+result$model$get_parHeight()
+matplot(sapply(1:5, function(i) result$model$param_history[[i]]$parHeight) |> t(), type = "l")
+preds = predict(result, env = env)
+library(dplyr)
+tmp = preds |> filter(species ==2) |> filter(siteID == 1)
+plot(dbh~year, data = tmp)
 
+rr=
+sapply(result$models_list, function(m) {
+  m = m$model
+  m$check()
+  return(as.matrix(m$parGrowthEnv[[1]][1,1]))
+})
+apply(rr, 1, mean)
+apply(rr, 1, sd)
+mean(rr)
+sd(rr)
+hist(rnorm(1000, mean(rr), sd(rr)))
+result$models_list[[1]]$model
 
 
 library(parallel)

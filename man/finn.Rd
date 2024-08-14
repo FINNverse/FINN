@@ -14,13 +14,14 @@ finn(
   height = NULL,
   patches = 10L,
   patch_size = 0.1,
-  sp = 5L,
   init = NULL,
+  batchsize = 50L,
+  epochs = 20L,
+  lr = 0.1,
   device = c("cpu", "gpu"),
   bootstrap = NULL,
   parallel = FALSE,
   NGPU = 1,
-  batchsize = NULL,
   ...
 )
 }
@@ -34,8 +35,6 @@ finn(
 \item{patches}{An integer specifying the number of patches in the simulation. Default is 10.}
 
 \item{patch_size}{A numeric value representing the size of each patch. Default is 0.1.}
-
-\item{sp}{An integer specifying the number of species in the simulation. Default is 5.}
 
 \item{init}{A custom initialization object for the simulation, if available.}
 
@@ -56,6 +55,8 @@ finn(
 \item{regeneration}{A process object or formula defining the regeneration process.}
 
 \item{competition}{A function defining the competition process, if applicable.}
+
+\item{sp}{An integer specifying the number of species in the simulation. Default is 5.}
 }
 \value{
 A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.
