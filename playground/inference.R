@@ -61,13 +61,14 @@ str(resultYear)
 
 library(FINN)
 
-env = data.table(siteID = rep(1:50000, each = 50), year = rep(1:50, 50000), tmp = runif(50000*50), pre = runif(50000*50))
+env = data.table(siteID = rep(1:500, each = 50), year = rep(1:50, 500), tmp = runif(500*50), pre = runif(500*50))
 system.time({
 simulateForest(env,
                sp = 15L,
-               batchsize = 50L, patches=50L
-               ,device = "gpu", NGPU = 4, parallel = 16)
+                patches=50L
+               ,device = "gpu")
 })
+
 
 
 

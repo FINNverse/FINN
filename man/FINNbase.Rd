@@ -2,9 +2,9 @@
 % Please edit documentation in R/FINNbase.R
 \name{FINNbase}
 \alias{FINNbase}
-\title{FINNbase class}
+\title{FINNbase Class}
 \description{
-The \code{FINNbase} class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
+The \code{FINNbase} class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, setting and getting model parameters, and managing weights in neural networks.
 }
 \examples{
 
