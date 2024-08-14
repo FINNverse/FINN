@@ -4,7 +4,16 @@
 \alias{mortality}
 \title{Mortality}
 \usage{
-mortality(dbh, species, trees, parMort, pred, light, debug = F)
+mortality(
+  dbh,
+  species,
+  trees,
+  parMort,
+  pred,
+  light,
+  base_steepness = 10,
+  debug = F
+)
 }
 \arguments{
 \item{dbh}{dbh}

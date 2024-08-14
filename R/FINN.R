@@ -78,6 +78,7 @@ FINN = R6::R6Class(
     #' @param patch_size_ha numeric. Patch size in hectares.
     #' @param minLight numeric. Minimum light level.
     #' @param disturbance numeric. Disturbance level.
+
     #' @return Invisible self.
     initialize = function(
                   sp = NULL,
@@ -105,7 +106,6 @@ FINN = R6::R6Class(
                   bias = FALSE,
                   patch_size_ha = 0.1,
                   minLight = 50,
-                  disturbance = 0.0,
                   growthFunction = NULL,
                   mortalityFunction = NULL,
                   regenerationFunction = NULL,
@@ -198,6 +198,7 @@ FINN = R6::R6Class(
         self$parReg = np_runif(0, 1, size = self$sp)
       }
 
+
       self$set_parHeight(parHeight)
       self$set_parGrowth(parGrowth)
       self$set_parMort(parMort)
@@ -283,6 +284,16 @@ FINN = R6::R6Class(
       patches = dbh$shape[2]
       sp = self$sp
 
+      # disturbances = array(NA_integer_, dim = c(sites, timesteps, patches))
+      # for(site_i in 1:sites){
+      #   for(year_i in 1:timesteps){
+      #     dist_site_year = rbinom(n = 1, size = 1, prob = self$disturbance_frequency)
+      #     disturbances[site_i, year_i, ] = dist_site_year*rbinom(n = patches, size = 1, prob = self$disturbance_intensity)
+      #   }
+      # }
+      # disturbances = 1*(disturbances == 0)
+      # disturbances_tens <- torch::torch_tensor(disturbances, device = self$device, dtype = self$dtype)
+
       if(is.null(y)) {
         lapply(self$parameters, function(p) p$requires_grad_(FALSE) )
       }
@@ -345,6 +356,9 @@ FINN = R6::R6Class(
         trees=trees$detach()
         species=species$detach()
         cohort_ids=cohort_ids$detach()
+
+        # Disturbance
+        # trees*disturbances_tens[,i,]$unsqueeze(3L)
 
         # Model - get Parameters parameter constrains
         parHeight = self$get_parHeight()
