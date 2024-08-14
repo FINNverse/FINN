@@ -1,11 +1,11 @@
 #' Create a Process Object
 #'
-#' This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, allometric parameters, environmental initialization, and hidden layers for neural networks.
+#' This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
 #'
 #' @param formula An optional formula specifying the structure of the model. Default is `NULL`, which results in the formula `~.` being used.
 #' @param func A custom function to define the process. This is a required parameter.
 #' @param optimize Logical indicating whether the process function should be optimized. Default is `FALSE`.
-#' @param initAllometric Initial allometric parameters for the process. Default is `NULL`.
+#' @param initSpecies Initial species parameters for the process. Default is `NULL`.
 #' @param initEnv Initial environmental parameters for the process. Default is `NULL`.
 #' @param hidden A list specifying the hidden layers for neural network models. Default is an empty list.
 #'
@@ -15,7 +15,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initAllometric = NULL, initEnv = NULL, hidden = list(), optimizeAllometric = FALSE, optimizeEnv = TRUE) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = list(), optimizeSpecies = FALSE, optimizeEnv = TRUE) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -32,8 +32,8 @@ createProcess = function(formula = NULL, func, initAllometric = NULL, initEnv = 
   out$func = func
   out$custom = TRUE
   if(isNamespace(environment(func))) out$custom = getNamespaceName(environment(func)) != "FINN"
-  out$initAllometric = initAllometric
-  out$optimizeAllometric = optimizeAllometric
+  out$initSpecies = initSpecies
+  out$optimizeSpecies = optimizeSpecies
   out$optimizeEnv = optimizeEnv
   out$initEnv = initEnv
   out$hidden = NULL
@@ -170,9 +170,9 @@ simulateForest = function(env,
                    mortalityFunction = mortalityProcess$func,
                    regenerationFunction = regenerationProcess$func,
                    competitionFunction = competitionProcess$func,
-                   parGrowth = growthProcess$initAllometric,
-                   parMort = mortalityProcess$initAllometric,
-                   parReg = regenerationProcess$initAllometric,
+                   parGrowth = growthProcess$initSpecies,
+                   parMort = mortalityProcess$initSpecies,
+                   parReg = regenerationProcess$initSpecies,
                    parHeight = height,
                    parGrowthEnv = growthProcess$initEnv,
                    parMortEnv = mortalityProcess$initEnv,
@@ -246,6 +246,7 @@ simulateForest = function(env,
       })
     parallel::stopCluster(cl)
   }
+  predictions$model = model
   return(predictions)
 
 }
@@ -400,9 +401,9 @@ finn = function(data = NULL,
                    mortalityFunction = mortalityProcess$func,
                    regenerationFunction = regenerationProcess$func,
                    competitionFunction = competitionProcess$func,
-                   parGrowth = growthProcess$initAllometric,
-                   parMort = mortalityProcess$initAllometric,
-                   parReg = regenerationProcess$initAllometric,
+                   parGrowth = growthProcess$initSpecies,
+                   parMort = mortalityProcess$initSpecies,
+                   parReg = regenerationProcess$initSpecies,
                    parHeight = height,
                    parGrowthEnv = growthProcess$initEnv,
                    parMortEnv = mortalityProcess$initEnv,
@@ -410,9 +411,9 @@ finn = function(data = NULL,
                    patch_size_ha = patch_size)
 
   #### set parameters for optimization #####
-  if(!mortalityProcess$optimizeAllometric) model$parMort$requires_grad_(FALSE)
-  if(!growthProcess$optimizeAllometric) model$parGrowth$requires_grad_(FALSE)
-  if(!regenerationProcess$optimizeAllometric) model$parReg$requires_grad_(FALSE)
+  if(!mortalityProcess$optimizeSpecies) model$parMort$requires_grad_(FALSE)
+  if(!growthProcess$optimizeSpecies) model$parGrowth$requires_grad_(FALSE)
+  if(!regenerationProcess$optimizeSpecies) model$parReg$requires_grad_(FALSE)
   if(!optimizeHeight) model$parHeight$requires_grad_(FALSE)
   if(!mortalityProcess$optimizeEnv) .n = lapply(model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
   if(!growthProcess$optimizeEnv) .n = lapply(model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
@@ -487,18 +488,18 @@ finn = function(data = NULL,
                    mortalityFunction = mortalityProcess$func,
                    regenerationFunction = regenerationProcess$func,
                    competitionFunction = competitionProcess$func,
-                   parGrowth = growthProcess$initAllometric,
-                   parMort = mortalityProcess$initAllometric,
-                   parReg = regenerationProcess$initAllometric,
+                   parGrowth = growthProcess$initSpecies,
+                   parMort = mortalityProcess$initSpecies,
+                   parReg = regenerationProcess$initSpecies,
                    parHeight = height,
                    parGrowthEnv = growthProcess$initEnv,
                    parMortEnv = mortalityProcess$initEnv,
                    parRegEnv = regenerationProcess$initEnv,
                    patch_size_ha = patch_size)
 
-          if(!mortalityProcess$optimizeAllometric) tmp_model$parMort$requires_grad_(FALSE)
-          if(!growthProcess$optimizeAllometric) tmp_model$parGrowth$requires_grad_(FALSE)
-          if(!regenerationProcess$optimizeAllometric) tmp_model$parReg$requires_grad_(FALSE)
+          if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
+          if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
+          if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
           if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
           if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
           if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
@@ -552,18 +553,18 @@ finn = function(data = NULL,
                                mortalityFunction = mortalityProcess$func,
                                regenerationFunction = regenerationProcess$func,
                                competitionFunction = competitionProcess$func,
-                               parGrowth = growthProcess$initAllometric,
-                               parMort = mortalityProcess$initAllometric,
-                               parReg = regenerationProcess$initAllometric,
+                               parGrowth = growthProcess$initSpecies,
+                               parMort = mortalityProcess$initSpecies,
+                               parReg = regenerationProcess$initSpecies,
                                parHeight = height,
                                parGrowthEnv = growthProcess$initEnv,
                                parMortEnv = mortalityProcess$initEnv,
                                parRegEnv = regenerationProcess$initEnv,
                                patch_size_ha = patch_size)
 
-          if(!mortalityProcess$optimizeAllometric) tmp_model$parMort$requires_grad_(FALSE)
-          if(!growthProcess$optimizeAllometric) tmp_model$parGrowth$requires_grad_(FALSE)
-          if(!regenerationProcess$optimizeAllometric) tmp_model$parReg$requires_grad_(FALSE)
+          if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
+          if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
+          if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
           if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
           if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
           if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))

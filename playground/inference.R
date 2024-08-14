@@ -61,16 +61,9 @@ str(resultYear)
 
 library(FINN)
 
-env = data.table(siteID = rep(1:50, each = 20), year = rep(1:20, 50), tmp = runif(50*20), pre = runif(50*20))
-system.time({
-
-  predictions =
-simulateForest(env,
-               sp = 2L,
-                patches=50L
-               ,device = "gpu")
-})
-
+env = data.table(siteID = rep(1:50, each = 20), year = rep(1:20, 50), env1 = runif(50*20))
+env$env1 = scale(env$siteID*(-2))
+disturbance = data.table(siteID = rep(1:50, each = 20), year = rep(1:20, 50), intensity = sample(c(0.0, 0.2), size = 20*50, replace = TRUE) )
 
 system.time({
 
@@ -84,10 +77,20 @@ system.time({
 
 
 plot(predictions$Predictions$Site$dbh[1,,2])
-
 data <- pred2DF(predictions, format = "wide")$site
+
+result = finn(data = data,
+              env = env,
+              disturbance = disturbance,
+              mortalityProcess = createProcess(~., optimizeSpecies = TRUE, optimizeEnv = FALSE, func = mortality),
+              device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L)
+preds = predict(result)
+result$model$parameters
+
+
+
+
 head(data)
-env
 library(FINN)
 result = finn(data = data, env = env, device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L, parallel=10L, NGPU = 4L, bootstrap = 10L)
 result$model$get_parGrowth()
@@ -98,7 +101,6 @@ result = finn(data = data,
               env = env,
               mortalityProcess = createProcess(~., optimizeAllometric = TRUE, optimizeEnv = FALSE, func = mortality),
               device = "gpu", batchsize = 50L, lr = 0.1, epochs = 5L)
-result$model$parameters
 preds = predict(result)
 
 
