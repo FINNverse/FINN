@@ -442,7 +442,7 @@ parMort2 = seq(0,.4,0.1)
 fun <- function(dbh,parMort2) (dbh/(parMort2*0.1*100))^(2.3)
 
 fun <- function(dbh, parMort2) {
-  1-(exp(-(dbh / (parMort2 * 100))^1))
+  (exp(-(dbh / (parMort2 * 100))^1))
 }
 
 plot(dbh,fun(dbh,1), ylim = c(0,2), type = "l", xlab = "dbh", ylab = "gPSize")
@@ -747,3 +747,74 @@ lines(light,fun(light,0.9), ylim = c(0,1), col = "green")
 # add legend for each par and color on top left
 
 
+
+
+  # Define the curve function with adjustable parameters
+
+
+  dbh_function <- function(DBH_is, Dopt_s = 0.66, K_s = 0.14+.3, Max_s = 1) {
+    DBH_is = DBH_is/10
+    # Calculate the log(AGR_is + 1) based on the formula provided
+    log_AGR_plus_1 <- Max_s * exp(-1/2 * (log(DBH_is / Dopt_s) / K_s)^2)
+
+    return(log_AGR_plus_1)
+  }
+
+  # # Example usage of the function:
+  # DBH_is <- 25  # Example value for DBH_is
+  # Dopt_s <- 30  # Example value for Dopt_s
+  # K_s <- 0.5    # Example value for K_s
+  # Max_s <- 1.5  # Example value for Max_s
+  #
+  # result <- agr_function(DBH_is, Dopt_s, K_s, Max_s)
+  # print(result)
+
+# Define the DBH values
+dbh_values <- seq(0, 500, by = 1)
+
+# Define a vector of parGrowth2 values
+parGrowth2_values <- c(30, 10, 20, 150, 200)
+
+dbh_function <- function(DBH, Dopt = 50, K = 0.7, Max = 5) {
+  Max * exp(-0.5 * (log(DBH / Dopt) / K)^2)
+}
+# Plot the first curve using the first value in the parGrowth2_values vector
+# plot(dbh_values, dbh_function(dbh_values, parGrowth2_values[1]), ylim = c(0, 1), type = "l", xlab = "DBH (cm)", ylab = "Density", col = "black", lty = 1)
+par(mfrow = c(2,2))
+for(k in c(0.1,0.5,0.8,1.5)){
+  {plot(dbh_values, dbh_function(dbh_values, parGrowth2_values[1], K = k), type = "l", xlab = "DBH (cm)", ylab = "Density", col = "black", lty = 1,
+       main = paste0("
+       function(DBH, Dopt, K = ",k,", Max = 2)
+          Max * exp(-0.5 * (log(DBH / Dopt) / K)^2)
+       "))
+
+  # Loop over the remaining parGrowth2 values and add them to the plot
+  colors <- c("black", "red", "blue", "orange", "green")
+
+  for (i in 2:length(parGrowth2_values)) {
+    lines(dbh_values, dbh_function(dbh_values, parGrowth2_values[i]), col = colors[i], lty = 1)
+  }
+  legend("topright", title = "Dopt", legend = parGrowth2_values, col = colors, lty = 1)}
+}
+
+
+
+# Add a legend to the top right
+  # Define the DBH values
+  dbh_values <- seq(0, 400, by = 1)
+
+  # Define a vector of parGrowth2 values
+  parGrowth2_values <- c(30, 10, 20, 80, 200)
+
+  # Plot the first curve using the first value in the parGrowth2_values vector
+  plot(dbh_values, dbh_function(dbh_values, parGrowth2_values[1]), ylim = c(0, 1), type = "l", xlab = "DBH (cm)", ylab = "Density", col = "black", lty = 1)
+
+  # Loop over the remaining parGrowth2 values and add them to the plot
+  colors <- c("black", "red", "blue", "orange", "green")
+
+  for (i in 2:length(parGrowth2_values)) {
+    lines(dbh_values, dbh_function(dbh_values, parGrowth2_values[i]), col = colors[i], lty = 1)
+  }
+
+  # Add a legend to the top right
+  legend("topright", title = "parGrowth2", legend = parGrowth2_values, col = colors, lty = 1)

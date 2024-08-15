@@ -362,3 +362,57 @@ FINN.seed <- function(seed) {
   set.seed(seed)
   torch::torch_manual_seed(seed)
 }
+
+
+checkPars = function(inputPar, parRange){
+  if(is.list(inputPar)) inputPar = inputPar[[1]]
+  if(is.vector(inputPar)) {
+    Npar = 1
+    Nsp = length(inputPar)
+    inputPar = matrix(inputPar, nrow = Nsp, ncol = Npar)
+    parRange = matrix(parRange, nrow = Npar, ncol = 2)
+  }else if(is.matrix(inputPar)){
+    Npar = ncol(inputPar)
+    Nsp = nrow(inputPar)
+  }else{
+    stop("speciesPars and speciesPars_ranges must contain vectors or a matrices")
+  }
+  if(Npar != nrow(parRange)){
+    stop("speciesPars and speciesPars_ranges must have the same number of parameters")
+  }
+  checkedPar = matrix(nrow = Nsp, ncol = Npar)
+  j=1
+  for(j in 1:Nsp){
+    for(i in 1:Npar){
+      lower = parRange[i,1]
+      upper = parRange[i,2]
+      checkedPar[j,i] = inputPar[j,i] < upper & inputPar[j,i] > lower
+    }
+  }
+  return(list(invalid = any(!checkedPar), checkedPar = checkedPar, inputPar = inputPar, parRange = parRange))
+}
+
+checkParInput = function(speciesPars, speciesPars_ranges){
+  checked = list()
+  valid_pars = T
+  for(i in names(speciesPars_ranges)){
+    checked[[i]] = checkPars(speciesPars[[i]], speciesPars_ranges[[i]])
+    if(checked[[i]]$invalid) valid_pars = F
+  }
+  if(!valid_pars){
+    stop_message = paste("speciesPars must be within the range of speciesPars_ranges", sep = "\n")
+    stop_message <- paste(stop_message, "The following parameters are out of range:", sep = "\n")
+    for(i in names(speciesPars_ranges)){
+      if(any(!checked[[i]]$checkedPar)){
+        false_idx = which(!checked[[i]]$checkedPar, arr.ind = TRUE)
+        for(ipar in 1:nrow(false_idx)){
+          stop_message <- paste(stop_message, paste0("speciesPars$", i, "[", false_idx[ipar,1], ",", false_idx[ipar,2], "] = ", checked[[i]]$inputPar[false_idx[ipar,1], false_idx[ipar,2]]), sep = "\n")
+        }
+      }
+    }
+    stop_message <- paste(stop_message, "Adjust the upper and lower range in speciesPars_ranges or adjust the parameters in initSpecies", "", sep = "\n")
+    stop(stop_message)
+  }
+}
+
+

@@ -97,6 +97,29 @@ simulateForest = function(env,
                           growthProcess = NULL,
                           regenerationProcess = NULL,
                           competitionProcess = NULL,
+                          speciesPars_ranges = list(
+                            parGrowth = rbind(
+                              c(0.01, 0.99),
+                              c(1, 4)
+                            ),
+                            parMort = rbind(
+                              c(0.01, 0.99),
+                              c(1, 4)
+                            ),
+                            parReg = c(0.01, 0.99),
+                            parHeight = c(0.3, 0.7),
+                            parGrowthEnv = rbind(
+                              c(0, 2),
+                              c(-2, 2)
+                            ),
+                            parMortEnv = rbind(
+                              c(0, 2),
+                              c(-2, 2)
+                            ),
+                            parRegEnv = rbind(
+                              c(0, 2),
+                              c(-2, 2)
+                            )),
                           height = NULL,
                           patches = 10L,
                           patch_size = 0.1,
@@ -177,6 +200,7 @@ simulateForest = function(env,
                    parGrowthEnv = growthProcess$initEnv,
                    parMortEnv = mortalityProcess$initEnv,
                    parRegEnv = regenerationProcess$initEnv,
+                   speciesPars_ranges = speciesPars_ranges,
                    patch_size_ha = patch_size)
 
 
