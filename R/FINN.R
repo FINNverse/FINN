@@ -146,13 +146,13 @@ FINNModel = R6::R6Class(
       self$optimizer = NULL
       self$dtype = torch_float32()
 
-      self$nnMortConfig = list(input_shape=env[1], output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99)
+      self$nnMortConfig = list(input_shape=env[1], output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
       self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig) # sigmoid
 
-      self$nnGrowthConfig = list(input_shape=env[2], output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99)
+      self$nnGrowthConfig = list(input_shape=env[2], output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
       self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig) # sigmoid
 
-      self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "relu")
+      self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
       self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
 
       if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
@@ -286,16 +286,6 @@ FINNModel = R6::R6Class(
       patches = dbh$shape[2]
       sp = self$sp
 
-      # disturbances = array(NA_integer_, dim = c(sites, timesteps, patches))
-      # for(site_i in 1:sites){
-      #   for(year_i in 1:timesteps){
-      #     dist_site_year = rbinom(n = 1, size = 1, prob = self$disturbance_frequency)
-      #     disturbances[site_i, year_i, ] = dist_site_year*rbinom(n = patches, size = 1, prob = self$disturbance_intensity) # []
-      #   }
-      # }
-      # disturbances = 1*(disturbances == 0)
-      # disturbances_tens <- torch::torch_tensor(disturbances, device = self$device, dtype = self$dtype)
-
       if(!is.null(disturbance)) {
         disturbance = disturbance$to(dtype=self$dtype, device=self$device)
         disturbances_tens = torch::distr_bernoulli(probs = disturbance$squeeze(3L))$sample(patches)$permute(c(2, 3, 1))
@@ -394,10 +384,12 @@ FINNModel = R6::R6Class(
             dbh = dbh,
             species = species,
             parGrowth = parGrowth,
-            parMort = parMort,
             pred = index_species(pred_growth, species),
             light = light
           )
+          # print("Mort:")
+          # print(g)
+          # print("++++")
 
           dbh = dbh + g
 
@@ -420,9 +412,16 @@ FINNModel = R6::R6Class(
             parMort = parMort,
             pred = index_species(pred_mort, species),
             light = light
-          ) #.unsqueeze(3) # TODO check!
+          )
+          # print("Mort:")
+          # print(m)
+          # print("++++")
+          dead_trees = binomial_from_gamma(trees+trees$le(0.5)$float(), m+0.001)*trees$ge(0.5)$float()
+          dead_trees = dead_trees + dead_trees$round()$detach() - dead_trees$detach()
+
+          #.unsqueeze(3) # TODO check!
           #trees$sub_(m)$clamp_(min = 0.0)
-          trees = torch_clamp(trees - m, min = 0) #### TODO if trees = 0 then NA...prevent!
+          trees = torch_clamp(trees - dead_trees, min = 0) #### TODO if trees = 0 then NA...prevent!
         }
 
 
@@ -442,6 +441,9 @@ FINNModel = R6::R6Class(
                          pred = pred_reg,
                          light = AL_reg,
                          patch_size_ha = self$patch_size_ha)
+        # print("Mort:")
+        # print(r)
+        # print("++++")
 
         # New recruits
         new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
