@@ -3,10 +3,10 @@ library(data.table)
 
 # one species, 100 patches, 50 sites, 1 env
 
-Nsp = 2
+Nsp = 1
 Npatches = 100
-Nsites = 100
-Ntimesteps = 100
+Nsites = 200
+Ntimesteps = 200L
 
 site_dt <- data.table(
   expand.grid(
@@ -22,19 +22,42 @@ dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, 0.1)*rbeta(Ntimesteps*Nsites, 2
 
 env_dt <- site_dt
 env_dt$env1 = rep(seq(-2,2,length.out = Nsites), Ntimesteps)
-sp = 2
+sp = 1
 
 system.time({
   predictions =
     simulateForest(env = env_dt,
                    #disturbance = dist_dt,
-                   sp = 2L,
+                   sp = 1L,
                    patches=10L,
-                   growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(4, 0), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.2, 3.9), sp, 2, byrow = TRUE)),
+                   growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(4, 0), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE)),
                    mortalityProcess = createProcess(~1+env1, func = mortality, initEnv = list(matrix(c(1, -3), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.2, 3.9), sp, 2, byrow = TRUE)),
-                   regenerationProcess = createProcess(~1+env1, func = regeneration, initEnv = list(matrix(c(4, 0), sp, 2, byrow = TRUE)) ),
+                   regenerationProcess = createProcess(~1+env1, func = regeneration, initEnv = list(matrix(c(3, 0), sp, 2, byrow = TRUE)) ),
                    device = "cpu")
 })
+
+predictions$Predictions
+init = CohortMat$new(sp = 1L, dims = c(Nsites, Npatches, 5L))
+pred = (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)))))
+
+light = predictions$model$competitionFunction(init$dbh, init$species, init$trees, predictions$model$get_parHeight(),
+                                              h = NULL,
+                                              minLight = predictions$model$minLight,
+                                              patch_size_ha = predictions$model$patch_size_ha,
+                                              ba = NULL,
+                                              cohortHeights = NULL)
+
+predictions$model$growthFunction(init$dbh+5.0, init$species,
+                                 parGrowth = predictions$model$get_parGrowth(),
+                                 pred = FINN::index_species(pred, init$species), light = light)
+
+predictions$model$mortalityFunction(init$dbh, init$species,init$trees,
+                                 parMort = predictions$model$get_parMort(),
+                                 pred = FINN::index_species(pred, init$species), light = light)
+
+
+
+
 
 predictions$model$nnGrowthEnv$parameters
 predictions$model$nnMortEnv$parameters
@@ -42,9 +65,9 @@ predictions$model$get_parGrowth()
 predictions$model$get_parMort()
 predictions$model$get_parReg()
 
-plot(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,1])
+plot(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix() |> exp())[,1])
 plot(unique(env_dt$env1), predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix(), ylim = c(0,1))
-plot(unique(env_dt$env1), predictions$model$nnRegEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())
+plot(unique(env_dt$env1), (predictions$model$nnRegEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix() |> exp())[,1])
 
 data <- pred2DF(predictions, format = "wide")$site
 
@@ -64,10 +87,10 @@ fit = finn(data = data,
            regenerationProcess = createProcess(~1+env1, func = regeneration,
                                                initEnv = list(matrix(c(4, 0), sp, 2, byrow = TRUE)),
                                                optimizeSpecies = FALSE, optimizeEnv = FALSE),
-           device = "gpu", optimizeHeight= FALSE, lr = 0.05, epochs = 1L, batchsize = 100L,
+           device = "gpu", optimizeHeight= FALSE, lr = 0.3, epochs = 10L, batchsize = 100L,
            )
 fit$model$parameters
-continue_fit(fit, epochs = 2L, batchsize = 20L)
+continue_fit(fit, epochs = 20L, batchsize = 100L)
 fit$model$parameters
 
 fit$models_list[[3]]$model$check()
@@ -97,7 +120,8 @@ plot(unique(env_dt$env1), (fit$model$nnMortEnv( torch::torch_tensor(cbind(1, uni
 points(unique(env_dt$env1), predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix(), col = "red")
 as.matrix(fit$model$parameters[[1]])
 
-pred = predictions
+pred = pred2DF(predictions, format = "long")$site
+
 library(ggplot2)
 # ggplot(pred[, .(value = mean(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
 ggplot(pred[siteID == 1], aes(x = year, y = value, group = siteID, color = siteID)) +
@@ -115,7 +139,7 @@ ggplot(pred[patch == 1, .(value = value ), by = .(year, species, variable)], aes
   facet_wrap(~variable, scales = "free_y")
 
 
-pred = predict(fit)
+pred = pred2DF(predictions, format = "wide")$site
 comp_dt <- merge(pred, env_dt, by = c("siteID", "year"))
 plot(growth~env1, data = comp_dt)
 
