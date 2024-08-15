@@ -103,6 +103,7 @@ FINN = R6::R6Class(
                   hidden_growth = list(),
                   hidden_mort = list(),
                   hidden_reg = list(),
+                  speciesPars_ranges = NULL,
                   bias = FALSE,
                   patch_size_ha = 0.1,
                   minLight = 50,
@@ -113,22 +114,45 @@ FINN = R6::R6Class(
       ){
 
       # check input parameters
-      if(any(parHeight < 0 | parHeight > 1)) stop("parHeight cannot be <0 or >1")
-      if(any(parReg < 0 | parReg > 1)) stop("parReg cannot be <0 or >1")
+      # if(any(parHeight < 0 | parHeight > 1)) stop("parHeight cannot be <0 or >1")
+      # if(any(parReg < 0 | parReg > 1)) stop("parReg cannot be <0 or >1")
 
       self$sp = sp
       self$device = device
 
-      ###### Defaults #####
-      if(is.null(parHeight)) parHeight = runif(sp, min = 0.69, max = 0.71)
-      if(is.null(parGrowth)) parGrowth = cbind(runif(sp, min = 0.51, 0.52), runif(sp, 3.45, 3.55))
-      if(is.null(parMort)) parMort = cbind(runif(sp, min = 0.21, 0.22), runif(sp, 2.45, 2.55))
-      if(is.null(parReg)) parReg = runif(sp, min = 0.19, max = 0.21)
+      # ###### Defaults #####
+      # if(is.null(parHeight)) parHeight = runif(sp, min = 0.69, max = 0.71)
+      # if(is.null(parGrowth)) parGrowth = cbind(runif(sp, min = 0.51, 0.52), runif(sp, 3.45, 3.55))
+      # if(is.null(parMort)) parMort = cbind(runif(sp, min = 0.21, 0.22), runif(sp, 2.45, 2.55))
+      # if(is.null(parReg)) parReg = runif(sp, min = 0.19, max = 0.21)
+
+      if(!is.null(speciesPars_ranges)){
+        checkParInput(
+          speciesPars = list(
+            parGrowth = parGrowth,
+            parMort = parMort,
+            parReg = parReg,
+            parHeight = parHeight,
+            parGrowthEnv = parGrowthEnv,
+            parMortEnv = parMortEnv,
+            parRegEnv = parRegEnv
+          ), speciesPars_ranges
+          )
+      }
+      print(speciesPars_ranges)
 
       self$set_parHeight(parHeight)
-      self$set_parGrowth(parGrowth)
-      self$set_parMort(parMort)
-      self$set_parReg(parReg)
+
+      # self$set_parGrowth(parGrowth)
+      # self$set_parMort(parMort)
+      # self$set_parReg(parReg)
+
+      self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
+      self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
+      self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
+
+      print("set pars doone")
+
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
       self$parRegEnv = parRegEnv
@@ -155,10 +179,12 @@ FINN = R6::R6Class(
       self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "relu")
       self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
 
+      print("start set weights")
       if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
       if(!is.null(parMortEnv)) self$set_weights_nnMortEnv(parMortEnv)
       if(!is.null(parRegEnv)) self$set_weights_nnRegEnv(parRegEnv)
 
+      print("start set functions")
       if(is.null(growthFunction)) self$growthFunction = growth
       else self$growthFunction = growthFunction
 
@@ -171,6 +197,7 @@ FINN = R6::R6Class(
       if(is.null(competitionFunction)) self$competitionFunction = competition
       else self$competitionFunction = competitionFunction
 
+      print("start set functions")
       self$nnMortEnv$to(device = self$device)
       self$nnGrowthEnv$to(device = self$device)
       self$nnRegEnv$to(device = self$device)
@@ -199,10 +226,12 @@ FINN = R6::R6Class(
       }
 
 
+      print("start set again")
       self$set_parHeight(parHeight)
       self$set_parGrowth(parGrowth)
       self$set_parMort(parMort)
       self$set_parReg(parReg)
+      print("end set again")
 
       # if(which == "env"){
       #   self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
@@ -219,10 +248,17 @@ FINN = R6::R6Class(
       #   .n = lapply(self$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
       #
       # }else{
+      print("set self parameters")
       self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
+      print("names self parameters")
       names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort")
       # }
+      print("parameter to r")
+      print(self)
+      print(names(self))
+      print(self$parameter_to_r)
       self$parameter_to_r()
+      print("parameter to r done")
 
       return(invisible(self)) # Only for testing now
     },

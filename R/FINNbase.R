@@ -1,7 +1,7 @@
-#' FINNbase Class
+#' FINNbase class
 #'
 #' @description
-#' The `FINNbase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, setting and getting model parameters, and managing weights in neural networks.
+#' The `FINNbase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
 #'
 #' @export
 FINNbase <- R6::R6Class(
@@ -14,7 +14,6 @@ FINNbase <- R6::R6Class(
     parGrowthEnv_r = NULL, # must be dim [species, 2], first for shade tolerance
     parMortEnv_r = NULL, # must be dim [species, 2], first for shade tolerance,
     parRegEnv_r = NULL, # must be dim [species]
-
     #' Build a neural network
     #'
     #' This function builds a neural network with specified input shape, output shape, hidden layers, bias, activation functions, dropout rate, and last activation function.
@@ -316,11 +315,37 @@ FINNbase <- R6::R6Class(
       if(self$nnGrowthEnv$parameters[[1]]$requires_grad) pars = c(pars, nnGrowth = self$nnGrowthEnv$parameters)
       if(self$nnMortEnv$parameters[[1]]$requires_grad) pars = c(pars, nnMort = self$nnMortEnv$parameters)
       self$parameters = pars
+    },
+
+    setPars = function(inputPar, parRange){
+      # inputPar = torch::torch_tensor(inputPar, requires_grad = TRUE)
+      if(is.vector(inputPar)) {
+        Npar = 1
+        NPsp = length(inputPar)
+        inputPar = matrix(inputPar, nrow = NPsp, ncol = Npar)
+        parRange = matrix(parRange, nrow = Npar, ncol = 2)
+      }else if(is.matrix(inputPar)){
+        Npar = ncol(inputPar)
+        Nsp = nrow(inputPar)
+      }else{
+        stop("speciesPars and speciesPars_ranges must contain vectors or a matrices")
+      }
+      out = matrix(nrow = Nsp, ncol = 0)
+      # for(j in 1:Nsp){
+      for(i in 1:Npar){
+        lower = parRange[i,1,drop=FALSE]
+        upper = parRange[i,2,drop=FALSE]
+        out <- cbind(out, plogis(inputPar[,i, drop=FALSE])*as.numeric((upper - lower)+lower))
+      }
+      if(Npar == 1) out = as.vector(out) # TODO replace vectors with matrices as species input everywhere
+      # }
+      # out <- torch::torch_tensor(out, requires_grad = TRUE, device = "cpu", dtype = "float32")
+      out <- torch::torch_tensor(out, requires_grad = TRUE, device = self$device, dtype = self$dtype)
+      return(out)
     }
 
   )
 )
-
 
 to_r = function(par, numeric = FALSE) {
   if(numeric) {
