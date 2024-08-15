@@ -7,10 +7,10 @@
 createProcess(
   formula = NULL,
   func,
-  initAllometric = NULL,
+  initSpecies = NULL,
   initEnv = NULL,
   hidden = list(),
-  optimizeAllometric = FALSE,
+  optimizeSpecies = FALSE,
   optimizeEnv = TRUE
 )
 }
@@ -19,7 +19,7 @@ createProcess(
 
 \item{func}{A custom function to define the process. This is a required parameter.}
 
-\item{initAllometric}{Initial allometric parameters for the process. Default is \code{NULL}.}
+\item{initSpecies}{Initial species parameters for the process. Default is \code{NULL}.}
 
 \item{initEnv}{Initial environmental parameters for the process. Default is \code{NULL}.}
 
@@ -31,7 +31,7 @@ createProcess(
 A list of class "process" containing the process definition and associated parameters.
 }
 \description{
-This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, allometric parameters, environmental initialization, and hidden layers for neural networks.
+This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
 }
 \examples{
 growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
