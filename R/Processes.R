@@ -181,7 +181,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
   shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))) /
          (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))))
 
-  environment = index_species(pred, species)
+  environment = pred
   # gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
   gPSize = (1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))))
   # gPSize = torch_sigmoid(gPSize)
@@ -222,7 +222,6 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
   K = 0
   light_steepness = 10
 
-  # shade = torch_sigmoid((light + (1-parGrowth[,1][species]) - 1)/1e-1)
   shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
          (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
   environment = pred

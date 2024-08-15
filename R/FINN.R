@@ -1,7 +1,7 @@
 #' @title FINN: Forest Informed Neural Network
 #'
 #' @description
-#' The `FINN` class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
+#' The `FINNModel` class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 #'
 #' @field sp integer. Number of species.
 #' @field device character. Device to use ('cpu' or 'cuda').
@@ -18,8 +18,8 @@
 #'
 #' @include FINNbase.R
 #' @export
-FINN = R6::R6Class(
-  classname = 'FINN',
+FINNModel = R6::R6Class(
+  classname = 'FINNModel',
   inherit = FINNbase,
   public = list(
     # helper functions
@@ -61,7 +61,7 @@ FINN = R6::R6Class(
 
 
     #' @description
-    #' Initializes the FINN model with the specified parameters.
+    #' Initializes the FINNModel model with the specified parameters.
     #' @param sp integer. Number of species.
     #' @param device character. Device to use ('cpu' or 'cuda').
     #' @param parHeight torch.Tensor. Global parameters for height.
@@ -239,7 +239,7 @@ FINN = R6::R6Class(
     #' @param env torch.Tensor. Environmental data.
     #' @param start_time integer. Time at which to start recording the results.
     #' @param pred_growth torch.Tensor (Optional). Predicted growth values.
-    #' @param pred_morth torch.Tensor (Optional). Predicted mortality values.
+    #' @param pred_mort torch.Tensor (Optional). Predicted mortality values.
     #' @param pred_reg torch.Tensor (Optional). Predicted regeneration values.
     #' @param patches numeric. Number of patches.
     #' @param debug logical. Run in debug mode if TRUE.
@@ -256,7 +256,7 @@ FINN = R6::R6Class(
                        disturbance = NULL,
                        start_time = 1L,
                        pred_growth = NULL,
-                       pred_morth = NULL,
+                       pred_mort = NULL,
                        pred_reg = NULL,
                        patches = 50.,
                        debug = TRUE,
@@ -346,12 +346,12 @@ FINN = R6::R6Class(
 
         # Only necessary if gradients are needed
         if(!is.null(y)) {
-          pred_morth = self$nnMortEnv(env[[1]][,i,])
+          pred_mort = self$nnMortEnv(env[[1]][,i,])
           pred_growth = self$nnGrowthEnv(env[[2]][,i,])
           pred_reg = self$nnRegEnv(env[[3]][,i,])
         } else {
           pred_growth = predGrowthGlobal[,i,]
-          pred_morth = predMortGlobal[,i,]
+          pred_mort = predMortGlobal[,i,]
           pred_reg = predRegGlobal[,i,]
         }
 
@@ -394,7 +394,8 @@ FINN = R6::R6Class(
             dbh = dbh,
             species = species,
             parGrowth = parGrowth,
-            pred = pred_growth,
+            parMort = parMort,
+            pred = index_species(pred_growth, species),
             light = light
           )
 
@@ -417,7 +418,7 @@ FINN = R6::R6Class(
             species = species,
             trees = trees + 0.001,
             parMort = parMort,
-            pred = pred_morth,
+            pred = index_species(pred_mort, species),
             light = light
           ) #.unsqueeze(3) # TODO check!
           #trees$sub_(m)$clamp_(min = 0.0)
@@ -543,7 +544,7 @@ FINN = R6::R6Class(
 
         loss = torch_zeros(1L, device = self$device)
         if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
-          for(j in 1:7) {
+          for(j in 2:7) {
             # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
             if(j != 3) {
               loss = loss+torch::nnf_mse_loss(y[, i,,j], Result[[j]][,i,])$mean()*(weights[j]+0.0001)
@@ -650,7 +651,7 @@ FINN = R6::R6Class(
         }
         DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
-        self$history = torch::torch_zeros(epochs)
+        self$history = c()
 
 
         if(!is.null(weights)) {
