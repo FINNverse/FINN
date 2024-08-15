@@ -770,13 +770,14 @@ lines(light,fun(light,0.9), ylim = c(0,1), col = "green")
   # print(result)
 
 # Define the DBH values
-dbh_values <- seq(0, 500, by = 1)
+dbh_values <- seq(0, 300, by = 1)
 
 # Define a vector of parGrowth2 values
-parGrowth2_values <- c(30, 10, 20, 150, 200)
+parGrowth2_values <- c(1, 2, 3, 4, 5)
 
 dbh_function <- function(DBH, Dopt = 50, K = 0.7, Max = 5) {
-  Max * exp(-0.5 * (log(DBH / Dopt) / K)^2)
+  Max * exp(-0.5 * (log(DBH / (Dopt*10)) / K)^2)
+  # torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*100) / K)^2)
 }
 # Plot the first curve using the first value in the parGrowth2_values vector
 # plot(dbh_values, dbh_function(dbh_values, parGrowth2_values[1]), ylim = c(0, 1), type = "l", xlab = "DBH (cm)", ylab = "Density", col = "black", lty = 1)

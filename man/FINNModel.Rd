@@ -58,6 +58,7 @@ The \code{FINNModel} class provides tools to initialize, train, and predict usin
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parReg'><code>FINN::FINNbase$get_parReg()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="np_runif"><a href='../../FINN/html/FINNbase.html#method-FINNbase-np_runif'><code>FINN::FINNbase$np_runif()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="parameter_to_r"><a href='../../FINN/html/FINNbase.html#method-FINNbase-parameter_to_r'><code>FINN::FINNbase$parameter_to_r()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="setPars"><a href='../../FINN/html/FINNbase.html#method-FINNbase-setPars'><code>FINN::FINNbase$setPars()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parGrowth'><code>FINN::FINNbase$set_parGrowth()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parHeight'><code>FINN::FINNbase$set_parHeight()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parMort'><code>FINN::FINNbase$set_parMort()</code></a></span></li>
@@ -99,6 +100,7 @@ Initializes the FINNModel model with the specified parameters.
   hidden_growth = list(),
   hidden_mort = list(),
   hidden_reg = list(),
+  speciesPars_ranges = NULL,
   bias = FALSE,
   patch_size_ha = 0.1,
   minLight = 50,

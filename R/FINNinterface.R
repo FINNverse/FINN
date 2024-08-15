@@ -103,24 +103,24 @@ simulateForest = function(env,
                           speciesPars_ranges = list(
                             parGrowth = rbind(
                               c(0.01, 0.99),
-                              c(1, 4)
+                              c(0.01, 4)
                             ),
                             parMort = rbind(
                               c(0.01, 0.99),
-                              c(1, 4)
+                              c(0, 4)
                             ),
                             parReg = c(0.01, 0.99),
                             parHeight = c(0.3, 0.7),
                             parGrowthEnv = rbind(
-                              c(0, 2),
-                              c(-2, 2)
+                              c(-1, 1),
+                              c(-1, 1)
                             ),
                             parMortEnv = rbind(
-                              c(0, 2),
+                              c(-2, 2),
                               c(-2, 2)
                             ),
                             parRegEnv = rbind(
-                              c(0, 2),
+                              c(-2, 2),
                               c(-2, 2)
                             )),
                           height = NULL,
@@ -131,7 +131,8 @@ simulateForest = function(env,
                           device = c("cpu", "gpu"),
                           parallel = FALSE,
                           NGPU = 1,
-                          batchsize = NULL
+                          batchsize = NULL,
+                          debug = F
 ) {
 
   out = list()
@@ -218,7 +219,7 @@ simulateForest = function(env,
                                            torch::torch_tensor(regeneration_env)),
                                 disturbance = disturbance_T,
                                 patches = patches,
-                                debug = FALSE,
+                                debug = debug,
                                 verbose = TRUE)
 
   } else {
