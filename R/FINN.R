@@ -394,7 +394,6 @@ FINN = R6::R6Class(
             dbh = dbh,
             species = species,
             parGrowth = parGrowth,
-            parMort = parMort,
             pred = pred_growth,
             light = light
           )
