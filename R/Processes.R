@@ -181,7 +181,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
   shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))) /
          (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))))
 
-  environment = index_species(pred, species)
+  environment = torch::torch_sigmoid(pred)
   # gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
   gPSize = (1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))))
   # gPSize = torch_sigmoid(gPSize)
@@ -193,9 +193,8 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
   # -> raw pred -> [0, 5]
   predM = environment*((shade*gPSize + shade + gPSize)/3)
   # predM = torch_sigmoid((environment*(shade+gPSize) + shade*gPSize + shade + gPSize -1.5)*2 )
-  mort1 = binomial_from_gamma(trees+trees$le(0.5)$float(), predM)*trees$ge(0.5)$float()
-  mort2 = mort1 + mort1$round()$detach() - mort1$detach()
-  if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM, mort1 = mort1, mort2 = mort2) else out = mort2
+  if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM)
+  else out = predM
   return(out)
 }
 
@@ -218,14 +217,12 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 #'
 #' @export
 growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F){
-  # K = parGrowth[,3][species]
-  # K = 0
-  # light_steepness = 10
+  K = 0.8
 
-  # shade = torch_sigmoid((light + (1-parGrowth[,1][species]) - 1)/1e-1)
   shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
          (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
-  environment = index_species(pred, species)
+
+  environment = torch::torch_exp(pred) # inverse link function
   # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
   growth = shade * environment * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
   # growth = environment * shade * torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*100) / K)^2)
@@ -253,7 +250,7 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 #' @export
 regeneration = function(species, parReg, pred, light, patch_size_ha, debug = F) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
-  environment = pred
+  environment = torch::torch_exp(pred) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
   #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)

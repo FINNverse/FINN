@@ -35,6 +35,9 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$initSpecies = initSpecies
   out$optimizeSpecies = optimizeSpecies
   out$optimizeEnv = optimizeEnv
+  if(!is.null(initEnv)) {
+    if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
+  }
   out$initEnv = initEnv
   out$hidden = NULL
 
@@ -183,7 +186,7 @@ simulateForest = function(env,
   if(is.numeric(parallel)) NCPUs = parallel
 
 
-  model = FINN$new(sp = sp,
+  model = FINNModel$new(sp = sp,
                    env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
                    device = device,
                    hidden_growth = growthProcess$hidden,
@@ -225,7 +228,7 @@ simulateForest = function(env,
     batches = cbind(c(1, (seq(1, sites, by = batchsize))[-1]), c((seq(1, sites, by = batchsize)-1)[-1], sites)  )
 
     parallel::clusterEvalQ(cl, {library(torch);library(FINN)})
-    parallel::clusterExport(cl, varlist = c("FINN","CohortMat","model", "init", "mortality_env", "growth_env", "regeneration_env", "batches", "patches", "nodes", "NGPU", "device_old"),envir = environment())
+    parallel::clusterExport(cl, varlist = c("FINNModel","CohortMat","model", "init", "mortality_env", "growth_env", "regeneration_env", "batches", "patches", "nodes", "NGPU", "device_old"),envir = environment())
     # parallel::clusterEvalQ(cl, {
     #
     #   # who am I
@@ -365,6 +368,8 @@ finn = function(data = NULL,
 
 
   sp = length(unique(data$species))
+  out$sp = sp
+  out$lr = lr
 
 
   #### Prepare response ####
@@ -392,12 +397,18 @@ finn = function(data = NULL,
 
   if(batchsize > sites) batchsize = sites
 
+  out$batchsize = batchsize
+
   if(is.null(init)) {
     init = CohortMat$new(dims = c(sites, patches, sp),
                          dbh = array(1, dim = c(sites, patches, sp)),
                          trees = array(1, dim = c(sites, patches, sp)),
                          sp = sp)
+  } else {
+    patches = dim(init$species_r)[2]
   }
+
+  out$patches = patches
   device_old = device
   if(device == "gpu") {
     device = "cuda:0"
@@ -415,7 +426,7 @@ finn = function(data = NULL,
   if(is.numeric(parallel)) NCPUs = parallel
 
 
-  model = FINN$new(sp = sp,
+  model = FINNModel$new(sp = sp,
                    env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
                    device = device,
                    hidden_growth = growthProcess$hidden,
@@ -471,6 +482,8 @@ finn = function(data = NULL,
     out$regenerationProcess = regenerationProcess
     out$competition = competitionProcess
     out$response = response
+    out$disturbance = disturbance
+    out$data = data
     out$env = list(mortality_env = mortality_env,
                    growth_env = growth_env,
                    regeneration_env = regeneration_env)
@@ -502,7 +515,7 @@ finn = function(data = NULL,
           response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
 
           init$check()
-          tmp_model = FINN$new(sp = sp,
+          tmp_model = FINNModel$new(sp = sp,
                    env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
                    device = device_hardware,
                    hidden_growth = growthProcess$hidden,
@@ -553,6 +566,8 @@ finn = function(data = NULL,
           out$regenerationProcess = regenerationProcess
           out$competition = competitionProcess
           out$response = response
+          out$disturbance = disturbance
+          out$data = data
           out$env = list(mortality_env = mortality_env,
                          growth_env = growth_env,
                          regeneration_env = regeneration_env)
@@ -567,7 +582,7 @@ finn = function(data = NULL,
         lapply(1:bootstrap, function(i) {
           indices = sample.int(sites, sites, replace = TRUE)
           init$check()
-          tmp_model = FINN$new(sp = sp,
+          tmp_model = FINNModel$new(sp = sp,
                                env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
                                device = device,
                                hidden_growth = growthProcess$hidden,
@@ -619,6 +634,7 @@ finn = function(data = NULL,
           out$competition = competitionProcess
           out$response = response
           out$disturbance = disturbance
+          out$data = data
           out$env = list(mortality_env = mortality_env,
                          growth_env = growth_env,
                          regeneration_env = regeneration_env)
@@ -689,3 +705,64 @@ predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL
   return(pred2DF(predictions, format = "wide")$site)
 }
 
+
+#' Continue Training a `finnModel`
+#'
+#' This function continues the training process for an existing `finnModel` object. It fits the model for a specified number of epochs using the provided learning rate and batch size, updating the model's weights accordingly.
+#'
+#' @param object An object of class `finnModel`, typically obtained from the `finn()` function. This object contains the model, initial conditions, and data required for training.
+#' @param epochs An integer specifying the number of epochs to train the model. Defaults to 20.
+#' @param lr A numeric value specifying the learning rate for the training process. If `NULL`, the learning rate from the `object` is used.
+#' @param batchsize An integer specifying the batch size to use during training. If `NULL`, the batch size from the `object` is used.
+#'
+#' @return The function returns an updated object of class `finnModel` with the model's training continued for the specified number of epochs.
+#'
+#' @details The function prepares the response variables and disturbance data, converts them into tensors, and then proceeds with the training process using the `fit` method of the `finnModel` object. The training is performed on the CPU.
+#'
+#' @examples
+#' \dontrun{
+#'   model <- finn(data, ...)
+#'   model <- continue_fit(model, epochs = 50, lr = 0.01, batchsize = 32)
+#' }
+#'
+#' @export
+continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL) {
+  object$model$check()
+  object$init$check()
+
+  response = list(
+    dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), object$data[object$data$species==i,])), along = 3L),
+    ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), object$data[object$data$species==i,])), along = 3L),
+    trees = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+trees), object$data[object$data$species==i,])), along = 3L),
+    AL = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+AL), object$data[object$data$species==i,])), along = 3L),
+    growth = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+growth), object$data[object$data$species==i,])), along = 3L),
+    mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), object$data[object$data$species==i,])), along = 3L),
+    reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), object$data[object$data$species==i,])), along = 3L)
+  )
+
+  disturbance = object$disturbance
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  }
+
+  response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+
+  if(is.null(lr)) lr = object$lr
+  if(is.null(batchsize)) batchsize=object$batchsize
+
+  object$model$fit(initCohort = object$init,
+            X = list(torch::torch_tensor(object$env$mortality_env),
+                     torch::torch_tensor(object$env$growth_env),
+                     torch::torch_tensor(object$env$regeneration_env)),
+            Y = response_T,
+            disturbance = disturbance_T,
+            patches = object$patches,
+            batch_size = batchsize,
+            epochs = epochs,
+            learning_rate = lr,
+            update_step = 1L,
+            weights = NULL)
+  return(invisible(object))
+}
