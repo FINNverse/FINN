@@ -4,16 +4,7 @@
 \alias{growth}
 \title{Calculate growth}
 \usage{
-growth(
-  dbh,
-  species,
-  parGrowth,
-  parMort,
-  pred,
-  light,
-  light_steepness = 10,
-  debug = F
-)
+growth(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F)
 }
 \arguments{
 \item{dbh}{torch.Tensor Diameter at breast height.}
@@ -22,11 +13,11 @@ growth(
 
 \item{parGrowth}{torch.Tensor Growth parameters.}
 
-\item{parMort}{torch.Tensor Mortality parameters.}
-
 \item{pred}{torch.Tensor Predicted values.}
 
 \item{light}{torch.Tensor Accumulated Light.}
+
+\item{parMort}{torch.Tensor Mortality parameters.}
 }
 \value{
 torch.Tensor A tensor representing the forest plot growth.
