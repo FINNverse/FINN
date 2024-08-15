@@ -2,9 +2,9 @@
 % Please edit documentation in R/FINNbase.R
 \name{FINNbase}
 \alias{FINNbase}
-\title{FINNbase Class}
+\title{FINNbase class}
 \description{
-The \code{FINNbase} class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, setting and getting model parameters, and managing weights in neural networks.
+The \code{FINNbase} class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
 }
 \examples{
 
@@ -48,6 +48,7 @@ This function assigns the specified weights to the growth environment neural net
 \item \href{#method-FINNbase-parameter_to_r}{\code{FINNbase$parameter_to_r()}}
 \item \href{#method-FINNbase-check}{\code{FINNbase$check()}}
 \item \href{#method-FINNbase-update_parameters}{\code{FINNbase$update_parameters()}}
+\item \href{#method-FINNbase-setPars}{\code{FINNbase$setPars()}}
 \item \href{#method-FINNbase-clone}{\code{FINNbase$clone()}}
 }
 }
@@ -397,6 +398,15 @@ None. The regeneration parameters are set in the model.
 \subsection{Method \code{update_parameters()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNbase$update_parameters()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINNbase-setPars"></a>}}
+\if{latex}{\out{\hypertarget{method-FINNbase-setPars}{}}}
+\subsection{Method \code{setPars()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINNbase$setPars(inputPar, parRange)}\if{html}{\out{</div>}}
 }
 
 }

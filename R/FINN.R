@@ -121,10 +121,16 @@ FINNModel = R6::R6Class(
       self$device = device
 
       # ###### Defaults #####
-      # if(is.null(parHeight)) parHeight = runif(sp, min = 0.69, max = 0.71)
-      # if(is.null(parGrowth)) parGrowth = cbind(runif(sp, min = 0.51, 0.52), runif(sp, 3.45, 3.55))
-      # if(is.null(parMort)) parMort = cbind(runif(sp, min = 0.21, 0.22), runif(sp, 2.45, 2.55))
-      # if(is.null(parReg)) parReg = runif(sp, min = 0.19, max = 0.21)
+      if(is.null(parHeight)) parHeight = runif(sp, min = speciesPars_ranges$parHeight[1], max = speciesPars_ranges$parHeight[2])
+      if(is.null(parGrowth)) parGrowth = cbind(
+        runif(sp, min = speciesPars_ranges$parGrowth[1,1], speciesPars_ranges$parHeight[1,2]),
+        runif(sp, min = speciesPars_ranges$parGrowth[2,1], speciesPars_ranges$parHeight[2,2])
+      )
+      if(is.null(parMort)) parMort = cbind(
+        runif(sp, min = speciesPars_ranges$parMort[1,1], speciesPars_ranges$parHeight[1,2]),
+        runif(sp, min = speciesPars_ranges$parMort[2,1], speciesPars_ranges$parHeight[2,2])
+      )
+      if(is.null(parReg)) parReg = runif(sp, min = speciesPars_ranges$parReg[1], max = speciesPars_ranges$parReg[2])
 
       if(!is.null(speciesPars_ranges)){
         checkParInput(
@@ -139,7 +145,6 @@ FINNModel = R6::R6Class(
           ), speciesPars_ranges
           )
       }
-      print(speciesPars_ranges)
 
       self$set_parHeight(parHeight)
 
@@ -150,8 +155,6 @@ FINNModel = R6::R6Class(
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
-
-      print("set pars doone")
 
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
@@ -179,12 +182,10 @@ FINNModel = R6::R6Class(
       self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
       self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
 
-      print("start set weights")
       if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
       if(!is.null(parMortEnv)) self$set_weights_nnMortEnv(parMortEnv)
       if(!is.null(parRegEnv)) self$set_weights_nnRegEnv(parRegEnv)
 
-      print("start set functions")
       if(is.null(growthFunction)) self$growthFunction = growth
       else self$growthFunction = growthFunction
 
@@ -197,7 +198,6 @@ FINNModel = R6::R6Class(
       if(is.null(competitionFunction)) self$competitionFunction = competition
       else self$competitionFunction = competitionFunction
 
-      print("start set functions")
       self$nnMortEnv$to(device = self$device)
       self$nnGrowthEnv$to(device = self$device)
       self$nnRegEnv$to(device = self$device)
@@ -226,12 +226,10 @@ FINNModel = R6::R6Class(
       }
 
 
-      print("start set again")
       self$set_parHeight(parHeight)
       self$set_parGrowth(parGrowth)
       self$set_parMort(parMort)
       self$set_parReg(parReg)
-      print("end set again")
 
       # if(which == "env"){
       #   self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
@@ -248,17 +246,10 @@ FINNModel = R6::R6Class(
       #   .n = lapply(self$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
       #
       # }else{
-      print("set self parameters")
       self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-      print("names self parameters")
       names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort")
       # }
-      print("parameter to r")
-      print(self)
-      print(names(self))
-      print(self$parameter_to_r)
       self$parameter_to_r()
-      print("parameter to r done")
 
       return(invisible(self)) # Only for testing now
     },
@@ -566,14 +557,18 @@ FINNModel = R6::R6Class(
             labels = species
             samples = vector("list", 3)
             mask = trees$gt(0.5)
-            samples[[1]] = dbh * mask
+            dbh_mask = dbh$gt(0)
+            # samples[[1]] = dbh * mask
+            # only add dbh values > 0 to samples
+            samples[[1]] = dbh * dbh_mask
             samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
             samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
             Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
 
             tmp_res = aggregate_results(labels, samples, Results_tmp)
             # BA and number of trees Result[[1]] and Result[[2]]
-            for(v in 1:3){
+            Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])/torch::torch_clamp(cohort_counts[[1]], min = 1.0)
+            for(v in 2:3){
               Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
             }
             rm(BA_stem)
