@@ -4,6 +4,8 @@
 \alias{FINNModel}
 \title{FINN: Forest Informed Neural Network}
 \description{
+\loadmathjax
+
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
@@ -12,29 +14,104 @@ The \code{FINNModel} class provides tools to initialize, train, and predict usin
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{sp}}{integer. Number of species.}
+\item{\code{sp}}{(\code{integer(1)}) \cr
+Number of species}
 
-\item{\code{device}}{character. Device to use ('cpu' or 'cuda').}
+\item{\code{env}}{(\code{integer(1)} or \code{list(3)} of \code{integer(1)}) \cr
+Number of environmental predictors}
 
-\item{\code{parHeight}}{torch.Tensor. Global parameters for height.}
+\item{\code{dtype}}{(\code{character(1)}) \cr
+Device, "cpu" or cuda devices (e.g. "cuda:0")}
 
-\item{\code{parGrowth}}{torch.Tensor. Growth parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
+\item{\code{parameters}}{(\code{list(n)} with n objects of class \code{torch_tensor}) \cr
+List of parameters that should be optimized}
 
-\item{\code{parMort}}{torch.Tensor. Mortality parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
+\item{\code{optimizer}}{(\code{torch_optimizer}) \cr
+First-order gradient descent optimizer, automatically set by the \code{fit()} method}
 
-\item{\code{parReg}}{torch.Tensor. Regeneration parameters with dimensions \link{species}.}
+\item{\code{history}}{(\code{numeric(n)} for n epochs) \cr
+Vector of epoch losses}
 
-\item{\code{parGrowthEnv}}{torch.Tensor. Growth environment parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
+\item{\code{param_history}}{(\code{list(numeric(n))}) \cr
+Weights after each optimization step}
 
-\item{\code{parMortEnv}}{torch.Tensor. Mortality environment parameters with dimensions \link{species, 2}, where the first dimension is for shade tolerance.}
+\item{\code{pred}}{(\code{list(torch_tensor)}) \cr
+List of predictions}
 
-\item{\code{parRegEnv}}{torch.Tensor. Regeneration environment parameters with dimensions \link{species}.}
+\item{\code{device}}{(\code{character(1)} or \code{torch_device}) \cr
+Device, "cpu" or "cuda:0"}
 
-\item{\code{hidden_growth}}{list. Hidden layers for the growth model.}
+\item{\code{device_r}}{(\code{character(1)}) \cr
+Device, "cpu" or "cuda:0" (backup R object)}
 
-\item{\code{hidden_mort}}{list. Hidden layers for the mortality model.}
+\item{\code{parHeight}}{(\code{torch_tensor}) \cr
+Height species parameters, Dimensions: \mjseqn{[n_{species}]}}
 
-\item{\code{hidden_reg}}{list. Hidden layers for the regeneration model.}
+\item{\code{parGrowth}}{(\code{torch_tensor}) \cr
+Growth species parameters, Dimensions: \mjseqn{[n_{species}, m_{growth}]}}
+
+\item{\code{parMort}}{(\code{torch_tensor}) \cr
+Mortality species parameters, Dimensions: \mjseqn{[n_{species}, m_{growth}]}}
+
+\item{\code{parReg}}{(\code{torch_tensor}) \cr
+Regeneration species parameters, Dimensions: \mjseqn{[n_{species}]}}
+
+\item{\code{parGrowthEnv}}{(\code{list(torch_tensor, torch_tensor, ...)}) \cr
+Parameters for environmental growth model}
+
+\item{\code{parMortEnv}}{(\code{list(torch_tensor, torch_tensor, ...)}) \cr
+Parameters for environmental mortality model}
+
+\item{\code{parRegEnv}}{(\code{list(torch_tensor, torch_tensor, ...)}) \cr
+Parameters for environmental regeneration model}
+
+\item{\code{nnRegEnv}}{(\code{nn_sequential}) \cr
+Neural Network for environmental regeneration model}
+
+\item{\code{nnGrowthEnv}}{(\code{nn_sequential}) \cr
+Neural Network for environmental growth model}
+
+\item{\code{nnMortEnv}}{(\code{nn_sequential}) \cr
+Neural Network for environmental mortality model}
+
+\item{\code{hidden_growth}}{(\code{list(integer(1), integer(1))}) \cr
+Each integer in the list is one hidden layer}
+
+\item{\code{hidden_mort}}{(\code{list(integer(1), integer(1))}) \cr
+Each integer in the list is one hidden layer}
+
+\item{\code{hidden_reg}}{(\code{list(integer(1), integer(1))}) \cr
+Each integer in the list is one hidden layer}
+
+\item{\code{bias}}{(\code{logical(1)}) \cr
+Use bias in neural networks or not}
+
+\item{\code{patch_size_ha}}{(\code{numeric(1)}) \cr
+Patch size in ha}
+
+\item{\code{minLight}}{(\code{numeric(1)}) \cr
+Minimum Light}
+
+\item{\code{growthFunction}}{(\verb{function()}) \cr
+Growth process function}
+
+\item{\code{mortalityFunction}}{(\verb{function()}) \cr
+Mortality process function}
+
+\item{\code{regenerationFunction}}{(\verb{function()}) \cr
+Regeneration process function}
+
+\item{\code{competitionFunction}}{(\verb{function()}) \cr
+Competition function}
+
+\item{\code{nnMortConfig}}{(\code{list()}) \cr
+Neural Network Configuration, internal useage}
+
+\item{\code{nnGrowthConfig}}{(\code{list()}) \cr
+Neural Network Configuration, internal useage}
+
+\item{\code{nnRegConfig}}{(\code{list()}) \cr
+Neural Network Configuration, internal useage}
 }
 \if{html}{\out{</div>}}
 }
@@ -58,6 +135,7 @@ The \code{FINNModel} class provides tools to initialize, train, and predict usin
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parReg'><code>FINN::FINNbase$get_parReg()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="np_runif"><a href='../../FINN/html/FINNbase.html#method-FINNbase-np_runif'><code>FINN::FINNbase$np_runif()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="parameter_to_r"><a href='../../FINN/html/FINNbase.html#method-FINNbase-parameter_to_r'><code>FINN::FINNbase$parameter_to_r()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="setPars"><a href='../../FINN/html/FINNbase.html#method-FINNbase-setPars'><code>FINN::FINNbase$setPars()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parGrowth'><code>FINN::FINNbase$set_parGrowth()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parHeight'><code>FINN::FINNbase$set_parHeight()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parMort'><code>FINN::FINNbase$set_parMort()</code></a></span></li>
@@ -99,6 +177,7 @@ Initializes the FINNModel model with the specified parameters.
   hidden_growth = list(),
   hidden_mort = list(),
   hidden_reg = list(),
+  speciesPars_ranges = NULL,
   bias = FALSE,
   patch_size_ha = 0.1,
   minLight = 50,
@@ -141,8 +220,6 @@ Initializes the FINNModel model with the specified parameters.
 \item{\code{patch_size_ha}}{numeric. Patch size in hectares.}
 
 \item{\code{minLight}}{numeric. Minimum light level.}
-
-\item{\code{disturbance}}{numeric. Disturbance level.}
 }
 \if{html}{\out{</div>}}
 }

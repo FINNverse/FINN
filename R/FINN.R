@@ -1,20 +1,10 @@
 #' @title FINN: Forest Informed Neural Network
 #'
 #' @description
+#' \loadmathjax
+#'
 #' The `FINNModel` class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 #'
-#' @field sp integer. Number of species.
-#' @field device character. Device to use ('cpu' or 'cuda').
-#' @field parHeight torch.Tensor. Global parameters for height.
-#' @field parGrowth torch.Tensor. Growth parameters with dimensions [species, 2], where the first dimension is for shade tolerance.
-#' @field parMort torch.Tensor. Mortality parameters with dimensions [species, 2], where the first dimension is for shade tolerance.
-#' @field parReg torch.Tensor. Regeneration parameters with dimensions [species].
-#' @field parGrowthEnv torch.Tensor. Growth environment parameters with dimensions [species, 2], where the first dimension is for shade tolerance.
-#' @field parMortEnv torch.Tensor. Mortality environment parameters with dimensions [species, 2], where the first dimension is for shade tolerance.
-#' @field parRegEnv torch.Tensor. Regeneration environment parameters with dimensions [species].
-#' @field hidden_growth list. Hidden layers for the growth model.
-#' @field hidden_mort list. Hidden layers for the mortality model.
-#' @field hidden_reg list. Hidden layers for the regeneration model.
 #'
 #' @include FINNbase.R
 #' @export
@@ -22,41 +12,141 @@ FINNModel = R6::R6Class(
   classname = 'FINNModel',
   inherit = FINNbase,
   public = list(
-    # helper functions
-    # default model parameters
+
+    #' @field sp (`integer(1)`) \cr
+    #' Number of species
     sp = NULL,
+
+    #' @field env (`integer(1)` or `list(3)` of `integer(1)`) \cr
+    #' Number of environmental predictors
     env = NULL,
+
+    #' @field dtype (`character(1)`) \cr
+    #' Device, "cpu" or cuda devices (e.g. "cuda:0")
     dtype = NULL,
+
+    #' @field parameters (`list(n)` with n objects of class `torch_tensor`) \cr
+    #' List of parameters that should be optimized
     parameters = NULL,
+
+    #' @field optimizer (`torch_optimizer`) \cr
+    #' First-order gradient descent optimizer, automatically set by the `fit()` method
     optimizer = NULL,
+
+    #' @field history (`numeric(n)` for n epochs) \cr
+    #' Vector of epoch losses
     history = NULL,
+
+    #' @field param_history (`list(numeric(n))`) \cr
+    #' Weights after each optimization step
     param_history = NULL,
+
+    #' @field pred (`list(torch_tensor)`) \cr
+    #' List of predictions
     pred = NULL,
+
+    #' @field device (`character(1)` or `torch_device`) \cr
+    #' Device, "cpu" or "cuda:0"
     device = 'cpu',
+
+    #' @field device_r (`character(1)`) \cr
+    #' Device, "cpu" or "cuda:0" (backup R object)
     device_r = "cpu",
-    parHeight = NULL, # must be dim [species]
-    parGrowth = NULL, # must be dim [species, 2], first for shade tolerance
-    parMort = NULL, # must be dim [species, 2], first for shade tolerance,
-    parReg = NULL, # must be dim [species]
-    parGrowthEnv = NULL, # must be dim [species, 2], first for shade tolerance
-    parMortEnv = NULL, # must be dim [species, 2], first for shade tolerance,
-    parRegEnv = NULL, # must be dim [species]
+
+    #' @field parHeight (`torch_tensor`) \cr
+    #' Height species parameters, Dimensions: \mjseqn{[n_{species}]}
+    parHeight = NULL,
+
+    #' @field parGrowth (`torch_tensor`) \cr
+    #' Growth species parameters, Dimensions: \mjseqn{[n_{species}, m_{growth}]}
+    parGrowth = NULL,
+
+    #' @field parMort (`torch_tensor`) \cr
+    #' Mortality species parameters, Dimensions: \mjseqn{[n_{species}, m_{growth}]}
+    parMort = NULL,
+
+    #' @field parReg (`torch_tensor`) \cr
+    #' Regeneration species parameters, Dimensions: \mjseqn{[n_{species}]}
+    parReg = NULL,
+
+    #' @field parGrowthEnv (`list(torch_tensor, torch_tensor, ...)`) \cr
+    #' Parameters for environmental growth model
+    parGrowthEnv = NULL,
+
+    #' @field parMortEnv (`list(torch_tensor, torch_tensor, ...)`) \cr
+    #' Parameters for environmental mortality model
+    parMortEnv = NULL,
+
+    #' @field parRegEnv (`list(torch_tensor, torch_tensor, ...)`) \cr
+    #' Parameters for environmental regeneration model
+    parRegEnv = NULL,
+
+    #' @field nnRegEnv (`nn_sequential`) \cr
+    #' Neural Network for environmental regeneration model
     nnRegEnv = NULL,
+
+    #' @field nnGrowthEnv (`nn_sequential`) \cr
+    #' Neural Network for environmental growth model
     nnGrowthEnv = NULL,
+
+    #' @field nnMortEnv (`nn_sequential`) \cr
+    #' Neural Network for environmental mortality model
     nnMortEnv = NULL,
+
+    #' @field hidden_growth (`list(integer(1), integer(1))`) \cr
+    #' Each integer in the list is one hidden layer
     hidden_growth = list(),
+
+    #' @field hidden_mort (`list(integer(1), integer(1))`) \cr
+    #' Each integer in the list is one hidden layer
     hidden_mort = list(),
+
+
+    #' @field hidden_reg (`list(integer(1), integer(1))`) \cr
+    #' Each integer in the list is one hidden layer
     hidden_reg = list(),
+
+
+    #' @field bias (`logical(1)`) \cr
+    #' Use bias in neural networks or not
     bias = FALSE,
+
+
+    #' @field patch_size_ha (`numeric(1)`) \cr
+    #' Patch size in ha
     patch_size_ha = 0.1,
+
+    #' @field minLight (`numeric(1)`) \cr
+    #' Minimum Light
     minLight = 50,
-    disturbance = 0.0,
+
+    #' @field growthFunction (`function()`) \cr
+    #' Growth process function
     growthFunction = NULL,
+
+    #' @field mortalityFunction (`function()`) \cr
+    #' Mortality process function
     mortalityFunction = NULL,
+
+    #' @field regenerationFunction (`function()`) \cr
+    #' Regeneration process function
     regenerationFunction = NULL,
+
+    #' @field competitionFunction (`function()`) \cr
+    #' Competition function
     competitionFunction = NULL,
+
+
+    #' @field nnMortConfig (`list()`) \cr
+    #' Neural Network Configuration, internal useage
     nnMortConfig = NULL,
+
+    #' @field nnGrowthConfig (`list()`) \cr
+    #' Neural Network Configuration, internal useage
     nnGrowthConfig = NULL,
+
+    #' @field nnRegConfig (`list()`) \cr
+    #' Neural Network Configuration, internal useage
     nnRegConfig = NULL,
 
 
@@ -77,7 +167,6 @@ FINNModel = R6::R6Class(
     #' @param bias logical. Whether to include a bias term in the neural networks.
     #' @param patch_size_ha numeric. Patch size in hectares.
     #' @param minLight numeric. Minimum light level.
-    #' @param disturbance numeric. Disturbance level.
 
     #' @return Invisible self.
     initialize = function(
