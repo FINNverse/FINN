@@ -30,8 +30,8 @@ system.time({
                    #disturbance = dist_dt,
                    sp = 1L,
                    patches=10L,
-                   growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(4, 0), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE)),
-                   mortalityProcess = createProcess(~1+env1, func = mortality, initEnv = list(matrix(c(1, -3), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.2, 3.9), sp, 2, byrow = TRUE)),
+                   growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(4, 0), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.8, 1.0), sp, 2, byrow = TRUE)),
+                   mortalityProcess = createProcess(~1+env1, func = mortality, initEnv = list(matrix(c(2, -3), sp, 2, byrow = TRUE)), initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE)),
                    regenerationProcess = createProcess(~1+env1, func = regeneration, initEnv = list(matrix(c(3, 0), sp, 2, byrow = TRUE)) ),
                    device = "cpu")
 })
