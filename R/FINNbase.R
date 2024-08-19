@@ -321,8 +321,8 @@ FINNbase <- R6::R6Class(
       # inputPar = torch::torch_tensor(inputPar, requires_grad = TRUE)
       if(is.vector(inputPar)) {
         Npar = 1
-        NPsp = length(inputPar)
-        inputPar = matrix(inputPar, nrow = NPsp, ncol = Npar)
+        Nsp = length(inputPar)
+        inputPar = matrix(inputPar, nrow = Nsp, ncol = Npar)
         parRange = matrix(parRange, nrow = Npar, ncol = 2)
       }else if(is.matrix(inputPar)){
         Npar = ncol(inputPar)
