@@ -212,12 +212,12 @@ FINNModel = R6::R6Class(
       # ###### Defaults #####
       if(is.null(parHeight)) parHeight = runif(sp, min = speciesPars_ranges$parHeight[1], max = speciesPars_ranges$parHeight[2])
       if(is.null(parGrowth)) parGrowth = cbind(
-        runif(sp, min = speciesPars_ranges$parGrowth[1,1], speciesPars_ranges$parHeight[1,2]),
-        runif(sp, min = speciesPars_ranges$parGrowth[2,1], speciesPars_ranges$parHeight[2,2])
+        runif(sp, min = speciesPars_ranges$parGrowth[1,1], speciesPars_ranges$parGrowth[1,2]),
+        runif(sp, min = speciesPars_ranges$parGrowth[2,1], speciesPars_ranges$parGrowth[2,2])
       )
       if(is.null(parMort)) parMort = cbind(
-        runif(sp, min = speciesPars_ranges$parMort[1,1], speciesPars_ranges$parHeight[1,2]),
-        runif(sp, min = speciesPars_ranges$parMort[2,1], speciesPars_ranges$parHeight[2,2])
+        runif(sp, min = speciesPars_ranges$parMort[1,1], speciesPars_ranges$parMort[1,2]),
+        runif(sp, min = speciesPars_ranges$parMort[2,1], speciesPars_ranges$parMort[2,2])
       )
       if(is.null(parReg)) parReg = runif(sp, min = speciesPars_ranges$parReg[1], max = speciesPars_ranges$parReg[2])
 
@@ -227,10 +227,10 @@ FINNModel = R6::R6Class(
             parGrowth = parGrowth,
             parMort = parMort,
             parReg = parReg,
-            parHeight = parHeight,
-            parGrowthEnv = parGrowthEnv,
-            parMortEnv = parMortEnv,
-            parRegEnv = parRegEnv
+            parHeight = parHeight
+            # parGrowthEnv = parGrowthEnv,
+            # parMortEnv = parMortEnv,
+            # parRegEnv = parRegEnv
           ), speciesPars_ranges
           )
       }
