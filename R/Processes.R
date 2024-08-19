@@ -225,7 +225,15 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
   environment = torch::torch_exp(pred) # inverse link function
   # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
   growth = shade * environment * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
-  # growth = environment * shade * torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*100) / K)^2)
+  # print("environment")
+  # print(environment)
+  # print("shade")
+  # print(shade)
+  # print("torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*10) / K)^2)")
+  # print(torch::torch_exp(-0.5 * (torch::torch_log(dbh / (parGrowth[,2][species])*10) / K)^2))
+  # growth = environment * shade * torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*10) / K)^2)
+  # print("growth")
+  # print(growth)
   # growth = parGrowth[species,1]
   # return torch.nn.functional.softplus(growth)
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment,growth = growth) else out = growth
@@ -248,15 +256,13 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
-regeneration = function(species, parReg, pred, light, patch_size_ha, debug = F) {
+regeneration = function(species, parReg, pred, light, debug = F) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = torch::torch_exp(pred) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
-  #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
-  regeneration1 = sample_poisson_gaussian(mean*patch_size_ha) # TODO, check if exp or not?! lambda should be always positive!
-  regeneration2 = regeneration1 + regeneration1$round()$detach() - regeneration1$detach()
-  if(debug == T) out = list(regP = regP, mean = mean, regeneration1 = regeneration1, regeneration2 = regeneration2) else out = regeneration2
+  #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
+  if(debug == T) out = list(regP = regP, mean = mean) else out = mean
   return(out)
 }
 

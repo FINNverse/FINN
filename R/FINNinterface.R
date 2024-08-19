@@ -103,24 +103,24 @@ simulateForest = function(env,
                           speciesPars_ranges = list(
                             parGrowth = rbind(
                               c(0.01, 0.99),
-                              c(1, 4)
+                              c(0.01, 4)
                             ),
                             parMort = rbind(
                               c(0.01, 0.99),
-                              c(1, 4)
+                              c(0, 4)
                             ),
                             parReg = c(0.01, 0.99),
                             parHeight = c(0.3, 0.7),
                             parGrowthEnv = rbind(
-                              c(0, 2),
-                              c(-2, 2)
+                              c(-1, 1),
+                              c(-1, 1)
                             ),
                             parMortEnv = rbind(
-                              c(0, 2),
+                              c(-2, 2),
                               c(-2, 2)
                             ),
                             parRegEnv = rbind(
-                              c(0, 2),
+                              c(-2, 2),
                               c(-2, 2)
                             )),
                           height = NULL,
@@ -131,7 +131,8 @@ simulateForest = function(env,
                           device = c("cpu", "gpu"),
                           parallel = FALSE,
                           NGPU = 1,
-                          batchsize = NULL
+                          batchsize = NULL,
+                          debug = F
 ) {
 
   out = list()
@@ -209,7 +210,6 @@ simulateForest = function(env,
 
 
   if(NCPUs < -0.5) {
-
     predictions = model$predict(dbh = init$dbh,
                                 trees = init$trees,
                                 species = init$species,
@@ -218,7 +218,7 @@ simulateForest = function(env,
                                            torch::torch_tensor(regeneration_env)),
                                 disturbance = disturbance_T,
                                 patches = patches,
-                                debug = FALSE,
+                                debug = debug,
                                 verbose = TRUE)
 
   } else {
@@ -320,6 +320,29 @@ finn = function(data = NULL,
                 competitionProcess = NULL,
                 height = NULL,
                 optimizeHeight = TRUE,
+                speciesPars_ranges = list(
+                  parGrowth = rbind(
+                    c(0.01, 0.99),
+                    c(0.01, 4)
+                  ),
+                  parMort = rbind(
+                    c(0.01, 0.99),
+                    c(0, 4)
+                  ),
+                  parReg = c(0.01, 0.99),
+                  parHeight = c(0.3, 0.7),
+                  parGrowthEnv = rbind(
+                    c(-1, 1),
+                    c(-1, 1)
+                  ),
+                  parMortEnv = rbind(
+                    c(-2, 2),
+                    c(-2, 2)
+                  ),
+                  parRegEnv = rbind(
+                    c(-2, 2),
+                    c(-2, 2)
+                  )),
                 patches = 10L,
                 patch_size = 0.1,
                 init = NULL,
@@ -330,6 +353,7 @@ finn = function(data = NULL,
                 bootstrap = NULL,
                 parallel = FALSE,
                 NGPU = 1,
+                weights = NULL,
                 ...
 ) {
 
@@ -443,6 +467,7 @@ finn = function(data = NULL,
                    parGrowthEnv = growthProcess$initEnv,
                    parMortEnv = mortalityProcess$initEnv,
                    parRegEnv = regenerationProcess$initEnv,
+                   speciesPars_ranges = speciesPars_ranges,
                    patch_size_ha = patch_size)
 
   #### set parameters for optimization #####
@@ -473,7 +498,7 @@ finn = function(data = NULL,
               epochs = epochs,
               learning_rate = lr,
               update_step = 1L,
-              weights = NULL)
+              weights = weights)
 
     out$model = model
     out$init = init
@@ -532,6 +557,7 @@ finn = function(data = NULL,
                    parGrowthEnv = growthProcess$initEnv,
                    parMortEnv = mortalityProcess$initEnv,
                    parRegEnv = regenerationProcess$initEnv,
+                   speciesPars_ranges = speciesPars_ranges,
                    patch_size_ha = patch_size)
 
           if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
@@ -556,7 +582,7 @@ finn = function(data = NULL,
                     epochs = epochs,
                     learning_rate = lr,
                     update_step = 1L,
-                    weights = NULL)
+                    weights = weights)
 
           out$model = tmp_model
           out$indices = indices
@@ -599,6 +625,7 @@ finn = function(data = NULL,
                                parGrowthEnv = growthProcess$initEnv,
                                parMortEnv = mortalityProcess$initEnv,
                                parRegEnv = regenerationProcess$initEnv,
+                               speciesPars_ranges = speciesPars_ranges,
                                patch_size_ha = patch_size)
 
           if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
@@ -623,7 +650,7 @@ finn = function(data = NULL,
                         epochs = epochs,
                         learning_rate = lr,
                         update_step = 1L,
-                        weights = NULL)
+                        weights = weights)
 
           out$model = tmp_model
           out$indices = indices
@@ -726,7 +753,7 @@ predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL
 #' }
 #'
 #' @export
-continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL) {
+continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weights = NULL) {
   object$model$check()
   object$init$check()
 
@@ -763,6 +790,6 @@ continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL) {
             epochs = epochs,
             learning_rate = lr,
             update_step = 1L,
-            weights = NULL)
+            weights = weights)
   return(invisible(object))
 }
