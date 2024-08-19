@@ -132,7 +132,7 @@ simulateForest = function(env,
                           parallel = FALSE,
                           NGPU = 1,
                           batchsize = NULL,
-                          debug = F
+                          debug = FALSE
 ) {
 
   out = list()
@@ -221,6 +221,8 @@ simulateForest = function(env,
                                 debug = debug,
                                 verbose = TRUE)
 
+    out = list(long = pred2DF(predictions, "long"), wide = pred2DF(predictions, "wide"))
+
   } else {
     cl = parallel::makeCluster(NCPUs)
     nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
@@ -229,23 +231,7 @@ simulateForest = function(env,
 
     parallel::clusterEvalQ(cl, {library(torch);library(FINN)})
     parallel::clusterExport(cl, varlist = c("FINNModel","CohortMat","model", "init", "mortality_env", "growth_env", "regeneration_env", "batches", "patches", "nodes", "NGPU", "device_old"),envir = environment())
-    # parallel::clusterEvalQ(cl, {
-    #
-    #   # who am I
-    #   if(device_old == "gpu") {
-    #     myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-    #     dist = cbind(nodes,0:(NGPU-1))
-    #     dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
-    #     device_hardware = paste0("cuda:",dev)
-    #   } else {
-    #     device_hardware = "cpu"
-    #   }
-    #
-    #    init$check()
-    #    model$check(device = device_hardware)
-    #
-    #   print(1)
-    # })
+
     predictions =
       parallel::parLapply(cl, 1:nrow(batches), function(i) {
 
@@ -269,13 +255,17 @@ simulateForest = function(env,
                             patches = patches,
                             debug = FALSE,
                             verbose = TRUE)
-        return(pred)
+        return(list(long = pred2DF(pred,format = "long"), wide = pred2DF(pred,format = "wide")))
       })
     parallel::stopCluster(cl)
-  }
-  predictions$model = model
-  return(predictions)
 
+    out = list(long = data.table::rbindlist(lapply(predictions, function(p) p$long)),
+               wide = data.table::rbindlist(lapply(predictions, function(p) p$wide)),
+               )
+  }
+
+  out$model = model
+  return(out)
 }
 
 
@@ -729,7 +719,9 @@ predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL
       debug = FALSE
     )
 
-  return(pred2DF(predictions, format = "wide")$site)
+  return(list(wide = pred2DF(predictions, format = "wide")$site,
+              long = pred2DF(predictions, format = "long")$site,
+              ))
 }
 
 

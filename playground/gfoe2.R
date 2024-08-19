@@ -118,18 +118,24 @@ fit = finn(data = data,
                                                initEnv = list(matrix(c(0.0, 0), sp, 2, byrow = TRUE)),
                                                initSpecies = (as.numeric(predictions$model$get_parReg())),
                                                optimizeSpecies = FALSE, optimizeEnv = FALSE),
-            weights = c(1.0, 1/20, 1/10, 1,2,1,2, 1),
-           device = "gpu", optimizeHeight= FALSE, lr = 0.1, epochs = 20L, batchsize = 100L, , speciesPars_ranges = speciesPars_ranges
+            weights = c(1.0, 1/20, 1/2, 3,0.5,3,2, 1),
+           device = "gpu", optimizeHeight= FALSE, lr = 0.1, epochs = 60L, batchsize = 100L, , speciesPars_ranges = speciesPars_ranges
            )
 fit$model$parameters
-continue_fit(fit, batchsize = 100L, lr = 0.1, epochs = 20L)
-matplot(sapply(1:10, function(i) fit$model$param_history[[i]][[1]][,2]) |> t(), type = "l")
-fit$model$parameters
+continue_fit(fit, batchsize = 100L, lr = 0.1, epochs = 60L, weights = c(1.0, 1/20, 1/2, 3,0.5,3,2, 1))
+matplot(sapply(1:240L, function(i) fit$model$param_history[[i]][[1]][,1]) |> t(), type = "l", main = "Growth Parameter")
+legend("topleft", col = 1:3, legend = as.matrix(predictions$model$nnGrowthEnv$parameters[[1]])[,2], pch = 15)
+matplot(sapply(1:240L, function(i) fit$model$param_history[[i]][[2]][,2]) |> t(), type = "l", main = "Mort Parameter")
+legend("topleft", col = 1:3, legend = round(as.matrix(predictions$model$nnMortEnv$parameters[[1]])[,2], 2), pch = 15)
+
+as.matrix(fit$model$parameters)[[1]]
 
 fit$models_list[[3]]$model$check()
 fit$models_list[[3]]$model$parMortEnv
 
-matplot(abind::abind(fit$model$history, along = 0L)*matrix(c(1/20, 1/10, 1,2,2,1), nrow = 20,ncol = 6L, byrow = TRUE), type = "l")
+matplot((abind::abind(fit$model$history, along = 0L))/matrix(c(1/20, 1/2, 3,0.5,3,2), ncol = 6L, nrow = 60L, byrow = TRUE), type = "l")
+matplot((abind::abind(fit$model$history, along = 0L)), type = "l")
+
 
 rr=
   sapply(fit$models_list, function(m) {
@@ -148,11 +154,12 @@ predictions = melt(predictions, id.vars = c("siteID", "species", "year"))
 pred = pred2DF(predictions, format = "long")$site
 
 par(mfrow = c(1,2))
-plot(unique(env_dt$env1), (fit$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,2] |> exp(), ylim = c(0,10))
-points(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,2] |> exp(), col = "red")
+plot(unique(env_dt$env1), (fit$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,3] |> exp(), ylim = c(0,30))
+points(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,3] |> exp(), col = "red")
 
-plot(unique(env_dt$env1), (fit$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,3] |> plogis(), ylim = c(0,1))
-points(unique(env_dt$env1), (predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,3] |> plogis(), col = "red")
+
+plot(unique(env_dt$env1), (fit$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,1] |> plogis(), ylim = c(0,1))
+points(unique(env_dt$env1), (predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,1] |> plogis(), col = "red")
 
 as.matrix(fit$model$parameters[[1]])
 
