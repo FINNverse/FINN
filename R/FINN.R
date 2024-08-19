@@ -227,10 +227,10 @@ FINNModel = R6::R6Class(
             parGrowth = parGrowth,
             parMort = parMort,
             parReg = parReg,
-            parHeight = parHeight,
-            parGrowthEnv = parGrowthEnv,
-            parMortEnv = parMortEnv,
-            parRegEnv = parRegEnv
+            parHeight = parHeight
+            # parGrowthEnv = parGrowthEnv,
+            # parMortEnv = parMortEnv,
+            # parRegEnv = parRegEnv
           ), speciesPars_ranges
           )
       }
