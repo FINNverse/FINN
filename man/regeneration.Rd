@@ -4,7 +4,7 @@
 \alias{regeneration}
 \title{Calculate the regeneration of forest patches BA_stemsed on the input parameters.}
 \usage{
-regeneration(species, parReg, pred, light, patch_size_ha, debug = F)
+regeneration(species, parReg, pred, light, debug = F)
 }
 \arguments{
 \item{species}{torch.Tensor species information.}
