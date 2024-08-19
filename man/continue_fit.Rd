@@ -4,7 +4,7 @@
 \alias{continue_fit}
 \title{Continue Training a \code{finnModel}}
 \usage{
-continue_fit(object, epochs = 20L, lr = NULL, batchsize = NULL)
+continue_fit(object, epochs = 20L, lr = NULL, batchsize = NULL, weights = NULL)
 }
 \arguments{
 \item{object}{An object of class \code{finnModel}, typically obtained from the \code{finn()} function. This object contains the model, initial conditions, and data required for training.}
