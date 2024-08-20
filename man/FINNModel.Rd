@@ -83,6 +83,9 @@ Each integer in the list is one hidden layer}
 \item{\code{hidden_reg}}{(\code{list(integer(1), integer(1))}) \cr
 Each integer in the list is one hidden layer}
 
+\item{\code{speciesPars_ranges}}{(\code{list()}) \cr
+Ranges for species parameters}
+
 \item{\code{bias}}{(\code{logical(1)}) \cr
 Use bias in neural networks or not}
 
@@ -129,17 +132,10 @@ Neural Network Configuration, internal useage}
 <ul>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="build_NN"><a href='../../FINN/html/FINNbase.html#method-FINNbase-build_NN'><code>FINN::FINNbase$build_NN()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="check"><a href='../../FINN/html/FINNbase.html#method-FINNbase-check'><code>FINN::FINNbase$check()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parGrowth'><code>FINN::FINNbase$get_parGrowth()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parHeight'><code>FINN::FINNbase$get_parHeight()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parMort'><code>FINN::FINNbase$get_parMort()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="get_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-get_parReg'><code>FINN::FINNbase$get_parReg()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="getPars"><a href='../../FINN/html/FINNbase.html#method-FINNbase-getPars'><code>FINN::FINNbase$getPars()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="np_runif"><a href='../../FINN/html/FINNbase.html#method-FINNbase-np_runif'><code>FINN::FINNbase$np_runif()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="parameter_to_r"><a href='../../FINN/html/FINNbase.html#method-FINNbase-parameter_to_r'><code>FINN::FINNbase$parameter_to_r()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="setPars"><a href='../../FINN/html/FINNbase.html#method-FINNbase-setPars'><code>FINN::FINNbase$setPars()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parGrowth"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parGrowth'><code>FINN::FINNbase$set_parGrowth()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parHeight"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parHeight'><code>FINN::FINNbase$set_parHeight()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parMort"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parMort'><code>FINN::FINNbase$set_parMort()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_parReg"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_parReg'><code>FINN::FINNbase$set_parReg()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights'><code>FINN::FINNbase$set_weights()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnGrowthEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnGrowthEnv'><code>FINN::FINNbase$set_weights_nnGrowthEnv()</code></a></span></li>
 <li><span class="pkg-link" data-pkg="FINN" data-topic="FINNbase" data-id="set_weights_nnMortEnv"><a href='../../FINN/html/FINNbase.html#method-FINNbase-set_weights_nnMortEnv'><code>FINN::FINNbase$set_weights_nnMortEnv()</code></a></span></li>

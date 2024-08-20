@@ -37,18 +37,11 @@ This function assigns the specified weights to the growth environment neural net
 \item \href{#method-FINNbase-set_weights_nnMortEnv}{\code{FINNbase$set_weights_nnMortEnv()}}
 \item \href{#method-FINNbase-set_weights_nnRegEnv}{\code{FINNbase$set_weights_nnRegEnv()}}
 \item \href{#method-FINNbase-set_weights}{\code{FINNbase$set_weights()}}
-\item \href{#method-FINNbase-get_parMort}{\code{FINNbase$get_parMort()}}
-\item \href{#method-FINNbase-get_parGrowth}{\code{FINNbase$get_parGrowth()}}
-\item \href{#method-FINNbase-get_parHeight}{\code{FINNbase$get_parHeight()}}
-\item \href{#method-FINNbase-get_parReg}{\code{FINNbase$get_parReg()}}
-\item \href{#method-FINNbase-set_parMort}{\code{FINNbase$set_parMort()}}
-\item \href{#method-FINNbase-set_parGrowth}{\code{FINNbase$set_parGrowth()}}
-\item \href{#method-FINNbase-set_parHeight}{\code{FINNbase$set_parHeight()}}
-\item \href{#method-FINNbase-set_parReg}{\code{FINNbase$set_parReg()}}
 \item \href{#method-FINNbase-parameter_to_r}{\code{FINNbase$parameter_to_r()}}
 \item \href{#method-FINNbase-check}{\code{FINNbase$check()}}
 \item \href{#method-FINNbase-update_parameters}{\code{FINNbase$update_parameters()}}
 \item \href{#method-FINNbase-setPars}{\code{FINNbase$setPars()}}
+\item \href{#method-FINNbase-getPars}{\code{FINNbase$getPars()}}
 \item \href{#method-FINNbase-clone}{\code{FINNbase$clone()}}
 }
 }
@@ -56,6 +49,9 @@ This function assigns the specified weights to the growth environment neural net
 \if{html}{\out{<a id="method-FINNbase-build_NN"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-build_NN}{}}}
 \subsection{Method \code{build_NN()}}{
+Build a neural network
+
+This function builds a neural network with specified input shape, output shape, hidden layers, bias, activation functions, dropout rate, and last activation function.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNbase$build_NN(
   self,
@@ -224,154 +220,6 @@ This function assigns the specified weights to a given neural network model.
 }
 \subsection{Returns}{
 torch.nn.modules.container.Sequential. The neural network with updated weights.
-Get Mortality Parameters
-
-This function retrieves the mortality parameters with appropriate transformations applied.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-get_parMort"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-get_parMort}{}}}
-\subsection{Method \code{get_parMort()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$get_parMort()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-torch.Tensor. The processed mortality parameters.
-Get Growth Parameters
-
-This function retrieves the growth parameters with appropriate transformations applied.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-get_parGrowth"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-get_parGrowth}{}}}
-\subsection{Method \code{get_parGrowth()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$get_parGrowth()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-torch.Tensor. The processed growth parameters.
-Get Height Parameters
-
-This function retrieves the height parameters with appropriate transformations applied.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-get_parHeight"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-get_parHeight}{}}}
-\subsection{Method \code{get_parHeight()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$get_parHeight()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-torch.Tensor. The processed height parameters.
-Get Regeneration Parameters
-
-This function retrieves the regeneration parameters with appropriate transformations applied.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-get_parReg"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-get_parReg}{}}}
-\subsection{Method \code{get_parReg()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$get_parReg()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-torch.Tensor. The processed regeneration parameters.
-Set Mortality Parameters
-
-This function sets the mortality parameters after applying the appropriate transformations.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-set_parMort"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-set_parMort}{}}}
-\subsection{Method \code{set_parMort()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$set_parMort(value)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{value}}{matrix. A matrix of mortality parameters.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-None. The mortality parameters are set in the model.
-Set Growth Parameters
-
-This function sets the growth parameters after applying the appropriate transformations.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-set_parGrowth"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-set_parGrowth}{}}}
-\subsection{Method \code{set_parGrowth()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$set_parGrowth(value)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{value}}{matrix. A matrix of growth parameters.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-None. The growth parameters are set in the model.
-Set Height Parameters
-
-This function sets the height parameters after applying the appropriate transformations.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-set_parHeight"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-set_parHeight}{}}}
-\subsection{Method \code{set_parHeight()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$set_parHeight(value)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{value}}{numeric. A numeric vector of height parameters.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-None. The height parameters are set in the model.
-Set Regeneration Parameters
-
-This function sets the regeneration parameters after applying the appropriate transformations.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FINNbase-set_parReg"></a>}}
-\if{latex}{\out{\hypertarget{method-FINNbase-set_parReg}{}}}
-\subsection{Method \code{set_parReg()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FINNbase$set_parReg(value)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{value}}{numeric. A numeric vector of regeneration parameters.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-None. The regeneration parameters are set in the model.
 }
 }
 \if{html}{\out{<hr>}}
@@ -407,6 +255,15 @@ None. The regeneration parameters are set in the model.
 \subsection{Method \code{setPars()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNbase$setPars(inputPar, parRange)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINNbase-getPars"></a>}}
+\if{latex}{\out{\hypertarget{method-FINNbase-getPars}{}}}
+\subsection{Method \code{getPars()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINNbase$getPars(internalPar, parRange)}\if{html}{\out{</div>}}
 }
 
 }

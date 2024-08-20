@@ -106,6 +106,9 @@ FINNModel = R6::R6Class(
     #' Each integer in the list is one hidden layer
     hidden_reg = list(),
 
+    #' @field speciesPars_ranges (`list()`) \cr
+    #' Ranges for species parameters
+    speciesPars_ranges = NULL,
 
     #' @field bias (`logical(1)`) \cr
     #' Use bias in neural networks or not
@@ -209,7 +212,9 @@ FINNModel = R6::R6Class(
       self$sp = sp
       self$device = device
 
+
       # ###### Defaults #####
+      if(is.null(speciesPars_ranges)) speciesPars_ranges = default_speciesPars_ranges
       if(is.null(parHeight)) parHeight = runif(sp, min = speciesPars_ranges$parHeight[1], max = speciesPars_ranges$parHeight[2])
       if(is.null(parGrowth)) parGrowth = cbind(
         runif(sp, min = speciesPars_ranges$parGrowth[1,1], speciesPars_ranges$parGrowth[1,2]),
@@ -220,27 +225,33 @@ FINNModel = R6::R6Class(
         runif(sp, min = speciesPars_ranges$parMort[2,1], speciesPars_ranges$parMort[2,2])
       )
       if(is.null(parReg)) parReg = runif(sp, min = speciesPars_ranges$parReg[1], max = speciesPars_ranges$parReg[2])
+      self$speciesPars_ranges = speciesPars_ranges
 
-      if(!is.null(speciesPars_ranges)){
-        checkParInput(
-          speciesPars = list(
-            parGrowth = parGrowth,
-            parMort = parMort,
-            parReg = parReg,
-            parHeight = parHeight
-          ), speciesPars_ranges
-          )
-      }
 
-      self$set_parHeight(parHeight)
+      # if(!is.null(speciesPars_ranges)){
+      checkParInput(
+        speciesPars = list(
+          parGrowth = parGrowth,
+          parMort = parMort,
+          parReg = parReg,
+          parHeight = parHeight
+        ), speciesPars_ranges
+      )
+      # }
 
+      # self$set_parHeight(parHeight)
       # self$set_parGrowth(parGrowth)
       # self$set_parMort(parMort)
       # self$set_parReg(parReg)
 
+      print(parGrowth)
+      print(speciesPars_ranges$parGrowth)
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
+      print(parMort)
+      print(speciesPars_ranges$parMort)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
+      self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
 
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
@@ -311,11 +322,14 @@ FINNModel = R6::R6Class(
         self$parReg = np_runif(0, 1, size = self$sp)
       }
 
-
-      self$set_parHeight(parHeight)
-      self$set_parGrowth(parGrowth)
-      self$set_parMort(parMort)
-      self$set_parReg(parReg)
+      # self$set_parHeight(parHeight)
+      # self$set_parGrowth(parGrowth)
+      # self$set_parMort(parMort)
+      # self$set_parReg(parReg)
+      self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
+      self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
+      self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
+      self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
 
       # if(which == "env"){
       #   self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
@@ -476,10 +490,15 @@ FINNModel = R6::R6Class(
         # trees*disturbances_tens[,i,]$unsqueeze(3L)
 
         # Model - get Parameters parameter constrains
-        parHeight = self$get_parHeight()
-        parMort = self$get_parMort()
-        parGrowth = self$get_parGrowth()
-        parReg = self$get_parReg()
+        # parHeight = self$get_parHeight()
+        # parMort = self$get_parMort()
+        # parGrowth = self$get_parGrowth()
+        # parReg = self$get_parReg()
+
+        parMort = self$getPars(self$parMort, speciesPars_ranges$parMort)
+        parGrowth = self$getPars(self$parGrowth, speciesPars_ranges$parGrowth)
+        parReg = self$getPars(self$parReg, speciesPars_ranges$parReg)
+        parHeight = self$getPars(self$parHeight, speciesPars_ranges$parHeight)
 
         if(dbh$shape[3] > 0.5){
           light = self$competitionFunction(
