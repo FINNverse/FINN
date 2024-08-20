@@ -14,6 +14,7 @@ FINNbase <- R6::R6Class(
     parGrowthEnv_r = NULL, # must be dim [species, 2], first for shade tolerance
     parMortEnv_r = NULL, # must be dim [species, 2], first for shade tolerance,
     parRegEnv_r = NULL, # must be dim [species]
+    #' @description
     #' Build a neural network
     #'
     #' This function builds a neural network with specified input shape, output shape, hidden layers, bias, activation functions, dropout rate, and last activation function.
@@ -38,18 +39,6 @@ FINNbase <- R6::R6Class(
                         activation, # vector
                         dropout,
                         last_activation = "sigmoid") {
-      # Build neural network
-      #
-      # Args:
-      # input_shape (int): Number of predictors
-      # output_shape (int): Number of species
-      # hidden (vector): List of hidden layers
-      # bias (vector[bool]): Biases in hidden layers
-      # activation (vector[str]): List of activation functions
-      # dropout (float): Dropout rate
-      #
-      # Returns:
-      # torch.nn.modules.container.Sequential: Sequential neural network object
 
       model_list <- list()
       if (length(hidden) != length(activation)) {
@@ -162,95 +151,6 @@ FINNbase <- R6::R6Class(
       return(NN)
     },
 
-    #' Get Mortality Parameters
-    #'
-    #' This function retrieves the mortality parameters with appropriate transformations applied.
-    #'
-    #' @return torch.Tensor. The processed mortality parameters.
-    get_parMort = function() {
-      return(torch::torch_cat(list(self$parMort[, 1, drop = FALSE]$sigmoid(), self$parMort[, 2, drop = FALSE]$sigmoid() * 4.0), dim = 2L))
-      # return(torch::torch_cat(list(self$parMort[,1,drop=FALSE]$clamp(min = 0., max = 1.0), self$parMort[,2,drop=FALSE]$clamp(min = 0.0, max = 4.0)), dim = 2L ))
-    },
-
-    #' Get Growth Parameters
-    #'
-    #' This function retrieves the growth parameters with appropriate transformations applied.
-    #'
-    #' @return torch.Tensor. The processed growth parameters.
-    get_parGrowth = function() {
-      return(torch::torch_cat(list(self$parGrowth[, 1, drop = FALSE]$sigmoid(), self$parGrowth[, 2, drop = FALSE]$exp()), dim = 2L))
-      # return(torch::torch_cat(list(self$parGrowth[,1,drop=FALSE]$clamp(min = 0.0, max = 1.0), self$parGrowth[,2,drop=FALSE]$clamp(min = 0.0)), dim = 2L ))
-    },
-
-    #' Get Height Parameters
-    #'
-    #' This function retrieves the height parameters with appropriate transformations applied.
-    #'
-    #' @return torch.Tensor. The processed height parameters.
-    get_parHeight = function() {
-      return(self$parHeight$sigmoid())
-      # return(self$parHeight$clamp(min = 0.0, max = 1.0))
-    },
-
-    #' Get Regeneration Parameters
-    #'
-    #' This function retrieves the regeneration parameters with appropriate transformations applied.
-    #'
-    #' @return torch.Tensor. The processed regeneration parameters.
-    get_parReg = function() {
-      return(self$parReg$sigmoid())
-      # return(self$parReg$clamp(min = 0.0, max = 1.0))
-    },
-
-    #' Set Mortality Parameters
-    #'
-    #' This function sets the mortality parameters after applying the appropriate transformations.
-    #'
-    #' @param value matrix. A matrix of mortality parameters.
-    #'
-    #' @return None. The mortality parameters are set in the model.
-    set_parMort = function(value) {
-      # return(cbind(binomial()$linkfun(value[,1]), binomial()$linkfun(value[,2]/4.0)))
-      self$parMort <- torch::torch_tensor(cbind(stats::binomial()$linkfun(value[, 1]), stats::binomial()$linkfun(value[, 2] / 4.0)), requires_grad = TRUE, device = self$device, dtype = self$dtype)
-      # self$parMort = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
-    },
-
-    #' Set Growth Parameters
-    #'
-    #' This function sets the growth parameters after applying the appropriate transformations.
-    #'
-    #' @param value matrix. A matrix of growth parameters.
-    #'
-    #' @return None. The growth parameters are set in the model.
-    set_parGrowth = function(value) {
-      self$parGrowth <- torch::torch_tensor(cbind(stats::binomial()$linkfun(value[, 1]), log(value[, 2])), requires_grad = TRUE, device = self$device, dtype = self$dtype)
-      # self$parGrowth = torch::torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype)
-    },
-
-    #' Set Height Parameters
-    #'
-    #' This function sets the height parameters after applying the appropriate transformations.
-    #'
-    #' @param value numeric. A numeric vector of height parameters.
-    #'
-    #' @return None. The height parameters are set in the model.
-    set_parHeight = function(value) {
-      self$parHeight <- torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype = self$dtype)
-      # self$parHeight = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
-    },
-
-    #' Set Regeneration Parameters
-    #'
-    #' This function sets the regeneration parameters after applying the appropriate transformations.
-    #'
-    #' @param value numeric. A numeric vector of regeneration parameters.
-    #'
-    #' @return None. The regeneration parameters are set in the model.
-    set_parReg = function(value) {
-      self$parReg <- torch_tensor(stats::binomial()$linkfun(value), requires_grad = TRUE, device = self$device, dtype = self$dtype)
-      # self$parReg = torch_tensor(value, requires_grad = TRUE, device = self$device, dtype=self$dtype )
-    },
-
     parameter_to_r = function() {
 
       self$parHeight_r = to_r(self$parHeight, TRUE)
@@ -333,14 +233,35 @@ FINNbase <- R6::R6Class(
       out = matrix(nrow = Nsp, ncol = 0)
       # for(j in 1:Nsp){
       for(i in 1:Npar){
-        lower = parRange[i,1,drop=FALSE]
-        upper = parRange[i,2,drop=FALSE]
-        out <- cbind(out, plogis(inputPar[,i, drop=FALSE])*as.numeric((upper - lower)+lower))
+        lower = as.numeric(parRange[i,1,drop=FALSE])
+        upper = as.numeric(parRange[i,2,drop=FALSE])
+        out <- cbind(out, qlogis((inputPar[,i, drop=FALSE] - lower) / (upper - lower)))
       }
       if(Npar == 1) out = as.vector(out) # TODO replace vectors with matrices as species input everywhere
       # }
       # out <- torch::torch_tensor(out, requires_grad = TRUE, device = "cpu", dtype = "float32")
       out <- torch::torch_tensor(out, requires_grad = TRUE, device = self$device, dtype = self$dtype)
+      return(out)
+    },
+    getPars = function(internalPar, parRange) {
+      if (is.vector(parRange)) {
+        # Case where internalPar is a 1D tensor and parRange is a vector
+        Npar <- length(parRange) / 2
+        lower <- parRange[1:Npar]
+        upper <- parRange[(Npar + 1):(2 * Npar)]
+
+        out <- internalPar$sigmoid() * (upper - lower) + lower
+      } else {
+        # Case where internalPar is a matrix and parRange is a matrix
+        Npar <- ncol(internalPar)
+        out <- list()
+        for (i in 1:Npar) {
+          lower <- parRange[i, 1, drop = FALSE]
+          upper <- parRange[i, 2, drop = FALSE]
+          out[[i]] <- internalPar[, i, drop = FALSE]$sigmoid() * (upper - lower) + lower
+        }
+        out <- torch::torch_cat(out, dim = 2L)
+      }
       return(out)
     }
 

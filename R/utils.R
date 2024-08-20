@@ -415,4 +415,17 @@ checkParInput = function(speciesPars, speciesPars_ranges){
   }
 }
 
+# default ranges
+default_speciesPars_ranges = list(
+  parGrowth = rbind(
+    c(0.01, 0.99),
+    c(0.01, 4)
+  ),
+  parMort = rbind(
+    c(0.01, 0.99),
+    c(0, 4)
+  ),
+  parReg = c(0.01, 0.99),
+  parHeight = c(0.3, 0.7)
+)
 

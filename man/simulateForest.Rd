@@ -22,7 +22,7 @@ simulateForest(
   parallel = FALSE,
   NGPU = 1,
   batchsize = NULL,
-  debug = F
+  debug = FALSE
 )
 }
 \arguments{
