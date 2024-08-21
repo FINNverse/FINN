@@ -1,16 +1,23 @@
 
+<!-- badges: start -->
+
+[![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # Forest Informed Neural Networks (FINN)
 
-<!-- badges: start -->
-<!-- badges: end -->
-
-<figure>
-<img src="vignettes/annimated-plots/combined_iterations.gif"
-alt="FINN" />
-<figcaption aria-hidden="true">FINN</figcaption>
-</figure>
+FINN is an R package for modular dynamic vegetation (forest) models.
+Modularity is achieved by implementing all components and the platform
+in R, and by allowing users to pass their own processes to FINN as R
+functions. Nevertheless, FINN has a high performance (low runtime)
+because FINN is implemented in torch for R. torch allows access to
+highly optimized routines and also allows FINN to run on the GPU, hence
+FINN scales extremely well with the number of sites. Furthermore, FINN
+can seamlessly integrate neural networks into the processes or even
+replace them (hybrid modeling). In addition, the parameters in FINN can
+be directly optimized using stochastic gradient descent.
 
 ## Installation
 
@@ -20,14 +27,41 @@ You can install the development version of FINN from
 ``` r
 # install.packages("devtools")
 devtools::install_github("FINNverse/FINN")
-FINN::install_FINN()
 ```
 
 ## Example
 
 This is a basic example which shows you how to solve a common problem:
 
+Simulate:
+
 ``` r
 library(FINN)
-## basic example code
+env = data.table(siteID = rep(1:100, each = 200),
+                 year = rep(1:200, 100L),
+                 env1 = runif(200*100, -1, 1))
+simulations = simulateForest(env = env, sp = 3L)
+head(simulations$long)
 ```
+
+Estimate (inference, calibrate) environmental responses within the three
+processes:
+
+``` r
+model = 
+  finn(data = simulations$wide$site,
+       env = env,
+       mortalityProcess = createProcess(~env1, func = mortality, optimizeEnv = TRUE, optimizeSpecies = FALSE),
+       growthProcess = createProcess(~env1, func = growth, optimizeEnv = TRUE, optimizeSpecies = FALSE),
+       regenerationProcess = createProcess(~env1, func = regeneration, optimizeEnv = TRUE, optimizeSpecies = FALSE),
+       optimizeHeight = FALSE,
+       batchsize = 100L,
+       epochs = 20L
+       )
+```
+
+<figure>
+<img src="vignettes/annimated-plots/combined_iterations.gif"
+alt="FINN" />
+<figcaption aria-hidden="true">FINN</figcaption>
+</figure>
