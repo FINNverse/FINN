@@ -6,6 +6,12 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
+<figure>
+<img src="vignettes/annimated-plots/combined_iterations.gif"
+alt="FINN" />
+<figcaption aria-hidden="true">FINN</figcaption>
+</figure>
+
 ## Installation
 
 You can install the development version of FINN from
@@ -23,8 +29,5 @@ This is a basic example which shows you how to solve a common problem:
 
 ``` r
 library(FINN)
-#> ── Attaching FINN ─────────────────────────────────────────────────── 0.0.900 ──
-#> ✔ torch <environment> 
-#> ✔ torch_optimizer
 ## basic example code
 ```
