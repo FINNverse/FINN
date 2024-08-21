@@ -11,6 +11,8 @@
 FINNModel = R6::R6Class(
   classname = 'FINNModel',
   inherit = FINNbase,
+  lock_objects = FALSE,
+  lock_class = FALSE,
   public = list(
 
     #' @field sp (`integer(1)`) \cr
@@ -20,6 +22,10 @@ FINNModel = R6::R6Class(
     #' @field env (`integer(1)` or `list(3)` of `integer(1)`) \cr
     #' Number of environmental predictors
     env = NULL,
+
+    #' @field output (`integer(1)` or `list(3)` of `integer(1)`) \cr
+    #' Output dimensions of the NNs
+    output = NULL,
 
     #' @field dtype (`character(1)`) \cr
     #' Device, "cpu" or cuda devices (e.g. "cuda:0")
@@ -106,6 +112,17 @@ FINNModel = R6::R6Class(
     #' Each integer in the list is one hidden layer
     hidden_reg = list(),
 
+    #' @field runEnvGrowth (`logical(1)`) \cr
+    #' Make predictions with GrowthNN on env or not
+    runEnvGrowth = TRUE,
+
+    #' @field runEnvMort (`logical(1)`) \cr
+    #' Make predictions with MortNN on env or not
+    runEnvMort = TRUE,
+
+    #' @field runEnvReg (`logical(1)`) \cr
+    #' Make predictions with RegNN on env or not
+    runEnvReg = TRUE,
 
     #' @field bias (`logical(1)`) \cr
     #' Use bias in neural networks or not
@@ -135,7 +152,6 @@ FINNModel = R6::R6Class(
     #' @field competitionFunction (`function()`) \cr
     #' Competition function
     competitionFunction = NULL,
-
 
     #' @field nnMortConfig (`list()`) \cr
     #' Neural Network Configuration, internal useage
@@ -172,6 +188,7 @@ FINNModel = R6::R6Class(
     initialize = function(
                   sp = NULL,
                   env = NULL,
+                  output = NULL,
                   dtype = NULL,
                   parameters = NULL,
                   optimizer = NULL,
@@ -192,6 +209,9 @@ FINNModel = R6::R6Class(
                   hidden_growth = list(),
                   hidden_mort = list(),
                   hidden_reg = list(),
+                  runEnvGrowth = TRUE,
+                  runEnvMort = TRUE,
+                  runEnvReg = TRUE,
                   speciesPars_ranges = NULL,
                   bias = FALSE,
                   patch_size_ha = 0.1,
@@ -241,7 +261,6 @@ FINNModel = R6::R6Class(
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
-
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
       self$parRegEnv = parRegEnv
@@ -258,31 +277,36 @@ FINNModel = R6::R6Class(
       self$env = env
       self$optimizer = NULL
       self$dtype = torch_float32()
+      self$runEnvGrowth = runEnvGrowth
+      self$runEnvMort = runEnvMort
+      self$runEnvReg = runEnvReg
+      if(is.null(output)) output = c(sp, sp, sp)
+      self$output = output
 
-      self$nnMortConfig = list(input_shape=env[1], output_shape=sp, hidden=hidden_mort, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
-      self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig) # sigmoid
+      self$nnMortConfig = list(input_shape=env[1], output_shape=output[1], hidden=hidden_mort, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
+      self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
 
-      self$nnGrowthConfig = list(input_shape=env[2], output_shape=sp, hidden=hidden_growth, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
-      self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig) # sigmoid
+      self$nnGrowthConfig = list(input_shape=env[2], output_shape=output[2], hidden=hidden_growth, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
+      self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
 
-      self$nnRegConfig = list(input_shape=env[3], output_shape=sp, hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
+      self$nnRegConfig = list(input_shape=env[3], output_shape=output[3], hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
       self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
 
       if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
       if(!is.null(parMortEnv)) self$set_weights_nnMortEnv(parMortEnv)
       if(!is.null(parRegEnv)) self$set_weights_nnRegEnv(parRegEnv)
 
-      if(is.null(growthFunction)) self$growthFunction = growth
-      else self$growthFunction = growthFunction
+      if(is.null(growthFunction)) self$growthFunction = growth |> self$set_environment()
+      else self$growthFunction = growthFunction |> self$set_environment()
 
-      if(is.null(mortalityFunction)) self$mortalityFunction = mortality
-      else self$mortalityFunction = mortalityFunction
+      if(is.null(mortalityFunction)) self$mortalityFunction = mortality |> self$set_environment()
+      else self$mortalityFunction = mortalityFunction |> self$set_environment()
 
-      if(is.null(regenerationFunction)) self$regenerationFunction = regeneration
-      else self$regenerationFunction = regenerationFunction
+      if(is.null(regenerationFunction)) self$regenerationFunction = regeneration |> self$set_environment()
+      else self$regenerationFunction = regenerationFunction |> self$set_environment()
 
-      if(is.null(competitionFunction)) self$competitionFunction = competition
-      else self$competitionFunction = competitionFunction
+      if(is.null(competitionFunction)) self$competitionFunction = competition |> self$set_environment()
+      else self$competitionFunction = competitionFunction |> self$set_environment()
 
       self$nnMortEnv$to(device = self$device)
       self$nnGrowthEnv$to(device = self$device)
@@ -316,25 +340,8 @@ FINNModel = R6::R6Class(
       self$set_parGrowth(parGrowth)
       self$set_parMort(parMort)
       self$set_parReg(parReg)
-
-      # if(which == "env"){
-      #   self$parameters = c(self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-      #   self$parHeight$requires_grad_(FALSE)
-      #   self$parGrowth$requires_grad_(FALSE)
-      #   self$parMort$requires_grad_(FALSE)
-      #   self$parReg$requires_grad_(FALSE)
-      #   names(self$parameters) = c("R_E", "G_E", "M_E")
-      # }else if(which == "species"){
-      #   self$parameters = c(self$parHeight, self$parGrowth, self$parMort, self$parReg)
-      #   names(self$parameters) = c("H", "G", "M", "R")
-      #   .n = lapply(self$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
-      #   .n = lapply(self$nnGrowtEnv$parameters, function(p) p$requires_grad_(FALSE))
-      #   .n = lapply(self$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
-      #
-      # }else{
       self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
       names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort")
-      # }
       self$parameter_to_r()
 
       return(invisible(self)) # Only for testing now
@@ -437,9 +444,9 @@ FINNModel = R6::R6Class(
       }
 
       if(is.null(y)) {
-        predGrowthGlobal = self$nnGrowthEnv(env[[1]])
-        predMortGlobal = self$nnMortEnv(env[[2]])
-        predRegGlobal = self$nnRegEnv(env[[3]])
+        if(self$runEnvGrowth) predGrowthGlobal = self$nnGrowthEnv(env[[1]])
+        if(self$runEnvMort) predMortGlobal = self$nnMortEnv(env[[2]])
+        if(self$runEnvReg) predRegGlobal = self$nnRegEnv(env[[3]])
       }
 
       # Run over timesteps
@@ -450,13 +457,13 @@ FINNModel = R6::R6Class(
 
         # Only necessary if gradients are needed
         if(!is.null(y)) {
-          pred_mort = self$nnMortEnv(env[[1]][,i,])
-          pred_growth = self$nnGrowthEnv(env[[2]][,i,])
-          pred_reg = self$nnRegEnv(env[[3]][,i,])
+          if(self$runEnvGrowth) pred_growth = self$nnGrowthEnv(env[[2]][,i,])
+          if(self$runEnvMort) pred_mort = self$nnMortEnv(env[[1]][,i,])
+          if(self$runEnvReg) pred_reg = self$nnRegEnv(env[[3]][,i,])
         } else {
-          pred_growth = predGrowthGlobal[,i,]
-          pred_mort = predMortGlobal[,i,]
-          pred_reg = predRegGlobal[,i,]
+          if(self$runEnvGrowth) pred_growth = predGrowthGlobal[,i,]
+          if(self$runEnvMort) pred_mort = predMortGlobal[,i,]
+          if(self$runEnvReg) pred_reg = predRegGlobal[,i,]
         }
 
         light = torch_zeros(list(sites, time,  dbh$shape[3]), device=self$device)
@@ -494,11 +501,14 @@ FINNModel = R6::R6Class(
             cohortHeights = NULL
           )
 
+          if(self$runEnvGrowth) pred = index_species(pred_growth, species)
+          else pred = env[[2]][,i,]
+
           g = self$growthFunction(
             dbh = dbh,
             species = species,
             parGrowth = parGrowth,
-            pred = index_species(pred_growth, species),
+            pred = pred,
             light = light
           )
           # print("Mort:")
@@ -519,12 +529,16 @@ FINNModel = R6::R6Class(
             cohortHeights = NULL
           )
           # cat("Second section  B2\n")
+
+          if(self$runEnvMort) pred = index_species(pred_mort, species)
+          else pred = env[[2]][,i,]
+
           m = self$mortalityFunction(
             dbh = dbh,
             species = species,
             trees = trees + 0.001,
             parMort = parMort,
-            pred = index_species(pred_mort, species),
+            pred = pred,
             light = light
           )
           # print("Mort:")
@@ -550,9 +564,13 @@ FINNModel = R6::R6Class(
           ba = NULL,
           cohortHeights = NULL
         )
+
+        if(self$runEnvReg) pred = pred_reg
+        else pred = env[[2]][,i,]
+
         r_mean = self$regenerationFunction(species = species,
                                            parReg = parReg,
-                                           pred = pred_reg,
+                                           pred = pred,
                                            light = AL_reg)
 
         r = sample_poisson_gaussian(r_mean*self$patch_size_ha)
@@ -675,11 +693,11 @@ FINNModel = R6::R6Class(
           for(j in 2:7) {
             # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
             if(j == 3) {
-              loss[j-1] = loss[j-1]+torch::distr_poisson(Result[[2]][,i,]+0.001)$log_prob(c[, i,])$mean()$negative()*(weights[j]+0.0001)
+              loss[j-1] = loss[j-1]+torch::distr_poisson(Result[[2]][,i,]+0.001)$log_prob(c[, i,])$mean()$negative()*(weights[j-1]+0.0001)
             } else if(j == 7) {
-              loss[j-1] = loss[j-1]+torch::distr_poisson(r_mean+0.001)$log_prob(Result[[7]][,i,])$mean()$negative()*(weights[j]+0.0001)
+              loss[j-1] = loss[j-1]+torch::distr_poisson(r_mean+0.001)$log_prob(Result[[7]][,i,])$mean()$negative()*(weights[j-1]+0.0001)
             } else {
-              loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, i,,j], Result[[j]][,i,])$mean()*(weights[j]+0.0001)
+              loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, i,,j], Result[[j]][,i,])$mean()*(weights[j-1]+0.0001)
             }
           }
           loss$sum()$backward()
