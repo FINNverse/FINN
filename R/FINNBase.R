@@ -1,10 +1,10 @@
 #' FINNbase class
 #'
 #' @description
-#' The `FINNbase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
+#' The `FINNBase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
 #'
 #' @export
-FINNbase <- R6::R6Class(
+FINNBase <- R6::R6Class(
   classname = "FINNbase",
   lock_objects = FALSE,
   lock_class = FALSE,
@@ -274,6 +274,20 @@ FINNbase <- R6::R6Class(
       return(fn)
     }
 
+  ),
+  active = list(
+    parGrowthT = function() {
+      return(self$getPars(self$parGrowth, self$speciesPars_ranges$parGrowth))
+    },
+    parMortT = function() {
+      return(self$getPars(self$parMort, self$speciesPars_ranges$parMort))
+    },
+    parRegT = function() {
+      return(self$getPars(self$parReg, self$speciesPars_ranges$parReg))
+    },
+    parHeightT = function() {
+      return(self$getPars(self$parHeight, self$speciesPars_ranges$parHeight))
+    }
   )
 )
 

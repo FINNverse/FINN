@@ -6,11 +6,11 @@
 #' The `FINNModel` class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 #'
 #'
-#' @include FINNbase.R
+#' @include FINNBase.R
 #' @export
 FINNModel = R6::R6Class(
   classname = 'FINNModel',
-  inherit = FINNbase,
+  inherit = FINNBase,
   lock_objects = FALSE,
   lock_class = FALSE,
   public = list(
@@ -115,7 +115,7 @@ FINNModel = R6::R6Class(
     #' @field speciesPars_ranges (`list()`) \cr
     #' Ranges for species parameters
     speciesPars_ranges = NULL,
-    
+
     #' @field runEnvGrowth (`logical(1)`) \cr
     #' Make predictions with GrowthNN on env or not
     runEnvGrowth = TRUE,
@@ -265,11 +265,7 @@ FINNModel = R6::R6Class(
       # self$set_parMort(parMort)
       # self$set_parReg(parReg)
 
-      print(parGrowth)
-      print(speciesPars_ranges$parGrowth)
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
-      print(parMort)
-      print(speciesPars_ranges$parMort)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
       self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
@@ -352,15 +348,18 @@ FINNModel = R6::R6Class(
       # self$set_parGrowth(parGrowth)
       # self$set_parMort(parMort)
       # self$set_parReg(parReg)
+
+      # browser()
+
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
       self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
 
-      self$set_parHeight(parHeight)
-      self$set_parGrowth(parGrowth)
-      self$set_parMort(parMort)
-      self$set_parReg(parReg)
+      # self$set_parHeight(parHeight)
+      # self$set_parGrowth(parGrowth)
+      # self$set_parMort(parMort)
+      # self$set_parReg(parReg)
 
       self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
       names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort")
@@ -510,10 +509,11 @@ FINNModel = R6::R6Class(
         # parGrowth = self$get_parGrowth()
         # parReg = self$get_parReg()
 
-        parMort = self$getPars(self$parMort, speciesPars_ranges$parMort)
-        parGrowth = self$getPars(self$parGrowth, speciesPars_ranges$parGrowth)
-        parReg = self$getPars(self$parReg, speciesPars_ranges$parReg)
-        parHeight = self$getPars(self$parHeight, speciesPars_ranges$parHeight)
+        # TODO change to active bindings see https://collinerickson.github.io/2018/01/10/using-active-bindings-in-r6-classes/
+        parMort = self$getPars(self$parMort, self$speciesPars_ranges$parMort)
+        parGrowth = self$getPars(self$parGrowth, self$speciesPars_ranges$parGrowth)
+        parReg = self$getPars(self$parReg, self$speciesPars_ranges$parReg)
+        parHeight = self$getPars(self$parHeight, self$speciesPars_ranges$parHeight)
 
         if(dbh$shape[3] > 0.5){
           light = self$competitionFunction(

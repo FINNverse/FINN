@@ -54,8 +54,10 @@ system.time({
                                                                                                        2.0, 0.0), sp, 2, byrow = TRUE)),
                                                     initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE)),
                    regenerationProcess = createProcess(~1+env1, func = regeneration, initEnv = list(matrix(c(1.99, 0), sp, 2, byrow = TRUE)) ),
-                   device = "cpu", speciesPars_ranges = speciesPars_ranges)
+                   device = "cpu", speciesPars_ranges = NULL)
 })
+
+
 
 predictions$Predictions
 init = CohortMat$new(sp = 1L, dims = c(Nsites, Npatches, 5L))
@@ -224,7 +226,7 @@ predictions$model$check()
 fit = finn(data = data,
            env = env_dt,
            patches = Npatches,
-           height = as.numeric(predictions$model$get_parHeight()),
+           height = as.numeric(predictions$model$parHeightT),
            #disturbance = dist_dt,
            growthProcess = gg,
            mortalityProcess = createProcess(~1+env1,
@@ -235,7 +237,7 @@ fit = finn(data = data,
                                             optimizeSpecies = FALSE, optimizeEnv = TRUE),
            regenerationProcess = createProcess(~1+env1, func = regeneration,
                                                initEnv = list(matrix(c(0.0, 0), sp, 2, byrow = TRUE)),
-                                               initSpecies = (as.numeric(predictions$model$get_parReg())),
+                                               initSpecies = (as.numeric(predictions$model$parRegT)),
                                                optimizeSpecies = FALSE, optimizeEnv = FALSE),
            weights = c(1/20, 1/2, 3,0.5,3,2),
            device = "gpu", optimizeHeight= FALSE, lr = 0.03, epochs = 5L, batchsize = 100L, , speciesPars_ranges = speciesPars_ranges
