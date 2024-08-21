@@ -46,9 +46,9 @@ RdMacros: mathjaxr
 Config/testthat/edition: 3
 Collate: 
     'CohortMat.R'
-    'FINNbase.R'
+    'FINNBase.R'
+    'FINNInterface.R'
     'FINNModel.R'
-    'FINNinterface.R'
     'Processes.R'
     'RcppExports.R'
     'calibrate-height.R'
