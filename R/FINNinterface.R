@@ -8,6 +8,8 @@
 #' @param initSpecies Initial species parameters for the process. Default is `NULL`.
 #' @param initEnv Initial environmental parameters for the process. Default is `NULL`.
 #' @param hidden A list specifying the hidden layers for neural network models. Default is an empty list.
+#' @param inputNN input dimension for NN, default is inferred from the formula. See details
+#' @param outputNN output dimension for NN, default is the number of species. See details
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -15,7 +17,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = list(), optimizeSpecies = FALSE, optimizeEnv = TRUE) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -35,11 +37,13 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$initSpecies = initSpecies
   out$optimizeSpecies = optimizeSpecies
   out$optimizeEnv = optimizeEnv
+  out$inputNN = inputNN
+  out$outputNN = outputNN
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }
   out$initEnv = initEnv
-  out$hidden = NULL
+  out$hidden = hidden
 
   if(out$custom) cli::cli_text("Custom function detected...")
   if(!is.null(out$hidden)) cli::cli_text("Neural Network detected...")
@@ -175,26 +179,56 @@ simulateForest = function(env,
 
   if(is.numeric(parallel)) NCPUs = parallel
 
+  runEnvMort = TRUE
+  runEnvGrowth = TRUE
+  runEnvReg = TRUE
+
+  input_dimensions = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3])
+  if(!is.null(mortalityProcess$inputNN)) {
+    input_dimensions[1] = mortalityProcess$inputNN
+    runEnvMort = FALSE
+  }
+  if(!is.null(growthProcess$inputNN)) {
+    input_dimensions[2] = growthProcess$inputNN
+    runEnvGrowth = FALSE
+  }
+  if(!is.null(regenerationProcess$inputNN)) {
+    input_dimensions[3] = regenerationProcess$inputNN
+    runEnvReg = FALSE
+  }
+
+  out$input_dimensions = input_dimensions
+
+  output = c(sp, sp, sp)
+  if(!is.null(mortalityProcess$outputNN)) output[1] = mortalityProcess$outputNN
+  if(!is.null(growthProcess$outputNN)) output[2] = growthProcess$outputNN
+  if(!is.null(regenerationProcess$outputNN)) output[3] = regenerationProcess$outputNN
+  out$output = output
 
   model = FINNModel$new(sp = sp,
-                   env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
-                   device = device,
-                   hidden_growth = growthProcess$hidden,
-                   hidden_mort = mortalityProcess$hidden,
-                   hidden_reg = regenerationProcess$hidden,
-                   growthFunction = growthProcess$func,
-                   mortalityFunction = mortalityProcess$func,
-                   regenerationFunction = regenerationProcess$func,
-                   competitionFunction = competitionProcess$func,
-                   parGrowth = growthProcess$initSpecies,
-                   parMort = mortalityProcess$initSpecies,
-                   parReg = regenerationProcess$initSpecies,
-                   parHeight = height,
-                   parGrowthEnv = growthProcess$initEnv,
-                   parMortEnv = mortalityProcess$initEnv,
-                   parRegEnv = regenerationProcess$initEnv,
-                   speciesPars_ranges = speciesPars_ranges,
-                   patch_size_ha = patch_size)
+                        # Can be forcefully overwritten if the NNs should be used for something else e.g. hbyrid modeling, replace one of the process function by a NN!
+                        env = input_dimensions,
+                        output = output,
+                        device = device,
+                        hidden_growth = growthProcess$hidden,
+                        hidden_mort = mortalityProcess$hidden,
+                        hidden_reg = regenerationProcess$hidden,
+                        runEnvGrowth = runEnvGrowth,
+                        runEnvMort = runEnvMort,
+                        runEnvReg = runEnvReg,
+                        growthFunction = growthProcess$func,
+                        mortalityFunction = mortalityProcess$func,
+                        regenerationFunction = regenerationProcess$func,
+                        competitionFunction = competitionProcess$func,
+                        parGrowth = growthProcess$initSpecies,
+                        parMort = mortalityProcess$initSpecies,
+                        parReg = regenerationProcess$initSpecies,
+                        parHeight = height,
+                        parGrowthEnv = growthProcess$initEnv,
+                        parMortEnv = mortalityProcess$initEnv,
+                        parRegEnv = regenerationProcess$initEnv,
+                        speciesPars_ranges = speciesPars_ranges,
+                        patch_size_ha = patch_size)
 
 
 
@@ -244,12 +278,16 @@ simulateForest = function(env,
                             patches = patches,
                             debug = FALSE,
                             verbose = TRUE)
-        return(list(long = pred2DF(pred,format = "long"), wide = pred2DF(pred,format = "wide")))
+        long = pred2DF(pred,format = "long")
+        wide = pred2DF(pred,format = "wide")
+        long$site$siteID = (batches[i,1]:batches[i,2])[long$site$siteID]
+        wide$site$siteID = (batches[i,1]:batches[i,2])[wide$site$siteID]
+        tmp_out = list(long = long, wide = wide)
+        return(tmp_out)
       })
     parallel::stopCluster(cl)
-
-    out = list(long = data.table::rbindlist(lapply(predictions, function(p) p$long)),
-               wide = data.table::rbindlist(lapply(predictions, function(p) p$wide)),
+    out = list(long = list(site=data.table::rbindlist(lapply(predictions, function(p) p$long$site))),
+               wide = list(site=data.table::rbindlist(lapply(predictions, function(p) p$wide$site)))
                )
   }
 
@@ -429,12 +467,42 @@ finn = function(data = NULL,
   if(is.numeric(parallel)) NCPUs = parallel
 
 
+  runEnvMort = TRUE
+  runEnvGrowth = TRUE
+  runEnvReg = TRUE
+
+  input_dimensions = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3])
+  if(!is.null(mortalityProcess$inputNN)) {
+    input_dimensions[1] = mortalityProcess$inputNN
+    runEnvMort = FALSE
+  }
+  if(!is.null(growthProcess$inputNN)) {
+    input_dimensions[2] = growthProcess$inputNN
+    runEnvGrowth = FALSE
+  }
+  if(!is.null(regenerationProcess$inputNN)) {
+    input_dimensions[3] = regenerationProcess$inputNN
+    runEnvReg = FALSE
+  }
+
+  out$input_dimensions = input_dimensions
+  output = c(sp, sp, sp)
+  if(!is.null(mortalityProcess$outputNN)) output[1] = mortalityProcess$outputNN
+  if(!is.null(growthProcess$outputNN)) output[2] = growthProcess$outputNN
+  if(!is.null(regenerationProcess$outputNN)) output[3] = regenerationProcess$outputNN
+  out$output = output
+
+
   model = FINNModel$new(sp = sp,
-                   env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
+                   env = input_dimensions,
+                   output = output,
                    device = device,
                    hidden_growth = growthProcess$hidden,
                    hidden_mort = mortalityProcess$hidden,
                    hidden_reg = regenerationProcess$hidden,
+                   runEnvGrowth = runEnvGrowth,
+                   runEnvMort = runEnvMort,
+                   runEnvReg = runEnvReg,
                    growthFunction = growthProcess$func,
                    mortalityFunction = mortalityProcess$func,
                    regenerationFunction = regenerationProcess$func,
@@ -461,7 +529,6 @@ finn = function(data = NULL,
   model$parameter_to_r()
   model$update_parameters()
 
-  #browser()
 
 
   if(is.null(bootstrap)) {
@@ -520,24 +587,28 @@ finn = function(data = NULL,
 
           init$check()
           tmp_model = FINNModel$new(sp = sp,
-                   env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
-                   device = device_hardware,
-                   hidden_growth = growthProcess$hidden,
-                   hidden_mort = mortalityProcess$hidden,
-                   hidden_reg = regenerationProcess$hidden,
-                   growthFunction = growthProcess$func,
-                   mortalityFunction = mortalityProcess$func,
-                   regenerationFunction = regenerationProcess$func,
-                   competitionFunction = competitionProcess$func,
-                   parGrowth = growthProcess$initSpecies,
-                   parMort = mortalityProcess$initSpecies,
-                   parReg = regenerationProcess$initSpecies,
-                   parHeight = height,
-                   parGrowthEnv = growthProcess$initEnv,
-                   parMortEnv = mortalityProcess$initEnv,
-                   parRegEnv = regenerationProcess$initEnv,
-                   speciesPars_ranges = speciesPars_ranges,
-                   patch_size_ha = patch_size)
+                                    env = input_dimensions,
+                                    output = output,
+                                    device = device_hardware,
+                                    hidden_growth = growthProcess$hidden,
+                                    hidden_mort = mortalityProcess$hidden,
+                                    hidden_reg = regenerationProcess$hidden,
+                                    runEnvGrowth = runEnvGrowth,
+                                    runEnvMort = runEnvMort,
+                                    runEnvReg = runEnvReg,
+                                    growthFunction = growthProcess$func,
+                                    mortalityFunction = mortalityProcess$func,
+                                    regenerationFunction = regenerationProcess$func,
+                                    competitionFunction = competitionProcess$func,
+                                    parGrowth = growthProcess$initSpecies,
+                                    parMort = mortalityProcess$initSpecies,
+                                    parReg = regenerationProcess$initSpecies,
+                                    parHeight = height,
+                                    parGrowthEnv = growthProcess$initEnv,
+                                    parMortEnv = mortalityProcess$initEnv,
+                                    parRegEnv = regenerationProcess$initEnv,
+                                    speciesPars_ranges = speciesPars_ranges,
+                                    patch_size_ha = patch_size)
 
           if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
           if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
@@ -588,24 +659,28 @@ finn = function(data = NULL,
           indices = sample.int(sites, sites, replace = TRUE)
           init$check()
           tmp_model = FINNModel$new(sp = sp,
-                               env = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3]),
-                               device = device,
-                               hidden_growth = growthProcess$hidden,
-                               hidden_mort = mortalityProcess$hidden,
-                               hidden_reg = regenerationProcess$hidden,
-                               growthFunction = growthProcess$func,
-                               mortalityFunction = mortalityProcess$func,
-                               regenerationFunction = regenerationProcess$func,
-                               competitionFunction = competitionProcess$func,
-                               parGrowth = growthProcess$initSpecies,
-                               parMort = mortalityProcess$initSpecies,
-                               parReg = regenerationProcess$initSpecies,
-                               parHeight = height,
-                               parGrowthEnv = growthProcess$initEnv,
-                               parMortEnv = mortalityProcess$initEnv,
-                               parRegEnv = regenerationProcess$initEnv,
-                               speciesPars_ranges = speciesPars_ranges,
-                               patch_size_ha = patch_size)
+                                    env = input_dimensions,
+                                    output = output,
+                                    device = device,
+                                    hidden_growth = growthProcess$hidden,
+                                    hidden_mort = mortalityProcess$hidden,
+                                    hidden_reg = regenerationProcess$hidden,
+                                    runEnvGrowth = runEnvGrowth,
+                                    runEnvMort = runEnvMort,
+                                    runEnvReg = runEnvReg,
+                                    growthFunction = growthProcess$func,
+                                    mortalityFunction = mortalityProcess$func,
+                                    regenerationFunction = regenerationProcess$func,
+                                    competitionFunction = competitionProcess$func,
+                                    parGrowth = growthProcess$initSpecies,
+                                    parMort = mortalityProcess$initSpecies,
+                                    parReg = regenerationProcess$initSpecies,
+                                    parHeight = height,
+                                    parGrowthEnv = growthProcess$initEnv,
+                                    parMortEnv = mortalityProcess$initEnv,
+                                    parRegEnv = regenerationProcess$initEnv,
+                                    speciesPars_ranges = speciesPars_ranges,
+                                    patch_size_ha = patch_size)
 
           if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
           if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
@@ -709,7 +784,7 @@ predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL
     )
 
   return(list(wide = pred2DF(predictions, format = "wide")$site,
-              long = pred2DF(predictions, format = "long")$site,
+              long = pred2DF(predictions, format = "long")$site
               ))
 }
 

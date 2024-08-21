@@ -6,6 +6,8 @@
 #' @export
 FINNbase <- R6::R6Class(
   classname = "FINNbase",
+  lock_objects = FALSE,
+  lock_class = FALSE,
   public = list(
     parHeight_r = NULL, # must be dim [species]
     parGrowth_r = NULL, # must be dim [species, 2], first for shade tolerance
@@ -53,9 +55,9 @@ FINNbase <- R6::R6Class(
       if (length(hidden) > 0) {
         for (i in 1:length(hidden)) {
           if (i == 1) {
-            model_list <- c(model_list, torch::nn_linear(input_shape, hidden[i], bias = bias[i]))
+            model_list <- c(model_list, torch::nn_linear(input_shape, hidden[i], bias = TRUE))
           } else {
-            model_list <- c(model_list, torch::nn_linear(hidden[i - 1], hidden[i], bias = bias[i]))
+            model_list <- c(model_list, torch::nn_linear(hidden[i - 1], hidden[i], bias = TRUE))
           }
           if (activation[i] == "relu") model_list <- c(model_list, torch::nn_relu())
           if (activation[i] == "selu") model_list <- c(model_list, torch::nn_selu())
@@ -67,7 +69,7 @@ FINNbase <- R6::R6Class(
       }
 
       if (length(hidden) > 0) {
-        model_list <- c(model_list, torch::nn_linear(hidden[length(hidden)], output_shape, bias = bias[length(hidden)]))
+        model_list <- c(model_list, torch::nn_linear(hidden[length(hidden)], output_shape, bias = TRUE))
       } else {
         model_list <- c(model_list, torch::nn_linear(input_shape, output_shape, bias = FALSE))
       }
@@ -243,6 +245,7 @@ FINNbase <- R6::R6Class(
       out <- torch::torch_tensor(out, requires_grad = TRUE, device = self$device, dtype = self$dtype)
       return(out)
     },
+
     getPars = function(internalPar, parRange) {
       if (is.vector(parRange)) {
         # Case where internalPar is a 1D tensor and parRange is a vector
@@ -263,17 +266,14 @@ FINNbase <- R6::R6Class(
         out <- torch::torch_cat(out, dim = 2L)
       }
       return(out)
+    },
+
+
+    set_environment = function(fn) {
+      environment(fn) = self$.__enclos_env__
+      return(fn)
     }
 
   )
 )
 
-to_r = function(par, numeric = FALSE) {
-  if(numeric) {
-    tmp = par |> as.numeric()
-  } else {
-    tmp = par |> as.matrix()
-  }
-  attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
-  return(tmp)
-}
