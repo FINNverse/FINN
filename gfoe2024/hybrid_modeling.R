@@ -19,35 +19,11 @@ site_dt <- data.table(
 env_dt <- site_dt
 env_dt$env1 = rep(seq(-2,2,length.out = Nsites), Ntimesteps)
 
-parGrowth = cbind(0.2, rep(1.0, 3))
-shade_func = function(light_steepness = 10,  light = 0.5, inter = 0.0) {
-((1 / (1 + exp(-light_steepness * (light - parGrowth[,1][species]) + inter)) - 1 / (1 + exp(light_steepness * parGrowth[,1][species] + inter))) /
-           (1 / (1 + exp(-light_steepness * (1 - parGrowth[,1][species]) + inter)) - 1 / (1 + exp(light_steepness * parGrowth[,1][species] + inter))))
-}
-
-inp = seq(0.0, 1.0, length.out = 100)
-plot(inp, sapply(inp, function(l) shade_func(light = l, )))
-points(inp, sapply(seq(0.0, 1.0, length.out = 100), function(l) shade_func(light = l, light_steepness = 10, inter = -4)))
-points(inp, sapply(seq(0.0, 1.0, length.out = 100), function(l) shade_func(light = l, light_steepness = 10, inter = + 4)))
-
-
-
-growthCustom = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F){
-  intercept = torch_tensor(c(0, -4.0, +4.0), device=self$device)
-
-  shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]) + intercept[species])) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]  + intercept[species]))) /
-             (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species])  + intercept[species])) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]  + intercept[species]))))
-
-  environment = torch::torch_exp(pred)
-  growth = shade * environment * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
-  return(growth)
-}
-
 predictions =
   simulateForest(env = env_dt,
                  sp = Nsp,
                  patches=10L,
-                 growthProcess = createProcess(~1+env1, func = growthCustom, initEnv = list(matrix(c(1.0, 1.0,
+                 growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(1.0, 1.0,
                                                                                                1.0, -1.0,
                                                                                                1.0, 0), Nsp, 2, byrow = TRUE)),
                                                initSpecies = matrix(c(0.8, 1.0), Nsp, 2, byrow = TRUE)),
@@ -93,9 +69,9 @@ growthProcess = createProcess(~1+env1,
                               outputNN = 1)
 
 
-
 data <- predictions$wide$site
 predictions$model$check()
+
 fit = finn(data = data,
            env = env_dt,
            patches = Npatches,
@@ -103,7 +79,6 @@ fit = finn(data = data,
            growthProcess = growthProcess,
            mortalityProcess = createProcess(~1+env1,
                                             func = mortality,
-                                            #initEnv = list(matrix(c(0.0, 0, 0.0, 0.0, 2.0, 0.0), sp, 2, byrow = TRUE)),
                                             hidden = c(50L, 50L),
                                             initSpecies = matrix(c(0.8, 3.9), Nsp, 2, byrow = TRUE),
                                             optimizeSpecies = FALSE, optimizeEnv = TRUE),
@@ -115,26 +90,87 @@ fit = finn(data = data,
            device = "cpu",
            optimizeHeight= FALSE,
            lr = 0.03,
-           epochs = 5L,
+           epochs = 40L,
            batchsize = 100L,
            speciesPars_ranges = predictions$model$speciesPars_ranges
 )
 
-continue_fit(fit, batchsize = 100L, lr = 0.01, epochs = 50L, weights = c(1/20, 1/2, 3,0.5,3,2, 1))
+continue_fit(fit, weights = c(1/20, 1/2, 3,0.5,3,2), epochs = 15L, lr = 0.005, batchsize = 100L)
+
+# Mortality
+par(mfrow = c(1, 3))
+env = torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cpu")
+for(i in 1:3) {
+  plot(unique(env_dt$env1), (fit$model$nnMortEnv( env ) |> as.matrix())[,i] |> plogis(), ylim = c(0,1), xlab = "Environment", ylab = "Mortality", col = "red", type = "l", las = 1, lwd = 1.4, main = paste0("Species: ", i))
+  points(unique(env_dt$env1), (predictions$model$nnMortEnv( env ) |> as.matrix())[,i] |> plogis(), col = "black", type = "l", lwd = 1.4)
+}
+legend("bottom", legend = c("Est. Mort-Env Association", "Simulated Mort-Env Association"), col = c("red", "black"), bty = "n", lty = 1)
+
 
 
 
 par(mfrow = c(1,1))
+parGrowth = predictions$model$parGrowthT |> as.matrix()
 
-input = cbind(200/200 ,1, unique(env_dt$env1), 1.0, 0, 1, 0)
+sp = 1
+simulated =
+cbind(
+  growthCustomSimulated(dbh = 50.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 1.0) |> as.matrix(),
+  growthCustomSimulated(dbh = 200.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 1.0) |> as.matrix(),
+  growthCustomSimulated(dbh = 50.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 1.0) |> as.matrix(),
+  growthCustomSimulated(dbh = 200.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 1.0) |> as.matrix(),
+  growthCustomSimulated(dbh = 50.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 0.6) |> as.matrix(),
+  growthCustomSimulated(dbh = 200.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 0.6) |> as.matrix(),
+  growthCustomSimulated(dbh = 50.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 0.6) |> as.matrix(),
+  growthCustomSimulated(dbh = 200.0, species = sp, parGrowth = parGrowth, pred = predictions$model$nnGrowthEnv(env)[,sp], light = 0.6) |> as.matrix()
+)
+matplot(simulated, type = "l", lty = c(1, 1, 1, 1, 2, 2, 2, 2), col = c(rep(c("black", "red"), 4)))
+
+sp = 2
+
+estimatedGrowth = function(dbh, light, species, pred) {
+  input = cbind(dbh/200, pred, light, 0, 0, 0)
+  input[,4+species] = 1
+  ((fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cpu"))$exp()) |> as.matrix())[,1]
+}
+
+estimated =
+  cbind(
+    estimatedGrowth(dbh = 50.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 1.0) |> as.matrix(),
+    estimatedGrowth(dbh = 200.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 1.0) |> as.matrix(),
+    estimatedGrowth(dbh = 50.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 1.0) |> as.matrix(),
+    estimatedGrowth(dbh = 200.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 1.0) |> as.matrix(),
+    estimatedGrowth(dbh = 50.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 0.6) |> as.matrix(),
+    estimatedGrowth(dbh = 200.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 0.6) |> as.matrix(),
+    estimatedGrowth(dbh = 50.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 0.6) |> as.matrix(),
+    estimatedGrowth(dbh = 200.0, species = sp,  pred = cbind(1, unique(env_dt$env1)), light = 0.6) |> as.matrix()
+  )
+matplot(estimated, type = "l", lty = c(1, 1, 1, 1, 2, 2, 2, 2), col = c(rep(c("black", "red"), 4)))
+
+
+
 res =
   sapply(seq(1, 300, by = 50), function(i) {
-    input = cbind(i/200 ,1, unique(env_dt$env1), 0.0, 1, 0, 0)
-    ((fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cuda:0"))$relu()+0.001) |> as.matrix())[,1]
+    input = cbind(i/200 ,1, unique(env_dt$env1), 1.0, 0, 0, 1)
+    ((fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cpu"))$exp()) |> as.matrix())[,1]
 
   })
 matplot(x =unique(env_dt$env1) ,y = res, type = "l", col = viridis::viridis(6), lty = 1, lwd = 2.0, ylab = "growth", xlab = "Env")
 legend("bottomright", bty = "n", col = viridis::viridis(6), lty = 1,legend = seq(1, 300, by = 50))
+
+
+res =
+  sapply(seq(0, 1, length.out = 50), function(i) {
+    input = cbind(50/200 ,1, 0, i, 0, 1, 0)
+    ((fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cpu"))$exp()) |> as.matrix())[,1]
+
+  })
+plot(res)
+matplot(x =unique(env_dt$env1) ,y = res, type = "l", col = viridis::viridis(6), lty = 1, lwd = 2.0, ylab = "growth", xlab = "Env")
+legend("bottomright", bty = "n", col = viridis::viridis(6), lty = 1,legend = seq(1, 300, by = 50))
+
+
+
 for(i in 1:3) {
   input = cbind(200/200 ,1, unique(env_dt$env1), 0.0, 0, 1, 0)
   plot(unique(env_dt$env1), (fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cuda:0"))$relu()+0.001 |> as.matrix())[,1])
