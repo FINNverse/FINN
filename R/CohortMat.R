@@ -81,7 +81,6 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
 #' CohortMat$new(obs_df = obs_df)
 #' }
 #' @importFrom stats rweibull
-#' @export
 rweibull_cohorts = function(
   trees = NULL, # integer
   dbh_shape = NULL, # numeric
@@ -198,6 +197,7 @@ array2obsDF <- function(obs_array) {
 #' @field trees_r A numeric array representing the number of trees in R array format.
 #' @field species_r An integer array representing the species in R array format.
 #' @field device_r A character string specifying the device in R format ('cpu' or 'cuda').
+#' @field obsDF2arrays Transforms data.table into array
 #'
 #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
 #' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
@@ -206,6 +206,7 @@ array2obsDF <- function(obs_array) {
 #' @param dims A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to `self$dims`.
 #' @param sp An integer representing the number of species. Defaults to `self$sp`.
 #' @param device A character string specifying the device to use ('cpu' or 'cuda'). Defaults to `self$device`.
+#' @param device_r Device as R character, internal useage
 #'
 #' @export
 CohortMat = R6::R6Class("CohortMat", public = list(
@@ -219,6 +220,7 @@ CohortMat = R6::R6Class("CohortMat", public = list(
   sp = 10,
   device = 'cpu',
   device_r = "cpu",
+  obsDF2arrays = NULL,
 
   #' @description
   #' Initialize the CohortMat class
@@ -233,6 +235,7 @@ CohortMat = R6::R6Class("CohortMat", public = list(
     if (!is.null(obs_df)) {
       if (!all(c("siteID", "patchID", "species", "dbh", "trees") %in% colnames(obs_df)))
         stop('c("siteID", "patchID", "species", "dbh", "trees") %in% all(colnames(obs_df)) is not TRUE')
+      self$obsDF2arrays = obsDF2arrays
       obs_array = self$obsDF2arrays(obs_df)
       dbh = obs_array$dbh
       trees = obs_array$trees
@@ -257,7 +260,11 @@ CohortMat = R6::R6Class("CohortMat", public = list(
     self$species_r = torch::as_array(self$species)
   },
 
-  #' Check and reinitialize tensors if necessary
+  #' @description
+  #'
+  #' Check if all tensors are initialized, if not, reinitialize them. Necessary after restarting r session or after loading the object into the session using `readRDS(..)` or `load(...)`
+  #'
+  #' @return nothing
   check = function() {
     self$device = torch::torch_device(self$device_r)
     self$dbh = check_and_recreate(self$dbh, self$dbh_r, dtype = torch::torch_float32(), device = self$device_r)
@@ -265,11 +272,11 @@ CohortMat = R6::R6Class("CohortMat", public = list(
     self$species = check_and_recreate(self$species, self$species_r, dtype = torch::torch_int64(), device = self$device_r)
   },
 
-  #' Transform an observation data frame into three arrays
-  #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees".
-  obsDF2arrays = obsDF2arrays,
-
+  #'  @description
+  #'
   #' Convert the tensors to a data frame format
+  #'
+  #' @return data.table object
   asDF = function() {
     array2obsDF(list(dbh = torch::as_array(self$dbh), trees = torch::as_array(self$trees), species = torch::as_array(self$species)))
   }

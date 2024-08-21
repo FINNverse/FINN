@@ -5,7 +5,6 @@
 #'
 #' The `FINNModel` class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 #'
-#'
 #' @include FINNBase.R
 #' @export
 FINNModel = R6::R6Class(
@@ -107,7 +106,6 @@ FINNModel = R6::R6Class(
     #' Each integer in the list is one hidden layer
     hidden_mort = list(),
 
-
     #' @field hidden_reg (`list(integer(1), integer(1))`) \cr
     #' Each integer in the list is one hidden layer
     hidden_reg = list(),
@@ -131,7 +129,6 @@ FINNModel = R6::R6Class(
     #' @field bias (`logical(1)`) \cr
     #' Use bias in neural networks or not
     bias = FALSE,
-
 
     #' @field patch_size_ha (`numeric(1)`) \cr
     #' Patch size in ha
@@ -169,24 +166,37 @@ FINNModel = R6::R6Class(
     #' Neural Network Configuration, internal useage
     nnRegConfig = NULL,
 
-
     #' @description
     #' Initializes the FINNModel model with the specified parameters.
     #' @param sp integer. Number of species.
+    #' @param env vector of input dimensions for the neural networks
+    #' @param output vector of output dimensions for the neural networks
+    #' @param dtype dtype, should be either `torch::torch_float32()` or `torch::torch_float64()`
     #' @param device character. Device to use ('cpu' or 'cuda').
     #' @param parHeight torch.Tensor. Global parameters for height.
-    #' @param parGrowth torch.Tensor. Growth parameters with dimensions [species, 2].
-    #' @param parMort torch.Tensor. Mortality parameters with dimensions [species, 2].
-    #' @param parReg torch.Tensor. Regeneration parameters with dimensions [species].
-    #' @param parGrowthEnv torch.Tensor. Growth environment parameters with dimensions [species, 2].
-    #' @param parMortEnv torch.Tensor. Mortality environment parameters with dimensions [species, 2].
-    #' @param parRegEnv torch.Tensor. Regeneration environment parameters with dimensions [species].
+    #' @param parGrowth torch.Tensor. Growth parameters.
+    #' @param parMort torch.Tensor. Mortality parameters.
+    #' @param parReg torch.Tensor. Regeneration parameters.
+    #' @param parGrowthEnv torch.Tensor. Growth environment parameters.
+    #' @param parMortEnv torch.Tensor. Mortality environment parameters.
+    #' @param parRegEnv torch.Tensor. Regeneration environment parameters.
+    #' @param nnRegEnv list of matrices. Initial parameters for the NN.
+    #' @param nnGrowthEnv list of matrices. Initial parameters for the NN.
+    #' @param nnMortEnv list of matrices. Initial parameters for the NN.
     #' @param hidden_growth list. Hidden layers for the growth model.
     #' @param hidden_mort list. Hidden layers for the mortality model.
     #' @param hidden_reg list. Hidden layers for the regeneration model.
+    #' @param runEnvGrowth logical. Should the runEnvGrowth NN be run outside of the process functions on the environment.
+    #' @param runEnvMort logical. Should the runEnvMort NN be run outside of the process functions on the environment.
+    #' @param runEnvReg logical. Should the runEnvReg NN be run outside of the process functions on the environment.
+    #' @param speciesPars_ranges list. List of species parameter ranges.
     #' @param bias logical. Whether to include a bias term in the neural networks.
     #' @param patch_size_ha numeric. Patch size in hectares.
     #' @param minLight numeric. Minimum light level.
+    #' @param growthFunction function or NULL. Which process function should be used. If NULL, package process functions will be used, see `?growth`
+    #' @param mortalityFunction function or NULL. Which process function should be used. If NULL, package process functions will be used, see `?mortality`
+    #' @param regenerationFunction function or NULL. Which process function should be used. If NULL, package process functions will be used, see `?regeneration`
+    #' @param competitionFunction function or NULL. Which process function should be used. If NULL, package process functions will be used, see `?competition`
 
     #' @return Invisible self.
     initialize = function(
@@ -194,11 +204,6 @@ FINNModel = R6::R6Class(
                   env = NULL,
                   output = NULL,
                   dtype = NULL,
-                  parameters = NULL,
-                  optimizer = NULL,
-                  history = NULL,
-                  param_history = NULL,
-                  pred = NULL,
                   device = 'cpu',
                   parHeight = NULL, # must be dim [species]
                   parGrowth = NULL, # must be dim [species, 2], first for shade tolerance
@@ -378,6 +383,7 @@ FINNModel = R6::R6Class(
     #' @param trees torch.Tensor (Optional). Number of trees.
     #' @param species torch.Tensor (Optional). Species of the trees.
     #' @param env torch.Tensor. Environmental data.
+    #' @param disturbance torch.Tensor. Disturbance rates.
     #' @param start_time integer. Time at which to start recording the results.
     #' @param pred_growth torch.Tensor (Optional). Predicted growth values.
     #' @param pred_mort torch.Tensor (Optional). Predicted mortality values.
@@ -766,6 +772,7 @@ FINNModel = R6::R6Class(
     #'
     #' @param X torch.Tensor (Optional). Input data, typically environmental variables over time.
     #' @param Y torch.Tensor (Optional). Target data, representing observed tree metrics.
+    #' @param disturbance torch.Tensor. Disturbance rates.
     #' @param initCohort list (Optional). Initial cohort data, including initial dbh, trees, and species information.
     #' @param epochs integer. Number of epochs to train the model. Default is 2.
     #' @param batch_size integer. Batch size for training. Default is 20.

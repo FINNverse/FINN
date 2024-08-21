@@ -2,20 +2,40 @@
 #'
 #' @description
 #' The `FINNBase` class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
-#'
-#' @export
 FINNBase <- R6::R6Class(
   classname = "FINNbase",
   lock_objects = FALSE,
   lock_class = FALSE,
   public = list(
-    parHeight_r = NULL, # must be dim [species]
-    parGrowth_r = NULL, # must be dim [species, 2], first for shade tolerance
-    parMort_r = NULL, # must be dim [species, 2], first for shade tolerance,
-    parReg_r = NULL, # must be dim [species]
-    parGrowthEnv_r = NULL, # must be dim [species, 2], first for shade tolerance
-    parMortEnv_r = NULL, # must be dim [species, 2], first for shade tolerance,
-    parRegEnv_r = NULL, # must be dim [species]
+
+    #' @field parHeight_r (`as.numeric(sp)`)\cr
+    #' parHeight parameters as R vector, internal useage
+    parHeight_r = NULL,
+
+    #' @field parGrowth_r (`as.matrix(sp, ..)`)\cr
+    #' parGrowth parameters as R vector, internal useage
+    parGrowth_r = NULL,
+
+    #' @field parMort_r (`as.matrix(sp, ...)`)\cr
+    #' parMort parameters as R vector, internal useage
+    parMort_r = NULL,
+
+    #' @field parReg_r (`as.vector(sp)`)\cr
+    #' parReg parameters as R vector, internal useage
+    parReg_r = NULL,
+
+    #' @field parGrowthEnv_r (`as.list(matrix(), matrix(), ...)`)\cr
+    #' parGrowthEnv parameters as R vector, internal useage
+    parGrowthEnv_r = NULL,
+
+    #' @field parMortEnv_r (`as.list(matrix(), matrix(), ...)`)\cr
+    #' parMortEnv parameters as R vector, internal useage
+    parMortEnv_r = NULL,
+
+    #' @field parRegEnv_r (`as.list(matrix(), matrix(), ...)`)\cr
+    #' parRegEnv parameters as R vector, internal useage
+    parRegEnv_r = NULL,
+
     #' @description
     #' Build a neural network
     #'
@@ -30,11 +50,7 @@ FINNBase <- R6::R6Class(
     #' @param last_activation character. Last activation function.
     #'
     #' @return torch.nn.modules.container.Sequential. Sequential neural network object.
-    #'
-    #' @examples
-    #' build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
-    build_NN = function(self,
-                        input_shape,
+    build_NN = function(input_shape,
                         output_shape,
                         hidden, # vector
                         bias, # vector
@@ -78,7 +94,7 @@ FINNBase <- R6::R6Class(
       return(do.call(torch::nn_sequential, model_list))
     },
 
-
+    #' @description
     #' Generate random numbers from a uniform distribution
     #'
     #' This function generates random numbers from a uniform distribution with specified low and high values and size similar to `np.random.uniform` in Python.
@@ -88,14 +104,12 @@ FINNBase <- R6::R6Class(
     #' @param size numeric. Size of the output array.
     #'
     #' @return array. A numeric array of random numbers.
-    #'
-    #' @examples
-    #' np_runif(0, 1, c(2, 3))
     np_runif = function(low, high, size) {
       N <- prod(size) # Calculate total number of values to generate
       array(runif(N, low, high), dim = size) # Generate random numbers and reshape into desired size
     },
 
+    #' @description
     #' Set weights for the Growth Environment Neural Network
     #'
     #' This function assigns the specified weights to the growth environment neural network.
@@ -107,6 +121,7 @@ FINNBase <- R6::R6Class(
       self$nnGrowthEnv <- self$set_weights(weights, self$nnGrowthEnv)
     },
 
+    #' @description
     #' Set weights for the Mortality Environment Neural Network
     #'
     #' This function assigns the specified weights to the mortality environment neural network.
@@ -118,6 +133,7 @@ FINNBase <- R6::R6Class(
       self$nnMortEnv <- self$set_weights(weights, self$nnMortEnv)
     },
 
+    #' @description
     #' Set weights for the Regeneration Environment Neural Network
     #'
     #' This function assigns the specified weights to the regeneration environment neural network.
@@ -129,6 +145,7 @@ FINNBase <- R6::R6Class(
       self$nnRegEnv <- self$set_weights(weights, self$nnRegEnv)
     },
 
+    #' @description
     #' Set weights for a specified Neural Network
     #'
     #' This function assigns the specified weights to a given neural network model.
@@ -153,6 +170,10 @@ FINNBase <- R6::R6Class(
       return(NN)
     },
 
+    #' @description
+    #'
+    #' Transform torch parameters to R (to save them)
+    #'
     parameter_to_r = function() {
 
       self$parHeight_r = to_r(self$parHeight, TRUE)
@@ -164,6 +185,13 @@ FINNBase <- R6::R6Class(
       self$parRegEnv_r = lapply(self$parRegEnv, function(p) to_r(p))
     },
 
+    #' @description
+    #'
+    #' Check if all tensors are initialized, if not, reinitialize them. Necessary after restarting r session or after loading the object into the session using `readRDS(..)` or `load(...)`
+    #'
+    #' @param device can be used to specify a new device (useful for parallelization)
+    #'
+    #' @return nothing
     check = function(device = NULL) {
       if(is.null(device)) device = self$device_r
 
@@ -207,6 +235,9 @@ FINNBase <- R6::R6Class(
 
     },
 
+    #' @description
+    #'
+    #' Update R fields of the parameters
     update_parameters = function() {
       pars = list()
       if(self$parHeight$requires_grad) pars = c(pars, parHeight = self$parHeight)
@@ -219,6 +250,12 @@ FINNBase <- R6::R6Class(
       self$parameters = pars
     },
 
+    #' @description
+    #'
+    #' Set the raw parameters within their ranges
+    #'
+    #' @param inputPar which parameter should be set
+    #' @param parRange matrix of parameter ranges
     setPars = function(inputPar, parRange){
       # inputPar = torch::torch_tensor(inputPar, requires_grad = TRUE)
       if(is.vector(inputPar)) {
@@ -246,6 +283,12 @@ FINNBase <- R6::R6Class(
       return(out)
     },
 
+    #' @description
+    #'
+    #' Get transformed parameters (on the response scale)
+    #'
+    #' @param internalPar which parameter should be returned (raw internal version)
+    #' @param parRange matrix of parameter ranges
     getPars = function(internalPar, parRange) {
       if (is.vector(parRange)) {
         # Case where internalPar is a 1D tensor and parRange is a vector
@@ -268,7 +311,10 @@ FINNBase <- R6::R6Class(
       return(out)
     },
 
-
+    #' @description
+    #'
+    #' Set function environment to object environment (so that `self$...` can be used within custom process functions)
+    #' @param fn function
     set_environment = function(fn) {
       environment(fn) = self$.__enclos_env__
       return(fn)
@@ -276,15 +322,20 @@ FINNBase <- R6::R6Class(
 
   ),
   active = list(
+
+    #' @field parGrowthT return transformed parGrowth
     parGrowthT = function() {
       return(self$getPars(self$parGrowth, self$speciesPars_ranges$parGrowth))
     },
+    #' @field parMortT return transformed parMort
     parMortT = function() {
       return(self$getPars(self$parMort, self$speciesPars_ranges$parMort))
     },
+    #' @field parRegT return transformed parReg
     parRegT = function() {
       return(self$getPars(self$parReg, self$speciesPars_ranges$parReg))
     },
+    #' @field parHeightT return transformed parHeight
     parHeightT = function() {
       return(self$getPars(self$parHeight, self$speciesPars_ranges$parHeight))
     }

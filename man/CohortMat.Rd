@@ -33,27 +33,19 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \item{\code{species_r}}{An integer array representing the species in R array format.}
 
 \item{\code{device_r}}{A character string specifying the device in R format ('cpu' or 'cuda').}
+
+\item{\code{obsDF2arrays}}{Transforms data.table into array}
 }
 \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-CohortMat-obsDF2arrays}{\code{CohortMat$obsDF2arrays()}}
 \item \href{#method-CohortMat-new}{\code{CohortMat$new()}}
 \item \href{#method-CohortMat-check}{\code{CohortMat$check()}}
 \item \href{#method-CohortMat-asDF}{\code{CohortMat$asDF()}}
 \item \href{#method-CohortMat-clone}{\code{CohortMat$clone()}}
 }
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortMat-obsDF2arrays"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortMat-obsDF2arrays}{}}}
-\subsection{Method \code{obsDF2arrays()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortMat$obsDF2arrays(obs_dt, additional_cols = character(0))}\if{html}{\out{</div>}}
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortMat-new"></a>}}
@@ -87,9 +79,7 @@ Initialize the CohortMat class
 
 \item{\code{sp}}{An integer representing the number of species. Defaults to \code{self$sp}.}
 
-\item{\code{device}}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.
-Check and reinitialize tensors if necessary
-Transform an observation data frame into three arrays}
+\item{\code{device}}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.}
 }
 \if{html}{\out{</div>}}
 }
@@ -98,10 +88,17 @@ Transform an observation data frame into three arrays}
 \if{html}{\out{<a id="method-CohortMat-check"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortMat-check}{}}}
 \subsection{Method \code{check()}}{
+Check if all tensors are initialized, if not, reinitialize them. Necessary after restarting r session or after loading the object into the session using \code{readRDS(..)} or \code{load(...)}
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CohortMat$check()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+nothing
+@description
+
+Convert the tensors to a data frame format
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortMat-asDF"></a>}}
@@ -111,13 +108,8 @@ Transform an observation data frame into three arrays}
 \if{html}{\out{<div class="r">}}\preformatted{CohortMat$asDF()}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{obs_df}}{A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees".
-Convert the tensors to a data frame format}
-}
-\if{html}{\out{</div>}}
+\subsection{Returns}{
+data.table object
 }
 }
 \if{html}{\out{<hr>}}
