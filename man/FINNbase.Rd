@@ -49,6 +49,7 @@ This function assigns the specified weights to the growth environment neural net
 \item \href{#method-FINNbase-check}{\code{FINNbase$check()}}
 \item \href{#method-FINNbase-update_parameters}{\code{FINNbase$update_parameters()}}
 \item \href{#method-FINNbase-setPars}{\code{FINNbase$setPars()}}
+\item \href{#method-FINNbase-set_environment}{\code{FINNbase$set_environment()}}
 \item \href{#method-FINNbase-clone}{\code{FINNbase$clone()}}
 }
 }
@@ -407,6 +408,15 @@ None. The regeneration parameters are set in the model.
 \subsection{Method \code{setPars()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNbase$setPars(inputPar, parRange)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FINNbase-set_environment"></a>}}
+\if{latex}{\out{\hypertarget{method-FINNbase-set_environment}{}}}
+\subsection{Method \code{set_environment()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FINNbase$set_environment(fn)}\if{html}{\out{</div>}}
 }
 
 }

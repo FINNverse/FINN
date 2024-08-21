@@ -416,3 +416,12 @@ checkParInput = function(speciesPars, speciesPars_ranges){
 }
 
 
+to_r = function(par, numeric = FALSE) {
+  if(numeric) {
+    tmp = par |> as.numeric()
+  } else {
+    tmp = par |> as.matrix()
+  }
+  attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
+  return(tmp)
+}
