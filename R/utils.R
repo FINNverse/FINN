@@ -429,3 +429,12 @@ default_speciesPars_ranges = list(
   parHeight = c(0.3, 0.7)
 )
 
+to_r = function(par, numeric = FALSE) {
+  if(numeric) {
+    tmp = par |> as.numeric()
+  } else {
+    tmp = par |> as.matrix()
+  }
+  attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
+  return(tmp)
+}

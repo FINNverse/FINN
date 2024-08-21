@@ -36,19 +36,7 @@ speciesPars_ranges = list(
     c(0, 4)
   ),
   parReg = c(0.01, 0.99),
-  parHeight = c(0.3, 0.7),
-  parGrowthEnv = rbind(
-    c(-1, 1),
-    c(-1, 1)
-  )*5,
-  parMortEnv = rbind(
-    c(-2, 2),
-    c(-2, 2)
-  )*5,
-  parRegEnv = rbind(
-    c(-2, 2),
-    c(-2, 2)
-  ))
+  parHeight = c(0.3, 0.7))
 
 
 system.time({
@@ -57,9 +45,13 @@ system.time({
                    #disturbance = dist_dt,
                    sp = sp,
                    patches=10L,
-                   growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(2.99, 0, 2.99, 0, 2.99, 0), sp, 2, byrow = TRUE)),
+                   growthProcess = createProcess(~1+env1, func = growth, initEnv = list(matrix(c(2.0, 1.0,
+                                                                                                 2.0, -1.0,
+                                                                                                 2.0, 0), sp, 2, byrow = TRUE)),
                                                  initSpecies = matrix(c(0.8, 1.0), sp, 2, byrow = TRUE)),
-                   mortalityProcess = createProcess(~1+env1, func = mortality, initEnv = list(matrix(c(0.0, -3.99, 0.0, 3.99, 2.0, 0.0), sp, 2, byrow = TRUE)),
+                   mortalityProcess = createProcess(~1+env1, func = mortality, initEnv = list(matrix(c(0.0, -2.0,
+                                                                                                       0.0, 2.0,
+                                                                                                       2.0, 0.0), sp, 2, byrow = TRUE)),
                                                     initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE)),
                    regenerationProcess = createProcess(~1+env1, func = regeneration, initEnv = list(matrix(c(1.99, 0), sp, 2, byrow = TRUE)) ),
                    device = "cpu", speciesPars_ranges = speciesPars_ranges)
@@ -98,7 +90,7 @@ plot(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cb
 plot(unique(env_dt$env1), predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix(), ylim = c(0,1))
 plot(unique(env_dt$env1), (predictions$model$nnRegEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix() |> exp())[,1])
 
-data <- pred2DF(predictions, format = "wide")$site
+data <- predictions$wide$site
 fit = finn(data = data,
            env = env_dt,
            patches = Npatches,
@@ -106,26 +98,28 @@ fit = finn(data = data,
            #disturbance = dist_dt,
            growthProcess = createProcess(~1+env1,
                                          func = growth,
-                                         initEnv = list(matrix(c(0, 0), sp, 2, byrow = TRUE)),
+                                         #initEnv = list(matrix(c(2.99, 0, 2.99, 0, 2.99, 0), sp, 2, byrow = TRUE)),
+                                         hidden = c(50L, 50L),
                                          initSpecies = matrix(c(0.8, 1.0), sp, 2, byrow = TRUE),
                                          optimizeSpecies = FALSE, optimizeEnv = TRUE),
            mortalityProcess = createProcess(~1+env1,
                                             func = mortality,
-                                            initEnv = list(matrix(c(0, 0), sp, 2, byrow = TRUE)),
+                                            #initEnv = list(matrix(c(0.0, 0, 0.0, 0.0, 2.0, 0.0), sp, 2, byrow = TRUE)),
+                                            hidden = c(50L, 50L),
                                             initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE),
                                             optimizeSpecies = FALSE, optimizeEnv = TRUE),
            regenerationProcess = createProcess(~1+env1, func = regeneration,
                                                initEnv = list(matrix(c(0.0, 0), sp, 2, byrow = TRUE)),
                                                initSpecies = (as.numeric(predictions$model$get_parReg())),
                                                optimizeSpecies = FALSE, optimizeEnv = FALSE),
-            weights = c(1.0, 1/20, 1/2, 3,0.5,3,2, 1),
-           device = "gpu", optimizeHeight= FALSE, lr = 0.1, epochs = 60L, batchsize = 100L, , speciesPars_ranges = speciesPars_ranges
+            weights = c(1/20, 1/2, 3,0.5,3,2),
+           device = "gpu", optimizeHeight= FALSE, lr = 0.03, epochs = 5L, batchsize = 100L, , speciesPars_ranges = speciesPars_ranges
            )
 fit$model$parameters
-continue_fit(fit, batchsize = 100L, lr = 0.1, epochs = 60L, weights = c(1.0, 1/20, 1/2, 3,0.5,3,2, 1))
-matplot(sapply(1:240L, function(i) fit$model$param_history[[i]][[1]][,1]) |> t(), type = "l", main = "Growth Parameter")
+continue_fit(fit, batchsize = 100L, lr = 0.01, epochs = 50L, weights = c(1/20, 1/2, 3,0.5,3,2, 1))
+matplot(sapply(40:55L, function(i) fit$model$param_history[[i]][[1]][,2]) |> t(), type = "l", main = "Growth Parameter")
 legend("topleft", col = 1:3, legend = as.matrix(predictions$model$nnGrowthEnv$parameters[[1]])[,2], pch = 15)
-matplot(sapply(1:240L, function(i) fit$model$param_history[[i]][[2]][,2]) |> t(), type = "l", main = "Mort Parameter")
+matplot(sapply(1:1920, function(i) fit$model$param_history[[i]][[2]][,2]) |> t(), type = "l", main = "Mort Parameter")
 legend("topleft", col = 1:3, legend = round(as.matrix(predictions$model$nnMortEnv$parameters[[1]])[,2], 2), pch = 15)
 
 as.matrix(fit$model$parameters)[[1]]
@@ -153,13 +147,17 @@ predictions = melt(predictions, id.vars = c("siteID", "species", "year"))
 
 pred = pred2DF(predictions, format = "long")$site
 
-par(mfrow = c(1,2))
-plot(unique(env_dt$env1), (fit$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,3] |> exp(), ylim = c(0,30))
-points(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,3] |> exp(), col = "red")
+
+par(mfrow = c(3,2))
+for(i in 1:3) {
+plot(unique(env_dt$env1), (fit$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,i] |> exp(), ylim = c(0,30))
+points(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,i] |> exp(), col = "red")
 
 
-plot(unique(env_dt$env1), (fit$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,1] |> plogis(), ylim = c(0,1))
-points(unique(env_dt$env1), (predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,1] |> plogis(), col = "red")
+plot(unique(env_dt$env1), (fit$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,i] |> plogis(), ylim = c(0,1))
+points(unique(env_dt$env1), (predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,i] |> plogis(), col = "red")
+
+}
 
 as.matrix(fit$model$parameters[[1]])
 
@@ -190,5 +188,103 @@ plot(mort~env1, data = comp_dt)
 summary(lm(growth~env1, data = comp_dt))
 
 
+# Hybrid modeling
+custom_growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F){
+
+  # pred -> [sites, 2]
+  # dbh -> [sites, patches, cohort]
+  # light -> [sites, patches, cohort]
+  # species -> [sites, patches, cohort, one_hot/3]
+
+  # NN(Umwelt, dbh, light, Species) * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
+  input =
+    torch::torch_cat(
+      list(dbh$unsqueeze(4L)/200.,
+           pred$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+           light$unsqueeze(4L),
+           torch::nnf_one_hot(species, num_classes = 3L)),
+      dim = 4L)
+
+  pred = self$nnGrowthEnv(input)[,,,1]$relu() + 0.001 #$squeeze(4) # [sites, patches, cohort, 5]
+
+  growth = pred * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
+  return(growth)
+}
+
+gg = createProcess(~1+env1,
+                  func = custom_growth,
+                  hidden = c(50L, 50L),
+                  initSpecies = matrix(c(0.8, 1.0), sp, 2, byrow = TRUE),
+                  optimizeSpecies = FALSE,
+                  optimizeEnv = TRUE,
+                  inputNN = 7) # 2 umwelt, 1dbh, 1light, 3 für 3 Arten 0 1 0, 1 00
+
+data <- predictions$wide$site
+predictions$model$check()
+fit = finn(data = data,
+           env = env_dt,
+           patches = Npatches,
+           height = as.numeric(predictions$model$get_parHeight()),
+           #disturbance = dist_dt,
+           growthProcess = gg,
+           mortalityProcess = createProcess(~1+env1,
+                                            func = mortality,
+                                            #initEnv = list(matrix(c(0.0, 0, 0.0, 0.0, 2.0, 0.0), sp, 2, byrow = TRUE)),
+                                            hidden = c(50L, 50L),
+                                            initSpecies = matrix(c(0.8, 3.9), sp, 2, byrow = TRUE),
+                                            optimizeSpecies = FALSE, optimizeEnv = TRUE),
+           regenerationProcess = createProcess(~1+env1, func = regeneration,
+                                               initEnv = list(matrix(c(0.0, 0), sp, 2, byrow = TRUE)),
+                                               initSpecies = (as.numeric(predictions$model$get_parReg())),
+                                               optimizeSpecies = FALSE, optimizeEnv = FALSE),
+           weights = c(1/20, 1/2, 3,0.5,3,2),
+           device = "gpu", optimizeHeight= FALSE, lr = 0.03, epochs = 5L, batchsize = 100L, , speciesPars_ranges = speciesPars_ranges
+)
+
+continue_fit(fit, batchsize = 100L, lr = 0.01, epochs = 50L, weights = c(1/20, 1/2, 3,0.5,3,2, 1))
 
 
+
+par(mfrow = c(1,1))
+
+input = cbind(200/200 ,1, unique(env_dt$env1), 1.0, 0, 1, 0)
+res =
+sapply(seq(1, 300, by = 50), function(i) {
+  input = cbind(i/200 ,1, unique(env_dt$env1), 0.0, 1, 0, 0)
+  ((fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cuda:0"))$relu()+0.001) |> as.matrix())[,1]
+
+})
+matplot(x =unique(env_dt$env1) ,y = res, type = "l", col = viridis::viridis(6), lty = 1, lwd = 2.0, ylab = "growth", xlab = "Env")
+legend("bottomright", bty = "n", col = viridis::viridis(6), lty = 1,legend = seq(1, 300, by = 50))
+for(i in 1:3) {
+  # erste Arte postiver Umwelt effekt
+  # zweite Art negativer
+  # dritte Art neutral
+  input = cbind(200/200 ,1, unique(env_dt$env1), 0.0, 0, 1, 0)
+  plot(unique(env_dt$env1), (fit$model$nnGrowthEnv( torch::torch_tensor( input , device = "cuda:0"))$relu()+0.001 |> as.matrix())[,1])
+  #points(unique(env_dt$env1), (predictions$model$nnGrowthEnv( torch::torch_tensor( input )) |> as.matrix())[,i] |> exp(), col = "red")
+
+  plot(unique(env_dt$env1), (fit$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) , device = "cuda:0")) |> as.matrix())[,i] |> plogis(), ylim = c(0,1))
+  points(unique(env_dt$env1), (predictions$model$nnMortEnv( torch::torch_tensor(cbind(1, unique(env_dt$env1)) )) |> as.matrix())[,i] |> plogis(), col = "red")
+}
+pred_fit = predict(fit)
+
+pred = pred_fit$long
+library(ggplot2)
+# ggplot(pred[, .(value = mean(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
+ggplot(pred[siteID == 100], aes(x = year, y = value, group = siteID, color = factor(species))) +
+  geom_line() +
+  labs(x = "Year",
+       y = "value") +
+  theme_minimal()+
+  facet_wrap(~variable, scales = "free_y")
+
+pred = predictions$long$site
+library(ggplot2)
+# ggplot(pred[, .(value = mean(value) ), by = .(year, species, variable)], aes(x = year, y = value, color = factor(species))) +
+ggplot(pred[siteID == 100], aes(x = year, y = value, group = siteID, color = factor(species))) +
+  geom_line() +
+  labs(x = "Year",
+       y = "value") +
+  theme_minimal()+
+  facet_wrap(~variable, scales = "free_y")
