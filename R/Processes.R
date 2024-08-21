@@ -217,25 +217,11 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 #'
 #' @export
 growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F){
-  K = 0.8
-
   shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
          (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
 
   environment = torch::torch_exp(pred) # inverse link function
-  # growth = (1.- torch.pow(1.- pred,4.0)) * parGrowth[species,1]
   growth = shade * environment * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
-  # print("environment")
-  # print(environment)
-  # print("shade")
-  # print(shade)
-  # print("torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*10) / K)^2)")
-  # print(torch::torch_exp(-0.5 * (torch::torch_log(dbh / (parGrowth[,2][species])*10) / K)^2))
-  # growth = environment * shade * torch::torch_exp(-0.5 * (log(dbh / (parGrowth[,2][species])*10) / K)^2)
-  # print("growth")
-  # print(growth)
-  # growth = parGrowth[species,1]
-  # return torch.nn.functional.softplus(growth)
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment,growth = growth) else out = growth
   return(out)
 }
