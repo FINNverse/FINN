@@ -104,7 +104,7 @@ finn = function(data = NULL,
                 bootstrap = NULL,
                 parallel = FALSE,
                 NGPU = 1,
-                weights = NULL,
+                weights = c(0.05, 0.50, 3.00, 0.50, 3.00, 2.00),
                 ...
 ) {
 
