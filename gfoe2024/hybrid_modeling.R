@@ -89,8 +89,8 @@ fit = finn(data = data,
            weights = c(1/20, 1/2, 3,0.5,3,2),
            device = "cpu",
            optimizeHeight= FALSE,
-           lr = 0.03,
-           epochs = 40L,
+           lr = 0.01,
+           epochs = 300L,
            batchsize = 100L,
            speciesPars_ranges = predictions$model$speciesPars_ranges
 )
