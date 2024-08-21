@@ -253,7 +253,6 @@ FINNModel = R6::R6Class(
       if(is.null(parReg)) parReg = runif(sp, min = speciesPars_ranges$parReg[1], max = speciesPars_ranges$parReg[2])
       self$speciesPars_ranges = speciesPars_ranges
 
-
       # if(!is.null(speciesPars_ranges)){
       checkParInput(
         speciesPars = list(
@@ -261,7 +260,13 @@ FINNModel = R6::R6Class(
           parMort = parMort,
           parReg = parReg,
           parHeight = parHeight
-        ), speciesPars_ranges
+        ),
+        speciesPars_ranges = list(
+          parGrowth = speciesPars_ranges$parGrowth,
+          parMort = speciesPars_ranges$parMort,
+          parReg = speciesPars_ranges$parReg,
+          parHeight = speciesPars_ranges$parHeight
+        )
       )
       # }
 
