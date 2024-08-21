@@ -3,7 +3,7 @@ output: github_document
 ---
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml)
+[![Project Status: Active -- The project has reached a stable, usable state and is being actively developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active) [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)[![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -19,6 +19,13 @@ knitr::opts_chunk$set(
 
 # Forest Informed Neural Networks (FINN)
 FINN is an R package for modular dynamic vegetation (forest) models. Modularity is achieved by implementing all components and the platform in R, and by allowing users to pass their own processes to FINN as R functions. Nevertheless, FINN has a high performance (low runtime) because FINN is implemented in torch for R. torch allows access to highly optimized routines and also allows FINN to run on the GPU, hence FINN scales extremely well with the number of sites. Furthermore, FINN can seamlessly integrate neural networks into the processes or even replace them (hybrid modeling). In addition, the parameters in FINN can be directly optimized using stochastic gradient descent.
+
+
+
+![ ](vignettes/annimated-plots/combined_iterations.gif)
+
+
+
 
 ## Installation
 
@@ -57,11 +64,5 @@ model =
        epochs = 20L
        )
 ```
-
-
-
-
-![FINN](vignettes/annimated-plots/combined_iterations.gif)
-
 
 
