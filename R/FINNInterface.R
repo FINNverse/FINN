@@ -1,3 +1,471 @@
+#' Forest informed neural network
+#'
+#' @description
+#' This function is the main interface to the FINN platform. The function can be used to simulate and to estimate (fit) the parameters of the FINN model.
+#'
+#'
+#' @param data data containing species information (dbh, ba, trees, AL, growth, mortality rates, and regeneration rates)
+#' @param env A data frame containing the environmental variables used in the simulation.
+#' @param mortality A process object or formula defining the mortality process.
+#' @param growth A process object or formula defining the growth process.
+#' @param regeneration A process object or formula defining the regeneration process.
+#' @param competition A function defining the competition process, if applicable.
+#' @param height A function or set of parameters defining the height-growth relationship, if applicable.
+#' @param patches An integer specifying the number of patches in the simulation. Default is 10.
+#' @param patch_size A numeric value representing the size of each patch. Default is 0.1.
+#' @param sp An integer specifying the number of species in the simulation. Default is 5.
+#' @param init A custom initialization object for the simulation, if available.
+#' @param device A character string specifying whether to use `"cpu"` or `"gpu"` for computation. Default is `"cpu"`.
+#' @param bootstrap bootstrap model or not (computationally expensive!)
+#' @param parallel A logical value indicating whether to run the bootstrapping in parallel. Default is `FALSE`.
+#' @param NGPU An integer specifying the number of GPUs to use if `device = "gpu"`. Default is 1 (only used for parallel bootstrapping).
+#' @param ... arguments passed to `simulateForest()`
+#'
+#'
+#' @details
+#'
+#' While FINN is a platform for modular dynamic forest models, we provide default functions for the four processes, namely `?mortality`, `?growth`, `?regeneration`, and `?competetition`.
+#'
+#' The idea of finn is to combine mechanistic understanding (the processes) and data-driven approaches. Data-driven means that parameters of the model can be estimated (or informed) by empirical data. This is optional and can be realized in different ways or levels in finn. By default, we assume that the three processes mortality, growth, and regeneration depend on the environment (niche of species), available light (as a consequence of competition), and species specific parameters. The environmental component and the species specific parameters can be estimated or configured. The central function to configure each process is the `?createProcess` function.
+#'
+#' In the `createProcess()` function, the parameters of the environmental model (by default a linear regression model) can be set by the `initEnv = ...` argument (must be a matrix with n rows for n species and m columns for m environmental predictors (which is set by the formula argument)). Species specific parameters are set by the `initSpecies=...` argument (check help of the default processes for dimensions). If `NULL` the parameters will be sampled from plausible ranges that serve as initial values for the optimization, if inference is desired (which is set by `optimizeSpecies` and `optimizeEnv` arguments). Moreover, custom process functions can be passed to the `createProcess()` function using the `func` argument. However, take caution that all operations in the custom process function are compatible with `torch`, work with multi-dimensional arrays, and are differentiable when inference is wanted. See the section below for more information about custom process functions.
+#'
+#' ## Custom Process Functions:
+#'
+#' FINN is based on torch for R which is an library for Deep Learning. The advantage of torch is that all calculations are highly optimized and can be run on the GPU. To fully exploit the potential of GPU, all operations in FINN are based on multi-dimensional arrays, tensors. Usually, the dimensions of data objects within finn are of \mjseqn{[k_sites, m_{patches}, n_{cohorts}]}. For custom process functions to properly work, they must work on these tensors and handle the dimensions correctly (in the future we will provide helper functions to check automatically custom functions):
+#'
+#' Part of the hybrid modeling example:
+#'
+#' ```{r, eval=FALSE}
+#' growthCustom = function(dbh, species, parGrowth, pred, light, debug = F){
+#' # dbh, species, light dimensions -> [sites, patches, cohorts]
+#' # parGrowth species parameters, ignore
+#' # pred -> [sites, number of environmental predictors]
+#' input =
+#'     torch::torch_cat(
+#'       list(dbh$unsqueeze(4L)/200., # rescale dbh
+#'            pred$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+#'            light$unsqueeze(4L),
+#'            torch::nnf_one_hot(species, num_classes = 3L)),
+#'       dim = 4L)
+#'   growth = self$nnGrowthEnv(input)[,,,1]$exp()
+#'   return(growth)
+#' }
+#' ```
+#' Within the custom growth function, the `torch::torch_cat()` function concatenates dbh, light, environment, and species information (one hot encoded species). The concatenation happens in an additional 4th dimension. `$unsqueeze(dim = ..)` adds a new dimension at the specific dimension. For pred, we must add two additional dimensions and then repeat the values along these new dimensions to get the same number of patches and cohorts (`dbh$shape[2], dbh$shape[3]`).
+#'
+#' Moreover, the custom functions must be differentiable, in short, avoid complex R functions or functions from other packages, do not transform the tensors into R objects (e.g. by using `torch::as_array` or `as.matrix`), and be careful with indexing (we have helper functions for that (TODO!)).
+#'
+#'
+#'
+#'
+#' @return A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.
+#'
+#' @export
+finn = function(data = NULL,
+                env,
+                disturbance = NULL,
+                mortalityProcess = NULL,
+                growthProcess = NULL,
+                regenerationProcess = NULL,
+                competitionProcess = NULL,
+                height = NULL,
+                optimizeHeight = TRUE,
+                speciesPars_ranges = list(
+                  parGrowth = rbind(
+                    c(0.01, 0.99),
+                    c(0.01, 4)
+                  ),
+                  parMort = rbind(
+                    c(0.01, 0.99),
+                    c(0, 4)
+                  ),
+                  parReg = c(0.01, 0.99),
+                  parHeight = c(0.3, 0.7),
+                  parGrowthEnv = rbind(
+                    c(-1, 1),
+                    c(-1, 1)
+                  ),
+                  parMortEnv = rbind(
+                    c(-2, 2),
+                    c(-2, 2)
+                  ),
+                  parRegEnv = rbind(
+                    c(-2, 2),
+                    c(-2, 2)
+                  )),
+                patches = 10L,
+                patch_size = 0.1,
+                init = NULL,
+                batchsize = 50L,
+                epochs = 20L,
+                lr = 0.1,
+                device = c("cpu", "gpu"),
+                bootstrap = NULL,
+                parallel = FALSE,
+                NGPU = 1,
+                weights = NULL,
+                ...
+) {
+
+  if(is.null(data)) {
+    cli::cli_text("No data provided, simulations will be generated...")
+    return(simulateForest(env=env,
+                          mortalityProcess = mortalityProcess,
+                          growthProcess = growthProcess,
+                          regenerationProcess = regenerationProcess,
+                          competitionProcess = competitionProcess,
+                          height = height,
+                          patches = patches,
+                          patch_size = patch_size,
+                          init = init, device = device,
+                          parallel = parallel,
+                          NGPU = NGPU,
+                          batchsize = batchsize,
+                          ...))
+  }
+
+  out = list()
+  device = match.arg(device)
+  if(is.null(mortalityProcess)) mortalityProcess = createProcess(formula = ~., func = mortality)
+  if(is.null(growthProcess)) growthProcess = createProcess(formula = ~., func = growth)
+  if(is.null(regenerationProcess)) regenerationProcess = createProcess(formula = ~., func = regeneration)
+  if(is.null(competitionProcess)) competitionProcess = createProcess(formula = ~., func = competition)
+
+  if(inherits(mortalityProcess, "formula")) mortalityProcess = createProcess(formula = mortalityProcess, func = mortality)
+  if(inherits(growthProcess, "formula")) growthProcess = createProcess(formula = growthProcess, func = growth)
+  if(inherits(regenerationProcess, "formula")) regenerationProcess = createProcess(formula = regenerationProcess, func = regeneration)
+
+  ### Year only ###
+  mortality_env = extract_env(mortalityProcess, env)
+  growth_env = extract_env(growthProcess, env)
+  regeneration_env = extract_env(regenerationProcess, env)
+
+
+  sp = length(unique(data$species))
+  out$sp = sp
+  out$lr = lr
+
+
+  #### Prepare response ####
+  # TODO: improve!!!
+  response = list(
+    dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), data[data$species==i,])), along = 3L),
+    ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), data[data$species==i,])), along = 3L),
+    trees = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+trees), data[data$species==i,])), along = 3L),
+    AL = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+AL), data[data$species==i,])), along = 3L),
+    growth = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+growth), data[data$species==i,])), along = 3L),
+    mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), data[data$species==i,])), along = 3L),
+    reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), data[data$species==i,])), along = 3L)
+  )
+
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  }
+
+  response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+
+  sites = dim(mortality_env)[1] # TODO check that all env arrays have the same sites and timesteps
+  if(is.null(batchsize)) batchsize = sites
+
+  if(batchsize > sites) batchsize = sites
+
+  out$batchsize = batchsize
+
+  if(is.null(init)) {
+    init = CohortMat$new(dims = c(sites, patches, sp),
+                         dbh = array(1, dim = c(sites, patches, sp)),
+                         trees = array(1, dim = c(sites, patches, sp)),
+                         sp = sp)
+  } else {
+    patches = dim(init$species_r)[2]
+  }
+
+  out$patches = patches
+  device_old = device
+  if(device == "gpu") {
+    device = "cuda:0"
+    if(!torch::cuda_is_available()) {
+      cli::cli_text("GPU device not available...")
+      device = "cpu"
+    }
+  }
+
+  if(is.logical(parallel)) {
+    if(parallel) NCPUs = parallel::detectCores()-1
+    else NCPUs = -999
+  }
+
+  if(is.numeric(parallel)) NCPUs = parallel
+
+
+  runEnvMort = TRUE
+  runEnvGrowth = TRUE
+  runEnvReg = TRUE
+
+  input_dimensions = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3])
+  if(!is.null(mortalityProcess$inputNN)) {
+    input_dimensions[1] = mortalityProcess$inputNN
+    runEnvMort = FALSE
+  }
+  if(!is.null(growthProcess$inputNN)) {
+    input_dimensions[2] = growthProcess$inputNN
+    runEnvGrowth = FALSE
+  }
+  if(!is.null(regenerationProcess$inputNN)) {
+    input_dimensions[3] = regenerationProcess$inputNN
+    runEnvReg = FALSE
+  }
+
+  out$input_dimensions = input_dimensions
+  output = c(sp, sp, sp)
+  if(!is.null(mortalityProcess$outputNN)) output[1] = mortalityProcess$outputNN
+  if(!is.null(growthProcess$outputNN)) output[2] = growthProcess$outputNN
+  if(!is.null(regenerationProcess$outputNN)) output[3] = regenerationProcess$outputNN
+  out$output = output
+
+
+  model = FINNModel$new(sp = sp,
+                        env = input_dimensions,
+                        output = output,
+                        device = device,
+                        hidden_growth = growthProcess$hidden,
+                        hidden_mort = mortalityProcess$hidden,
+                        hidden_reg = regenerationProcess$hidden,
+                        runEnvGrowth = runEnvGrowth,
+                        runEnvMort = runEnvMort,
+                        runEnvReg = runEnvReg,
+                        growthFunction = growthProcess$func,
+                        mortalityFunction = mortalityProcess$func,
+                        regenerationFunction = regenerationProcess$func,
+                        competitionFunction = competitionProcess$func,
+                        parGrowth = growthProcess$initSpecies,
+                        parMort = mortalityProcess$initSpecies,
+                        parReg = regenerationProcess$initSpecies,
+                        parHeight = height,
+                        parGrowthEnv = growthProcess$initEnv,
+                        parMortEnv = mortalityProcess$initEnv,
+                        parRegEnv = regenerationProcess$initEnv,
+                        speciesPars_ranges = speciesPars_ranges,
+                        patch_size_ha = patch_size)
+
+  #### set parameters for optimization #####
+  if(!mortalityProcess$optimizeSpecies) model$parMort$requires_grad_(FALSE)
+  if(!growthProcess$optimizeSpecies) model$parGrowth$requires_grad_(FALSE)
+  if(!regenerationProcess$optimizeSpecies) model$parReg$requires_grad_(FALSE)
+  if(!optimizeHeight) model$parHeight$requires_grad_(FALSE)
+  if(!mortalityProcess$optimizeEnv) .n = lapply(model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
+  if(!growthProcess$optimizeEnv) .n = lapply(model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
+  if(!regenerationProcess$optimizeEnv) .n = lapply(model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
+  # update parameter list
+  model$parameter_to_r()
+  model$update_parameters()
+
+
+
+  if(is.null(bootstrap)) {
+
+    model$fit(initCohort = init,
+              X = list(torch::torch_tensor(mortality_env),
+                       torch::torch_tensor(growth_env),
+                       torch::torch_tensor(regeneration_env)),
+              Y = response_T,
+              disturbance = disturbance_T,
+              patches = patches,
+              batch_size = batchsize,
+              epochs = epochs,
+              learning_rate = lr,
+              update_step = 1L,
+              weights = weights)
+
+    out$model = model
+    out$init = init
+    out$growthProcess = growthProcess
+    out$mortalityProcess = mortalityProcess
+    out$regenerationProcess = regenerationProcess
+    out$competition = competitionProcess
+    out$response = response
+    out$disturbance = disturbance
+    out$data = data
+    out$env = list(mortality_env = mortality_env,
+                   growth_env = growth_env,
+                   regeneration_env = regeneration_env)
+    class(out) = "finnModel"
+    return(out)
+
+  } else {
+
+    if(NCPUs > 0.5) {
+
+      cl = parallel::makeCluster(NCPUs)
+      nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
+      parallel::clusterEvalQ(cl, {library(torch);library(FINN)})
+      parallel::clusterExport(cl, varlist = ls(environment()) ,envir = environment())
+      models_list  =
+        parallel::parLapply(cl, 1:bootstrap, function(i) {
+
+          indices = sample.int(sites, sites, replace = TRUE)
+
+          if(device_old == "gpu") {
+            myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
+            dist = cbind(nodes,0:(NGPU-1))
+            dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
+            device_hardware = paste0("cuda:",dev)
+          } else {
+            device_hardware = "cpu"
+          }
+
+          response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+
+          init$check()
+          tmp_model = FINNModel$new(sp = sp,
+                                    env = input_dimensions,
+                                    output = output,
+                                    device = device_hardware,
+                                    hidden_growth = growthProcess$hidden,
+                                    hidden_mort = mortalityProcess$hidden,
+                                    hidden_reg = regenerationProcess$hidden,
+                                    runEnvGrowth = runEnvGrowth,
+                                    runEnvMort = runEnvMort,
+                                    runEnvReg = runEnvReg,
+                                    growthFunction = growthProcess$func,
+                                    mortalityFunction = mortalityProcess$func,
+                                    regenerationFunction = regenerationProcess$func,
+                                    competitionFunction = competitionProcess$func,
+                                    parGrowth = growthProcess$initSpecies,
+                                    parMort = mortalityProcess$initSpecies,
+                                    parReg = regenerationProcess$initSpecies,
+                                    parHeight = height,
+                                    parGrowthEnv = growthProcess$initEnv,
+                                    parMortEnv = mortalityProcess$initEnv,
+                                    parRegEnv = regenerationProcess$initEnv,
+                                    speciesPars_ranges = speciesPars_ranges,
+                                    patch_size_ha = patch_size)
+
+          if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
+          if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
+          if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
+          if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
+          if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
+          if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
+          if(!regenerationProcess$optimizeEnv) .n = lapply(tmp_model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
+          # update parameter list
+          tmp_model$parameter_to_r()
+          tmp_model$update_parameters()
+
+          tmp_model$fit(initCohort = init,
+                        X = list(torch::torch_tensor(mortality_env[indices,,,drop=FALSE]),
+                                 torch::torch_tensor(growth_env[indices,,,drop=FALSE]),
+                                 torch::torch_tensor(regeneration_env[indices,,,drop=FALSE])),
+                        Y = response_T,
+                        disturbance = disturbance_T,
+                        patches = patches,
+                        batch_size = batchsize,
+                        epochs = epochs,
+                        learning_rate = lr,
+                        update_step = 1L,
+                        weights = weights)
+
+          out$model = tmp_model
+          out$indices = indices
+          out$init = init
+          out$growthProcess = growthProcess
+          out$mortalityProcess = mortalityProcess
+          out$regenerationProcess = regenerationProcess
+          out$competition = competitionProcess
+          out$response = response
+          out$disturbance = disturbance
+          out$data = data
+          out$env = list(mortality_env = mortality_env,
+                         growth_env = growth_env,
+                         regeneration_env = regeneration_env)
+          class(out) = "finnModel"
+          return(out)
+        })
+      parallel::stopCluster(cl)
+      out$models_list = models_list
+      class(out) = "finnModelBootstrap"
+    } else {
+      models_list =
+        lapply(1:bootstrap, function(i) {
+          indices = sample.int(sites, sites, replace = TRUE)
+          init$check()
+          tmp_model = FINNModel$new(sp = sp,
+                                    env = input_dimensions,
+                                    output = output,
+                                    device = device,
+                                    hidden_growth = growthProcess$hidden,
+                                    hidden_mort = mortalityProcess$hidden,
+                                    hidden_reg = regenerationProcess$hidden,
+                                    runEnvGrowth = runEnvGrowth,
+                                    runEnvMort = runEnvMort,
+                                    runEnvReg = runEnvReg,
+                                    growthFunction = growthProcess$func,
+                                    mortalityFunction = mortalityProcess$func,
+                                    regenerationFunction = regenerationProcess$func,
+                                    competitionFunction = competitionProcess$func,
+                                    parGrowth = growthProcess$initSpecies,
+                                    parMort = mortalityProcess$initSpecies,
+                                    parReg = regenerationProcess$initSpecies,
+                                    parHeight = height,
+                                    parGrowthEnv = growthProcess$initEnv,
+                                    parMortEnv = mortalityProcess$initEnv,
+                                    parRegEnv = regenerationProcess$initEnv,
+                                    speciesPars_ranges = speciesPars_ranges,
+                                    patch_size_ha = patch_size)
+
+          if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
+          if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
+          if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
+          if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
+          if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
+          if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
+          if(!regenerationProcess$optimizeEnv) .n = lapply(tmp_model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
+          # update parameter list
+          tmp_model$parameter_to_r()
+          tmp_model$update_parameters()
+
+          tmp_model$fit(initCohort = init,
+                        X = list(torch::torch_tensor(mortality_env[indices,,,drop=FALSE]),
+                                 torch::torch_tensor(growth_env[indices,,,drop=FALSE]),
+                                 torch::torch_tensor(regeneration_env[indices,,,drop=FALSE])),
+                        Y = response_T,
+                        disturbance = disturbance_T,
+                        patches = patches,
+                        batch_size = batchsize,
+                        epochs = epochs,
+                        learning_rate = lr,
+                        update_step = 1L,
+                        weights = weights)
+
+          out$model = tmp_model
+          out$indices = indices
+          out$init = init
+          out$growthProcess = growthProcess
+          out$mortalityProcess = mortalityProcess
+          out$regenerationProcess = regenerationProcess
+          out$competition = competitionProcess
+          out$response = response
+          out$disturbance = disturbance
+          out$data = data
+          out$env = list(mortality_env = mortality_env,
+                         growth_env = growth_env,
+                         regeneration_env = regeneration_env)
+          class(out) = "finnModel"
+          return(out)
+        })
+      out$models_list = models_list
+      class(out) = "finnModelBootstrap"
+    }
+  }
+  return(out)
+
+}
+
+
+
 #' Create a Process Object
 #'
 #' This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
@@ -299,436 +767,7 @@ simulateForest = function(env,
 
 
 
-#' Forest informed neural network
-#'
-#' This function simulates forest dynamics, including mortality, growth, regeneration, and competition,
-#' across multiple patches and species.
-#'
-#' @param data data containing species information (dbh, ba, trees, AL, growth, mortality rates, and regeneration rates)
-#' @param env A data frame containing the environmental variables used in the simulation.
-#' @param mortality A process object or formula defining the mortality process.
-#' @param growth A process object or formula defining the growth process.
-#' @param regeneration A process object or formula defining the regeneration process.
-#' @param competition A function defining the competition process, if applicable.
-#' @param height A function or set of parameters defining the height-growth relationship, if applicable.
-#' @param patches An integer specifying the number of patches in the simulation. Default is 10.
-#' @param patch_size A numeric value representing the size of each patch. Default is 0.1.
-#' @param sp An integer specifying the number of species in the simulation. Default is 5.
-#' @param init A custom initialization object for the simulation, if available.
-#' @param device A character string specifying whether to use `"cpu"` or `"gpu"` for computation. Default is `"cpu"`.
-#' @param bootstrap bootstrap model or not (computationally expensive!)
-#' @param parallel A logical value indicating whether to run the bootstrapping in parallel. Default is `FALSE`.
-#' @param NGPU An integer specifying the number of GPUs to use if `device = "gpu"`. Default is 1 (only used for parallel bootstrapping).
-#' @param ... arguments passed to `simulateForest()`
-#'
-#' @return A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.
-#'
-#' @examples
-#' env_data <- data.frame(siteID = 1:5, year = 2001:2005, temp = rnorm(5), precip = rnorm(5))
-#' predictions <- simulateForest(env = env_data, patches = 3, sp = 2)
-#'
-#' @export
-finn = function(data = NULL,
-                env,
-                disturbance = NULL,
-                mortalityProcess = NULL,
-                growthProcess = NULL,
-                regenerationProcess = NULL,
-                competitionProcess = NULL,
-                height = NULL,
-                optimizeHeight = TRUE,
-                speciesPars_ranges = list(
-                  parGrowth = rbind(
-                    c(0.01, 0.99),
-                    c(0.01, 4)
-                  ),
-                  parMort = rbind(
-                    c(0.01, 0.99),
-                    c(0, 4)
-                  ),
-                  parReg = c(0.01, 0.99),
-                  parHeight = c(0.3, 0.7),
-                  parGrowthEnv = rbind(
-                    c(-1, 1),
-                    c(-1, 1)
-                  ),
-                  parMortEnv = rbind(
-                    c(-2, 2),
-                    c(-2, 2)
-                  ),
-                  parRegEnv = rbind(
-                    c(-2, 2),
-                    c(-2, 2)
-                  )),
-                patches = 10L,
-                patch_size = 0.1,
-                init = NULL,
-                batchsize = 50L,
-                epochs = 20L,
-                lr = 0.1,
-                device = c("cpu", "gpu"),
-                bootstrap = NULL,
-                parallel = FALSE,
-                NGPU = 1,
-                weights = NULL,
-                ...
-) {
 
-  if(is.null(data)) {
-    cli::cli_text("No data provided, simulations will be generated...")
-    return(simulateForest(env=env,
-                          mortalityProcess = mortalityProcess,
-                          growthProcess = growthProcess,
-                          regenerationProcess = regenerationProcess,
-                          competitionProcess = competitionProcess,
-                          height = height,
-                          patches = patches,
-                          patch_size = patch_size,
-                          init = init, device = device,
-                          parallel = parallel,
-                          NGPU = NGPU,
-                          batchsize = batchsize,
-                          ...))
-  }
-
-  out = list()
-  device = match.arg(device)
-  if(is.null(mortalityProcess)) mortalityProcess = createProcess(formula = ~., func = mortality)
-  if(is.null(growthProcess)) growthProcess = createProcess(formula = ~., func = growth)
-  if(is.null(regenerationProcess)) regenerationProcess = createProcess(formula = ~., func = regeneration)
-  if(is.null(competitionProcess)) competitionProcess = createProcess(formula = ~., func = competition)
-
-  if(inherits(mortalityProcess, "formula")) mortalityProcess = createProcess(formula = mortalityProcess, func = mortality)
-  if(inherits(growthProcess, "formula")) growthProcess = createProcess(formula = growthProcess, func = growth)
-  if(inherits(regenerationProcess, "formula")) regenerationProcess = createProcess(formula = regenerationProcess, func = regeneration)
-
-  ### Year only ###
-  mortality_env = extract_env(mortalityProcess, env)
-  growth_env = extract_env(growthProcess, env)
-  regeneration_env = extract_env(regenerationProcess, env)
-
-
-  sp = length(unique(data$species))
-  out$sp = sp
-  out$lr = lr
-
-
-  #### Prepare response ####
-  # TODO: improve!!!
-  response = list(
-    dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), data[data$species==i,])), along = 3L),
-    ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), data[data$species==i,])), along = 3L),
-    trees = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+trees), data[data$species==i,])), along = 3L),
-    AL = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+AL), data[data$species==i,])), along = 3L),
-    growth = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+growth), data[data$species==i,])), along = 3L),
-    mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), data[data$species==i,])), along = 3L),
-    reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), data[data$species==i,])), along = 3L)
-  )
-
-  disturbance_T = NULL
-  if(!is.null(disturbance)) {
-    disturbance = extract_env(list(formula=~0+intensity), disturbance)
-    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
-  }
-
-  response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
-
-  sites = dim(mortality_env)[1] # TODO check that all env arrays have the same sites and timesteps
-  if(is.null(batchsize)) batchsize = sites
-
-  if(batchsize > sites) batchsize = sites
-
-  out$batchsize = batchsize
-
-  if(is.null(init)) {
-    init = CohortMat$new(dims = c(sites, patches, sp),
-                         dbh = array(1, dim = c(sites, patches, sp)),
-                         trees = array(1, dim = c(sites, patches, sp)),
-                         sp = sp)
-  } else {
-    patches = dim(init$species_r)[2]
-  }
-
-  out$patches = patches
-  device_old = device
-  if(device == "gpu") {
-    device = "cuda:0"
-    if(!torch::cuda_is_available()) {
-      cli::cli_text("GPU device not available...")
-      device = "cpu"
-    }
-  }
-
-  if(is.logical(parallel)) {
-    if(parallel) NCPUs = parallel::detectCores()-1
-    else NCPUs = -999
-  }
-
-  if(is.numeric(parallel)) NCPUs = parallel
-
-
-  runEnvMort = TRUE
-  runEnvGrowth = TRUE
-  runEnvReg = TRUE
-
-  input_dimensions = c(dim(mortality_env)[3], dim(growth_env)[3], dim(regeneration_env)[3])
-  if(!is.null(mortalityProcess$inputNN)) {
-    input_dimensions[1] = mortalityProcess$inputNN
-    runEnvMort = FALSE
-  }
-  if(!is.null(growthProcess$inputNN)) {
-    input_dimensions[2] = growthProcess$inputNN
-    runEnvGrowth = FALSE
-  }
-  if(!is.null(regenerationProcess$inputNN)) {
-    input_dimensions[3] = regenerationProcess$inputNN
-    runEnvReg = FALSE
-  }
-
-  out$input_dimensions = input_dimensions
-  output = c(sp, sp, sp)
-  if(!is.null(mortalityProcess$outputNN)) output[1] = mortalityProcess$outputNN
-  if(!is.null(growthProcess$outputNN)) output[2] = growthProcess$outputNN
-  if(!is.null(regenerationProcess$outputNN)) output[3] = regenerationProcess$outputNN
-  out$output = output
-
-
-  model = FINNModel$new(sp = sp,
-                   env = input_dimensions,
-                   output = output,
-                   device = device,
-                   hidden_growth = growthProcess$hidden,
-                   hidden_mort = mortalityProcess$hidden,
-                   hidden_reg = regenerationProcess$hidden,
-                   runEnvGrowth = runEnvGrowth,
-                   runEnvMort = runEnvMort,
-                   runEnvReg = runEnvReg,
-                   growthFunction = growthProcess$func,
-                   mortalityFunction = mortalityProcess$func,
-                   regenerationFunction = regenerationProcess$func,
-                   competitionFunction = competitionProcess$func,
-                   parGrowth = growthProcess$initSpecies,
-                   parMort = mortalityProcess$initSpecies,
-                   parReg = regenerationProcess$initSpecies,
-                   parHeight = height,
-                   parGrowthEnv = growthProcess$initEnv,
-                   parMortEnv = mortalityProcess$initEnv,
-                   parRegEnv = regenerationProcess$initEnv,
-                   speciesPars_ranges = speciesPars_ranges,
-                   patch_size_ha = patch_size)
-
-  #### set parameters for optimization #####
-  if(!mortalityProcess$optimizeSpecies) model$parMort$requires_grad_(FALSE)
-  if(!growthProcess$optimizeSpecies) model$parGrowth$requires_grad_(FALSE)
-  if(!regenerationProcess$optimizeSpecies) model$parReg$requires_grad_(FALSE)
-  if(!optimizeHeight) model$parHeight$requires_grad_(FALSE)
-  if(!mortalityProcess$optimizeEnv) .n = lapply(model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
-  if(!growthProcess$optimizeEnv) .n = lapply(model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
-  if(!regenerationProcess$optimizeEnv) .n = lapply(model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
-  # update parameter list
-  model$parameter_to_r()
-  model$update_parameters()
-
-
-
-  if(is.null(bootstrap)) {
-
-    model$fit(initCohort = init,
-              X = list(torch::torch_tensor(mortality_env),
-                       torch::torch_tensor(growth_env),
-                       torch::torch_tensor(regeneration_env)),
-              Y = response_T,
-              disturbance = disturbance_T,
-              patches = patches,
-              batch_size = batchsize,
-              epochs = epochs,
-              learning_rate = lr,
-              update_step = 1L,
-              weights = weights)
-
-    out$model = model
-    out$init = init
-    out$growthProcess = growthProcess
-    out$mortalityProcess = mortalityProcess
-    out$regenerationProcess = regenerationProcess
-    out$competition = competitionProcess
-    out$response = response
-    out$disturbance = disturbance
-    out$data = data
-    out$env = list(mortality_env = mortality_env,
-                   growth_env = growth_env,
-                   regeneration_env = regeneration_env)
-    class(out) = "finnModel"
-    return(out)
-
-  } else {
-
-    if(NCPUs > 0.5) {
-
-      cl = parallel::makeCluster(NCPUs)
-      nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
-      parallel::clusterEvalQ(cl, {library(torch);library(FINN)})
-      parallel::clusterExport(cl, varlist = ls(environment()) ,envir = environment())
-      models_list  =
-        parallel::parLapply(cl, 1:bootstrap, function(i) {
-
-          indices = sample.int(sites, sites, replace = TRUE)
-
-          if(device_old == "gpu") {
-            myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-            dist = cbind(nodes,0:(NGPU-1))
-            dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
-            device_hardware = paste0("cuda:",dev)
-          } else {
-            device_hardware = "cpu"
-          }
-
-          response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
-
-          init$check()
-          tmp_model = FINNModel$new(sp = sp,
-                                    env = input_dimensions,
-                                    output = output,
-                                    device = device_hardware,
-                                    hidden_growth = growthProcess$hidden,
-                                    hidden_mort = mortalityProcess$hidden,
-                                    hidden_reg = regenerationProcess$hidden,
-                                    runEnvGrowth = runEnvGrowth,
-                                    runEnvMort = runEnvMort,
-                                    runEnvReg = runEnvReg,
-                                    growthFunction = growthProcess$func,
-                                    mortalityFunction = mortalityProcess$func,
-                                    regenerationFunction = regenerationProcess$func,
-                                    competitionFunction = competitionProcess$func,
-                                    parGrowth = growthProcess$initSpecies,
-                                    parMort = mortalityProcess$initSpecies,
-                                    parReg = regenerationProcess$initSpecies,
-                                    parHeight = height,
-                                    parGrowthEnv = growthProcess$initEnv,
-                                    parMortEnv = mortalityProcess$initEnv,
-                                    parRegEnv = regenerationProcess$initEnv,
-                                    speciesPars_ranges = speciesPars_ranges,
-                                    patch_size_ha = patch_size)
-
-          if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
-          if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
-          if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
-          if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
-          if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
-          if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
-          if(!regenerationProcess$optimizeEnv) .n = lapply(tmp_model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
-          # update parameter list
-          tmp_model$parameter_to_r()
-          tmp_model$update_parameters()
-
-          tmp_model$fit(initCohort = init,
-                    X = list(torch::torch_tensor(mortality_env[indices,,,drop=FALSE]),
-                             torch::torch_tensor(growth_env[indices,,,drop=FALSE]),
-                             torch::torch_tensor(regeneration_env[indices,,,drop=FALSE])),
-                    Y = response_T,
-                    disturbance = disturbance_T,
-                    patches = patches,
-                    batch_size = batchsize,
-                    epochs = epochs,
-                    learning_rate = lr,
-                    update_step = 1L,
-                    weights = weights)
-
-          out$model = tmp_model
-          out$indices = indices
-          out$init = init
-          out$growthProcess = growthProcess
-          out$mortalityProcess = mortalityProcess
-          out$regenerationProcess = regenerationProcess
-          out$competition = competitionProcess
-          out$response = response
-          out$disturbance = disturbance
-          out$data = data
-          out$env = list(mortality_env = mortality_env,
-                         growth_env = growth_env,
-                         regeneration_env = regeneration_env)
-          class(out) = "finnModel"
-          return(out)
-        })
-      parallel::stopCluster(cl)
-      out$models_list = models_list
-      class(out) = "finnModelBootstrap"
-    } else {
-      models_list =
-        lapply(1:bootstrap, function(i) {
-          indices = sample.int(sites, sites, replace = TRUE)
-          init$check()
-          tmp_model = FINNModel$new(sp = sp,
-                                    env = input_dimensions,
-                                    output = output,
-                                    device = device,
-                                    hidden_growth = growthProcess$hidden,
-                                    hidden_mort = mortalityProcess$hidden,
-                                    hidden_reg = regenerationProcess$hidden,
-                                    runEnvGrowth = runEnvGrowth,
-                                    runEnvMort = runEnvMort,
-                                    runEnvReg = runEnvReg,
-                                    growthFunction = growthProcess$func,
-                                    mortalityFunction = mortalityProcess$func,
-                                    regenerationFunction = regenerationProcess$func,
-                                    competitionFunction = competitionProcess$func,
-                                    parGrowth = growthProcess$initSpecies,
-                                    parMort = mortalityProcess$initSpecies,
-                                    parReg = regenerationProcess$initSpecies,
-                                    parHeight = height,
-                                    parGrowthEnv = growthProcess$initEnv,
-                                    parMortEnv = mortalityProcess$initEnv,
-                                    parRegEnv = regenerationProcess$initEnv,
-                                    speciesPars_ranges = speciesPars_ranges,
-                                    patch_size_ha = patch_size)
-
-          if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
-          if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
-          if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
-          if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
-          if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
-          if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
-          if(!regenerationProcess$optimizeEnv) .n = lapply(tmp_model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
-          # update parameter list
-          tmp_model$parameter_to_r()
-          tmp_model$update_parameters()
-
-          tmp_model$fit(initCohort = init,
-                        X = list(torch::torch_tensor(mortality_env[indices,,,drop=FALSE]),
-                                 torch::torch_tensor(growth_env[indices,,,drop=FALSE]),
-                                 torch::torch_tensor(regeneration_env[indices,,,drop=FALSE])),
-                        Y = response_T,
-                        disturbance = disturbance_T,
-                        patches = patches,
-                        batch_size = batchsize,
-                        epochs = epochs,
-                        learning_rate = lr,
-                        update_step = 1L,
-                        weights = weights)
-
-          out$model = tmp_model
-          out$indices = indices
-          out$init = init
-          out$growthProcess = growthProcess
-          out$mortalityProcess = mortalityProcess
-          out$regenerationProcess = regenerationProcess
-          out$competition = competitionProcess
-          out$response = response
-          out$disturbance = disturbance
-          out$data = data
-          out$env = list(mortality_env = mortality_env,
-                         growth_env = growth_env,
-                         regeneration_env = regeneration_env)
-          class(out) = "finnModel"
-          return(out)
-        })
-      out$models_list = models_list
-      class(out) = "finnModelBootstrap"
-    }
-  }
-  return(out)
-
-}
 
 #' Predict Forest Dynamics
 #'
@@ -812,6 +851,8 @@ predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL
 continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weights = NULL) {
   object$model$check()
   object$init$check()
+
+  sp = object$sp
 
   response = list(
     dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), object$data[object$data$species==i,])), along = 3L),
