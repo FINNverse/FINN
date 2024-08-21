@@ -28,7 +28,7 @@ finn(
   bootstrap = NULL,
   parallel = FALSE,
   NGPU = 1,
-  weights = NULL,
+  weights = c(0.05, 0.5, 3, 0.5, 3, 2),
   ...
 )
 }

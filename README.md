@@ -1,7 +1,11 @@
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml)
+[![Project Status: Active – The project has reached a stable, usable
+state and is being actively
+developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
+[![License: GPL
+v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)[![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -18,6 +22,8 @@ FINN scales extremely well with the number of sites. Furthermore, FINN
 can seamlessly integrate neural networks into the processes or even
 replace them (hybrid modeling). In addition, the parameters in FINN can
 be directly optimized using stochastic gradient descent.
+
+![](vignettes/annimated-plots/combined_iterations.gif)
 
 ## Installation
 
@@ -59,9 +65,3 @@ model =
        epochs = 20L
        )
 ```
-
-<figure>
-<img src="vignettes/annimated-plots/combined_iterations.gif"
-alt="FINN" />
-<figcaption aria-hidden="true">FINN</figcaption>
-</figure>
