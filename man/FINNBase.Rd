@@ -6,27 +6,44 @@
 \description{
 The \code{FINNBase} class provides core functionalities for building and managing neural networks within the FINN model framework. This class includes methods for constructing neural networks, generating random numbers, and managing model parameters.
 }
-\examples{
+\section{Public fields}{
+\if{html}{\out{<div class="r6-fields">}}
+\describe{
+\item{\code{parHeight_r}}{(\code{as.numeric(sp)})\cr
+parHeight parameters as R vector, internal useage}
 
-## ------------------------------------------------
-## Method `FINNBase$build_NN`
-## ------------------------------------------------
+\item{\code{parGrowth_r}}{(\code{as.matrix(sp, ..)})\cr
+parGrowth parameters as R vector, internal useage}
 
-build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
-Generate random numbers from a uniform distribution
+\item{\code{parMort_r}}{(\code{as.matrix(sp, ...)})\cr
+parMort parameters as R vector, internal useage}
 
-This function generates random numbers from a uniform distribution with specified low and high values and size similar to `np.random.uniform` in Python.
+\item{\code{parReg_r}}{(\code{as.vector(sp)})\cr
+parReg parameters as R vector, internal useage}
 
+\item{\code{parGrowthEnv_r}}{(\code{as.list(matrix(), matrix(), ...)})\cr
+parGrowthEnv parameters as R vector, internal useage}
 
-## ------------------------------------------------
-## Method `FINNBase$np_runif`
-## ------------------------------------------------
+\item{\code{parMortEnv_r}}{(\code{as.list(matrix(), matrix(), ...)})\cr
+parMortEnv parameters as R vector, internal useage}
 
-np_runif(0, 1, c(2, 3))
-Set weights for the Growth Environment Neural Network
+\item{\code{parRegEnv_r}}{(\code{as.list(matrix(), matrix(), ...)})\cr
+parRegEnv parameters as R vector, internal useage}
+}
+\if{html}{\out{</div>}}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{parGrowthT}}{return transformed parGrowth}
 
-This function assigns the specified weights to the growth environment neural network.
+\item{\code{parMortT}}{return transformed parMort}
 
+\item{\code{parRegT}}{return transformed parReg}
+
+\item{\code{parHeightT}}{return transformed parHeight}
+}
+\if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
@@ -55,7 +72,6 @@ Build a neural network
 This function builds a neural network with specified input shape, output shape, hidden layers, bias, activation functions, dropout rate, and last activation function.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$build_NN(
-  self,
   input_shape,
   output_shape,
   hidden,
@@ -88,23 +104,14 @@ This function builds a neural network with specified input shape, output shape, 
 \subsection{Returns}{
 torch.nn.modules.container.Sequential. Sequential neural network object.
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{build_NN(input_shape = 2, output_shape = 3, hidden = c(1, 3, 2), bias = TRUE, activation = "relu", dropout = 1, last_activation = "sigmoid")
-Generate random numbers from a uniform distribution
-
-This function generates random numbers from a uniform distribution with specified low and high values and size similar to `np.random.uniform` in Python.
-
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-np_runif"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-np_runif}{}}}
 \subsection{Method \code{np_runif()}}{
+Generate random numbers from a uniform distribution
+
+This function generates random numbers from a uniform distribution with specified low and high values and size similar to \code{np.random.uniform} in Python.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$np_runif(low, high, size)}\if{html}{\out{</div>}}
 }
@@ -123,23 +130,14 @@ This function generates random numbers from a uniform distribution with specifie
 \subsection{Returns}{
 array. A numeric array of random numbers.
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{np_runif(0, 1, c(2, 3))
-Set weights for the Growth Environment Neural Network
-
-This function assigns the specified weights to the growth environment neural network.
-
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-set_weights_nnGrowthEnv"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-set_weights_nnGrowthEnv}{}}}
 \subsection{Method \code{set_weights_nnGrowthEnv()}}{
+Set weights for the Growth Environment Neural Network
+
+This function assigns the specified weights to the growth environment neural network.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$set_weights_nnGrowthEnv(weights)}\if{html}{\out{</div>}}
 }
@@ -153,15 +151,15 @@ This function assigns the specified weights to the growth environment neural net
 }
 \subsection{Returns}{
 None. The weights are set in the neural network.
-Set weights for the Mortality Environment Neural Network
-
-This function assigns the specified weights to the mortality environment neural network.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-set_weights_nnMortEnv"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-set_weights_nnMortEnv}{}}}
 \subsection{Method \code{set_weights_nnMortEnv()}}{
+Set weights for the Mortality Environment Neural Network
+
+This function assigns the specified weights to the mortality environment neural network.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$set_weights_nnMortEnv(weights)}\if{html}{\out{</div>}}
 }
@@ -175,15 +173,15 @@ This function assigns the specified weights to the mortality environment neural 
 }
 \subsection{Returns}{
 None. The weights are set in the neural network.
-Set weights for the Regeneration Environment Neural Network
-
-This function assigns the specified weights to the regeneration environment neural network.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-set_weights_nnRegEnv"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-set_weights_nnRegEnv}{}}}
 \subsection{Method \code{set_weights_nnRegEnv()}}{
+Set weights for the Regeneration Environment Neural Network
+
+This function assigns the specified weights to the regeneration environment neural network.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$set_weights_nnRegEnv(weights)}\if{html}{\out{</div>}}
 }
@@ -197,15 +195,15 @@ This function assigns the specified weights to the regeneration environment neur
 }
 \subsection{Returns}{
 None. The weights are set in the neural network.
-Set weights for a specified Neural Network
-
-This function assigns the specified weights to a given neural network model.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-set_weights"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-set_weights}{}}}
 \subsection{Method \code{set_weights()}}{
+Set weights for a specified Neural Network
+
+This function assigns the specified weights to a given neural network model.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$set_weights(weights, NN)}\if{html}{\out{</div>}}
 }
@@ -227,6 +225,7 @@ torch.nn.modules.container.Sequential. The neural network with updated weights.
 \if{html}{\out{<a id="method-FINNbase-parameter_to_r"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-parameter_to_r}{}}}
 \subsection{Method \code{parameter_to_r()}}{
+Transform torch parameters to R (to save them)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$parameter_to_r()}\if{html}{\out{</div>}}
 }
@@ -236,15 +235,27 @@ torch.nn.modules.container.Sequential. The neural network with updated weights.
 \if{html}{\out{<a id="method-FINNbase-check"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-check}{}}}
 \subsection{Method \code{check()}}{
+Check if all tensors are initialized, if not, reinitialize them. Necessary after restarting r session or after loading the object into the session using \code{readRDS(..)} or \code{load(...)}
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$check(device = NULL)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{device}}{can be used to specify a new device (useful for parallelization)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+nothing
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-update_parameters"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-update_parameters}{}}}
 \subsection{Method \code{update_parameters()}}{
+Update R fields of the parameters
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$update_parameters()}\if{html}{\out{</div>}}
 }
@@ -254,28 +265,56 @@ torch.nn.modules.container.Sequential. The neural network with updated weights.
 \if{html}{\out{<a id="method-FINNbase-setPars"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-setPars}{}}}
 \subsection{Method \code{setPars()}}{
+Set the raw parameters within their ranges
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$setPars(inputPar, parRange)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{inputPar}}{which parameter should be set}
+
+\item{\code{parRange}}{matrix of parameter ranges}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-getPars"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-getPars}{}}}
 \subsection{Method \code{getPars()}}{
+Get transformed parameters (on the response scale)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$getPars(internalPar, parRange)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{internalPar}}{which parameter should be returned (raw internal version)}
+
+\item{\code{parRange}}{matrix of parameter ranges}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-set_environment"></a>}}
 \if{latex}{\out{\hypertarget{method-FINNbase-set_environment}{}}}
 \subsection{Method \code{set_environment()}}{
+Set function environment to object environment (so that \code{self$...} can be used within custom process functions)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FINNBase$set_environment(fn)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{fn}}{function}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FINNbase-clone"></a>}}

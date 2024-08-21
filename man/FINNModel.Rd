@@ -9,7 +9,7 @@
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
-\code{FINN::FINNbase} -> \code{FINNModel}
+\code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINNModel}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -168,11 +168,6 @@ Initializes the FINNModel model with the specified parameters.
   env = NULL,
   output = NULL,
   dtype = NULL,
-  parameters = NULL,
-  optimizer = NULL,
-  history = NULL,
-  param_history = NULL,
-  pred = NULL,
   device = "cpu",
   parHeight = NULL,
   parGrowth = NULL,
@@ -206,21 +201,33 @@ Initializes the FINNModel model with the specified parameters.
 \describe{
 \item{\code{sp}}{integer. Number of species.}
 
+\item{\code{env}}{vector of input dimensions for the neural networks}
+
+\item{\code{output}}{vector of output dimensions for the neural networks}
+
+\item{\code{dtype}}{dtype, should be either \code{torch::torch_float32()} or \code{torch::torch_float64()}}
+
 \item{\code{device}}{character. Device to use ('cpu' or 'cuda').}
 
 \item{\code{parHeight}}{torch.Tensor. Global parameters for height.}
 
-\item{\code{parGrowth}}{torch.Tensor. Growth parameters with dimensions \link{species, 2}.}
+\item{\code{parGrowth}}{torch.Tensor. Growth parameters.}
 
-\item{\code{parMort}}{torch.Tensor. Mortality parameters with dimensions \link{species, 2}.}
+\item{\code{parMort}}{torch.Tensor. Mortality parameters.}
 
-\item{\code{parReg}}{torch.Tensor. Regeneration parameters with dimensions \link{species}.}
+\item{\code{parReg}}{torch.Tensor. Regeneration parameters.}
 
-\item{\code{parGrowthEnv}}{torch.Tensor. Growth environment parameters with dimensions \link{species, 2}.}
+\item{\code{parGrowthEnv}}{torch.Tensor. Growth environment parameters.}
 
-\item{\code{parMortEnv}}{torch.Tensor. Mortality environment parameters with dimensions \link{species, 2}.}
+\item{\code{parMortEnv}}{torch.Tensor. Mortality environment parameters.}
 
-\item{\code{parRegEnv}}{torch.Tensor. Regeneration environment parameters with dimensions \link{species}.}
+\item{\code{parRegEnv}}{torch.Tensor. Regeneration environment parameters.}
+
+\item{\code{nnRegEnv}}{list of matrices. Initial parameters for the NN.}
+
+\item{\code{nnGrowthEnv}}{list of matrices. Initial parameters for the NN.}
+
+\item{\code{nnMortEnv}}{list of matrices. Initial parameters for the NN.}
 
 \item{\code{hidden_growth}}{list. Hidden layers for the growth model.}
 
@@ -228,11 +235,27 @@ Initializes the FINNModel model with the specified parameters.
 
 \item{\code{hidden_reg}}{list. Hidden layers for the regeneration model.}
 
+\item{\code{runEnvGrowth}}{logical. Should the runEnvGrowth NN be run outside of the process functions on the environment.}
+
+\item{\code{runEnvMort}}{logical. Should the runEnvMort NN be run outside of the process functions on the environment.}
+
+\item{\code{runEnvReg}}{logical. Should the runEnvReg NN be run outside of the process functions on the environment.}
+
+\item{\code{speciesPars_ranges}}{list. List of species parameter ranges.}
+
 \item{\code{bias}}{logical. Whether to include a bias term in the neural networks.}
 
 \item{\code{patch_size_ha}}{numeric. Patch size in hectares.}
 
 \item{\code{minLight}}{numeric. Minimum light level.}
+
+\item{\code{growthFunction}}{function or NULL. Which process function should be used. If NULL, package process functions will be used, see \code{?growth}}
+
+\item{\code{mortalityFunction}}{function or NULL. Which process function should be used. If NULL, package process functions will be used, see \code{?mortality}}
+
+\item{\code{regenerationFunction}}{function or NULL. Which process function should be used. If NULL, package process functions will be used, see \code{?regeneration}}
+
+\item{\code{competitionFunction}}{function or NULL. Which process function should be used. If NULL, package process functions will be used, see \code{?competition}}
 }
 \if{html}{\out{</div>}}
 }
@@ -278,6 +301,8 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
 \item{\code{species}}{torch.Tensor (Optional). Species of the trees.}
 
 \item{\code{env}}{torch.Tensor. Environmental data.}
+
+\item{\code{disturbance}}{torch.Tensor. Disturbance rates.}
 
 \item{\code{start_time}}{integer. Time at which to start recording the results.}
 
@@ -336,6 +361,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 \item{\code{X}}{torch.Tensor (Optional). Input data, typically environmental variables over time.}
 
 \item{\code{Y}}{torch.Tensor (Optional). Target data, representing observed tree metrics.}
+
+\item{\code{disturbance}}{torch.Tensor. Disturbance rates.}
 
 \item{\code{initCohort}}{list (Optional). Initial cohort data, including initial dbh, trees, and species information.}
 
