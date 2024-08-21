@@ -69,11 +69,38 @@ finn(
 A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.
 }
 \description{
-This function simulates forest dynamics, including mortality, growth, regeneration, and competition,
-across multiple patches and species.
+This function is the main interface to the FINN platform. The function can be used to simulate and to estimate (fit) the parameters of the FINN model.
 }
-\examples{
-env_data <- data.frame(siteID = 1:5, year = 2001:2005, temp = rnorm(5), precip = rnorm(5))
-predictions <- simulateForest(env = env_data, patches = 3, sp = 2)
+\details{
+While FINN is a platform for modular dynamic forest models, we provide default functions for the four processes, namely \code{?mortality}, \code{?growth}, \code{?regeneration}, and \code{?competetition}.
 
+The idea of finn is to combine mechanistic understanding (the processes) and data-driven approaches. Data-driven means that parameters of the model can be estimated (or informed) by empirical data. This is optional and can be realized in different ways or levels in finn. By default, we assume that the three processes mortality, growth, and regeneration depend on the environment (niche of species), available light (as a consequence of competition), and species specific parameters. The environmental component and the species specific parameters can be estimated or configured. The central function to configure each process is the \code{?createProcess} function.
+
+In the \code{createProcess()} function, the parameters of the environmental model (by default a linear regression model) can be set by the \code{initEnv = ...} argument (must be a matrix with n rows for n species and m columns for m environmental predictors (which is set by the formula argument)). Species specific parameters are set by the \code{initSpecies=...} argument (check help of the default processes for dimensions). If \code{NULL} the parameters will be sampled from plausible ranges that serve as initial values for the optimization, if inference is desired (which is set by \code{optimizeSpecies} and \code{optimizeEnv} arguments). Moreover, custom process functions can be passed to the \code{createProcess()} function using the \code{func} argument. However, take caution that all operations in the custom process function are compatible with \code{torch}, work with multi-dimensional arrays, and are differentiable when inference is wanted. See the section below for more information about custom process functions.
+\subsection{Custom Process Functions:}{
+
+FINN is based on torch for R which is an library for Deep Learning. The advantage of torch is that all calculations are highly optimized and can be run on the GPU. To fully exploit the potential of GPU, all operations in FINN are based on multi-dimensional arrays, tensors. Usually, the dimensions of data objects within finn are of \mjseqn{[k_sites, m_{patches}, n_{cohorts}]}. For custom process functions to properly work, they must work on these tensors and handle the dimensions correctly (in the future we will provide helper functions to check automatically custom functions):
+
+Part of the hybrid modeling example:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{growthCustom = function(dbh, species, parGrowth, pred, light, debug = F)\{
+# dbh, species, light dimensions -> [sites, patches, cohorts]
+# parGrowth species parameters, ignore
+# pred -> [sites, number of environmental predictors]
+input =
+    torch::torch_cat(
+      list(dbh$unsqueeze(4L)/200., # rescale dbh
+           pred$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+           light$unsqueeze(4L),
+           torch::nnf_one_hot(species, num_classes = 3L)),
+      dim = 4L)
+  growth = self$nnGrowthEnv(input)[,,,1]$exp()
+  return(growth)
+\}
+}\if{html}{\out{</div>}}
+
+Within the custom growth function, the \code{torch::torch_cat()} function concatenates dbh, light, environment, and species information (one hot encoded species). The concatenation happens in an additional 4th dimension. \verb{$unsqueeze(dim = ..)} adds a new dimension at the specific dimension. For pred, we must add two additional dimensions and then repeat the values along these new dimensions to get the same number of patches and cohorts (\verb{dbh$shape[2], dbh$shape[3]}).
+
+Moreover, the custom functions must be differentiable, in short, avoid complex R functions or functions from other packages, do not transform the tensors into R objects (e.g. by using \code{torch::as_array} or \code{as.matrix}), and be careful with indexing (we have helper functions for that (TODO!)).
+}
 }
