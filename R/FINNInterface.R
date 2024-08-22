@@ -415,7 +415,7 @@ finn = function(data = NULL,
       parallel::stopCluster(cl)
       out$models_list = models_list
       .n = lapply(models_list, function(m) {
-        m$check(device = device)
+        m$model$check(device = device)
         m$init$check()
       })
       class(out) = "finnModelBootstrap"
