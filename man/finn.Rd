@@ -13,7 +13,7 @@ finn(
   regenerationProcess = NULL,
   competitionProcess = NULL,
   height = NULL,
-  optimizeHeight = TRUE,
+  optimizeHeight = FALSE,
   speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0.01, 4)), parMort =
     rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parHeight = c(0.3, 0.7),
     parGrowthEnv = rbind(c(-1, 1), c(-1, 1)), parMortEnv = rbind(c(-2, 2), c(-2, 2)),
@@ -21,7 +21,7 @@ finn(
   patches = 10L,
   patch_size = 0.1,
   init = NULL,
-  batchsize = 50L,
+  batchsize = NULL,
   epochs = 20L,
   lr = 0.1,
   device = c("cpu", "gpu"),
@@ -33,43 +33,78 @@ finn(
 )
 }
 \arguments{
-\item{data}{data containing species information (dbh, ba, trees, AL, growth, mortality rates, and regeneration rates)}
+\item{data}{(\code{data.table}) \cr
+Data containing species information, must include the columns siteID, species, year, dbh, ba, trees, AL, growth, mort, and reg.}
 
-\item{env}{A data frame containing the environmental variables used in the simulation.}
+\item{env}{(\code{data.table}) \cr
+Data containing environmental predictors, must include the columns siteID, year, and names of environmental predictors used in the formula argument of the processes.}
 
-\item{height}{A function or set of parameters defining the height-growth relationship, if applicable.}
+\item{disturbance}{(\code{data.table}) \cr
+Data containing disturbance events, must include the columns siteID, year, and intensity.}
 
-\item{patches}{An integer specifying the number of patches in the simulation. Default is 10.}
+\item{mortalityProcess}{(\code{NULL}, \code{formula}, or \code{process} created by \code{createProcess()}) \cr
+A process object or formula defining the mortality process. If \code{NULL}, default \code{createProcess(...)} object will be used (all envrionmental predictors will be used).}
 
-\item{patch_size}{A numeric value representing the size of each patch. Default is 0.1.}
+\item{growthProcess}{(\code{NULL}, \code{formula}, or \code{process} created by \code{createProcess()}) \cr
+A process object or formula defining the growth process. If \code{NULL}, default \code{createProcess(...)} object will be used (all envrionmental predictors will be used).}
 
-\item{init}{A custom initialization object for the simulation, if available.}
+\item{regenerationProcess}{(\code{NULL}, \code{formula}, or \code{process} created by \code{createProcess()}) \cr
+A process object or formula defining the regeneration process. If \code{NULL}, default \code{createProcess(...)} object will be used (all envrionmental predictors will be used).}
 
-\item{device}{A character string specifying whether to use \code{"cpu"} or \code{"gpu"} for computation. Default is \code{"cpu"}.}
+\item{competitionProcess}{(\code{NULL}, \code{formula}, or \code{process} created by \code{createProcess()}) \cr
+A function defining the competition process, if applicable. If \code{NULL}, default \code{createProcess(...)} object will be used.}
 
-\item{bootstrap}{bootstrap model or not (computationally expensive!)}
+\item{height}{(\code{numeric(sp)}) \cr
+Set of parameters defining the height-growth relationship, if applicable.}
 
-\item{parallel}{A logical value indicating whether to run the bootstrapping in parallel. Default is \code{FALSE}.}
+\item{optimizeHeight}{(\code{logical(1)}) \cr
+Should the height-growth parameters be estimated or not.}
 
-\item{NGPU}{An integer specifying the number of GPUs to use if \code{device = "gpu"}. Default is 1 (only used for parallel bootstrapping).}
+\item{speciesPars_ranges}{(\code{list(parGrowth = list(matrix()), parMort = list(matrix()), parReg = list(matrix()), parHeight = list(matrix()))}) \cr
+List of boundaries for species parameters.}
+
+\item{patches}{(\code{integer(1)}) \cr
+An integer specifying the number of patches in the simulation. Default is 10.}
+
+\item{patch_size}{(\code{numeric(1)}) \cr
+A numeric value representing the size of each patch. Default is 0.1.}
+
+\item{init}{(\code{NULL} or \code{CohortMat} created by \code{CohortMat$new()}) \cr
+A custom initialization object for the simulation, if available.}
+
+\item{batchsize}{(\code{NULL} or \code{integer(1)}) \cr
+batchsize (sites can be feed in chunkes to the predict function, can be necessary if GPU memory is limited).}
+
+\item{epochs}{(\code{integer(1)}) \cr
+Number of iteration (optimization) steps.}
+
+\item{lr}{(\code{numeric(1)}) \cr
+Learning rate for the first-gradient descent optimizer.}
+
+\item{device}{(\code{character(1)}) \cr
+A character string specifying whether to use \code{"cpu"} or \code{"gpu"} for computation. Default is \code{"cpu"}.}
+
+\item{bootstrap}{(\code{logical(1)} or \code{integer(1)}) \cr
+bootstrap model or not (computationally expensive!).}
+
+\item{parallel}{(\code{character(1)}) \cr
+A logical value indicating whether to run the bootstrapping in parallel. Default is \code{FALSE}.}
+
+\item{NGPU}{(\code{character(1)}) \cr
+An integer specifying the number of GPUs to use if \code{device = "gpu"}. Default is 1 (only used for parallel bootstrapping).}
+
+\item{weights}{(\verb{numeric(6}) \cr
+Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).}
 
 \item{...}{arguments passed to \code{simulateForest()}}
-
-\item{mortality}{A process object or formula defining the mortality process.}
-
-\item{growth}{A process object or formula defining the growth process.}
-
-\item{regeneration}{A process object or formula defining the regeneration process.}
-
-\item{competition}{A function defining the competition process, if applicable.}
-
-\item{sp}{An integer specifying the number of species in the simulation. Default is 5.}
 }
 \value{
 A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.
 }
 \description{
+\loadmathjax
 This function is the main interface to the FINN platform. The function can be used to simulate and to estimate (fit) the parameters of the FINN model.
+data
 }
 \details{
 While FINN is a platform for modular dynamic forest models, we provide default functions for the four processes, namely \code{?mortality}, \code{?growth}, \code{?regeneration}, and \code{?competetition}.

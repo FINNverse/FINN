@@ -338,6 +338,23 @@ FINNBase <- R6::R6Class(
     #' @field parHeightT return transformed parHeight
     parHeightT = function() {
       return(self$getPars(self$parHeight, self$speciesPars_ranges$parHeight))
+    },
+
+    #' @field parGrowthTR return transformed parGrowth
+    parGrowthTR = function() {
+      return(self$getPars(self$parGrowth, self$speciesPars_ranges$parGrowth) |> as.matrix())
+    },
+    #' @field parMortTR return transformed parMort
+    parMortTR = function() {
+      return(self$getPars(self$parMort, self$speciesPars_ranges$parMort)  |> as.matrix())
+    },
+    #' @field parRegTR return transformed parReg
+    parRegTR = function() {
+      return(self$getPars(self$parReg, self$speciesPars_ranges$parReg)  |> as.numeric())
+    },
+    #' @field parHeightTR return transformed parHeight
+    parHeightTR = function() {
+      return(self$getPars(self$parHeight, self$speciesPars_ranges$parHeight)  |> as.numeric())
     }
   )
 )

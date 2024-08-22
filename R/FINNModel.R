@@ -411,7 +411,7 @@ FINNModel = R6::R6Class(
                        pred_mort = NULL,
                        pred_reg = NULL,
                        patches = 50.,
-                       debug = TRUE,
+                       debug = FALSE,
                        y = NULL,
                        c = NULL,
                        update_step = 1L,
@@ -760,7 +760,10 @@ FINNModel = R6::R6Class(
             ),
           loss = loss)
       }else if(!debug){
-        Result_out = list(Predictions = list(Site = lapply(Result, function(x) torch::as_array(x))))
+        Result_out = list(
+          Predictions = list(
+            Site = lapply(Result, function(x) torch::as_array(x))),
+          loss = loss)
       }
 
 
@@ -908,8 +911,14 @@ FINNModel = R6::R6Class(
 
         self$parameter_to_r()
 
-        # torch::cuda_empty_cache()
-        self$pred = pred
+        if(torch::cuda_is_available()) torch::cuda_empty_cache()
+
+        # ignore debugging method
+        pred$Patch = NULL
+        pred$Cohort = NULL
+        self$pred = list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))
+
+        self$optimizer = NULL # TODO: best solution?
       }
 
     ))

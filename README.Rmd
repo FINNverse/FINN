@@ -61,7 +61,7 @@ model =
        regenerationProcess = createProcess(~env1, func = regeneration, optimizeEnv = TRUE, optimizeSpecies = FALSE),
        optimizeHeight = FALSE,
        batchsize = 100L,
-       epochs = 20L
+      epochs = 1L
        )
 ```
 
