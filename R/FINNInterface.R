@@ -177,6 +177,7 @@ finn = function(data = NULL,
 
   #### Prepare response ####
   # TODO: improve!!!
+  options(na.action='na.pass')
   response = list(
     dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), data[data$species==i,])), along = 3L),
     ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), data[data$species==i,])), along = 3L),
@@ -186,6 +187,9 @@ finn = function(data = NULL,
     mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), data[data$species==i,])), along = 3L),
     reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), data[data$species==i,])), along = 3L)
   )
+  options(na.action='na.omit')
+
+  year_sequence = which(levels(as.factor(env$year)) %in% levels(as.factor(data$year)), arr.ind = TRUE)
 
   disturbance_T = NULL
   if(!is.null(disturbance)) {
@@ -306,7 +310,8 @@ finn = function(data = NULL,
               epochs = epochs,
               learning_rate = lr,
               update_step = 1L,
-              weights = weights)
+              weights = weights,
+              year_sequence = year_sequence)
 
     out$model = model
     out$init = init
@@ -672,6 +677,24 @@ print.finnModel = function(object, ...) {
 #' @export
 summary.finnModel = function(object, ...) {
   print(object)
+}
+
+
+#' finnModel plot
+#'
+#' Plotting finnModel outputs (predictions or loss).
+#'
+#' @param x a model fitted by `finnModel`
+#' @param ... ignored
+#'
+#' @return
+#'
+#' ggplot2 object
+#'
+#' @import graphics
+#' @export
+plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
+
 }
 
 
