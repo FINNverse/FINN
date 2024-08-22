@@ -282,7 +282,7 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
   pred_mort = NULL,
   pred_reg = NULL,
   patches = 50,
-  debug = TRUE,
+  debug = FALSE,
   y = NULL,
   c = NULL,
   update_step = 1L,

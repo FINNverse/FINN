@@ -1,24 +1,52 @@
 #' Forest informed neural network
 #'
 #' @description
+#' \loadmathjax
 #' This function is the main interface to the FINN platform. The function can be used to simulate and to estimate (fit) the parameters of the FINN model.
+#'data
 #'
-#'
-#' @param data data containing species information (dbh, ba, trees, AL, growth, mortality rates, and regeneration rates)
-#' @param env A data frame containing the environmental variables used in the simulation.
-#' @param mortality A process object or formula defining the mortality process.
-#' @param growth A process object or formula defining the growth process.
-#' @param regeneration A process object or formula defining the regeneration process.
-#' @param competition A function defining the competition process, if applicable.
-#' @param height A function or set of parameters defining the height-growth relationship, if applicable.
-#' @param patches An integer specifying the number of patches in the simulation. Default is 10.
-#' @param patch_size A numeric value representing the size of each patch. Default is 0.1.
-#' @param sp An integer specifying the number of species in the simulation. Default is 5.
-#' @param init A custom initialization object for the simulation, if available.
-#' @param device A character string specifying whether to use `"cpu"` or `"gpu"` for computation. Default is `"cpu"`.
-#' @param bootstrap bootstrap model or not (computationally expensive!)
-#' @param parallel A logical value indicating whether to run the bootstrapping in parallel. Default is `FALSE`.
-#' @param NGPU An integer specifying the number of GPUs to use if `device = "gpu"`. Default is 1 (only used for parallel bootstrapping).
+#' @param data (`data.table`) \cr
+#'   Data containing species information, must include the columns siteID, species, year, dbh, ba, trees, AL, growth, mort, and reg.
+#' @param env (`data.table`) \cr
+#'   Data containing environmental predictors, must include the columns siteID, year, and names of environmental predictors used in the formula argument of the processes.
+#' @param disturbance (`data.table`) \cr
+#'   Data containing disturbance events, must include the columns siteID, year, and intensity.
+#' @param mortalityProcess (`NULL`, `formula`, or `process` created by `createProcess()`) \cr
+#'  A process object or formula defining the mortality process. If `NULL`, default `createProcess(...)` object will be used (all envrionmental predictors will be used).
+#' @param growthProcess (`NULL`, `formula`, or `process` created by `createProcess()`) \cr
+#'  A process object or formula defining the growth process. If `NULL`, default `createProcess(...)` object will be used (all envrionmental predictors will be used).
+#' @param regenerationProcess (`NULL`, `formula`, or `process` created by `createProcess()`) \cr
+#'  A process object or formula defining the regeneration process. If `NULL`, default `createProcess(...)` object will be used (all envrionmental predictors will be used).
+#' @param competitionProcess (`NULL`, `formula`, or `process` created by `createProcess()`) \cr
+#'  A function defining the competition process, if applicable. If `NULL`, default `createProcess(...)` object will be used.
+#' @param height (`numeric(sp)`) \cr
+#'  Set of parameters defining the height-growth relationship, if applicable.
+#' @param optimizeHeight (`logical(1)`) \cr
+#'  Should the height-growth parameters be estimated or not.
+#' @param speciesPars_ranges (`list(parGrowth = list(matrix()), parMort = list(matrix()), parReg = list(matrix()), parHeight = list(matrix()))`) \cr
+#'  List of boundaries for species parameters.
+#' @param patches (`integer(1)`) \cr
+#'  An integer specifying the number of patches in the simulation. Default is 10.
+#' @param patch_size (`numeric(1)`) \cr
+#'  A numeric value representing the size of each patch. Default is 0.1.
+#' @param init (`NULL` or `CohortMat` created by `CohortMat$new()`) \cr
+#'  A custom initialization object for the simulation, if available.
+#' @param batchsize (`NULL` or `integer(1)`) \cr
+#'  batchsize (sites can be feed in chunkes to the predict function, can be necessary if GPU memory is limited).
+#' @param epochs (`integer(1)`) \cr
+#'  Number of iteration (optimization) steps.
+#' @param lr (`numeric(1)`) \cr
+#'  Learning rate for the first-gradient descent optimizer.
+#' @param device (`character(1)`) \cr
+#'  A character string specifying whether to use `"cpu"` or `"gpu"` for computation. Default is `"cpu"`.
+#' @param bootstrap (`logical(1)` or `integer(1)`) \cr
+#'  bootstrap model or not (computationally expensive!).
+#' @param parallel (`character(1)`) \cr
+#'  A logical value indicating whether to run the bootstrapping in parallel. Default is `FALSE`.
+#' @param NGPU (`character(1)`) \cr
+#'  An integer specifying the number of GPUs to use if `device = "gpu"`. Default is 1 (only used for parallel bootstrapping).
+#' @param weights (`numeric(6`) \cr
+#'  Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).
 #' @param ... arguments passed to `simulateForest()`
 #'
 #'
@@ -70,7 +98,7 @@ finn = function(data = NULL,
                 regenerationProcess = NULL,
                 competitionProcess = NULL,
                 height = NULL,
-                optimizeHeight = TRUE,
+                optimizeHeight = FALSE,
                 speciesPars_ranges = list(
                   parGrowth = rbind(
                     c(0.01, 0.99),
@@ -97,7 +125,7 @@ finn = function(data = NULL,
                 patches = 10L,
                 patch_size = 0.1,
                 init = NULL,
-                batchsize = 50L,
+                batchsize = NULL,
                 epochs = 20L,
                 lr = 0.1,
                 device = c("cpu", "gpu"),
@@ -386,6 +414,10 @@ finn = function(data = NULL,
         })
       parallel::stopCluster(cl)
       out$models_list = models_list
+      .n = lapply(models_list, function(m) {
+        m$check(device = device)
+        m$init$check()
+      })
       class(out) = "finnModelBootstrap"
     } else {
       models_list =
@@ -463,6 +495,185 @@ finn = function(data = NULL,
   return(out)
 
 }
+
+
+
+#' Predict Forest Dynamics
+#'
+#' @param object object of class 'finnModel' created by `finn()`
+#' @param init new `cohortMat$new()` object, if `NULL`, the initial cohortMat of the object is used
+#' @param env new environment to simulate for
+#' @param ... currently ignored
+#'
+#' @export
+predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL, ...) {
+  object$model$check()
+  object$init$check()
+
+  if(is.null(env)) {
+    mortality_env = object$env$mortality_env
+    growth_env = object$env$growth_env
+    regeneration_env = object$env$regeneration_env
+  } else {
+    mortality_env = extract_env(object$mortalityProcess, env)
+    growth_env = extract_env(object$growthProcess, env)
+    regeneration_env = extract_env(object$regenerationProcess, env)
+  }
+
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  } else {
+    disturbance = object$disturbance
+    if(!is.null(disturbance)) {
+      disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+    }
+  }
+
+
+  if(is.null(init)) {
+    init = object$init
+  }
+
+  X = list(torch::torch_tensor(mortality_env),
+           torch::torch_tensor(growth_env),
+           torch::torch_tensor(regeneration_env))
+
+  predictions =
+    object$model$predict(
+      dbh = init$dbh,
+      trees = init$trees,
+      species = init$species,
+      env = X,
+      disturbance = disturbance_T,
+      patches = init$dbh$shape[2],
+      debug = FALSE
+    )
+
+  return(list(wide = pred2DF(predictions, format = "wide"),
+              long = pred2DF(predictions, format = "long")
+  ))
+}
+
+
+#' Continue Training a `finnModel`
+#'
+#' This function continues the training process for an existing `finnModel` object. It fits the model for a specified number of epochs using the provided learning rate and batch size, updating the model's weights accordingly.
+#'
+#' @param object An object of class `finnModel`, typically obtained from the `finn()` function. This object contains the model, initial conditions, and data required for training.
+#' @param epochs An integer specifying the number of epochs to train the model. Defaults to 20.
+#' @param lr A numeric value specifying the learning rate for the training process. If `NULL`, the learning rate from the `object` is used.
+#' @param batchsize An integer specifying the batch size to use during training. If `NULL`, the batch size from the `object` is used.
+#'
+#' @return The function returns an updated object of class `finnModel` with the model's training continued for the specified number of epochs.
+#'
+#' @details The function prepares the response variables and disturbance data, converts them into tensors, and then proceeds with the training process using the `fit` method of the `finnModel` object. The training is performed on the CPU.
+#'
+#' @examples
+#' \dontrun{
+#'   model <- finn(data, ...)
+#'   model <- continue_fit(model, epochs = 50, lr = 0.01, batchsize = 32)
+#' }
+#'
+#' @export
+continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weights = NULL) {
+  object$model$check()
+  object$init$check()
+
+  sp = object$sp
+
+  response = list(
+    dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), object$data[object$data$species==i,])), along = 3L),
+    ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), object$data[object$data$species==i,])), along = 3L),
+    trees = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+trees), object$data[object$data$species==i,])), along = 3L),
+    AL = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+AL), object$data[object$data$species==i,])), along = 3L),
+    growth = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+growth), object$data[object$data$species==i,])), along = 3L),
+    mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), object$data[object$data$species==i,])), along = 3L),
+    reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), object$data[object$data$species==i,])), along = 3L)
+  )
+
+  disturbance = object$disturbance
+  disturbance_T = NULL
+  if(!is.null(disturbance)) {
+    disturbance = extract_env(list(formula=~0+intensity), disturbance)
+    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
+  }
+
+  response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+
+  if(is.null(lr)) lr = object$lr
+  if(is.null(batchsize)) batchsize=object$batchsize
+
+  object$model$fit(initCohort = object$init,
+                   X = list(torch::torch_tensor(object$env$mortality_env),
+                            torch::torch_tensor(object$env$growth_env),
+                            torch::torch_tensor(object$env$regeneration_env)),
+                   Y = response_T,
+                   disturbance = disturbance_T,
+                   patches = object$patches,
+                   batch_size = batchsize,
+                   epochs = epochs,
+                   learning_rate = lr,
+                   update_step = 1L,
+                   weights = weights)
+  return(invisible(object))
+}
+
+#' Print finnModel
+#'
+#' print finnModel object created by `finn()`
+#'
+#' @param object object of class finnModel
+#' @param ... not implemented
+#'
+#' @export
+print.finnModel = function(object, ...) {
+  object$model$check()
+  cat("Estimated Parameters: \n")
+  if(attr(object$model$parGrowth_r, "requires_grad")) {
+    cat("\nGrowth Species Parameter: \n")
+    print(object$model$parGrowthTR)
+  }
+  if(attr(object$model$parMort_r, "requires_grad")) {
+    cat("\nMort Species Parameter: \n")
+    print(object$model$parMortTR)
+  }
+  if(attr(object$model$parReg_r, "requires_grad")) {
+    cat("\nGrowth Species Parameter: \n")
+    print(object$model$parRegTR)
+  }
+  if(attr(object$model$parHeight_r, "requires_grad")) {
+    cat("\nGrowth Species Parameter: \n")
+    print(object$model$parHeightTR)
+  }
+  if(attr(object$model$parGrowthEnv_r[[1]], "requires_grad")) {
+    cat("\nGrowth Environment Parameter: \n")
+    if(length(object$model$parGrowthEnv)) print(object$model$parGrowthEnv[[1]] |> as.matrix())
+  }
+  if(attr(object$model$parMortEnv_r[[1]], "requires_grad")) {
+    cat("\nMort Environment Parameter: \n")
+    if(length(object$model$parMortEnv)) print(object$model$parMortEnv[[1]] |> as.matrix())
+  }
+  if(attr(object$model$parRegEnv_r[[1]], "requires_grad")) {
+    cat("\nReg Environment Parameter: \n")
+    if(length(object$model$parRegEnv)) print(object$model$parRegEnv[[1]] |> as.matrix())
+  }
+}
+
+
+#' Summary of finnModel
+#'
+#' summary of finnModel object created by `finn()`
+#'
+#' @param object object of class finnModel
+#' @param ... not implemented
+#'
+#' @export
+summary.finnModel = function(object, ...) {
+  print(object)
+}
+
 
 
 
@@ -768,125 +979,3 @@ simulateForest = function(env,
 
 
 
-
-#' Predict Forest Dynamics
-#'
-#' @param object object of class 'finnModel' created by `finn()`
-#' @param init new `cohortMat$new()` object, if `NULL`, the initial cohortMat of the object is used
-#' @param env new environment to simulate for
-#' @param ... currently ignored
-#'
-#' @export
-predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL, ...) {
-  object$model$check()
-  object$init$check()
-
-  if(is.null(env)) {
-    mortality_env = object$env$mortality_env
-    growth_env = object$env$growth_env
-    regeneration_env = object$env$regeneration_env
-  } else {
-    mortality_env = extract_env(object$mortalityProcess, env)
-    growth_env = extract_env(object$growthProcess, env)
-    regeneration_env = extract_env(object$regenerationProcess, env)
-  }
-
-  disturbance_T = NULL
-  if(!is.null(disturbance)) {
-    disturbance = extract_env(list(formula=~0+intensity), disturbance)
-    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
-  } else {
-    disturbance = object$disturbance
-    if(!is.null(disturbance)) {
-      disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
-    }
-  }
-
-
-  if(is.null(init)) {
-    init = object$init
-  }
-
-  X = list(torch::torch_tensor(mortality_env),
-           torch::torch_tensor(growth_env),
-           torch::torch_tensor(regeneration_env))
-
-  predictions =
-    object$model$predict(
-      dbh = init$dbh,
-      trees = init$trees,
-      species = init$species,
-      env = X,
-      disturbance = disturbance_T,
-      patches = init$dbh$shape[2],
-      debug = FALSE
-    )
-
-  return(list(wide = pred2DF(predictions, format = "wide")$site,
-              long = pred2DF(predictions, format = "long")$site
-              ))
-}
-
-
-#' Continue Training a `finnModel`
-#'
-#' This function continues the training process for an existing `finnModel` object. It fits the model for a specified number of epochs using the provided learning rate and batch size, updating the model's weights accordingly.
-#'
-#' @param object An object of class `finnModel`, typically obtained from the `finn()` function. This object contains the model, initial conditions, and data required for training.
-#' @param epochs An integer specifying the number of epochs to train the model. Defaults to 20.
-#' @param lr A numeric value specifying the learning rate for the training process. If `NULL`, the learning rate from the `object` is used.
-#' @param batchsize An integer specifying the batch size to use during training. If `NULL`, the batch size from the `object` is used.
-#'
-#' @return The function returns an updated object of class `finnModel` with the model's training continued for the specified number of epochs.
-#'
-#' @details The function prepares the response variables and disturbance data, converts them into tensors, and then proceeds with the training process using the `fit` method of the `finnModel` object. The training is performed on the CPU.
-#'
-#' @examples
-#' \dontrun{
-#'   model <- finn(data, ...)
-#'   model <- continue_fit(model, epochs = 50, lr = 0.01, batchsize = 32)
-#' }
-#'
-#' @export
-continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weights = NULL) {
-  object$model$check()
-  object$init$check()
-
-  sp = object$sp
-
-  response = list(
-    dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), object$data[object$data$species==i,])), along = 3L),
-    ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), object$data[object$data$species==i,])), along = 3L),
-    trees = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+trees), object$data[object$data$species==i,])), along = 3L),
-    AL = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+AL), object$data[object$data$species==i,])), along = 3L),
-    growth = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+growth), object$data[object$data$species==i,])), along = 3L),
-    mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), object$data[object$data$species==i,])), along = 3L),
-    reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), object$data[object$data$species==i,])), along = 3L)
-  )
-
-  disturbance = object$disturbance
-  disturbance_T = NULL
-  if(!is.null(disturbance)) {
-    disturbance = extract_env(list(formula=~0+intensity), disturbance)
-    disturbance_T = torch::torch_tensor(disturbance, dtype=torch::torch_float32(), device="cpu")
-  }
-
-  response_T = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
-
-  if(is.null(lr)) lr = object$lr
-  if(is.null(batchsize)) batchsize=object$batchsize
-
-  object$model$fit(initCohort = object$init,
-            X = list(torch::torch_tensor(object$env$mortality_env),
-                     torch::torch_tensor(object$env$growth_env),
-                     torch::torch_tensor(object$env$regeneration_env)),
-            Y = response_T,
-            disturbance = disturbance_T,
-            patches = object$patches,
-            batch_size = batchsize,
-            epochs = epochs,
-            learning_rate = lr,
-            update_step = 1L,
-            weights = weights)
-  return(invisible(object))
-}

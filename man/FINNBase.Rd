@@ -42,6 +42,14 @@ parRegEnv parameters as R vector, internal useage}
 \item{\code{parRegT}}{return transformed parReg}
 
 \item{\code{parHeightT}}{return transformed parHeight}
+
+\item{\code{parGrowthTR}}{return transformed parGrowth}
+
+\item{\code{parMortTR}}{return transformed parMort}
+
+\item{\code{parRegTR}}{return transformed parReg}
+
+\item{\code{parHeightTR}}{return transformed parHeight}
 }
 \if{html}{\out{</div>}}
 }

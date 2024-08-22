@@ -141,16 +141,10 @@ height = function(dbh, parHeight) {
 #'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
 competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., patch_size_ha, ba = NULL, cohortHeights = NULL){
-
-
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)
   if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
   if(is.null(h)) {
     h = cohortHeights
-
-    # TODO:
-    # Rework the height comparison, the sigmoid function preserves the gradients but they are not great (either -1 or 1)
-
     ba_height = (ba$unsqueeze_(4)$multiply(((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2)$sigmoid_() ))$sum(-2) # AUFPASSEN
   }else{
     ba_height = (ba$unsqueeze_(4)$multiply_(((cohortHeights - 0.1)/1e-2)$sigmoid_() ))$sum(-2)
@@ -160,6 +154,8 @@ competition = function(dbh, species, trees, parHeight, h = NULL, minLight = 50.,
   return(light)
 }
 
+# TODO:
+# Rework the height comparison, the sigmoid function preserves the gradients but they are not great (either -1 or 1)
 
 
 #' Mortality
