@@ -704,7 +704,8 @@ FINNModel = R6::R6Class(
         # TODO: Position of the first block?
         if(i > 0){
           if(dbh$shape[3] != 0){
-            BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
+            # BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
+            BA_stem = BA_stem(dbh = dbh)*trees
             labels = species
             samples = vector("list", 3)
             mask = trees$gt(0.5)
