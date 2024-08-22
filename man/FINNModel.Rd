@@ -287,7 +287,8 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
   c = NULL,
   update_step = 1L,
   verbose = TRUE,
-  weights = NULL
+  weights = NULL,
+  year_sequence = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -325,6 +326,8 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
 \item{\code{verbose}}{logical. Print progress if TRUE.}
 
 \item{\code{weights}}{weights for reweighting the loss}
+
+\item{\code{year_sequence}}{at which year indices should the predictions compared with the observed values}
 }
 \if{html}{\out{</div>}}
 }
@@ -351,7 +354,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   start_time = 1,
   patches = 50L,
   update_step = 1L,
-  weights = NULL
+  weights = NULL,
+  year_sequence = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -379,6 +383,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 \item{\code{update_step}}{integer. Backpropagation step length.}
 
 \item{\code{weights}}{reweight likelihood}
+
+\item{\code{year_sequence}}{at which year indices should the predictions compared with the observed values}
 
 \item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
 }

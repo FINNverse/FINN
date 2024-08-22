@@ -400,6 +400,7 @@ FINNModel = R6::R6Class(
     #' @param update_step integer. Backpropagation step length.
     #' @param verbose logical. Print progress if TRUE.
     #' @param weights weights for reweighting the loss
+    #' @param year_sequence at which year indices should the predictions compared with the observed values
     #' @return list. A list of predicted values for dbh, number of trees, and other recorded time points. If `debug` is TRUE, raw results and cohorts are also returned.
     predict = function(dbh = NULL,
                        trees = NULL,
@@ -416,7 +417,8 @@ FINNModel = R6::R6Class(
                        c = NULL,
                        update_step = 1L,
                        verbose = TRUE,
-                       weights = NULL){
+                       weights = NULL,
+                       year_sequence = NULL){
 
 
       if(is.null(dbh)){
@@ -704,41 +706,52 @@ FINNModel = R6::R6Class(
         # TODO: Position of the first block?
         if(i > 0){
           if(dbh$shape[3] != 0){
-            BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
-            labels = species
-            samples = vector("list", 3)
-            mask = trees$gt(0.5)
-            dbh_mask = dbh$gt(0)
-            # samples[[1]] = dbh * mask
-            # only add dbh values > 0 to samples
-            samples[[1]] = dbh * dbh_mask
-            samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
-            samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
-            Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
 
-            tmp_res = aggregate_results(labels, samples, Results_tmp)
-            # BA and number of trees Result[[1]] and Result[[2]]
-            Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])/cohort_counts
-            for(v in 2:3){
-              Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
-            }
-            rm(BA_stem)
+              BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
+              labels = species
+              samples = vector("list", 3)
+              mask = trees$gt(0.5)
+              dbh_mask = dbh$gt(0)
+              # samples[[1]] = dbh * mask
+              # only add dbh values > 0 to samples
+              samples[[1]] = dbh * dbh_mask
+              samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
+              samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
+              Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
+
+              tmp_res = aggregate_results(labels, samples, Results_tmp)
+              # BA and number of trees Result[[1]] and Result[[2]]
+              Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])/cohort_counts
+              for(v in 2:3){
+                Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
+              }
+              rm(BA_stem)
           }
         }
 
         loss = torch_zeros(6L, device = self$device)
         if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
-          for(j in 2:7) {
-            # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
-            if(j == 3) {
-              loss[j-1] = loss[j-1]+torch::distr_poisson(Result[[2]][,i,]+0.001)$log_prob(c[, i,])$mean()$negative()*(weights[j-1]+0.0001)
-            } else if(j == 7) {
-              loss[j-1] = loss[j-1]+torch::distr_poisson(r_mean+0.001)$log_prob(Result[[7]][,i,])$mean()$negative()*(weights[j-1]+0.0001)
-            } else {
-              loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, i,,j], Result[[j]][,i,])$mean()*(weights[j-1]+0.0001)
+          print(i)
+          if(i %in% year_sequence) {
+            tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
+          #browser()
+            for(j in 2:7) {
+              # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
+              if(j == 3) {
+                mask = c[, tmp_index,]$isnan()$bitwise_not()
+                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson(Result[[2]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
+              } else if(j == 7) {
+                mask = y[, tmp_index,,j]$isnan()$bitwise_not()
+                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson((r_mean+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
+              } else {
+                mask = y[, tmp_index,,j]$isnan()$bitwise_not()
+                if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
+              }
             }
+            loss$sum()$backward()
+
           }
-          loss$sum()$backward()
+
           # cat("Backprop....\n")
           for(j in 1:7) Result[[j]] = Result[[j]]$detach()
         }
@@ -790,6 +803,7 @@ FINNModel = R6::R6Class(
     #' @param response character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".
     #' @param update_step integer. Backpropagation step length.
     #' @param weights reweight likelihood
+    #' @param year_sequence at which year indices should the predictions compared with the observed values
     #' @return None. The trained model is stored within the class instance.
     fit = function(
           X = NULL,
@@ -802,7 +816,8 @@ FINNModel = R6::R6Class(
           start_time = 1,
           patches = 50L,
           update_step = 1L,
-          weights = NULL){
+          weights = NULL,
+          year_sequence = NULL){
 
         if(is.null(self$optimizer)){
           self$optimizer = optim_adagrad(params = self$parameters, lr = learning_rate) # AdaBound was also good
@@ -851,6 +866,7 @@ FINNModel = R6::R6Class(
         }
 
         cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} Loss: {bl}", total = epochs, clear = FALSE)
+        if(is.null(year_sequence)) year_sequence = 1:X[[1]]$shape[2]
 
         for(epoch in 1:epochs){
           counter = 1
@@ -890,7 +906,8 @@ FINNModel = R6::R6Class(
                                     c = c,
                                     update_step = update_step,
                                     verbose = FALSE,
-                                    weights = weights)
+                                    weights = weights,
+                                    year_sequence = year_sequence)
             pred = pred_tmp[[1]]
             loss = pred_tmp[[2]]
 
