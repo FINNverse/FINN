@@ -47,6 +47,8 @@
 #'  An integer specifying the number of GPUs to use if `device = "gpu"`. Default is 1 (only used for parallel bootstrapping).
 #' @param weights (`numeric(6`) \cr
 #'  Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).
+#' @param file (`character()`) \cr
+#'  If weights should be saved after each optimization step (for monitoring), set a path. Default is `NULL`.
 #' @param ... arguments passed to `simulateForest()`
 #'
 #'
@@ -133,6 +135,7 @@ finn = function(data = NULL,
                 parallel = FALSE,
                 NGPU = 1,
                 weights = c(0.05, 0.50, 3.00, 0.50, 3.00, 2.00),
+                file = NULL,
                 ...
 ) {
 
@@ -213,6 +216,7 @@ finn = function(data = NULL,
                          sp = sp)
   } else {
     patches = dim(init$species_r)[2]
+    init$check()
   }
 
   out$patches = patches
@@ -311,7 +315,8 @@ finn = function(data = NULL,
               learning_rate = lr,
               update_step = 1L,
               weights = weights,
-              year_sequence = year_sequence)
+              year_sequence = year_sequence,
+              file = file)
 
     out$model = model
     out$init = init
@@ -588,6 +593,7 @@ continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weigh
 
   sp = object$sp
 
+  options(na.action='na.pass')
   response = list(
     dbh = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+dbh), object$data[object$data$species==i,])), along = 3L),
     ba = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+ba), object$data[object$data$species==i,])), along = 3L),
@@ -597,6 +603,7 @@ continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weigh
     mort = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+mort), object$data[object$data$species==i,])), along = 3L),
     reg = abind::abind(lapply(1:sp, function(i) extract_env(list(formula=~0+reg), object$data[object$data$species==i,])), along = 3L)
   )
+  options(na.action='na.omit')
 
   disturbance = object$disturbance
   disturbance_T = NULL
@@ -610,6 +617,8 @@ continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weigh
   if(is.null(lr)) lr = object$lr
   if(is.null(batchsize)) batchsize=object$batchsize
 
+  year_sequence = object$model$year_sequence
+
   object$model$fit(initCohort = object$init,
                    X = list(torch::torch_tensor(object$env$mortality_env),
                             torch::torch_tensor(object$env$growth_env),
@@ -621,7 +630,8 @@ continue_fit = function(object, epochs = 20L, lr = NULL, batchsize = NULL, weigh
                    epochs = epochs,
                    learning_rate = lr,
                    update_step = 1L,
-                   weights = weights)
+                   weights = weights,
+                   year_sequence = year_sequence)
   return(invisible(object))
 }
 
