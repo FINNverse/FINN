@@ -2,6 +2,9 @@ library(data.table)
 
 census_years <- c(1982, 1985, 1990, 1995, 2000, 2005, 2010, 2015)
 
+total_area = 1000*500
+area_of_square = total_area/500
+sqrt(1000)
 # BCI data was downloaded from https://datadryad.org/stash/dataset/doi:10.15146/5xcp-0d46
 dt_list <- list()
 for (i in 1:8) {
@@ -17,6 +20,8 @@ spptable <- data.table(bci.spptable)
 # donwloaded from
 # https://www.osti.gov/biblio/1771850
 meteo_dt <- fread("data/calibration-data/BCI/BCI_1985_2018c_mod_2018substituted_20210129025453.csv")
+
+cor(as.matrix(meteo_dt[,.(Temp_deg_C, RH_prc, SR_W_m2, Rainfall_mm_hr)]), method = "spearman")
 
 # convert 12/31/84 20:00 to year, month, day, hour columns
 meteo_dt[, c("date", "hour") := tstrsplit(DateTime, " ", fixed = TRUE)]
@@ -41,6 +46,11 @@ env_dt <- env_dt[,.(
   T_max = max(Temp),
   T_min = min(Temp)
 ), by = .(year)]
+
+library(usdm)
+vifstep(as.matrix(env_dt), method = "spearman")
+
+
 
 fwrite(env_dt, "data/calibration-data/BCI/env_dt.csv")
 
@@ -80,31 +90,35 @@ fwrite(env_dt, "data/calibration-data/BCI/env_dt.csv")
 # # Print the list of tree families
 # print(tree_families)
 
-
 all_trees <- rbindlist(dt_list, fill=TRUE)
-
+all_trees <- merge(all_trees, spptable[,.(sp,Genus)], by = "sp")
+uniqueN(all_trees$Genus)
 all_trees <- all_trees[order(census)]
 all_trees[grepl("A",status), status := "A",]
-all_trees[,species := as.integer(as.factor(sp)),]
+all_trees[,species := as.integer(as.factor(Genus)),]
 all_trees[, ":="(
   status_before = data.table::shift(status, 1, type = "lag"),
-  dbh_before = data.table::shift(dbh, 1, type = "lag")
+  dbh_before = data.table::shift(dbh, 1, type = "lag"),
+  period_length = census - data.table::shift(census, 1, type = "lag")
   ),
   by = .(stemID)]
 
+x_length = 40
+y_length = 25
 all_trees <- all_trees[!is.na(gx) & !is.na(gy)]
 all_trees[,":="(
-  x_class = cut(gx, breaks = seq(0, 1000, 100), labels = LETTERS[1:length(seq(0, 900, 100))], include.lowest = T),
-  y_class = cut(gy, breaks = seq(0, 500, 100), labels = LETTERS[1:length(seq(0, 400, 100))], include.lowest = T)
+  x_class = cut(gx, breaks = seq(0, 1000, x_length), labels = 1:length(seq(x_length, 1000, x_length)), include.lowest = T),
+  y_class = cut(gy, breaks = seq(0, 500, y_length), labels = 1:length(seq(y_length, 500, y_length)), include.lowest = T)
 ),]
+all_trees[is.na(x_class)]
 
-all_trees[, patch := as.integer(as.factor(paste0(x_class,y_class))),]
-
+all_trees[, patch := as.integer(as.factor(paste0(x_class,"-",y_class))),]
+uniqueN(all_trees$patch)
 stand_dt <- all_trees[,.(
   ba = round(sum(ba*(status=="A")),4),
   trees = sum(status=="A"),
   dbh = mean(dbh/10),
-  g = mean(dbh/10-dbh_before/10, na.rm = T),
+  g = mean(dbh/10-dbh_before/10, na.rm = T)/unique(period_length),
   fresh_dead = sum(status=="D" & status_before=="A", na.rm = T),
   r = sum(status=="A" & status_before=="P", na.rm = T)
 ), by=.(census, siteID = patch, species)]
@@ -113,7 +127,15 @@ stand_dt <- all_trees[,.(
 stand_dt[, trees_before := shift(trees, 1, type = "lag"), by=.(siteID, species)]
 stand_dt[, m := fresh_dead/trees_before, ]
 stand_dt[is.infinite(m), m := 1]
+hist(
+  stand_dt[,.(
+    ba = sum(ba)
+  ), by = .(siteID, census)]$ba
+  )
 
+g_max <- quantile(stand_dt$g,0.999, na.rm = T)
+stand_dt[g > g_max | g < 0, g := NA]
+summary(stand_dt$g)
 fwrite(stand_dt, "data/calibration-data/BCI/stand_dt.csv")
 
 dbh_class_size = 1
@@ -127,7 +149,8 @@ initial_trees <- all_trees[status=="A" & !is.na(dbh) & census == 1982, .(
 ]
 
 initial_trees <- initial_trees[order(patch)]
-initial_trees$cohortID = 1:nrow(initial_trees)
+# initial_trees$cohortID = 1:nrow(initial_trees)
+initial_trees[,cohortID := 1:.N,by = patch]
 
 initial_trees[, dbh := as.numeric(as.character(dbh)),]
 
@@ -137,4 +160,7 @@ fwrite(obs_df, "data/calibration-data/BCI/obs_df.csv")
 obs_array <- FINN::obsDF2arrays(obs_df)
 cohort1 <- FINN::CohortMat$new(obs_df)
 
+cohort1$species_r[is.na(cohort1$species_r)]
+cohort1$species_r[cohort1$species_r == 0]
+cohort1$patchID
 
