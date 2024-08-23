@@ -37,6 +37,8 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
   dbh_array <- array(result$dbh, dim = dim)
   trees_array <- array(result$trees, dim = dim)
 
+  species_array[is.na(species_array)] <- 1
+  species_array[species_array == 0] <- 1
   species_array[species_array == "NA"] <- 1
   dbh_array[is.na(dbh_array)] <- 0
   trees_array[is.na(trees_array)] <- 0
