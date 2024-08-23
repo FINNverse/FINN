@@ -364,7 +364,7 @@ FINN.seed <- function(seed) {
 }
 
 
-checkPars = function(inputPar, parRange){
+checkPars = function(inputPar, parRange, name = NULL){
   if(is.list(inputPar)) inputPar = inputPar[[1]]
   if(is.vector(inputPar)) {
     Npar = 1
@@ -375,7 +375,11 @@ checkPars = function(inputPar, parRange){
     Npar = ncol(inputPar)
     Nsp = nrow(inputPar)
   }else{
-    stop("speciesPars and speciesPars_ranges must contain vectors or a matrices")
+    error_message = c(
+      "Error: speciesPars and speciesPars_ranges must contain vectors or a matrices\n",
+      paste0("The object provided for ", name, " is not a vector or matrix\nstr(",name,")\n",paste0(capture.output(str(inputPar)), collapse = "\n"))
+      )
+    stop(error_message)
   }
   if(Npar != nrow(parRange)){
     stop("speciesPars and speciesPars_ranges must have the same number of parameters")
@@ -396,7 +400,7 @@ checkParInput = function(speciesPars, speciesPars_ranges){
   checked = list()
   valid_pars = T
   for(i in names(speciesPars_ranges)){
-    checked[[i]] = checkPars(speciesPars[[i]], speciesPars_ranges[[i]])
+    checked[[i]] = checkPars(speciesPars[[i]], speciesPars_ranges[[i]], i)
     if(checked[[i]]$invalid) valid_pars = F
   }
   if(!valid_pars){
