@@ -166,6 +166,10 @@ FINNModel = R6::R6Class(
     #' Neural Network Configuration, internal useage
     nnRegConfig = NULL,
 
+    #' @field year_sequence (`numeric(n)`) \cr
+    #' Time points for loss calculation
+    year_sequence = NULL,
+
     #' @description
     #' Initializes the FINNModel model with the specified parameters.
     #' @param sp integer. Number of species.
@@ -486,7 +490,6 @@ FINNModel = R6::R6Class(
       # Run over timesteps
       if(verbose) cli::cli_progress_bar(format = "Year: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} ", total = time, clear = FALSE)
 
-
       for(i in 1:time){
 
         # Only necessary if gradients are needed
@@ -706,35 +709,35 @@ FINNModel = R6::R6Class(
         # TODO: Position of the first block?
         if(i > 0){
           if(dbh$shape[3] != 0){
-            # BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
-            BA_stem = BA_stem(dbh = dbh)*trees
-            labels = species
-            samples = vector("list", 3)
-            mask = trees$gt(0.5)
-            dbh_mask = dbh$gt(0)
-            # samples[[1]] = dbh * mask
-            # only add dbh values > 0 to samples
-            samples[[1]] = dbh * dbh_mask
-            samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
-            samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
-            Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
+              #BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
+              BA_stem = BA_stem(dbh = dbh)*trees
+              labels = species
+              samples = vector("list", 3)
+              mask = trees$gt(0.5)
+              dbh_mask = dbh$gt(0)
+              # samples[[1]] = dbh * mask
+              # only add dbh values > 0 to samples
+              samples[[1]] = dbh * dbh_mask
+              samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
+              samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
+              Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
 
-            tmp_res = aggregate_results(labels, samples, Results_tmp)
-            # BA and number of trees Result[[1]] and Result[[2]]
-            Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])/cohort_counts
-            for(v in 2:3){
-              Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
-            }
-            rm(BA_stem)
+              tmp_res = aggregate_results(labels, samples, Results_tmp)
+              # BA and number of trees Result[[1]] and Result[[2]]
+              Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])/cohort_counts
+              for(v in 2:3){
+                Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
+              }
+              rm(BA_stem)
+
+
           }
         }
 
         loss = torch_zeros(6L, device = self$device)
         if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
-          print(i)
           if(i %in% year_sequence) {
             tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
-          #browser()
             for(j in 2:7) {
               # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
               if(j == 3) {
@@ -742,14 +745,13 @@ FINNModel = R6::R6Class(
                 if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson(Result[[2]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
               } else if(j == 7) {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson((r_mean+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson((r_mean+0.001)$squeeze(2L)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
               }
             }
             loss$sum()$backward()
-
           }
 
           # cat("Backprop....\n")
@@ -804,6 +806,7 @@ FINNModel = R6::R6Class(
     #' @param update_step integer. Backpropagation step length.
     #' @param weights reweight likelihood
     #' @param year_sequence at which year indices should the predictions compared with the observed values
+    #' @param file path if weights should be saved after each epoch (for monitoring).
     #' @return None. The trained model is stored within the class instance.
     fit = function(
           X = NULL,
@@ -817,7 +820,8 @@ FINNModel = R6::R6Class(
           patches = 50L,
           update_step = 1L,
           weights = NULL,
-          year_sequence = NULL){
+          year_sequence = NULL,
+          file = NULL){
 
         if(is.null(self$optimizer)){
           self$optimizer = optim_adagrad(params = self$parameters, lr = learning_rate) # AdaBound was also good
@@ -841,7 +845,7 @@ FINNModel = R6::R6Class(
                                 torch_tensor(X[[2]], dtype=self$dtype, device=torch_device('cpu')),
                                 torch_tensor(X[[3]], dtype=self$dtype, device=torch_device('cpu')),
                                 torch_tensor(Y[,,,], dtype=self$dtype, device=torch_device('cpu')),
-                                torch_tensor(Counts, dtype=torch_int64(), device=torch_device('cpu')),
+                                torch_tensor(Counts, dtype=self$dtype, device=torch_device('cpu')),
                                 torch_arange(1, X[[1]]$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu'))
           )
         } else {
@@ -849,7 +853,7 @@ FINNModel = R6::R6Class(
                                 torch_tensor(X[[2]], dtype=self$dtype, device=torch_device('cpu')),
                                 torch_tensor(X[[3]], dtype=self$dtype, device=torch_device('cpu')),
                                 torch_tensor(Y[,,,], dtype=self$dtype, device=torch_device('cpu')),
-                                torch_tensor(Counts, dtype=torch_int64(), device=torch_device('cpu')),
+                                torch_tensor(Counts, dtype=self$dtype, device=torch_device('cpu')),
                                 torch_arange(1, X[[1]]$shape[1])$to(dtype = torch_int64() , device=torch_device('cpu')),
                                 torch_tensor(disturbance, dtype=self$dtype, device=torch_device('cpu'))
           )
@@ -923,6 +927,9 @@ FINNModel = R6::R6Class(
           #cat("Epoch: ", epoch, "Loss: ", bl, "\n")
           self$history[[epoch]] = colMeans(batch_loss, na.rm = TRUE)
           cli::cli_progress_update()
+
+          if(!is.null( file )) saveRDS( self$param_history, file = file )
+
         }
         cli::cli_progress_done()
 
@@ -934,7 +941,7 @@ FINNModel = R6::R6Class(
         pred$Patch = NULL
         pred$Cohort = NULL
         self$pred = list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))
-
+        self$year_sequence = year_sequence
         self$optimizer = NULL # TODO: best solution?
       }
 
