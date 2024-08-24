@@ -81,7 +81,7 @@ m = finn(env = env, data = data,
          optimizeHeight = TRUE,
          init = cohort2,
          lr=0.01,
-         epochs = 5000L,
+         epochs = 13000L,
          patch_size = 0.1,
          batchsize = 350L,
          weights = c(1, 0.1, 3, 1.5, 3, 1.0))
@@ -92,96 +92,98 @@ m = finn(env = env, data = data,
 
 # Option B) Continue training!
 
-m = readRDS(file = "gfoe2024/bci_model.RDS")
-m$model$check()
+saveRDS(m, file = "model.RDS")
 
-m2 = finn(env = env, data = data,
-          mortalityProcess = createProcess(~., func = mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE, initSpecies = m$model$parMortTR, initEnv = m$model$parMortEnv_r),
-          growthProcess = createProcess(~., func = growth, optimizeSpecies = TRUE, optimizeEnv = TRUE, initSpecies = m$model$parGrowthTR, initEnv = m$model$parGrowthEnv_r),
-          regenerationProcess = createProcess(~., func = regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE, initSpecies = m$model$parRegTR, initEnv = m$model$parRegEnv_r),
-          device = "gpu",
-          height = as.vector(m$model$parHeightTR),
-          optimizeHeight = TRUE,
-          init = cohort2,
-          lr=0.01,
-          epochs = 3000L,
-          patch_size = 0.1,
-          batchsize = 350L,
-          weights = c(1, 0.1, 3, 1.5, 3, 1.0),
-          file = "BCI_parameters.RDS")
-
-saveRDS(m2, file = "continue_model.RDS")
-
+# m = readRDS(file = "gfoe2024/bci_model.RDS")
+# m$model$check()
 #
-# pred = predict(m)
-# library(ggplot2)
-# pred = pred$long$site
+# m2 = finn(env = env, data = data,
+#           mortalityProcess = createProcess(~., func = mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE, initSpecies = m$model$parMortTR, initEnv = m$model$parMortEnv_r),
+#           growthProcess = createProcess(~., func = growth, optimizeSpecies = TRUE, optimizeEnv = TRUE, initSpecies = m$model$parGrowthTR, initEnv = m$model$parGrowthEnv_r),
+#           regenerationProcess = createProcess(~., func = regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE, initSpecies = m$model$parRegTR, initEnv = m$model$parRegEnv_r),
+#           device = "gpu",
+#           height = as.vector(m$model$parHeightTR),
+#           optimizeHeight = TRUE,
+#           init = cohort2,
+#           lr=0.01,
+#           epochs = 3000L,
+#           patch_size = 0.1,
+#           batchsize = 350L,
+#           weights = c(1, 0.1, 3, 1.5, 3, 1.0),
+#           file = "BCI_parameters.RDS")
 #
-# ggplot(pred[siteID == 25 & (species %in% 1:100)], aes(x = year, y = value,  color = factor(species))) +
-#   geom_line() +
-#   labs(x = "Year",
-#        y = "value") +
-#   theme_minimal()+
-#   facet_wrap(~variable, scales = "free_y")
-# #saveRDS(m, file = "gfoe2024/bci_model.RDS")
+# saveRDS(m2, file = "continue_model.RDS")
 #
-#
-#
-# fields::image.plot(m$model$parRegEnv_r[[1]] |> t())
-#
-# apply(m$model$parMortEnv_r[[1]], 2, mean)[-1]
 # #
-
-
-# Simulate with fitted parameters
-# library(FINN)
-# library(data.table)
-# getPars = function(internalPar, parRange) {
-#   internalPar = torch::torch_tensor(internalPar)
-#   if (is.vector(parRange)) {
-#     # Case where internalPar is a 1D tensor and parRange is a vector
-#     Npar <- length(parRange) / 2
-#     lower <- parRange[1:Npar]
-#     upper <- parRange[(Npar + 1):(2 * Npar)]
-#
-#     out <- internalPar$sigmoid() * (upper - lower) + lower
-#   } else {
-#     # Case where internalPar is a matrix and parRange is a matrix
-#     Npar <- ncol(internalPar)
-#     out <- list()
-#     for (i in 1:Npar) {
-#       lower <- parRange[i, 1, drop = FALSE]
-#       upper <- parRange[i, 2, drop = FALSE]
-#       out[[i]] <- internalPar[, i, drop = FALSE]$sigmoid() * (upper - lower) + lower
-#     }
-#     out <- torch::torch_cat(out, dim = 2L)
-#   }
-#   return(out |> as.matrix())
-# }
-#
-# w = readRDS("playground/BCI_parameters.RDS") # raw untransformierten Parameter
-# matplot(sapply(1:length(w), function(i) w[[i]]$parHeight[11:50]) |> t() |> plogis(), type = "l")
+# # pred = predict(m)
+# # library(ggplot2)
+# # pred = pred$long$site
+# #
+# # ggplot(pred[siteID == 25 & (species %in% 1:100)], aes(x = year, y = value,  color = factor(species))) +
+# #   geom_line() +
+# #   labs(x = "Year",
+# #        y = "value") +
+# #   theme_minimal()+
+# #   facet_wrap(~variable, scales = "free_y")
+# # #saveRDS(m, file = "gfoe2024/bci_model.RDS")
+# #
+# #
+# #
+# # fields::image.plot(m$model$parRegEnv_r[[1]] |> t())
+# #
+# # apply(m$model$parMortEnv_r[[1]], 2, mean)[-1]
+# # #
 #
 #
-# pars = w[[length(w)]]
+# # Simulate with fitted parameters
+# # library(FINN)
+# # library(data.table)
+# # getPars = function(internalPar, parRange) {
+# #   internalPar = torch::torch_tensor(internalPar)
+# #   if (is.vector(parRange)) {
+# #     # Case where internalPar is a 1D tensor and parRange is a vector
+# #     Npar <- length(parRange) / 2
+# #     lower <- parRange[1:Npar]
+# #     upper <- parRange[(Npar + 1):(2 * Npar)]
+# #
+# #     out <- internalPar$sigmoid() * (upper - lower) + lower
+# #   } else {
+# #     # Case where internalPar is a matrix and parRange is a matrix
+# #     Npar <- ncol(internalPar)
+# #     out <- list()
+# #     for (i in 1:Npar) {
+# #       lower <- parRange[i, 1, drop = FALSE]
+# #       upper <- parRange[i, 2, drop = FALSE]
+# #       out[[i]] <- internalPar[, i, drop = FALSE]$sigmoid() * (upper - lower) + lower
+# #     }
+# #     out <- torch::torch_cat(out, dim = 2L)
+# #   }
+# #   return(out |> as.matrix())
+# # }
+# #
+# # w = readRDS("playground/BCI_parameters.RDS") # raw untransformierten Parameter
+# # matplot(sapply(1:length(w), function(i) w[[i]]$parHeight[11:50]) |> t() |> plogis(), type = "l")
+# #
+# #
+# # pars = w[[length(w)]]
+# #
+# # speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0.01, 4)), parMort =
+# #                             rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parHeight = c(0.3, 0.7),
+# #                           parGrowthEnv = rbind(c(-1, 1), c(-1, 1)), parMortEnv = rbind(c(-2, 2), c(-2, 2)),
+# #                           parRegEnv = rbind(c(-2, 2), c(-2, 2)))
+# #
+# # # laeuft nicht...
+# # simulation = simulateForest(env = env,
+# #                     init = cohort2,
+# #                     sp = 195L,
+# #                     mortalityProcess = createProcess(~., func = mortality, optimizeSpecies = FALSE, optimizeEnv = FALSE, initSpecies = getPars(pars$parMort, speciesPars_ranges$parMort), initEnv = list(pars$nnMort.0.weight)),
+# #                     growthProcess = createProcess(~., func = growth, optimizeSpecies = FALSE, optimizeEnv = FALSE, initSpecies = getPars(pars$parGrowth, speciesPars_ranges$parGrowth), initEnv = list(pars$nnGrowth.0.weight)),
+# #                     regenerationProcess = createProcess(~., func = regeneration, optimizeSpecies = FALSE, optimizeEnv = FALSE, initSpecies = getPars(pars$parReg, speciesPars_ranges$parReg)[,1], initEnv = list(pars$nnReg.0.weight)),
+# #                     device = "cpu",
+# #                     height = getPars(pars$parHeight, speciesPars_ranges$parHeight)[,1])
+# #
 #
-# speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0.01, 4)), parMort =
-#                             rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parHeight = c(0.3, 0.7),
-#                           parGrowthEnv = rbind(c(-1, 1), c(-1, 1)), parMortEnv = rbind(c(-2, 2), c(-2, 2)),
-#                           parRegEnv = rbind(c(-2, 2), c(-2, 2)))
 #
-# # laeuft nicht...
-# simulation = simulateForest(env = env,
-#                     init = cohort2,
-#                     sp = 195L,
-#                     mortalityProcess = createProcess(~., func = mortality, optimizeSpecies = FALSE, optimizeEnv = FALSE, initSpecies = getPars(pars$parMort, speciesPars_ranges$parMort), initEnv = list(pars$nnMort.0.weight)),
-#                     growthProcess = createProcess(~., func = growth, optimizeSpecies = FALSE, optimizeEnv = FALSE, initSpecies = getPars(pars$parGrowth, speciesPars_ranges$parGrowth), initEnv = list(pars$nnGrowth.0.weight)),
-#                     regenerationProcess = createProcess(~., func = regeneration, optimizeSpecies = FALSE, optimizeEnv = FALSE, initSpecies = getPars(pars$parReg, speciesPars_ranges$parReg)[,1], initEnv = list(pars$nnReg.0.weight)),
-#                     device = "cpu",
-#                     height = getPars(pars$parHeight, speciesPars_ranges$parHeight)[,1])
 #
-
-
-
-
-
+#
+#
