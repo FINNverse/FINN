@@ -114,6 +114,13 @@ all_trees[is.na(x_class)]
 
 all_trees[, patch := as.integer(as.factor(paste0(x_class,"-",y_class))),]
 uniqueN(all_trees$patch)
+
+fwrite(all_trees, "data/calibration-data/BCI/all_trees.csv")
+# merge species to all_trees
+species_assigned <- unique(merge(all_trees[,.(sp, speciesID = species)], spptable[,.(sp,Genus, Species, Family)], by = "sp"))
+
+fwrite(species_assigned, "data/calibration-data/BCI/species_assigned.csv")
+
 stand_dt <- all_trees[,.(
   ba = round(sum(ba*(status=="A")),4),
   trees = sum(status=="A"),
