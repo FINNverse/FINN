@@ -2,9 +2,13 @@ library(data.table)
 library(FINN)
 library(torch)
 
-df = fread("~/stand_dt.csv")
-obs_df = fread("~/obs_df.csv")
-env = fread("~/env_dt.csv")
+df = fread("data/calibration-data/BCI-1h-patch/stand_dt.csv")
+obs_df = fread("data/calibration-data/BCI-1h-patch/obs_df.csv")
+env = fread("data/calibration-data/BCI-1h-patch/env_dt.csv")
+
+# df = df[census >= 1985]
+# obs_df = obs_df[year >= 1985]
+# env = env[year >= 1985]
 
 head(df)
 df
@@ -29,19 +33,23 @@ empty_res =
 data2 = rbindlist(list(data, rbindlist(empty_res, fill = TRUE)), fill = TRUE)
 data = data2
 
+dist_dt <- unique(data[,.(year,siteID)])
+
+#
+# dist_dt[,intensity := rbinom(.N, 1, runif(1,0.0043, 0.016)), by = year]
 # Env prep.
 
 
-missing_years =
-lapply(1982:1984, function(year) {
-  tmp = env[2,]
-  tmp$year = year
-  return(tmp)
-  }) |> rbindlist()
+# missing_years =
+# lapply(1982:1984, function(year) {
+#   tmp = env[2,]
+#   tmp$year = year
+#   return(tmp)
+#   }) |> rbindlist()
 
 
 
-env = rbindlist(list(missing_years, env[-1,]))
+# env = rbindlist(list(missing_years, env[-1,]))
 env = env[!year %in% 2016:2019]
 
 env =
@@ -78,8 +86,8 @@ m = finn(env = env, data = data,
          optimizeHeight = TRUE,
          init = cohort2,
          lr=0.01,
-         epochs = 5000L,
-         patch_size = 0.1,
+         epochs = 100L,
+         patch_size = 1,
          batchsize = 350L,
          weights = c(1, 0.1, 3, 1.5, 3, 1.0))
 
@@ -93,11 +101,11 @@ m2 = finn(env = env, data = data,
           optimizeHeight = TRUE,
           init = cohort2,
           lr=0.01,
-          epochs = 2L,
-          patch_size = 0.1,
+          epochs = 1000L,
+          patch_size = 1,
           batchsize = 350L,
           weights = c(1, 0.1, 3, 1.5, 3, 1.0),
-          file = "BCI_parameters.RDS")
+          file = "BCI_parameters_1ha.RDS")
 
 m = readRDS(file = "gfoe2024/bci_model.RDS")
 m$model$check(device = "cpu")
