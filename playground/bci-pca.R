@@ -3,23 +3,77 @@ pars <- readRDS("data/calibration-output/parameters2.RDS")
 
 length(pars)
 
-pars2 = pars[[length(pars)]]
 
-out <- data.table()
+env_dt <- fread("data/calibration-data/BCI/env_dt.csv")
+env_names = colnames(env_dt)[-1]
+env_names = c("intercept", "prec", "SR_kW_m2", "RH_prc", "T_mean", "T_max", "T_min")
+
 i=2
-for(i in 1:length(pars2)){
-  par_name = names(pars2)[i]
-  print(i)
-  print(par_name)
-  dt <- data.table(pars2[[i]])
-  colnames(dt) <- paste0(par_name, "_", 1:ncol(pars2[[i]]))
-  out = cbind(out, dt)
+out <- data.table()
+for(i_epoch in 1:length(pars)){
+  pars_i = pars[[i_epoch]]
+  out_temp <- data.table()
+  for(i in 1:length(pars2)){
+    par_name = names(pars_i)[i]
+    # print(i)
+    # print(par_name)
+    dt <- data.table(pars_i[[i]])
+    col_names = paste0(par_name, "__", 1:ncol(pars_i[[i]]))
+    if(grepl("nn", par_name)){
+      col_names = paste0(par_name, "__", env_names)
+    }
+    if(grepl("parHeight", par_name)) {
+      col_names = paste0(par_name)
+    }
+    if(grepl("parMort", par_name) | grepl("parGrowth", par_name)) {
+      col_names = paste0(par_name, "__", c("light", "size"))
+    }
+    if(grepl("parReg", par_name)) {
+      col_names = paste0(par_name, "__", c("light"))
+    }
+    colnames(dt) <- col_names
+    out_temp = cbind(out_temp, dt)
+  }
+  out_temp$speciesID = 1:nrow(out_temp)
+  out_temp$epoch = i_epoch
+  out <- rbind(out, out_temp)
 }
+pars_long = data.table::melt(out, id.vars = c("speciesID","epoch"))
+# pars_long[,variable := gsub(".*__", "", variable)]
+pars_long[,c("process", "env") := tstrsplit(variable, "__", fixed = TRUE)]
+pars_long[,process := gsub("par|nn|.0.weight","", process, perl = T),]
+
+# calculate correlation between values of variables
+pars_long[,intercept := value[env == "intercept"], by = .(process, speciesID, epoch)]
+
+pars_long[env == "light"]
+
+cor(1:3,4:6)
+pars_long2 = pars_long[,.(cor = cor(value,intercept)), by = .(variable, process, epoch, env)]
+
+ggplot(pars_long2[process %in% c("Growth", "Mort", "Reg") & env %in% c("light", "size", "intercept")], aes(x = epoch, y = cor^2, color = env))+
+  geom_line()+
+  facet_wrap(~process)
+
+
+ggplot(pars_long[process %in% c("Growth", "Mort", "Reg")], aes(x = env, y = value, color = process)) +
+  geom_boxplot() +
+  theme_minimal() +
+  # facet_wrap(~process, ncol = 1)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# pars_wide = dcast(pars_long, speciesID + process ~ env, value.var = "value")
+out
+names(pars2)
 pars2$parMort
+
+cor(out)[which(abs(cor(out)) > 0.5)]
 
 # only select columns with "par" in the name
 data = out[,grep("par", colnames(out)), with = FALSE]
-# data = out
+data = out[,grepl("light|size|parHeight|intercept", colnames(out)), with = FALSE]
+cor(data)
 
 
 # Load necessary libraries
@@ -30,6 +84,9 @@ library(ggplot2)
 
 # Perform PCA on the data
 pca_result <- prcomp(data, scale. = TRUE)
+summary(pca_result)
+#show explained variance in % for PC1 and PC2
+pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 
 # Perform K-means clustering on the first two principal components
 set.seed(123)
@@ -60,8 +117,10 @@ ggplot(pca_data, aes(x = PC1, y = PC2, color = cluster)) +
                                 "Cluster 4", "Cluster 5")) +
   geom_segment(data = loadings_df, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.3, "cm")), color = "black") +
-  geom_text(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
+  ggrepel::geom_text_repel(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
             hjust = 0.5, vjust = 0.5, color = "black")
+  # geom_text(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
+  #           hjust = 0.5, vjust = 0.5, color = "black")
 
 assigned_species <- fread("data/calibration-data/BCI/species_assigned.csv")
 ruger_species <- data.table(readxl::read_xlsx("data/calibration-output/aaz4797_ruger_data_s1.xlsx", sheet = 2))
@@ -103,7 +162,8 @@ pca_data2 <- pca_data2[!is.na(cluster) & !is.na(PFT_2axes)]
 
 # Create a contingency table
 contingency_table <- table(pca_data2$cluster, pca_data2$PFT_2axes)
-
+contingency_table <- table(paste("FINN",LETTERS[pca_data2$cluster]), pca_data2$PFT_2axes)
+contingency_table
 # Find the best matching pairs between the cluster and PFT_2axes
 matching <- apply(contingency_table, 1, function(row) {
   colnames(contingency_table)[which.max(row)]
