@@ -472,7 +472,7 @@ FINNModel = R6::R6Class(
       m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
       r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
 
-      Result = lapply(1:7,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
+      Result = lapply(1:8,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
 
       # Can get memory intensive...
       if(debug) {
@@ -658,6 +658,7 @@ FINNModel = R6::R6Class(
           ## Observed recruit rates
           tmp_res = aggregate_results(new_species, list(r_mean), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
           r_mean = tmp_res[[1]]/patches
+          Result[[8]][,i,] = r_mean
 
           if (debug) {
             Raw_cohort_results[[i]] = list(
@@ -669,6 +670,7 @@ FINNModel = R6::R6Class(
             )
             Raw_patch_results[[i]] = list(
               "r" = torch::as_array(r$cpu())
+              # "r_mean" = torch::as_array(r_mean$cpu())
             )
             Raw_cohort_ids[[i]] = cohort_ids
           }
@@ -754,7 +756,7 @@ FINNModel = R6::R6Class(
           }
 
           # cat("Backprop....\n")
-          for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+          for(j in 1:8) Result[[j]] = Result[[j]]$detach()
         }
         loss$detach_()
 
@@ -762,7 +764,7 @@ FINNModel = R6::R6Class(
 
       }
 
-      names(Result) =  c("dbh","ba", "trees", "AL", "growth", "mort", "reg")
+      names(Result) =  c("dbh","ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha")
       if(debug){
         Result_out = list(
           Predictions = list(
