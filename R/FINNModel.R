@@ -653,12 +653,11 @@ FINNModel = R6::R6Class(
           # reg extra
           ## Observed recruits
           tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-          Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]]/cohort_counts)
+          Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]])/patches
 
           ## Observed recruit rates
           tmp_res = aggregate_results(new_species, list(r_mean), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-          r_mean = tmp_res[[1]]/cohort_counts
-
+          r_mean = tmp_res[[1]]/patches
 
           if (debug) {
             Raw_cohort_results[[i]] = list(
