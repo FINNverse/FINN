@@ -43,7 +43,7 @@ pred2DF <- function(pred, format = "wide") {
   site_dt = data.table()
 
   # Loop through the site-level prediction metrics
-  for (i in c("dbh", "ba", "trees", "AL", "growth", "mort", "reg")) {
+  for (i in c("dbh", "ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha")) {
     # Set dimension names
     dim_names = c("siteID", "year", "species")
     # Convert the prediction array to a data frame
