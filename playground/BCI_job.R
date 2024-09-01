@@ -6,6 +6,10 @@ df = fread("~/stand_dt.csv")
 obs_df = fread("~/obs_df.csv")
 env = fread("~/env_dt.csv")
 
+# df = df[census >= 1985]
+# obs_df = obs_df[year >= 1985]
+# env = env[year >= 1985]
+
 head(df)
 df
 df$AL = NA
@@ -29,19 +33,23 @@ empty_res =
 data2 = rbindlist(list(data, rbindlist(empty_res, fill = TRUE)), fill = TRUE)
 data = data2
 
+dist_dt <- unique(data[,.(year,siteID)])
+
+#
+# dist_dt[,intensity := rbinom(.N, 1, runif(1,0.0043, 0.016)), by = year]
 # Env prep.
 
 
-missing_years =
-  lapply(1982:1984, function(year) {
-    tmp = env[2,]
-    tmp$year = year
-    return(tmp)
-  }) |> rbindlist()
+# missing_years =
+# lapply(1982:1984, function(year) {
+#   tmp = env[2,]
+#   tmp$year = year
+#   return(tmp)
+#   }) |> rbindlist()
 
 
 
-env = rbindlist(list(missing_years, env[-1,]))
+# env = rbindlist(list(missing_years, env[-1,]))
 env = env[!year %in% 2016:2019]
 
 env =
@@ -67,24 +75,25 @@ sp[sp==0] = 1L
 sp[is.na(sp)] = 1L
 cohort2 = FINN::CohortMat$new(dbh = cohort1$dbh_r, trees = cohort1$trees_r, species = sp)
 # sp zum indexen, aber wenn 0 exisitiert -> seg fault / index fault
+colnames(data)[6] = "dbh"
+print(dim(env))
 
-
-
-
-# Option A) Train model
 m = finn(env = env, data = data,
          patches = 1L,
-         mortalityProcess = createProcess(~., func = mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-         growthProcess = createProcess(~., func = growth, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-         regenerationProcess = createProcess(~., func = regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+         mortalityProcess = createProcess(~0+., func = mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+         growthProcess = createProcess(~1+., func = growth, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+         regenerationProcess = createProcess(~0+., func = regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
          device = "gpu",
          optimizeHeight = TRUE,
          init = cohort2,
-         lr=0.01,
-         epochs = 13000L,
-         patch_size = 0.1,
-         batchsize = 350L,
-         weights = c(1, 0.1, 3, 1.5, 3, 1.0))
+         lr=0.003,
+         epochs = 6000L,
+         patch_size = 1,
+         batchsize = 12L,
+         weights = c(1, 0.1, 3, 1.5, 3, 1.0),
+         file = "BCI_parameters_1ha.RDS")
+
+
 
 # Check for convergence!!!
 # matplot(sapply(1:5000, function(i) m$model$param_history[[i]]$parGrowth[1:10, 2]) |> t(), type = "l")
@@ -92,7 +101,7 @@ m = finn(env = env, data = data,
 
 # Option B) Continue training!
 
-saveRDS(m, file = "model.RDS")
+saveRDS(m, file = "model_27_8.RDS")
 
 # m = readRDS(file = "gfoe2024/bci_model.RDS")
 # m$model$check()
