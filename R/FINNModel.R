@@ -467,12 +467,13 @@ FINNModel = R6::R6Class(
         1:(prod(species$shape)+1),
         dim = species$shape), dtype=torch_int32(), device = self$device
       )
+
       light = torch_zeros(list(sites, time,  dbh$shape[3]), device=self$device)
       g = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
       m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
       r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
 
-      Result = lapply(1:7,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
+      Result = lapply(1:8,function(tmp) torch_zeros(list(sites, time, self$sp), device=self$device))
 
       # Can get memory intensive...
       if(debug) {
@@ -480,7 +481,6 @@ FINNModel = R6::R6Class(
         Raw_cohort_ids = list()
         Raw_patch_results = list()
       }
-
       if(is.null(y)) {
         if(self$runEnvGrowth) predGrowthGlobal = self$nnGrowthEnv(env[[1]])
         if(self$runEnvMort) predMortGlobal = self$nnMortEnv(env[[2]])
@@ -595,7 +595,6 @@ FINNModel = R6::R6Class(
           trees = torch_clamp(trees - dead_trees, min = 0) #### TODO if trees = 0 then NA...prevent!
         }
 
-
         AL_reg = self$competitionFunction( # must have dimension = n species in last dim
           dbh = dbh,
           species = species,
@@ -627,7 +626,9 @@ FINNModel = R6::R6Class(
         new_dbh = ((r-1+0.1)/1e-3)$sigmoid() # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
         new_trees = r
         new_species = torch_arange(1, sp, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
+
         max_id <- max(c(1,as_array(cohort_ids), na.rm = TRUE))
+
         new_cohort_id = torch_tensor(array(
           (max_id+1):(max_id+prod(r$shape)+1),
           dim = r$shape), dtype=torch_int32(), device = self$device
@@ -653,12 +654,12 @@ FINNModel = R6::R6Class(
           # reg extra
           ## Observed recruits
           tmp_res = aggregate_results(new_species, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-          Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]]/cohort_counts)
+          Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]])/patches
 
           ## Observed recruit rates
           tmp_res = aggregate_results(new_species, list(r_mean), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-          r_mean = tmp_res[[1]]/cohort_counts
-
+          r_mean = tmp_res[[1]]/patches
+          Result[[8]][,i,] = r_mean
 
           if (debug) {
             Raw_cohort_results[[i]] = list(
@@ -670,17 +671,19 @@ FINNModel = R6::R6Class(
             )
             Raw_patch_results[[i]] = list(
               "r" = torch::as_array(r$cpu())
+              # "r_mean" = torch::as_array(r_mean$cpu())
             )
-            Raw_cohort_ids[[i]] = cohort_ids
+            Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
           }
         }
 
-        # Combine
         dbh = torch::torch_cat(list(dbh, new_dbh), 3)
         trees = torch::torch_cat(list(trees, new_trees), 3)
         species = torch::torch_cat(list(species, new_species), 3)
         cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
         rm(new_dbh,new_trees,new_species,new_cohort_id )
+
+        # Combine
 
         # Pad tensors, expensive, currently each timestep
         if(i %% 1 == 0){
@@ -703,7 +706,6 @@ FINNModel = R6::R6Class(
           species = species$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
           # })
         }
-
 
         # aggregate results
         # TODO: Position of the first block?
@@ -734,6 +736,7 @@ FINNModel = R6::R6Class(
           }
         }
 
+
         loss = torch_zeros(6L, device = self$device)
         if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
           if(i %in% year_sequence) {
@@ -755,7 +758,7 @@ FINNModel = R6::R6Class(
           }
 
           # cat("Backprop....\n")
-          for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+          for(j in 1:8) Result[[j]] = Result[[j]]$detach()
         }
         loss$detach_()
 
@@ -763,7 +766,7 @@ FINNModel = R6::R6Class(
 
       }
 
-      names(Result) =  c("dbh","ba", "trees", "AL", "growth", "mort", "reg")
+      names(Result) =  c("dbh","ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha")
       if(debug){
         Result_out = list(
           Predictions = list(
@@ -771,7 +774,9 @@ FINNModel = R6::R6Class(
             Patch = Raw_patch_results,
             Cohort = list(
               cohortStates = Raw_cohort_results,
-              cohortID = lapply(Raw_cohort_ids, function(x) torch::as_array(x)))
+              cohortID = Raw_cohort_ids
+              # cohortID = lapply(Raw_cohort_ids, function(x) torch::as_array(x))
+              )
             ),
           loss = loss)
       }else if(!debug){
