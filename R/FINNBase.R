@@ -296,7 +296,7 @@ FINNBase <- R6::R6Class(
         lower <- parRange[1:Npar]
         upper <- parRange[(Npar + 1):(2 * Npar)]
 
-        out <- internalPar$sigmoid() * (upper - lower) + lower
+        out <- torch::torch_sigmoid(internalPar) * (upper - lower) + lower
       } else {
         # Case where internalPar is a matrix and parRange is a matrix
         Npar <- ncol(internalPar)
@@ -304,7 +304,7 @@ FINNBase <- R6::R6Class(
         for (i in 1:Npar) {
           lower <- parRange[i, 1, drop = FALSE]
           upper <- parRange[i, 2, drop = FALSE]
-          out[[i]] <- internalPar[, i, drop = FALSE]$sigmoid() * (upper - lower) + lower
+          out[[i]] <- torch::torch_sigmoid(internalPar[, i, drop = FALSE]) * (upper - lower) + lower
         }
         out <- torch::torch_cat(out, dim = 2L)
       }

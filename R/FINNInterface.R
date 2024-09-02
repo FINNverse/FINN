@@ -136,6 +136,7 @@ finn = function(data = NULL,
                 NGPU = 1,
                 weights = c(0.05, 0.50, 3.00, 0.50, 3.00, 2.00),
                 file = NULL,
+                sp = NULL,
                 ...
 ) {
 
@@ -173,7 +174,17 @@ finn = function(data = NULL,
   regeneration_env = extract_env(regenerationProcess, env)
 
 
-  sp = length(unique(data$species))
+  if(is.null(sp)){
+    message(paste0("No number of species ('sp') provided, assuming sp = ", length(unique(data$species)), " species from data..."))
+    sp = length(unique(data$species))
+  }
+  if(!growthProcess$optimizeSpecies) if(nrow(parGrowth) != sp) stop("Number of species in parGrowth does not match sp")
+  if(!mortalityProcess$optimizeSpecies) if(nrow(parMort) != sp) stop("Number of species in parMort does not match sp")
+  if(!regenerationProcess$optimizeSpecies) if(length(parReg) != sp) stop("Number of species in parReg does not match sp")
+  if(!growthProcess$optimizeEnv) if(nrow(parGrowthEnv) != sp) stop("Number of species in parGrowthEnv does not match sp")
+  if(!mortalityProcess$optimizeEnv) if(nrow(parMortEnv) != sp) stop("Number of species in parMortEnv does not match sp")
+  if(!regenerationProcess$optimizeEnv) if(nrow(parRegEnv) != sp) stop("Number of species in parRegEnv does not match sp")
+  if(!optimizeHeight) if(!is.null(height) && length(height) != sp) stop("Number of species in height does not match sp")
   out$sp = sp
   out$lr = lr
 
@@ -215,6 +226,7 @@ finn = function(data = NULL,
                          trees = array(1, dim = c(sites, patches, sp)),
                          sp = sp)
   } else {
+    if(init$sp != sp) stop(paste("sp in cohort", init$sp, "does not match sp from data", sp))
     patches = dim(init$species_r)[2]
     init$check()
   }
@@ -797,7 +809,7 @@ extract_env = function(process, env) {
 #' @param height A function or set of parameters defining the height-growth relationship, if applicable.
 #' @param patches An integer specifying the number of patches in the simulation. Default is 10.
 #' @param patch_size A numeric value representing the size of each patch. Default is 0.1.
-#' @param sp An integer specifying the number of species in the simulation. Default is 5.
+#' @param sp An integer specifying the number of species in the simulation. Default is NULL.
 #' @param init A custom initialization object for the simulation, if available.
 #' @param device A character string specifying whether to use `"cpu"` or `"gpu"` for computation. Default is `"cpu"`.
 #' @param parallel A logical value indicating whether to run the simulation in parallel. Default is `FALSE`.
@@ -831,7 +843,7 @@ simulateForest = function(env,
                           height = NULL,
                           patches = 10L,
                           patch_size = 0.1,
-                          sp = 5L,
+                          sp = NULL,
                           init = NULL,
                           device = c("cpu", "gpu"),
                           parallel = FALSE,
@@ -867,13 +879,18 @@ simulateForest = function(env,
   if(is.null(batchsize)) batchsize = sites
 
   if(is.null(init)) {
+    if(is.null(sp)) stop("Number of species (argument 'sp') must be specified!")
     init = CohortMat$new(dims = c(sites, patches, sp),
                          dbh = array(1, dim = c(sites, patches, sp)),
                          trees = array(1, dim = c(sites, patches, sp)),
                          sp = sp)
+  }else{
+    if(is.null(sp)) warning(
+      paste("Number of species (argument 'sp') not specified, using the number of species in the initial cohort matrix: sp =", init$sp)
+      )
+    sp = init$sp
   }
 
-  sp = init$sp
 
   device_old = device
   if(device == "gpu") {
