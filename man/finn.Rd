@@ -29,6 +29,7 @@ finn(
   parallel = FALSE,
   NGPU = 1,
   weights = c(0.05, 0.5, 3, 0.5, 3, 2),
+  file = NULL,
   ...
 )
 }
@@ -95,6 +96,9 @@ An integer specifying the number of GPUs to use if \code{device = "gpu"}. Defaul
 
 \item{weights}{(\verb{numeric(6}) \cr
 Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).}
+
+\item{file}{(\code{character()}) \cr
+If weights should be saved after each optimization step (for monitoring), set a path. Default is \code{NULL}.}
 
 \item{...}{arguments passed to \code{simulateForest()}}
 }
