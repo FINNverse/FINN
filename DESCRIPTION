@@ -41,7 +41,7 @@ Suggests:
     rmarkdown
 RoxygenNote: 7.3.2
 Roxygen: list(old_usage = FALSE, markdown = TRUE)
-VignetteBuilder: knitr
+VignetteBuilder: quarto
 RdMacros: mathjaxr
 Config/testthat/edition: 3
 Collate: 

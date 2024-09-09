@@ -30,7 +30,10 @@ finn(
   NGPU = 1,
   weights = c(0.05, 0.5, 3, 0.5, 3, 2),
   file = NULL,
+<<<<<<< HEAD
   thin = 100,
+=======
+>>>>>>> 3a9102e561309303edad3881723b68d731cc91c9
   ...
 )
 }
@@ -101,9 +104,12 @@ Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).}
 \item{file}{(\code{character()}) \cr
 If weights should be saved after each optimization step (for monitoring), set a path. Default is \code{NULL}.}
 
+<<<<<<< HEAD
 \item{thin}{(\code{integer(1)}) \cr
 If weights should be save (file argument), save every thin epochs.}
 
+=======
+>>>>>>> 3a9102e561309303edad3881723b68d731cc91c9
 \item{...}{arguments passed to \code{simulateForest()}}
 }
 \value{
