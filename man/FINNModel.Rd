@@ -9,7 +9,7 @@
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
-\code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINNModel}
+\code{FINN::FINNbase} -> \code{FINNModel}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -127,6 +127,9 @@ Neural Network Configuration, internal useage}
 
 \item{\code{nnRegConfig}}{(\code{list()}) \cr
 Neural Network Configuration, internal useage}
+
+\item{\code{year_sequence}}{(\code{numeric(n)}) \cr
+Time points for loss calculation}
 }
 \if{html}{\out{</div>}}
 }
@@ -355,7 +358,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   patches = 50L,
   update_step = 1L,
   weights = NULL,
-  year_sequence = NULL
+  year_sequence = NULL,
+  file = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -385,6 +389,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 \item{\code{weights}}{reweight likelihood}
 
 \item{\code{year_sequence}}{at which year indices should the predictions compared with the observed values}
+
+\item{\code{file}}{path if weights should be saved after each epoch (for monitoring).}
 
 \item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
 }
