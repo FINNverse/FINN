@@ -49,6 +49,8 @@
 #'  Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).
 #' @param file (`character()`) \cr
 #'  If weights should be saved after each optimization step (for monitoring), set a path. Default is `NULL`.
+#' @param thin (`integer(1)`) \cr
+#'  If weights should be save (file argument), save every thin epochs.
 #' @param ... arguments passed to `simulateForest()`
 #'
 #'
@@ -136,6 +138,7 @@ finn = function(data = NULL,
                 NGPU = 1,
                 weights = c(0.05, 0.50, 3.00, 0.50, 3.00, 2.00),
                 file = NULL,
+                thin = 100,
                 ...
 ) {
 
@@ -316,7 +319,8 @@ finn = function(data = NULL,
               update_step = 1L,
               weights = weights,
               year_sequence = year_sequence,
-              file = file)
+              file = file,
+              thin = thin)
 
     out$model = model
     out$init = init

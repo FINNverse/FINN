@@ -613,9 +613,9 @@ FINNModel = R6::R6Class(
         r_mean = self$regenerationFunction(species = species,
                                            parReg = parReg,
                                            pred = pred,
-                                           light = AL_reg)
+                                           light = AL_reg)*self$patch_size_ha
 
-        r = sample_poisson_gaussian(r_mean*self$patch_size_ha)
+        r = sample_poisson_gaussian(r_mean)
         r = r + r$round()$detach() - r$detach()
 
         # print("Mort:")
@@ -812,6 +812,7 @@ FINNModel = R6::R6Class(
     #' @param weights reweight likelihood
     #' @param year_sequence at which year indices should the predictions compared with the observed values
     #' @param file path if weights should be saved after each epoch (for monitoring).
+    #' @param thin thin saving of weights
     #' @return None. The trained model is stored within the class instance.
     fit = function(
           X = NULL,
@@ -826,7 +827,8 @@ FINNModel = R6::R6Class(
           update_step = 1L,
           weights = NULL,
           year_sequence = NULL,
-          file = NULL){
+          file = NULL,
+          thin = 100L){
 
         if(is.null(self$optimizer)){
           self$optimizer = optim_adagrad(params = self$parameters, lr = learning_rate) # AdaBound was also good
@@ -933,7 +935,9 @@ FINNModel = R6::R6Class(
           self$history[[epoch]] = colMeans(batch_loss, na.rm = TRUE)
           cli::cli_progress_update()
 
-          if(!is.null( file )) saveRDS( self$param_history, file = file )
+          if(!is.null( file )) {
+            if(epoch %% thin == 0) saveRDS( self$param_history, file = file )
+          }
 
         }
         cli::cli_progress_done()
