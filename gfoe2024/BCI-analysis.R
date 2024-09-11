@@ -10,7 +10,7 @@ library(ggplot2)
 ## read and format parameters ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
-pars <- readRDS("data/calibration-output/BCI_parameters_01ha_9_9_wo_T (1).RDS")
+pars <- readRDS("data/calibration-output/BCI_parameters_01ha_9_9_wo_T_v2.RDS")
 env_dt = fread("data/calibration-data/BCI-1h-patch-V2/env_dt.csv")
 
 pars_i = pars[[length(pars)]]
@@ -70,21 +70,61 @@ loadings_df <- data.frame(Variable = rownames(loadings),
                           PC1 = loadings[, 1] * 5,  # Scaling for better visualization
                           PC2 = loadings[, 2] * 5)
 
+
+colors <- c(
+  "Slow" = "#E07A9E",        # Pink
+  "Fast" = "#F19D38",        # Orange
+  "Long-lived pioneer (LLP)" = "#5E9F6C",  # Green
+  "Short-lived breeder (SLB)" = "#4F7CBF", # Blue
+  "Intermediate" = "#DF7045"  # Orange-red (close to red)
+)
+
+pca_data$PFT = factor(
+  pca_data$cluster,
+  levels = c(4,1,2,3,5),
+  labels = c("Slow","Fast","Short-lived breeder (SLB)","Long-lived pioneer (LLP)","Intermediate")
+  )
+
+loadings_df$Variable2 =
+  factor(
+    loadings_df$Variable,
+    levels = c("parHeight","parGrowth__light", "parGrowth__size", "parMort__light", "parMort__size", "parReg__light"),
+    labels = c("Height", "Growth (light)", "Growth (size)", "Mortality (light)", "Mortality (size)", "Regeneration (light)")
+  )
+
 # Create the plot
-ggplot(pca_data, aes(x = PC1, y = PC2, color = cluster)) +
-  geom_point(size = 3, alpha = 0.7) +
+p = ggplot(pca_data, aes(x = PC1, y = PC2, color = PFT)) +
+  geom_hline(yintercept = 0, color = "grey") +
+  geom_vline(xintercept = 0, color = "grey")+
+  geom_point(size = 3, alpha = 1) +
   theme_minimal() +
-  labs(x = "PC1", y = "PC2") +
+  labs(
+    x = paste0("Growth-survival tradeoff (", round(explained_variance[1]),"%)"),
+    y = paste0("Stature-recruitment tradeoff (", round(explained_variance[2]),"%)")
+    ) +
   theme(legend.position = "right") +
-  scale_color_manual(values = c("magenta", "cyan", "green", "blue", "orange"),
-                     labels = c("Cluster 1", "Cluster 2", "Cluster 3",
-                                "Cluster 4", "Cluster 5")) +
+  # scale_color_manual(values = c("magenta", "cyan", "green", "blue", "orange"),
+  #                    labels = c("Cluster 1", "Cluster 2", "Cluster 3",
+  #                               "Cluster 4", "Cluster 5")) +
+  scale_color_manual(values = colors,
+                     labels = names(colors)) +
   geom_segment(data = loadings_df, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.3, "cm")), color = "black") +
-  ggrepel::geom_text_repel(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
-                           hjust = 0.5, vjust = 0.5, color = "black")
+  ggrepel::geom_text_repel(
+    data = loadings_df[loadings_df$PC1 < 0, ],
+    aes(x = PC1, y = PC2, label = Variable2), min.segment.length = 10,
+    hjust = 1, vjust = -1, color = "black", fontface = "bold")+
+  ggrepel::geom_text_repel(
+    data = loadings_df[loadings_df$PC1 >= 0, ],
+    aes(x = PC1, y = PC2, label = Variable2), , min.segment.length = 10,
+    hjust = 0, vjust = 0.3, color = "black", fontface = "bold")+
+  coord_cartesian(xlim = c(-3.5, 3.5), ylim = c(-3, 4))+
+  ggthemes::theme_base()
 # geom_text(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
 #           hjust = 0.5, vjust = 0.5, color = "black")
+p
+# save p as svg
+ggsave("gfoe2024/BCI_PCA_plot.png", p, width = 23, height = 15, units = "cm")
 
 assigned_species <- fread("data/calibration-data/BCI/species_assigned.csv")
 ruger_species <- data.table(readxl::read_xlsx("data/calibration-output/aaz4797_ruger_data_s1.xlsx", sheet = 2))
@@ -96,25 +136,26 @@ ruger_species$sp <- tolower(ruger_species$sp)
 
 pca_data2 <- data.table(merge(pca_data, ruger_species[,.(sp, PFT_1axis, PFT_2axes, PC1score, PC2score)], by = "sp", all = T))
 
+par(mfrow = c(1, 2))
 model_dat <- pca_data2[!is.na(PC1score)][order(PC1score)]
-# plot(PC1 ~ PC1score, model_dat, xlab = "Rüger PC1", ylab = "FINN PC1")
+plot(PC1 ~ PC1score, model_dat, xlab = "Rüger et al. (2020) PC1", ylab = "FINN PC1")
 fit <- lm(PC1 ~ PC1score, model_dat)
-# pred <- predict(fit, newdata = model_dat, interval = "confidence")
-# lines(model_dat$PC1score, pred[,1], col = "red")
+pred <- predict(fit, newdata = model_dat, interval = "confidence")
+lines(model_dat$PC1score, pred[,1], col = "red")
 # # add confidence interval
-# lines(model_dat$PC1score, pred[,2], col = "red", lty = 2)
-# lines(model_dat$PC1score, pred[,3], col = "red", lty = 2)
+lines(model_dat$PC1score, pred[,2], col = "red", lty = 2)
+lines(model_dat$PC1score, pred[,3], col = "red", lty = 2)
 summary(fit)
 
 # same for PC2
 model_dat2 <- pca_data2[!is.na(PC2score)][order(PC2score)]
-# plot(PC2 ~ PC2score, model_dat2, xlab = "Rüger PC2", ylab = "FINN PC2")
+plot(PC2 ~ PC2score, model_dat2, xlab = "Rüger PC2", ylab = "FINN PC2")
 fit2 <- lm(PC2 ~ PC2score, model_dat2)
-# pred2 <- predict(fit2, newdata = model_dat2, interval = "confidence")
-# lines(model_dat2$PC2score, pred2[,1], col = "red")
+pred2 <- predict(fit2, newdata = model_dat2, interval = "confidence")
+lines(model_dat2$PC2score, pred2[,1], col = "red")
 # add confidence interval
-# lines(model_dat2$PC2score, pred2[,2], col = "red", lty = 2)
-# lines(model_dat2$PC2score, pred2[,3], col = "red", lty = 2)
+lines(model_dat2$PC2score, pred2[,2], col = "red", lty = 2)
+lines(model_dat2$PC2score, pred2[,3], col = "red", lty = 2)
 summary(fit2)
 
 
@@ -152,24 +193,37 @@ results <- results %>%
   group_by(group, part) %>%
   mutate(R2_norm_env = R2 / sum(R2))
 
+results$PFT = factor(
+  results$group,
+  levels = c(4,1,2,3,5),
+  labels = c("Slow","Fast","Short-lived breeder (SLB)","Long-lived pioneer (LLP)","Intermediate")
+)
+colors2 <- c(
+  "Prec" = "#89bde6",       # Pale Blue
+  "SR_kW_m2" = "#ffbb78",   # Pale Orange
+  "RH_prc" = "#98df8a",     # Pale Green
+  "T_max" = "#ff9896",      # Pale Red
+  "T_min" = "#c5b0d5"       # Pale Purple
+)
+
+results$Environment = results$part
+
 plt =
-  ggplot(results, aes(x = group, y = R2, fill = env)) + #reorder(group, R2)
+  ggplot(results, aes(x = PFT, y = R2, fill = Environment)) + #reorder(group, R2)
   geom_bar(stat = "identity", position = "stack") +
-  scale_y_continuous(labels = scales::percent) +  # Display y-axis as percentages
-  facet_wrap(~part) +
-  labs(x = "Group", y = "Percentage", title = "Normalized Stacked Bar Plot by Group and Part") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-plt
-plt =
-  ggplot(results, aes(x = group, y = R2, fill = part)) + #reorder(group, R2)
-  geom_bar(stat = "identity", position = "stack") +
-  scale_y_continuous(labels = scales::percent) +  # Display y-axis as percentages
+  scale_fill_manual(
+    values = colors2,
+    name = names(colors2)
+  )+
   facet_wrap(~env) +
-  labs(x = "Group", y = "Percentage", title = "Normalized Stacked Bar Plot by Group and Part") +
+  labs(x = "PFT", y = "Explained Variance [%]") +
   theme_minimal() +
+  ggthemes::theme_base()+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 plt
+
+# save plt as png
+ggsave("gfoe2024/BCI_PFT_env_plot.png", plt, width = 34, height = 15, units = "cm")
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## continue simulation with fitted parameters ####
@@ -299,6 +353,7 @@ for(i in length(iters_start)){
 
   tmp_dt <- predictions$wide$site
   tmp_dt$rep = i
+  env_tmp[, siteID := as.integer(as.character(factor(siteID, levels = orig_siteID, labels = 1:100))),]
   out_dt <- rbind(out_dt, tmp_dt)
 }
   # pdat = rbind(pdat, tmp_dt)
