@@ -1,6 +1,6 @@
 library(data.table)
 
-out_dir = "data/calibration-data/BCI-1h-patch"
+out_dir = "data/calibration-data/BCI-1h-patch-V2"
 if(!dir.exists(out_dir)) {
   dir.create(out_dir,recursive = T)
 }
@@ -109,15 +109,20 @@ all_trees[, ":="(
   ),
   by = .(treeID)]
 
-table(all_trees$period_length)
-all_trees[, g := (dbh_cm-dbh_cm_before)/period_length,]
-g_max <- quantile(all_trees$g,0.9999, na.rm = T)
-all_trees[g > g_max | g < 0, g := NA]
 
-# x_length = 40
-# y_length = 25
-x_length = 100
-y_length = 100
+all_trees[, g := (dbh_cm-dbh_cm_before)/period_length,]
+
+# g_max <- quantile(all_trees$g,0.9999, na.rm = T)
+g_max = 5
+all_trees[g > g_max | g < 0, g := NA]
+# hist(all_trees$g, breaks = 100)
+
+
+uniqueN(all_trees$quadrat)
+x_length = 40
+y_length = 25
+# x_length = 100
+# y_length = 100
 all_trees <- all_trees[!is.na(gx) & !is.na(gy)]
 all_trees[,":="(
   x_class = cut(gx, breaks = seq(0, 1000, x_length), labels = 1:length(seq(x_length, 1000, x_length)), include.lowest = T),
@@ -126,8 +131,22 @@ all_trees[,":="(
 all_trees[is.na(x_class)]
 
 all_trees[, patch := as.integer(as.factor(paste0(x_class,"-",y_class))),]
+uniqueN(all_trees$treeID)
 uniqueN(all_trees$patch)
 
+# library(ggplot2)
+# library(scales)
+#
+# # Generate random colors for the unique patches
+# set.seed(123)  # Set seed for reproducibility
+# n_patches <- length(unique(all_trees$patch))  # Get the number of unique patches
+# random_colors <- hue_pal()(n_patches)  # Generate n random colors using hue palette
+
+# ggplot(all_trees[census == 2015], aes(x = gx, y = gy, colour = factor(patch, ordered = FALSE))) +
+#   geom_point(size = 0.01, alpha = 0.5) +
+#   scale_color_manual(values = sample(random_colors)) +  # Assign random colors
+#   theme_minimal() +
+#   theme(legend.position = "none")
 
 # fwrite(all_trees, "data/calibration-data/BCI/all_trees.csv")
 fwrite(all_trees[census >= 1985], paste0(out_dir, "/all_trees.csv"))
@@ -144,6 +163,8 @@ dbh_cmTOba_m2 <- function(dbh) {
   return(pi*dbh^2/4)
 }
 
+
+
 stand_dt <- all_trees[,.(
   ba = sum(dbh_cmTOba_m2(dbh_cm)*(status=="A"), na.rm = T),
   trees = sum(status=="A"),
@@ -153,6 +174,8 @@ stand_dt <- all_trees[,.(
   r = sum(status=="A" & status_before=="P", na.rm = T)
 ), by=.(census, siteID = patch, species)]
 
+plot(table(stand_dt$r))
+
 # define trees_before in stand_dt
 stand_dt[, trees_before := shift(trees, 1, type = "lag"), by=.(siteID, species)]
 stand_dt[, m := fresh_dead/trees_before, ]
@@ -161,25 +184,37 @@ stand_dt[is.infinite(m), m := 1]
 # fwrite(stand_dt, "data/calibration-data/BCI/stand_dt.csv")
 fwrite(stand_dt[census >= 1985], paste0(out_dir,"/stand_dt.csv"))
 
-dbh_cm_class_size = 1
+dbh_cm_class_size = 0.1
 initial_trees <- all_trees[status=="A" & !is.na(dbh_cm), .(
   trees = sum(status == "A")
   ), by = .(dbh_cm = cut(
   dbh_cm,
-  breaks = seq(1, 350, dbh_cm_class_size),
-  labels = seq(1, 350-dbh_cm_class_size, dbh_cm_class_size),
+  breaks = seq(1, 351, dbh_cm_class_size),
+  labels = seq(1, 351-dbh_cm_class_size, dbh_cm_class_size),
   include.lowest = T), species, patch, census)
 ]
-
+max(all_trees$dbh_cm, na.rm = T)
 initial_trees <- initial_trees[order(patch)]
 # initial_trees$cohortID = 1:nrow(initial_trees)
 initial_trees[,cohortID := 1:.N,by = .(patch,census)]
-
 initial_trees[, dbh_cm := as.numeric(as.character(dbh_cm)),]
 
-all_trees[,.N, by = .(census, period_length)]
+# Npatches = uniqueN(initial_trees$patch)
+#
+# stand_dt[,.(trees = sum(trees, na.rm = T)/50), by = .(census)]
+stand_dt[,.(ba = sum(ba, na.rm = T)/50), by = .(census)]
+#
+all_trees[, .(ba = sum(dbh_cmTOba_m2(dbh_cm)*(status == "A"), na.rm = T)/50), by = .(census)]
+# all_trees[,.N, by = .(census, period_length)]
 
 obs_df <- initial_trees[,.(siteID = patch, patchID = 1, cohortID, species = as.integer(as.factor(species)), dbh = dbh_cm, trees, census)]
 
-fwrite(obs_df[census == 1985], paste0(out_dir,"/obs_df.csv"))
+# hist(obs_df$dbh)
+obs_df[, .(ba = sum(dbh_cmTOba_m2(dbh)*trees)/50), by = .(census)]
+stand_dt[, .(dbh = sum(dbh_cm*trees, na.rm = T)), by = .(census)]
+obs_df[, .(dbh = sum(dbh*trees)), by = .(census)]
+
+# stand_dt[,.(ba = sum(ba)/50), by = census]
+
+fwrite(obs_df[census >= 1985], paste0(out_dir,"/obs_df.csv"))
 

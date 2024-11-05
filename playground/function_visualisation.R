@@ -492,6 +492,10 @@ for (i in 1:nrow(sim_dt)) {
   out_dt <- rbind(out_dt, cohort_df1)
   if(i==nrow(sim_dt)) cat("\n")
 }
+dbh = seq(0,300,1)
+plot(dbh, exp(-(dbh/100)/1), type = "l", xlab = "dbh", ylab = "growth", ylim = c(0,1))
+
+plot(seq(0,1,0.01), exp(-seq(0,1,0.01)*0.5), ylim = c(0,1))
 
 ggplot(out_dt[pred == 0,
               .(shade = mean(shade)

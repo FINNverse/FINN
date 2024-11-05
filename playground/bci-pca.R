@@ -1,5 +1,9 @@
 # read RDS file
-pars <- readRDS("data/calibration-output/parameters2.RDS")
+# pars <- readRDS("data/calibration-output/parameters3.RDS")
+library(data.table)
+library(ggplot2)
+
+pars <- readRDS("data/calibration-output/BCI_parameters_1ha_1_9_thinned.RDS")
 
 length(pars)
 
@@ -11,9 +15,10 @@ env_names = c("intercept", "prec", "SR_kW_m2", "RH_prc", "T_mean", "T_max", "T_m
 i=2
 out <- data.table()
 for(i_epoch in 1:length(pars)){
+  cat(i_epoch, "of", length(pars), "\n")
   pars_i = pars[[i_epoch]]
   out_temp <- data.table()
-  for(i in 1:length(pars2)){
+  for(i in 1:length(pars_i)){
     par_name = names(pars_i)[i]
     # print(i)
     # print(par_name)
@@ -71,10 +76,12 @@ pars2$parMort
 cor(out)[which(abs(cor(out)) > 0.5)]
 
 # only select columns with "par" in the name
-data = out[,grep("par", colnames(out)), with = FALSE]
-data = out[,grepl("light|size|parHeight|intercept", colnames(out)), with = FALSE]
+data = out[epoch == max(epoch)]
+data = data[,grep("par", colnames(out)), with = FALSE]
+# data = data[,grepl("light|size|parHeight|intercept", colnames(out)), with = FALSE]
 cor(data)
 
+# data <- data[epoch == max(epoch)]
 
 # Load necessary libraries
 library(ggplot2)
@@ -212,6 +219,22 @@ ggplot(pca_data2, aes(x = PC1, y = PC2, color = factor(PFT_2axes))) +
   scale_color_manual(values = c("magenta", "cyan", "green", "blue", "orange"),
                      labels = c("Cluster 1", "Cluster 2", "Cluster 3",
                                 "Cluster 4", "Cluster 5")) +
+  geom_segment(data = loadings_df, aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.3, "cm")), color = "black") +
+  geom_text(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
+            hjust = 0.5, vjust = 0.5, color = "black")+
+  geom_density_2d()+
+  facet_wrap(~PFT_2axes)
+
+# Create the plot
+ggplot(pca_data2, aes(x = PC1, y = PC2, color = factor(Family))) +
+  geom_point(size = 3, alpha = 0.7) +
+  theme_minimal() +
+  labs(x = "PC1", y = "PC2") +
+  theme(legend.position = "right") +
+  # scale_color_manual(values = c("magenta", "cyan", "green", "blue", "orange"),
+  #                    labels = c("Cluster 1", "Cluster 2", "Cluster 3",
+  #                               "Cluster 4", "Cluster 5")) +
   geom_segment(data = loadings_df, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.3, "cm")), color = "black") +
   geom_text(data = loadings_df, aes(x = PC1, y = PC2, label = Variable),
