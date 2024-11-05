@@ -12,9 +12,10 @@ library(ggplot2)
 
 pars <- readRDS("data/calibration-output/BCI_parameters_01ha_9_9_wo_T_v2.RDS")
 env_dt = fread("data/calibration-data/BCI-1h-patch-V2/env_dt.csv")
+env_dt = env_dt[,-"T_mean"]
 
 pars_i = pars[[length(pars)]]
-env_names = colnames(env_dt)[-1]
+env_names = c("Inter", colnames(env_dt)[-c(1)])
 out <- data.table()
 for(i in 1:length(pars_i)){
   par_name = names(pars_i)[i]
@@ -46,8 +47,14 @@ out$speciesID = 1:nrow(out)
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
 
+cor(out[,grep("par|Inter", colnames(out)), with = FALSE])
+
 # PCA all species
-data = out[,grep("par", colnames(out)), with = FALSE]
+data = out[,grep("par|Inter", colnames(out)), with = FALSE]
+names(data)[names(data) == "nnReg.0.weight__Inter"] <- "Regeneration (Intercept)"
+names(data)[names(data) == "nnMort.0.weight__Inter"] <- "Mortality (Intercept)"
+names(data)[names(data) == "nnGrowth.0.weight__Inter"] <- "Growth (Intercept)"
+# data = out[,grep("par", colnames(out)), with = FALSE]
 
 # Perform PCA on the data
 pca_result <- prcomp(data, scale. = TRUE)
@@ -56,7 +63,16 @@ summary(pca_result)
 #show explained variance in % for PC1 and PC2
 explained_variance = pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 
-kmeans_result <- kmeans(pca_result$x[, 1:2], centers = 5, nstart = 25)
+set.seed(123)
+# kmeans_result <- kmeans(pca_result$x[, 1:2], centers = 5, nstart = 25)
+kmeans_result <- kmeans(pca_result$x[, 1:2],
+                        centers = rbind(
+                          c(1,0),
+                          c(-1,0),
+                          c(0,-1),
+                          c(0,1),
+                          c(0,0)
+                          ), nstart = 25)
 
 # Create a data frame with the PCA results and cluster assignments
 pca_data <- data.frame(PC1 = pca_result$x[, 1],
@@ -81,17 +97,19 @@ colors <- c(
 
 pca_data$PFT = factor(
   pca_data$cluster,
-  levels = c(4,1,2,3,5),
+  levels = c(1,2,3,4,5),
   labels = c("Slow","Fast","Short-lived breeder (SLB)","Long-lived pioneer (LLP)","Intermediate")
   )
 
 loadings_df$Variable2 =
   factor(
     loadings_df$Variable,
-    levels = c("parHeight","parGrowth__light", "parGrowth__size", "parMort__light", "parMort__size", "parReg__light"),
-    labels = c("Height", "Growth (light)", "Growth (size)", "Mortality (light)", "Mortality (size)", "Regeneration (light)")
+    levels = c("parHeight","parGrowth__light", "parGrowth__size", "parMort__light", "parMort__size", "parReg__light", "Regeneration (Intercept)"  ,  "Growth (Intercept)", "Mortality (Intercept)"),
+    labels = c("Height", "Growth (light)", "Growth (size)", "Mortality (light)", "Mortality (size)", "Regeneration (light)", "Regeneration (Intercept)"   , "Growth (Intercept)", "Mortality (Intercept)")
   )
-
+# levels(loadings_df$Variable2)[levels(loadings_df$Variable2) == "nnReg.0.weight__Inter"] <- "Regeneration (Intercept)"
+# levels(loadings_df$Variable2)[levels(loadings_df$Variable2) == "nnMort.0.weight__Inter"] <- "Mortality (Intercept)"
+# levels(loadings_df$Variable2)[levels(loadings_df$Variable2) == "nnGrowth.0.weight__Inter"] <- "Growth (Intercept)"
 # Create the plot
 p = ggplot(pca_data, aes(x = PC1, y = PC2, color = PFT)) +
   geom_hline(yintercept = 0, color = "grey") +
@@ -109,7 +127,7 @@ p = ggplot(pca_data, aes(x = PC1, y = PC2, color = PFT)) +
   scale_color_manual(values = colors,
                      labels = names(colors)) +
   geom_segment(data = loadings_df, aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(length = unit(0.3, "cm")), color = "black") +
+               arrow = arrow(length = unit(0.4, "cm")), color = "black", linewidth = 1.5) +
   ggrepel::geom_text_repel(
     data = loadings_df[loadings_df$PC1 < 0, ],
     aes(x = PC1, y = PC2, label = Variable2), min.segment.length = 10,
