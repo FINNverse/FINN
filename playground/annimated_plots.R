@@ -12,7 +12,7 @@ for(i in 1:iterations){
 
 
   Nsp = 10
-  Npatches = 50
+  Npatches = 1
   Nsites = 1
   if(i != 2){
     shadeSP = runif(Nsp, 0.01, 0.99)
@@ -91,18 +91,18 @@ for(i in 1:iterations){
 }
 
 library(ggplot2)
-# ggplot(all_pred[iteration == 1, .(value = mean(value)), by = .(year, species, variable)],
-#        aes(x = year, y = value, color = factor(species))) +
-#   geom_line() +
-#   labs(x = "Year", y = "Value") +
-#   theme_minimal() +
-#   coord_cartesian(ylim = c(0, NA)) +
-#   scale_color_discrete(name = "Species")+
-#   facet_wrap(~variable, scales = "free_y", ncol = 1, strip.position = "left") +
-#   theme(axis.title.y = element_blank(),
-#     strip.placement = "outside",  # Places the facet labels outside the plotting area
-#     strip.text.y.left = element_text(angle = 90)  # Ensures the facet labels are horizontal
-#   )
+ggplot(all_pred[iteration == 1, .(value = mean(value)), by = .(year, species, variable)],
+       aes(x = year, y = value, color = factor(species))) +
+  geom_line() +
+  labs(x = "Year", y = "Value") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0, NA), xlim = c(0,200)) +
+  scale_color_discrete(name = "Species")+
+  facet_wrap(~variable, scales = "free_y", ncol = 1, strip.position = "left") +
+  theme(axis.title.y = element_blank(),
+    strip.placement = "outside",  # Places the facet labels outside the plotting area
+    strip.text.y.left = element_text(angle = 90)  # Ensures the facet labels are horizontal
+  )
 
 library(gganimate)
 
