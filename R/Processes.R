@@ -217,7 +217,8 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
          (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
 
   environment = torch::torch_exp(pred) # inverse link function
-  growth = shade * environment * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
+  # growth = shade * environment * (torch::torch_exp(-(dbh / (parGrowth[,2][species] * 100))))
+  growth = shade * environment * (torch::torch_exp(-parGrowth[,2][species] * dbh))
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment,growth = growth) else out = growth
   return(out)
 }
