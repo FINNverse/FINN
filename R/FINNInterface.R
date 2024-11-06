@@ -831,7 +831,7 @@ simulateForest = function(env,
                           speciesPars_ranges = list(
                             parGrowth = rbind(
                               c(0.01, 0.99),
-                              c(0.01, 4)
+                              c(0, 0.5)
                             ),
                             parMort = rbind(
                               c(0.01, 0.99),

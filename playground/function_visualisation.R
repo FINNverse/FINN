@@ -67,6 +67,21 @@ print(p_BA_stem)
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## BA_stand ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+
+competition2 = function(dbh, species, trees, parHeight, h = NULL, minLight = 50., patch_size_ha, ba = NULL, cohortHeights = NULL){
+  if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)
+  if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
+  if(is.null(h)) {
+    h = cohortHeights
+    ba_height = (ba$unsqueeze_(4)$multiply(((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2)$sigmoid_() ))$sum(-2) # AUFPASSEN
+  }else{
+    ba_height = (ba$unsqueeze_(4)$multiply_(((cohortHeights - 0.1)/1e-2)$sigmoid_() ))$sum(-2)
+  }
+  light = 1.-ba_height/minLight
+  light = torch_clamp(light, min = 0)
+  return(light)
+}
+
 trees_vec = c(0:500,10^(seq(2,4, length.out = 20)))
 dbh_vec = dbh = seq(1,200, 1)
 patch_size_vec = seq(0.04, 0.2, 0.02)
@@ -109,6 +124,19 @@ p_BA_stand <- ggplot(test_dt_out[trees_ha <=500],aes(y = factor(trees_ha), x = d
   ylab("trees [N/ha]")+
   xlab("mean stand dbh [cm]")+
   guides(fill=guide_legend(title="basal area\n[m^2/ha]"))+
+  ggtitle("BA_stand",paste0(deparse(BA_stand),collapse = "\n"))+
+  scale_fill_viridis_c(breaks = seq(0,max_ba,10), labels = c(seq(0,max_ba-10,10),paste0(">",max_ba)))+
+  scale_y_discrete(breaks = seq(0,500,100))+
+  facet_wrap(~patch_size_ha, labeller = labeller(patch_size_ha = function(x) paste0("patch size = ",x, " ha")))
+print(p_BA_stand)
+
+max_ba = 60
+test_dt_out[basal_area > max_ba, basal_area := max_ba,]
+p_BA_stand <- ggplot(test_dt_out[trees_ha <=500],aes(y = factor(trees_ha), x = dbh, fill = light))+
+  geom_tile()+
+  ylab("trees [N/ha]")+
+  xlab("mean stand dbh [cm]")+
+  guides(fill=guide_legend(title="light"))+
   ggtitle("BA_stand",paste0(deparse(BA_stand),collapse = "\n"))+
   scale_fill_viridis_c(breaks = seq(0,max_ba,10), labels = c(seq(0,max_ba-10,10),paste0(">",max_ba)))+
   scale_y_discrete(breaks = seq(0,500,100))+
