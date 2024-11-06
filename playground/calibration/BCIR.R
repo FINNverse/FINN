@@ -2,10 +2,11 @@ library(data.table)
 library(FINN)
 library(torch)
 
-df = fread("data/calibration-data/BCI-1h-patch-V2/stand_dt.csv")
-obs_df = fread("data/calibration-data/BCI-1h-patch-V2/obs_df.csv")
-env = fread("data/calibration-data/BCI-1h-patch-V2/env_dt.csv")
-df[census == 1985 & fresh_dead == 0,.(
+stand_dt = fread("data/calibration-data/BCI-V3/stand_dt.csv")
+obs_df = fread("data/calibration-data/BCI-V3/obs_df.csv")
+env = fread("data/calibration-data/BCI-V3/env_dt.csv")
+swp_dt = fread("data/calibration-data/BCI-V3/swp_dt.csv")
+stand_dt[census == 1985 & fresh_dead == 0,.(
   ba = sum(ba),
   dbh = sum(dbh_cm, na.rm=T)
 ),]
@@ -15,14 +16,14 @@ obs_df[census == 1985,.(
 ),]
 
 colnames(obs_df)
-colnames(df)[6] = "dbh"
+colnames(stand_dt)[6] = "dbh"
 
-head(df)
-df
-df$AL = NA
-colnames(df)[c(1,7, 9, 11)] = c("year", "growth", "reg", "mort")
-head(df)
-data = df
+head(stand_dt)
+stand_dt
+stand_dt$AL = NA
+colnames(stand_dt)[c(1,7, 9, 11)] = c("year", "growth", "reg", "mort")
+head(stand_dt)
+data = stand_dt
 
 # fill sites
 # Jedes jahr alle sites!
@@ -68,19 +69,16 @@ env$T_max = scale(env$T_max)
 env$T_min = scale(env$T_min)
 env$SR_kW_m2 = scale(env$SR_kW_m2)
 env$RH_prc = scale(env$RH_prc)
+env = merge(env, swp_dt[,.(siteID = patch, swp)], by = "siteID")
 data$AL = as.numeric(data$AL)
-str(data)
 
 # Preparation of cohorts! BUG!!!!
 cohort1 <- FINN::CohortMat$new(obs_df)
 sp= cohort1$species_r
 sp[sp==0] = 1L
 sp[is.na(sp)] = 1L
-cohort2 = FINN::CohortMat$new(dbh = cohort1$dbh_r, trees = cohort1$trees_r, species = sp, sp = uniqueN(df$species))
+cohort2 = FINN::CohortMat$new(dbh = cohort1$dbh_r, trees = cohort1$trees_r, species = sp, sp = uniqueN(stand_dt$species))
 # sp zum indexen, aber wenn 0 exisitiert -> seg fault / index fault
-
-
-
 
 # Option A) Train model
 m = finn(env = env, data = data,
@@ -175,7 +173,7 @@ tmp_dt$rep = i
 pdat = rbind(pdat, tmp_dt)
 }
 pdat[,year := year+1984,]
-pdat <- merge(df, pdat, by = c("siteID", "year", "species"))
+pdat <- merge(stand_dt, pdat, by = c("siteID", "year", "species"))
 library(ggplot2)
 ggplot() +
   geom_line(aes(x = year, y = ba, group = interaction(rep,species), color = factor(species)), data = pdat[, .(ba = sum(ba.y)), by = .(year, rep, species, siteID)], alpha = 0.3) +

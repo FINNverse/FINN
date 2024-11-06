@@ -1,6 +1,6 @@
 library(data.table)
 
-out_dir = "data/calibration-data/BCI-1h-patch-V2"
+out_dir = "data/calibration-data/BCI-V3"
 if(!dir.exists(out_dir)) {
   dir.create(out_dir,recursive = T)
 }
@@ -125,30 +125,57 @@ y_length = 25
 # y_length = 100
 all_trees <- all_trees[!is.na(gx) & !is.na(gy)]
 all_trees[,":="(
-  x_class = cut(gx, breaks = seq(0, 1000, x_length), labels = 1:length(seq(x_length, 1000, x_length)), include.lowest = T),
-  y_class = cut(gy, breaks = seq(0, 500, y_length), labels = 1:length(seq(y_length, 500, y_length)), include.lowest = T)
+  # x_class = cut(gx, breaks = seq(0, 1000, x_length), labels = 1:length(seq(x_length, 1000, x_length)), include.lowest = T),
+  # y_class = cut(gy, breaks = seq(0, 500, y_length), labels = 1:length(seq(y_length, 500, y_length)), include.lowest = T)
+  x_class = cut(gx, breaks = seq(0, 1000, x_length), labels = seq(x_length, 1000, x_length)-x_length/2, include.lowest = T),
+  y_class = cut(gy, breaks = seq(0, 500, y_length), labels = seq(y_length, 500, y_length)-y_length/2, include.lowest = T)
 ),]
 all_trees[is.na(x_class)]
+
+length(seq(y_length, 1000, y_length)-y_length/2)
+length(seq(0, 500, y_length))
 
 all_trees[, patch := as.integer(as.factor(paste0(x_class,"-",y_class))),]
 uniqueN(all_trees$treeID)
 uniqueN(all_trees$patch)
 
-# library(ggplot2)
-# library(scales)
-#
-# # Generate random colors for the unique patches
-# set.seed(123)  # Set seed for reproducibility
-# n_patches <- length(unique(all_trees$patch))  # Get the number of unique patches
-# random_colors <- hue_pal()(n_patches)  # Generate n random colors using hue palette
+swp_dt <- unique(all_trees[,.(
+  patch,
+  x_class = as.numeric(as.character(x_class)),
+  y_class = as.numeric(as.character(y_class))
+  )])
 
-# ggplot(all_trees[census == 2015], aes(x = gx, y = gy, colour = factor(patch, ordered = FALSE))) +
-#   geom_point(size = 0.01, alpha = 0.5) +
-#   scale_color_manual(values = sample(random_colors)) +  # Assign random colors
-#   theme_minimal() +
-#   theme(legend.position = "none")
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+## add swp data ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
-# fwrite(all_trees, "data/calibration-data/BCI/all_trees.csv")
+early_dt <- fread("data/calibration-data/BCI/Kupers_et_al/Output/BCI_SWP_map_early_dry_season_regular.txt")
+mid_dt <- fread("data/calibration-data/BCI/Kupers_et_al/Output/BCI_SWP_map_mid_dry_season_regular.txt")
+late_dt <- fread("data/calibration-data/BCI/Kupers_et_al/Output/BCI_SWP_map_late_dry_season_regular.txt")
+late_drougth_dt <- fread("data/calibration-data/BCI/Kupers_et_al/Output/BCI_SWP_map_mid_dry_season_drought.txt")
+names(early_dt)[3] <- c("SWP_early")
+names(mid_dt)[3] <- c("SWP_mid")
+names(late_dt)[3] <- c("SWP_late")
+names(late_drougth_dt)[3] <- c("SWP_late_drought")
+
+# merge all files
+all_swp_dt <- merge(early_dt, mid_dt, by = c("x", "y"))
+all_swp_dt <- merge(all_swp_dt, late_dt, by = c("x", "y"))
+all_swp_dt <- merge(all_swp_dt, late_drougth_dt, by = c("x", "y"))
+var(as.matrix(all_swp_dt[,.(
+  SWP_early,
+  SWP_mid,
+  SWP_late,
+  SWP_late_drought
+)]))
+
+# only use late swp because it has the highest spatial variation
+library(raster)
+late_r <- raster("data/calibration-data/BCI/Kupers_et_al/Output/BCI_SWP_map_late_dry_season_regular.tif")
+
+swp_dt$swp <- raster::extract(late_r, cbind(swp_dt$x_class, swp_dt$y_class))
+fwrite(swp_dt, paste0(out_dir, "/swp_dt.csv"))
+
 fwrite(all_trees[census >= 1985], paste0(out_dir, "/all_trees.csv"))
 # fwrite(spptable, "data/calibration-data/BCI/spptable.csv")
 
@@ -195,7 +222,6 @@ initial_trees <- all_trees[status=="A" & !is.na(dbh_cm), .(
 ]
 max(all_trees$dbh_cm, na.rm = T)
 initial_trees <- initial_trees[order(patch)]
-# initial_trees$cohortID = 1:nrow(initial_trees)
 initial_trees[,cohortID := 1:.N,by = .(patch,census)]
 initial_trees[, dbh_cm := as.numeric(as.character(dbh_cm)),]
 
