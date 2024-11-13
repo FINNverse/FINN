@@ -91,7 +91,7 @@ m = finn(env = env, data = data,
          init = cohort2,
          lr=0.01,
          epochs = 1,
-         patch_size = 1,
+         patch_size = 0.1,
          batchsize = 350L,
          weights = c(1, 0.1, 3, 1.5, 3, 1.0))
 
