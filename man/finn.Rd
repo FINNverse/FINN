@@ -18,7 +18,7 @@ finn(
     rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parHeight = c(0.3, 0.7),
     parGrowthEnv = rbind(c(-1, 1), c(-1, 1)), parMortEnv = rbind(c(-2, 2), c(-2, 2)),
     parRegEnv = rbind(c(-2, 2), c(-2, 2))),
-  patches = 10L,
+  patches = 100L,
   patch_size = 0.1,
   init = NULL,
   batchsize = NULL,
@@ -30,6 +30,7 @@ finn(
   NGPU = 1,
   weights = c(0.05, 0.5, 3, 0.5, 3, 2),
   file = NULL,
+  sp = NULL,
   ...
 )
 }
