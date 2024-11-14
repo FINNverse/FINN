@@ -11,12 +11,12 @@ simulateForest(
   growthProcess = NULL,
   regenerationProcess = NULL,
   competitionProcess = NULL,
-  speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0.01, 4)), parMort =
+  speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0, 0.5)), parMort =
     rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parHeight = c(0.3, 0.7)),
   height = NULL,
-  patches = 10L,
+  patches = 100L,
   patch_size = 0.1,
-  sp = 5L,
+  sp = NULL,
   init = NULL,
   device = c("cpu", "gpu"),
   parallel = FALSE,
@@ -34,7 +34,7 @@ simulateForest(
 
 \item{patch_size}{A numeric value representing the size of each patch. Default is 0.1.}
 
-\item{sp}{An integer specifying the number of species in the simulation. Default is 5.}
+\item{sp}{An integer specifying the number of species in the simulation. Default is NULL.}
 
 \item{init}{A custom initialization object for the simulation, if available.}
 
