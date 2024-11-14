@@ -7,6 +7,11 @@
 
 library(data.table)
 
+outputDir <- "data/calibration-data/FIA/preparedV4/"
+if(!dir.exists(outputDir)) {
+  dir.create(outputDir)
+}
+
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## functions and constants ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
@@ -99,7 +104,9 @@ selected_plots_dt <- plot_dt[
     QA_STATUS == 1 &
     INTENSITY == 1 &
     DESIGNCD == 1 &
-    INVYR != 9999
+    INVYR != 9999 &
+    !is.na(LAT) &
+    !is.na(LON)
     ,
   .(
     uniquePLOTid,
@@ -137,8 +144,8 @@ selected_plots_dt <- plot_dt[
 #                   objectives. Examples include designated Federal wilderness areas, national parks
 #                   and monuments, and most State parks.
 # TRTCD1 = 0 --> No treatment
-
 cond_dt[,CONDID2 := as.integer(factor(INVYR, ordered = T)), by = uniquePLOTid_txt]
+cond_dt[CONDID2 > CONDID, CONDID2 := max(CONDID), by = uniquePLOTid_txt]
 cond_dt <- cond_dt[CONDID == CONDID2]
 
 cond_dt[DSTRBCD1 != DSTRBCD1_P2A & DSTRBCD1 == 0, ":="(
@@ -169,12 +176,11 @@ cond_dt[perdiodID == 1, TRTCD1_P2A := 0,]
 cond_dt[, anyTRTCD1not0 := any(TRTCD1 != 0), by = uniquePLOTid_txt]
 cond_dt[, anyTRTCD1_P2Anot0 := any(TRTCD1_P2A != 0), by = uniquePLOTid_txt]
 
-selected_cond_dt <- cond_dt[
-  uniquePLOTid_txt %in% unique(selected_plots_dt$uniquePLOTid_txt) &
-    COND_STATUS_CD == 1 &
-    # RESERVCD == 1 &
-    anyTRTCD1not0 == F &
-    STUMP_CD_PNWRS != "N"
+cond_dt2 <- merge(cond_dt, selected_plots_dt[,.(uniquePLOTid_txt,INVYR)], by = c("uniquePLOTid_txt", "INVYR"))
+selected_cond_dt <- cond_dt2[
+  COND_STATUS_CD == 1 &
+  anyTRTCD1not0 == F &
+  STUMP_CD_PNWRS != "N"
   ,
   .(
     uniquePLOTid_txt,
@@ -182,6 +188,7 @@ selected_cond_dt <- cond_dt[
     CONDID,
     CONDID2,
     INVYR,
+    STATECD,
     FORTYPCD, # Forest type code derived (see appendix D in FIA documentation)
     FLDTYPCD, # Field type code from field team (see appendix D in FIA documentation)
     PROP_BASIS, # Proportion basis. A value indicating what type of fixed-size subplots were installed when this plot was sampled. This information is needed to use the proper adjustment factor for the stratum in which the plot occurs (see POP_STRATUM.ADJ_FACTOR_SUBP and POP_STRATUM.ADJ_FACTOR_MACR).
@@ -220,8 +227,9 @@ selected_cond_dt <- merge(selected_plots_dt, selected_cond_dt, by = c("uniquePLO
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # SUBP = 1,2,3,4 --> Only subplots 1,2,3,4 are included. These correspond to the FIA standard grid (see FIA documentation)
 # SUBP_STATUS_CD = 1 --> Sampled - at least one accessible forest land condition present on subplot.
-selected_subplots_dt <- subplot_dt[
-  uniquePLOTid_txt %in% unique(selected_plots_dt$uniquePLOTid_txt) &
+
+subplot_dt2 <- merge(subplot_dt, selected_plots_dt[,.(uniquePLOTid_txt,INVYR)], by = c("uniquePLOTid_txt", "INVYR"))
+selected_subplots_dt <- subplot_dt2[
     SUBP %in% c(1,2,3,4) &
     SUBP_STATUS_CD == 1 &
     MICRCOND == 1,
@@ -232,8 +240,8 @@ selected_subplots_dt <- subplot_dt[
       INVYR
     )
   ]
-
 selected_subplots_dt <- merge(selected_cond_dt, selected_subplots_dt, by = c("uniquePLOTid_txt", "INVYR"))
+
 
 # test_dt = selected_subplots_dt[, .(
 #   minyear = min(INVYR),
@@ -252,8 +260,8 @@ subp_cond_dt[CONDID2 > CONDID, CONDID2 := max(CONDID), by = uniqueSUBPid_txt]
 subp_cond_dt <- subp_cond_dt[CONDID == CONDID2]
 
 # SUBPCOND_PROP = 1 --> Only subplots with a proportion of 1 are included. This means that the subplot fully meets the conditions defined in SUBPLOT table (which is SUBCOND == 1). In simple words, only plots that are fully covered by forest are included.
-selected_subp_cond_dt <- subp_cond_dt[
-  uniqueSUBPid_txt %in% unique(selected_subplots_dt$uniqueSUBPid_txt) &
+subp_cond_dt2 <- merge(subp_cond_dt, selected_subplots_dt[,.(uniqueSUBPid_txt,INVYR)], by = c("uniqueSUBPid_txt", "INVYR"))
+selected_subp_cond_dt <- subp_cond_dt2[
     MICRCOND_PROP == 1 &
     SUBPCOND_PROP == 1,.(
       uniquePLOTid_txt,
@@ -272,7 +280,7 @@ if(!dir.exists("data/calibration-data/FIA_V2")) {
 fwrite(final_selected_plots, "data/calibration-data/FIA_V2/selected_plots.csv")
 
 # remove all objects but the final_selected_plots
-rm(list = setdiff(ls(), "final_selected_plots"))
+# rm(list = setdiff(ls(), "final_selected_plots"))
 gc()
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## select in TREE ####
@@ -371,6 +379,8 @@ selected_tree_dt1 <- tree_dt[
     uniqueSUBPid_txt,
     uniqueTREEid,
     uniqueTREEid_txt,
+    # SUBP,
+    TREE,
     INVYR,
     CN,
     PREV_TRE_CN,
@@ -398,6 +408,7 @@ selected_tree_dt2 <- merge(
   selected_tree_dt1, final_selected_plots,
   by = c("uniquePLOTid_txt", "uniqueSUBPid_txt", "INVYR")
 )
+final_selected_plots[uniqueSUBPid_txt == "17_3_17_20017_4"]
 
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
@@ -450,29 +461,54 @@ selected_tree_dt2 <- merge(
 ## calculate variables ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # complete time series for each tree
+subplot_eval_dt = selected_tree_dt1[, .(
+  minyear = min(INVYR),
+  maxyear = max(INVYR),
+  all_years = paste0(sort(unique(INVYR)), collapse = ","),
+  Nyears = uniqueN(INVYR)
+  ) ,.(uniquePLOTid_txt, uniqueSUBPid_txt)]
+
 plot_eval_dt = selected_tree_dt1[, .(
   minyear = min(INVYR),
   maxyear = max(INVYR),
   all_years = paste0(sort(unique(INVYR)), collapse = ","),
   Nyears = uniqueN(INVYR)
-  ) ,.(uniqueSUBPid_txt)]
+  ) ,.(uniquePLOTid_txt)]
 
-# only keep plots with at least 2 years of data
-plot_eval_dt <- plot_eval_dt[Nyears > 1]
+all_eval_dt <- merge(plot_eval_dt, subplot_eval_dt, by = c("uniquePLOTid_txt"))
+
+# only keep plots with at least 2 years of data and no change in subplot numbers within a plot
+evaluated_plots <-
+  all_eval_dt[
+    all_years.x == all_years.y & Nyears.x == Nyears.y & Nyears.x > 1 & Nyears.y > 1
+  ]
+
 # select plots
-selected_tree_dt3 <- selected_tree_dt2[uniqueSUBPid_txt %in% unique(plot_eval_dt$uniqueSUBPid_txt),]
+selected_tree_dt3 <- selected_tree_dt2[uniqueSUBPid_txt %in% unique(evaluated_plots$uniqueSUBPid_txt),]
 
 # create a table with all combinations of SUBPid and INVYR
-all_SUBPid_comb_dt <- unique(selected_tree_dt3[,.(uniqueSUBPid_txt, uniquePLOTid, uniquePLOTid_txt, INVYR)])
+all_SUBPid_comb_dt <- unique(selected_tree_dt3[,.(uniqueSUBPid_txt, SUBP, uniquePLOTid, uniquePLOTid_txt, INVYR)])
 
 # create a table with all combinations of TREEid and SUBPid
-all_TREEid_dt <- unique(selected_tree_dt3[,.(uniqueTREEid_txt, uniqueSUBPid_txt, uniquePLOTid, uniquePLOTid_txt, uniqueTREEid)])
+all_TREEid_dt <- unique(selected_tree_dt3[,.(uniqueTREEid_txt, TREE, uniqueSUBPid_txt, SUBP, uniquePLOTid, uniquePLOTid_txt, uniqueTREEid)])
 
 # merge all combinations of SUBPid and INVYR with all combinations of TREEid and SUBPid
-all_SUBPid_comb_dt <- merge(all_SUBPid_comb_dt, all_TREEid_dt, by = c("uniqueSUBPid_txt","uniquePLOTid","uniquePLOTid_txt"), allow.cartesian = T)
+all_SUBPid_comb_dt <- merge(all_SUBPid_comb_dt, all_TREEid_dt, by = c("uniqueSUBPid_txt", "SUBP","uniquePLOTid","uniquePLOTid_txt"), allow.cartesian = T)
 
 # add all combinations of SUBPid and INVYR to selected_tree_dt3 so that each uniqueTREEid_text has each INVYR and SUBPid combination
-selected_tree_dt4 <- merge(all_SUBPid_comb_dt, selected_tree_dt3, by = c("uniqueSUBPid_txt", "uniqueTREEid_txt", "uniquePLOTid", "uniquePLOTid_txt", "uniqueTREEid", "INVYR"), all.x = T)
+selected_tree_dt4a <- merge(all_SUBPid_comb_dt, selected_tree_dt3, by = c("uniquePLOTid", "uniquePLOTid_txt", "uniqueSUBPid_txt", "SUBP", "uniqueTREEid", "uniqueTREEid_txt", "TREE",  "INVYR"), all.x = T)
+
+# selected_tree_dt4a[, .N, .(uniquePLOTid_txt, uniqueTREEid_txt, INVYR)][N > 1]
+selected_tree_dt4a[,N_SUBP := uniqueN(uniqueSUBPid_txt), by = .(uniquePLOTid_txt, INVYR)]
+selected_tree_dt4a[, .(N = uniqueN(N_SUBP)), by = uniquePLOTid_txt][N > 1]
+selected_tree_dt4a[, periodID := as.integer(factor(INVYR,ordered = T)), by = uniquePLOTid_txt]
+selected_tree_dt4 <- selected_tree_dt4a[
+  !(uniquePLOTid_txt %in% unique(c(
+    selected_tree_dt4a[, .N, .(uniquePLOTid_txt, uniqueTREEid_txt, INVYR)][N > 1]$uniquePLOTid_txt, # remove sites with non unique TREE IDs within a plot
+    selected_tree_dt4a[, .(N = uniqueN(N_SUBP)), by = uniquePLOTid_txt][N > 1]$uniquePLOTid_txt, # remove sites changing number of SUPB within a plot over years
+    selected_tree_dt4a[periodID == 1, .(Nalive = sum(STATUSCD == 1)), .(uniquePLOTid_txt,uniqueSUBPid_txt, INVYR)][Nalive == 0]$uniquePLOTid_txt # remove sites with no alive trees in the first inventory period
+  ))) ,
+]
 
 # label new rows
 selected_tree_dt4[is.na(CN), missingrow := T,]
@@ -482,9 +518,9 @@ selected_tree_dt4[!is.na(CN), missingrow := F,]
 selected_tree_dt4[missingrow == F, DIACHECKisNot0 := sum(DIACHECK != 0 & STATUSCD == 1), by = uniqueTREEid_txt]
 selected_tree_dt4[missingrow == F, STATUSCDis3 := sum(STATUSCD == 3), by = uniqueTREEid_txt]
 selected_tree_dt5 <- selected_tree_dt4[
-  !(uniqueSUBPid_txt %in% selected_tree_dt4[
-    DIACHECKisNot0 > 0 | STATUSCDis3 > 0 | DIA_THRESHOLD > 5
-    ]$uniqueSUBPid_txt),
+  !(uniquePLOTid_txt %in% selected_tree_dt4[
+    DIACHECKisNot0 > 0 | STATUSCDis3 > 0 | DIA_THRESHOLD > 5 & !(RECONCILECD %in% c(3,7,8))
+    ]$uniquePLOTid_txt),
   ]
 
 ## label time series
@@ -493,6 +529,9 @@ selected_tree_dt5 <- selected_tree_dt4[
 selected_tree_dt5[, INVYR_before := data.table::shift(INVYR, 1, type = "lag"), by = uniqueTREEid_txt]
 selected_tree_dt5[, INVYR_after := data.table::shift(INVYR, 1, type = "lead"), by = uniqueTREEid_txt]
 selected_tree_dt5[, INVYR_diff := INVYR - INVYR_before, ]
+
+selected_tree_dt5[is.na(INVYR_diff)]
+
 # add status for not existing trees with STATUSCD = 9
 selected_tree_dt5[missingrow == T & is.na(STATUSCD), STATUSCD := 9,]
 # add STATUSCD before and after
@@ -503,6 +542,7 @@ selected_tree_dt5[, DIA_before := data.table::shift(DIA, 1, type = "lag"), by = 
 selected_tree_dt5[, DIA_after := data.table::shift(DIA, 1, type = "lead"), by = uniqueTREEid_txt]
 # calculate absolute growth difference
 selected_tree_dt5[, DIA_DIFF := DIA - DIA_before, ]
+selected_tree_dt5[, periodID := as.integer(factor(INVYR,ordered = T)), by = uniquePLOTid_txt]
 # calculate annual growth
 selected_tree_dt5[STATUSCD == 1, DIA_GROWTH := DIA_DIFF/INVYR_diff, ]
 
@@ -513,7 +553,7 @@ selected_tree_dt5[, STATUSCD_before := data.table::shift(STATUSCD, 1, type = "la
 selected_tree_dt5[, STATUSCD_after := data.table::shift(STATUSCD, 1, type = "lead"), by = uniqueTREEid_txt]
 
 # define recruitment events
-selected_tree_dt5[, recruitment := STATUSCD == 1 & !(RECONCILECD %in% c(3,7,8)) & STATUSCD_before == 9,]
+selected_tree_dt5[, recruitment := STATUSCD == 1 & STATUSCD_before == 9,]
 
 # define mortality events
 selected_tree_dt5[, mortality := (STATUSCD == 2 & STATUSCD_before == 1),]
@@ -531,118 +571,117 @@ max_growth = quantile(selected_tree_dt5$DIA_GROWTH, c(0.995), na.rm = T)
 selected_tree_dt6 <- selected_tree_dt5[
   !(uniqueSUBPid_txt %in% unique(selected_tree_dt5[DIA_GROWTH < min_growth & DIA_GROWTH > max_growth & RECR_GROWTH > max_growth,]$uniqueSUBPid_txt)),
 ]
-# remaining trees with growth < 0 are set to 0
+# remaining growth of trees with growth < 0 is set to 0
 selected_tree_dt6[DIA_GROWTH < 0, DIA_GROWTH := 0,]
 
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+## format calibration tables ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+selected_tree_dt6$plot_size_ha = subplot_size_ha
 
-
-## height
-# HEIGHTCD == 1
-
-selected_tree_dt6$plot_size = subplot_size_ha
-
+# transform from inches and ft to cm and m
 selected_tree_dt6[,":="(
   DBHcm = inches2cm(DIA),
+  DBHGrowthcm = inches2cm(DIA_GROWTH),
   height = ft2m(HT)
 ),]
+# calculate basal area of each tree
 selected_tree_dt6[,ba := round(circle_area(DBHcm), 4),]
 
-plotvars_dt <- selected_tree_dt6[,.(
-  N = sum((STATUSCD == 1)/plot_size, na.rm = T),
-  BA = sum(ba*(STATUSCD == 1)/plot_size, na.rm = T)
-), by = .(uniqueSUBPid_txt, INVYR)]
+library(FINN)
+# add siteID and species IDs for FINN
+selected_tree_dt6[,":="(
+  siteID = as.integer(factor(uniquePLOTid)),
+  species = as.integer(factor(SPCD)),
+  year = INVYR
+),]
 
-plot(plotvars_dt$N, plotvars_dt$BA)
+# add patchID for FINN
+selected_tree_dt6[,":="(
+  patchID = as.integer(factor(SUBP,ordered = T))
+  ), by = .(siteID)]
 
-selected_trees_dt <- merge(selected_trees_dt, plotvars_dt, by = c("uniquePLOTid", "INVYR"))
+selected_tree_dt6[,":="(
+  cohortID = as.integer(factor(TREE))
+  ), by = .(siteID, patchID)]
 
-# selected_trees_dt <- selected_trees_dt[,.(
-#   uniquePLOTid,
-#   uniqueSUBPid,
-#   uniqueTREEid,
-#   year = INVYR,
-#   species = SPCD,
-#   DBH = DBHcm,
-#   height = ft2m(HT),
-#   DIACHECK = DIACHECK, # 0 = accurate, 1 = estimated, 2 = deltawrong, 5 = modeled
-#   HTCD = HTCD, # 1 = measured, 2 = totvisest-actmeas, 3 = visest, 4 = estimated
-#   ACTUALHTm = ft2m(ACTUALHT),
-#   TPA_UNADJ,
-#   status = STATUSCD # 0 = none, 1 = alive, 2 = dead, 3 = cut
-# )]
+# create species_link table to link FINN species IDs to scientific names and SPCD codes
+species_link_dt <- merge(
+  unique(selected_tree_dt6[,.(species, SPCD)]),
+  species_dt[,.(latin_genus = GENUS, latin_species = SPECIES, species_name = SCIENTIFIC_NAME, SPCD)],,
+  by = c("SPCD"), all.x = T)
 
-selected_trees_dt <- selected_trees_dt[order(INVYR)]
+fwrite(species_link_dt, paste0(outputDir, "species_link_dt.csv"))
 
-selected_trees_dt[
-  order(INVYR),
-  ":="(
-    STATUSCD_before = data.table::shift(STATUSCD,1,type = "lag"),
-    DBHcm_before = data.table::shift(DBHcm,1,type = "lag")
+patch_dt <- final_selected_plots[
+  uniqueSUBPid_txt %in% unique(selected_tree_dt6$uniqueSUBPid_txt),
+]
+
+patch_dt <-
+  merge(
+    patch_dt,
+    unique(selected_tree_dt6[,.(uniqueSUBPid_txt,siteID,patchID)]),
+    by = c("uniqueSUBPid_txt")
+    )
+
+fwrite(patch_dt, paste0(outputDir, "full_patch_dt.csv"))
+
+site_dt <- unique(patch_dt[,.(
+  uniquePLOTid, siteID, STATECD = factor(STATECD), year = INVYR, LAT, LON)]
+  )
+
+fwrite(site_dt, paste0(outputDir, "site_dt.csv"))
+
+stand_variables_patch <- selected_tree_dt6[!is.na(species),.(
+  dbh = mean(DBHcm*(STATUSCD == 1), na.rm = T),
+  ba = sum(ba*(STATUSCD == 1), na.rm = T),
+  trees = sum((STATUSCD == 1), na.rm = T),
+  dead_trees = sum((STATUSCD == 2), na.rm = T),
+  AL = NA,
+  growth = mean(DIA_GROWTH, na.rm = T),
+  mort = round(sum(mortality, na.rm = T)/unique(INVYR_diff)),
+  reg = ceiling(sum(recruitment, na.rm = T)/unique(INVYR_diff)),
+  r_mean_ha = (sum(recruitment, na.rm = T)/unique(INVYR_diff))/unique(plot_size_ha)
   ),
-  by = .(uniquePLOTid, uniqueSUBPid, uniqueTREEid)]
+  by = .(siteID, patchID, species, year, periodID, patchsize = plot_size_ha)]
 
-selected_trees_dt[, fresh_dead := STATUSCD == 2 & STATUSCD_before == 1,]
-selected_trees_dt[DIACHECK == 0, DBHchange := DBHcm - DBHcm_before,]
+stand_variables_patch <- stand_variables_patch[!(trees == 0 & dead_trees > 0 & (is.na(mort) | mort == 0))]
 
-selected_trees_dt[
-  order(INVYR),
-  ":="(
-    DBHchange_before = data.table::shift(DBHchange,1,type = "lag")
+
+fwrite(stand_variables_patch, paste0(outputDir, "stand_variables_patch_dt.csv"))
+
+stand_variables_site <- stand_variables_patch[, .(
+  dbh = mean(dbh, na.rm = T),
+  ba = sum(ba, na.rm = T),
+  trees = sum(trees, na.rm = T),
+  dead_trees = sum(dead_trees, na.rm = T),
+  AL = NA,
+  growth = mean(growth, na.rm = T),
+  mort = mean(mort, na.rm = T),
+  reg = mean(reg, na.rm = T),
+  r_mean_ha = mean(r_mean_ha, na.rm = T)
   ),
-  by = .(uniquePLOTid, uniqueSUBPid, uniqueTREEid)]
+  by = .(siteID, species, year, periodID)]
 
-selected_trees_dt[fresh_dead == T, mort_year := INVYR,]
-selected_trees_dt[, trees_acre := TPA_UNADJ,]
+fwrite(stand_variables_site, paste0(outputDir, "stand_variables_site_dt.csv"))
 
-mort_calib_data <- selected_trees_dt[STATUSCD == 1 | STATUSCD_before == 1,.(
-  uniquePLOTid,
-  uniqueSUBPid,
-  uniqueTREEid,
-  year = INVYR,
-  species = SPCD,
-  trees_acre,
-  DBH = DBHcm,
-  DBH_before = DBHcm_before,
-  DBHchange,
-  DBHchange_before,
-  height = ft2m(HT),
-  actualHeight = ft2m(ACTUALHT),
-  HTCD = HTCD,
-  BA_total = BA,
-  N_total = N,
-  y = as.integer(fresh_dead)
+uniqueN(selected_tree_dt6$siteID)
+max(selected_tree_dt6$siteID)
+
+uniqueN(selected_tree_dt6[periodID == 1]$siteID)
+max(selected_tree_dt6[periodID == 1]$siteID)
+
+init_cohort1 <- selected_tree_dt6[periodID == 1, .(
+  siteID = siteID,
+  patchID = patchID,
+  cohortID = cohortID,
+  year = year,
+  species = species,
+  trees = (STATUSCD == 1)*1,
+  dbh = DBHcm
 )]
-
-
-maxDBH <- ceiling(max(selected_trees_dt$DBHcm,na.rm = T)/10)*10
-intervalsize <- 10
-DBHclasses <- seq(0, maxDBH, intervalsize)
-DBHclassesLabels <- DBHclasses[-1]-intervalsize/2
-# table for stand initialization
-cohort_mort_calib_data_dt <-
-  mort_calib_data[, .(trees_acre = sum(trees_acre),
-                      N_dead = sum(trees_acre * (y == 1))),
-                  by = .(
-                    uniquePLOTid,
-                    species,
-                    year,
-                    BA_total,
-                    N_total,
-                    DBHclass = as.numeric(as.character(cut(DBH, breaks = DBHclasses, labels = DBHclassesLabels)))
-                    )]
-
-outputDir <- "data/calibration-data/FIA/preparedV3/"
-if(!dir.exists(outputDir)) {
-  dir.create(outputDir)
-}
+fwrite(init_cohort1, paste0(outputDir, "init_cohort1_dt.csv"))
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## save the full tables ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-
-fwrite(selected_trees_dt, paste0(outputDir, "selected_trees.csv"))
-fwrite(mort_calib_data, paste0(outputDir, "mort_calib_data.csv"))
-fwrite(cohort_mort_calib_data_dt, paste0(outputDir, "cohort_mort_calib_data_dt.csv"))
-fwrite(state_dt, paste0(outputDir, "state.csv"))
-fwrite(plot_dt, paste0(outputDir, "plot.csv"))
-fwrite(species_dt, paste0(outputDir, "species.csv"))
