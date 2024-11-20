@@ -284,7 +284,7 @@ The \code{predict} method generates predictions for tree growth, mortality, and 
   pred_growth = NULL,
   pred_mort = NULL,
   pred_reg = NULL,
-  patches = 50,
+  patches = 100L,
   debug = FALSE,
   y = NULL,
   c = NULL,
@@ -355,11 +355,12 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   batch_size = 20L,
   learning_rate = 0.1,
   start_time = 1,
-  patches = 50L,
+  patches = 100,
   update_step = 1L,
   weights = NULL,
   year_sequence = NULL,
-  file = NULL
+  file = NULL,
+  optimizer = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -391,6 +392,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 \item{\code{year_sequence}}{at which year indices should the predictions compared with the observed values}
 
 \item{\code{file}}{path if weights should be saved after each epoch (for monitoring).}
+
+\item{\code{optimizer}}{torch optimizer}
 
 \item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
 }
