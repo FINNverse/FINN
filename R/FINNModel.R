@@ -566,7 +566,7 @@ FINNModel = R6::R6Class(
           # print(g)
           # print("++++")
 
-          dbh = dbh + g
+          dbh = dbh*(1+g)
 
           light = self$competitionFunction(
             dbh = dbh,

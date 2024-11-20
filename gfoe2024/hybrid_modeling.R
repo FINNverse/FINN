@@ -18,6 +18,11 @@ site_dt <- data.table(
 
 env_dt <- site_dt
 env_dt$env1 = rep(seq(-2,2,length.out = Nsites), Ntimesteps)
+# env_dt$env2 = rep(seq(-2,2,length.out = Nsites), Ntimesteps)
+
+# dim(FINN::climateDF2array(env_dt, c("env1","env2")))
+
+uniqueN(df$species)
 
 predictions =
   simulateForest(env = env_dt,
@@ -34,10 +39,13 @@ predictions =
                  regenerationProcess = createProcess(~1+env1, func = regeneration, initEnv = list(matrix(c(1.99, 0), Nsp, 2, byrow = TRUE)) ),
                  device = "cpu")
 
-
+str(predictions)
+predictions$wide
 pred = predictions$long$site
-ggplot(pred[siteID == 70], aes(x = year, y = value, group = siteID, color = factor(species))) +
+unique(pred[siteID == 70])
+ggplot(pred[siteID == 70], aes(x = year, y = value, color = as.character(species))) +
   geom_line() +
+  # geom_point() +
   labs(x = "Year",
        y = "value") +
   theme_minimal()+
@@ -90,12 +98,12 @@ fit = finn(data = data,
            device = "cpu",
            optimizeHeight= FALSE,
            lr = 0.01,
-           epochs = 300L,
+           epochs = 10L,
            batchsize = 100L,
            speciesPars_ranges = predictions$model$speciesPars_ranges
 )
 
-continue_fit(fit, weights = c(1/20, 1/2, 3,0.5,3,2), epochs = 15L, lr = 0.005, batchsize = 100L)
+fit2 = continue_fit(fit, weights = c(1/20, 1/2, 3,0.5,3,2), epochs = 15L, lr = 0.005, batchsize = 100L)
 
 # Mortality
 par(mfrow = c(1, 3))
@@ -107,7 +115,22 @@ for(i in 1:3) {
 legend("bottom", legend = c("Est. Mort-Env Association", "Simulated Mort-Env Association"), col = c("red", "black"), bty = "n", lty = 1)
 
 
+pred <- predict(fit)
 
+
+site_pred <- predictions$wide$site
+
+site_pred = merge(site_pred, env_dt, by = c("siteID","year"))
+
+ggplot(site_pred[, .(
+  mort = mean(mort),
+  env1 = mean(env1)
+  ), by = .(siteID, species)], aes(x = env1, y = mort, color = as.character(species))) +
+  geom_point() +
+  labs(x = "Year",
+       y = "growth") +
+  theme_minimal()+
+  facet_wrap(~species, scales = "free_y")
 
 par(mfrow = c(1,1))
 parGrowth = predictions$model$parGrowthT |> as.matrix()
