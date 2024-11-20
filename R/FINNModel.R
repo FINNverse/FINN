@@ -621,9 +621,10 @@ FINNModel = R6::R6Class(
         r_mean = self$regenerationFunction(species = species,
                                            parReg = parReg,
                                            pred = pred,
-                                           light = AL_reg)*self$patch_size_ha
+                                           light = AL_reg)
 
-        r = sample_poisson_gaussian(r_mean)
+
+        r = sample_poisson_gaussian(r_mean*self$patch_size_ha)
         r = r + r$round()$detach() - r$detach()
 
         # print("Mort:")
