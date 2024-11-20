@@ -52,6 +52,7 @@ Collate:
     'Processes.R'
     'RcppExports.R'
     'climateDF2array.R'
+    'convenience_functions.R'
     'create-help-plots.R'
     'pred2DF.R'
     'utils.R'
