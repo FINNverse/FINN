@@ -31,6 +31,7 @@ finn(
   weights = c(0.05, 0.5, 3, 0.5, 3, 2),
   file = NULL,
   sp = NULL,
+  optimizer = optim_adagrad,
   ...
 )
 }
@@ -100,6 +101,9 @@ Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).}
 
 \item{file}{(\code{character()}) \cr
 If weights should be saved after each optimization step (for monitoring), set a path. Default is \code{NULL}.}
+
+\item{optimizer}{(\verb{function()}) \cr
+Optimizer of the torch package}
 
 \item{...}{arguments passed to \code{simulateForest()}}
 }

@@ -49,6 +49,8 @@
 #'  Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).
 #' @param file (`character()`) \cr
 #'  If weights should be saved after each optimization step (for monitoring), set a path. Default is `NULL`.
+#' @param optimizer (`function()`) \cr
+#'  Optimizer of the torch package
 #' @param ... arguments passed to `simulateForest()`
 #'
 #'
@@ -137,6 +139,7 @@ finn = function(data = NULL,
                 weights = c(0.05, 0.50, 3.00, 0.50, 3.00, 2.00),
                 file = NULL,
                 sp = NULL,
+                optimizer = optim_adagrad,
                 ...
 ) {
 
@@ -178,13 +181,13 @@ finn = function(data = NULL,
     message(paste0("No number of species ('sp') provided, assuming sp = ", length(unique(data$species)), " species from data..."))
     sp = length(unique(data$species))
   }
-  if(!growthProcess$optimizeSpecies) if(nrow(parGrowth) != sp) stop("Number of species in parGrowth does not match sp")
-  if(!mortalityProcess$optimizeSpecies) if(nrow(parMort) != sp) stop("Number of species in parMort does not match sp")
-  if(!regenerationProcess$optimizeSpecies) if(length(parReg) != sp) stop("Number of species in parReg does not match sp")
-  if(!growthProcess$optimizeEnv) if(nrow(parGrowthEnv) != sp) stop("Number of species in parGrowthEnv does not match sp")
-  if(!mortalityProcess$optimizeEnv) if(nrow(parMortEnv) != sp) stop("Number of species in parMortEnv does not match sp")
-  if(!regenerationProcess$optimizeEnv) if(nrow(parRegEnv) != sp) stop("Number of species in parRegEnv does not match sp")
-  if(!optimizeHeight) if(!is.null(height) && length(height) != sp) stop("Number of species in height does not match sp")
+  # if(!growthProcess$optimizeSpecies) if(nrow(parGrowth) != sp) stop("Number of species in parGrowth does not match sp")
+  # if(!mortalityProcess$optimizeSpecies) if(nrow(parMort) != sp) stop("Number of species in parMort does not match sp")
+  # if(!regenerationProcess$optimizeSpecies) if(length(parReg) != sp) stop("Number of species in parReg does not match sp")
+  # if(!growthProcess$optimizeEnv) if(nrow(parGrowthEnv) != sp) stop("Number of species in parGrowthEnv does not match sp")
+  # if(!mortalityProcess$optimizeEnv) if(nrow(parMortEnv) != sp) stop("Number of species in parMortEnv does not match sp")
+  # if(!regenerationProcess$optimizeEnv) if(nrow(parRegEnv) != sp) stop("Number of species in parRegEnv does not match sp")
+  # if(!optimizeHeight) if(!is.null(height) && length(height) != sp) stop("Number of species in height does not match sp")
   out$sp = sp
   out$lr = lr
 
@@ -328,7 +331,8 @@ finn = function(data = NULL,
               update_step = 1L,
               weights = weights,
               year_sequence = year_sequence,
-              file = file)
+              file = file,
+              optimizer = optimizer)
 
     out$model = model
     out$init = init
@@ -416,7 +420,8 @@ finn = function(data = NULL,
                         epochs = epochs,
                         learning_rate = lr,
                         update_step = 1L,
-                        weights = weights)
+                        weights = weights,
+                        optimizer = optimizer)
 
           out$model = tmp_model
           out$indices = indices
@@ -492,7 +497,8 @@ finn = function(data = NULL,
                         epochs = epochs,
                         learning_rate = lr,
                         update_step = 1L,
-                        weights = weights)
+                        weights = weights,
+                        optimizer = optimizer)
 
           out$model = tmp_model
           out$indices = indices
@@ -972,6 +978,7 @@ simulateForest = function(env,
                                 patches = patches,
                                 debug = debug,
                                 verbose = TRUE)
+
 
     out = list(long = pred2DF(predictions, "long"), wide = pred2DF(predictions, "wide"))
 

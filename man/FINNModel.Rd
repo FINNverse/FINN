@@ -359,7 +359,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   update_step = 1L,
   weights = NULL,
   year_sequence = NULL,
-  file = NULL
+  file = NULL,
+  optimizer = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -391,6 +392,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 \item{\code{year_sequence}}{at which year indices should the predictions compared with the observed values}
 
 \item{\code{file}}{path if weights should be saved after each epoch (for monitoring).}
+
+\item{\code{optimizer}}{torch optimizer}
 
 \item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
 }

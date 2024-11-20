@@ -370,13 +370,21 @@ FINNModel = R6::R6Class(
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
       self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
 
+      self$scale_2 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
+      self$scale_4 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
+      self$scale_5 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
+      self$scale_6 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
+
       # self$set_parHeight(parHeight)
       # self$set_parGrowth(parGrowth)
       # self$set_parMort(parMort)
       # self$set_parReg(parReg)
 
-      self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters)
-      names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort")
+      self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters,self$scale_2,
+                          self$scale_4,
+                          self$scale_5,
+                          self$scale_6)
+      names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort", "scale_2","scale_4", "scale_5", "scale_6")
       self$parameter_to_r()
 
       return(invisible(self)) # Only for testing now
@@ -482,8 +490,8 @@ FINNModel = R6::R6Class(
         Raw_patch_results = list()
       }
       if(is.null(y)) {
-        if(self$runEnvGrowth) predGrowthGlobal = self$nnGrowthEnv(env[[1]])
-        if(self$runEnvMort) predMortGlobal = self$nnMortEnv(env[[2]])
+        if(self$runEnvGrowth) predGrowthGlobal = self$nnGrowthEnv(env[[2]])
+        if(self$runEnvMort) predMortGlobal = self$nnMortEnv(env[[1]])
         if(self$runEnvReg) predRegGlobal = self$nnRegEnv(env[[3]])
       }
 
@@ -644,11 +652,15 @@ FINNModel = R6::R6Class(
           # count number of cohorts
           Sp_tmp = species$to(dtype = g$dtype)
           cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 1.0)
+          cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 1.0) # TODO: Better with gradients?
+          cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
+          alive_species = cohort_counts$gt(0) # here based on dbh because we also want the rates for the dead cohorts!!!
 
           Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
           tmp_res = aggregate_results(labels, samples, Results_tmp)
           for(v in c(4,5,6)){
-            Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-3]]/cohort_counts) # TODO
+            if(as.numeric(alive_species$sum() > 0)) Result[[v]][,i,][alive_species] = Result[[v]][,i,][alive_species]$add(tmp_res[[v-3]][alive_species]/cohort_counts[alive_species]) # TODO
+            else Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v-3]])
           }
 
           # reg extra
@@ -712,21 +724,27 @@ FINNModel = R6::R6Class(
         if(i > 0){
           if(dbh$shape[3] != 0){
               #BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
+
+              dead_trees_mask = trees == 0
+              dbh$masked_fill_(dead_trees_mask, 0.0)
+
               BA_stem = BA_stem(dbh = dbh)*trees
               labels = species
               samples = vector("list", 3)
               mask = trees$gt(0.5)
-              dbh_mask = dbh$gt(0)
+              #dbh_mask = dbh$gt(0) # TODO why?
+
               # samples[[1]] = dbh * mask
               # only add dbh values > 0 to samples
-              samples[[1]] = dbh * dbh_mask
+              samples[[1]] = dbh * mask
               samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
               samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
               Results_tmp = replicate(3, torch_zeros_like(Result[[1]][,i,]))
 
               tmp_res = aggregate_results(labels, samples, Results_tmp)
               # BA and number of trees Result[[1]] and Result[[2]]
-              Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])/cohort_counts
+              if(as.numeric(alive_species$sum() > 0)) Result[[1]][,i,][alive_species] = Result[[1]][,i,]$add(tmp_res[[1]])[alive_species]/cohort_counts[alive_species]
+              else Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])
               for(v in 2:3){
                 Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
               }
@@ -745,13 +763,17 @@ FINNModel = R6::R6Class(
               # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
               if(j == 3) {
                 mask = c[, tmp_index,]$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson(Result[[2]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
+                    torch::distr_poisson(Result[[2]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
               } else if(j == 7) {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+torch::distr_poisson((r_mean+0.001)$squeeze(2L)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
+                    torch::distr_poisson((r_mean+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
+                #if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
+                if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+
+                    torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
               }
             }
             loss$sum()$backward()
@@ -812,6 +834,7 @@ FINNModel = R6::R6Class(
     #' @param weights reweight likelihood
     #' @param year_sequence at which year indices should the predictions compared with the observed values
     #' @param file path if weights should be saved after each epoch (for monitoring).
+    #' @param optimizer torch optimizer
     #' @return None. The trained model is stored within the class instance.
     fit = function(
           X = NULL,
@@ -826,10 +849,13 @@ FINNModel = R6::R6Class(
           update_step = 1L,
           weights = NULL,
           year_sequence = NULL,
-          file = NULL){
+          file = NULL,
+          optimizer = NULL){
+
+        if(is.null(optimizer)) optimizer = torch::optim_adagrad
 
         if(is.null(self$optimizer)){
-          self$optimizer = optim_adagrad(params = self$parameters, lr = learning_rate) # AdaBound was also good
+          self$optimizer = optimizer(params = self$parameters, lr = learning_rate) # AdaBound was also good
           # TODO scheduler implementieren
           # self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
         }
