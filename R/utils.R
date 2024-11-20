@@ -410,7 +410,13 @@ checkParInput = function(speciesPars, speciesPars_ranges){
       if(any(!checked[[i]]$checkedPar)){
         false_idx = which(!checked[[i]]$checkedPar, arr.ind = TRUE)
         for(ipar in 1:nrow(false_idx)){
-          stop_message <- paste(stop_message, paste0("speciesPars$", i, "[", false_idx[ipar,1], ",", false_idx[ipar,2], "] = ", checked[[i]]$inputPar[false_idx[ipar,1], false_idx[ipar,2]]), sep = "\n")
+          stop_message <- paste(
+            stop_message,
+            paste0(
+              "speciesPars$", i, "[", false_idx[ipar,1], ",", false_idx[ipar,2], "] = ", checked[[i]]$inputPar[false_idx[ipar,1], false_idx[ipar,2]],
+              " (min = ", checked[[i]]$parRange[false_idx[ipar,2],1], " max = ", checked[[i]]$parRange[false_idx[ipar,2],2],")"
+            ),
+            sep = "\n")
         }
       }
     }
@@ -418,6 +424,7 @@ checkParInput = function(speciesPars, speciesPars_ranges){
     stop(stop_message)
   }
 }
+
 
 # default ranges
 default_speciesPars_ranges = list(
