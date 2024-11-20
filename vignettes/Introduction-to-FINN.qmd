@@ -33,7 +33,7 @@ library(FINN)
 library(data.table)
 library(ggplot2)
 
-Ntimesteps = 50  # number of timesteps
+Ntimesteps = 500  # number of timesteps
 Nsites = 1 # number of sites
 patch_size = 0.1
 # one species
@@ -62,7 +62,7 @@ parRegEnv = list(matrix(c(
 # growth parameters
 parGrowth = matrix(c(
   shadeSP, # see above
-  runif(Nsp, 1, 2) # the second growth parameter modulates the size dependent growth
+  runif(Nsp, 0, 0.1) # the second growth parameter modulates the size dependent growth
   ),Nsp, 2) 
 
 parGrowthEnv = list(matrix(c(
@@ -127,7 +127,7 @@ Disturbances can be specified with the `disturbance` argument, which requires a 
 
 The effect of environmental variable supplied with the environmental data can be defined in the process functions. For example `~ 1 + env1` specifies an intercept and a linear effect of env1. Both, the intercept `1` and the effect of `env1` can be modulated by the species parameters that were specified above.
 
-```{r simulate1, include = FALSE}
+```{r simulate1}
 predictions <- list()
 predictions[["patches_1"]] =
   simulateForest(env = env_dt,
@@ -160,14 +160,15 @@ predictions[["patches_100"]] =
 ```{r plot-one-patch}
 #| label: fig-charts
 #| fig-cap: "Charts"
-#| fig-height: 6
-#| fig-width: 8
+#| fig-height: 4
+#| fig-width: 7
 #| fig-subcap: 
 #|   - "one patch"
 #|   - "100 patches"
 #| layout-ncol: 1
-
+i = "patches_100"
 for(i in c("patches_1", "patches_100")){
+  # p_dat <- predictions[[i]]$long$site[variable == "ba", .(value = mean(value)), by = .(year, species, variable)]
   p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year, species, variable)]
   p_dat[, variable2 := factor(
     variable,
@@ -321,7 +322,7 @@ $$
 
 This sigmoid transformation normalizes the environmental impact, providing a smooth and bounded effect across all environmental conditions.
 
-The structure of this model is similar to an expression like `~ 1 + \text{env}_1 + \text{env}_2`, where each environmental predictor has its own species-specific effect, and the neural network adjusts the coefficients $\beta_{i,k}$ for each species based on training data.
+The structure of this model is similar to an expression like `~ 1 + env1 + env2`, where each environmental predictor has its own species-specific effect, and the neural network adjusts the coefficients $\beta_{i,k}$ for each species based on training data.
 
 #### Summary of the Environmental Effects Process
 
@@ -366,7 +367,7 @@ This equation models the number of newly regenerated trees in each cohort, takin
 3. **Regeneration Potential**: The regeneration potential is adjusted by the environmental effect, representing species-specific responses to light and environmental conditions.
 4. **Regeneration Event**: The final number of regenerated trees is drawn from a Poisson distribution, based on the adjusted regeneration potential and patch size.
 
-### Growth Process
+### Growth
 
 The growth process models the increase in tree diameter for each cohort based on light availability, competition, tree size, and environmental effects. Growth is influenced by how much light each cohort receives, the size of the trees (diameter at breast height, DBH), and the external environmental conditions predicted by a neural network.
 
