@@ -30,10 +30,7 @@ finn(
   NGPU = 1,
   weights = c(0.05, 0.5, 3, 0.5, 3, 2),
   file = NULL,
-<<<<<<< HEAD
   thin = 100,
-=======
->>>>>>> 5cd21c2eb7097809e7ef264268ac759e29ad4e44
   sp = NULL,
   optimizer = optim_adagrad,
   ...
@@ -106,12 +103,9 @@ Weighting of the 6 errors (ba, trees, AL, growth, mortality, and regeneration).}
 \item{file}{(\code{character()}) \cr
 If weights should be saved after each optimization step (for monitoring), set a path. Default is \code{NULL}.}
 
-<<<<<<< HEAD
 \item{thin}{(\code{integer(1)}) \cr
 If weights should be save (file argument), save every thin epochs.}
 
-=======
->>>>>>> 5cd21c2eb7097809e7ef264268ac759e29ad4e44
 \item{optimizer}{(\verb{function()}) \cr
 Optimizer of the torch package}
 

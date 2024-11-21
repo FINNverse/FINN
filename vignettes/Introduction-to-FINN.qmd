@@ -37,7 +37,7 @@ Ntimesteps = 500  # number of timesteps
 Nsites = 1 # number of sites
 patch_size = 0.1
 # one species
-Nsp = 10 # number of species
+Nsp = 2 # number of species
 ```
 
 ## Species parameters
@@ -66,8 +66,8 @@ parGrowth = matrix(c(
   ),Nsp, 2) 
 
 parGrowthEnv = list(matrix(c(
-  runif(Nsp, -1, 1), # intercept regulating the overall effect size
-  runif(Nsp, -1, 1) # the second parameter modulates the effect of the environmental variable
+  runif(Nsp, -1, 2), # intercept regulating the overall effect size
+  runif(Nsp, -1, 2) # the second parameter modulates the effect of the environmental variable
   ),Nsp, 2))
 
 # mortality parameters
@@ -139,7 +139,7 @@ predictions[["patches_1"]] =
                  growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
                  mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
                  regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg),
-                 debug = F
+                 debug = FALSE
                  )
 
 predictions[["patches_100"]] =

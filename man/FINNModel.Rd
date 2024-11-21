@@ -9,11 +9,7 @@
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
-<<<<<<< HEAD
-\code{FINN::FINNbase} -> \code{FINNModel}
-=======
 \code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINNModel}
->>>>>>> 5cd21c2eb7097809e7ef264268ac759e29ad4e44
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -364,10 +360,7 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
   weights = NULL,
   year_sequence = NULL,
   file = NULL,
-<<<<<<< HEAD
   thin = 100L,
-=======
->>>>>>> 5cd21c2eb7097809e7ef264268ac759e29ad4e44
   optimizer = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -401,11 +394,8 @@ The \code{fit} method trains the FINN model using the input (X) and target (Y) d
 
 \item{\code{file}}{path if weights should be saved after each epoch (for monitoring).}
 
-<<<<<<< HEAD
 \item{\code{thin}}{thin saving of weights}
 
-=======
->>>>>>> 5cd21c2eb7097809e7ef264268ac759e29ad4e44
 \item{\code{optimizer}}{torch optimizer}
 
 \item{\code{response}}{character. Response variable to predict ("dbh", "BA_stem", or "BA_stem*nT"). Default is "dbh".}
