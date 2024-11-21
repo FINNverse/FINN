@@ -767,11 +767,11 @@ FINNModel = R6::R6Class(
               Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
 
               # count number of cohorts
-              # Sp_tmp = species$to(dtype = g$dtype)
-              # cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0)
-              # cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0) # TODO: Better with gradients?  # here based on dbh because we also want the rates for the dead cohorts!!!
-              # cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
-              # alive_species = cohort_counts$gt(0)
+              Sp_tmp = species$to(dtype = g$dtype)
+              cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0)
+              cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0) # TODO: Better with gradients?  # here based on dbh because we also want the rates for the dead cohorts!!!
+              cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
+              alive_species = cohort_counts$gt(0)
 
               tmp_res = aggregate_results(labels, samples, Results_tmp)
               # BA and number of trees Result[[1]] and Result[[2]]
@@ -779,13 +779,13 @@ FINNModel = R6::R6Class(
 
               if(as.numeric(alive_species$sum() > 0)) {
                 # dbh
-                Result[[1]][,i,][alive_species] = Result[[1]][,i,]$add(tmp_res[[1]][alive_species]/tmp_res[[3]][alive_species]) # /cohort_counts[alive_species]
+                Result[[1]][,i,][alive_species] = Result[[1]][,i,][alive_species]$add(tmp_res[[1]][alive_species]/tmp_res[[3]][alive_species]) # /cohort_counts[alive_species]
 
                 # BA
-                Result[[2]][,i,][alive_species] = Result[[2]][,i,]$add(tmp_res[[2]])[alive_species]$div_(patches)
+                Result[[2]][,i,][alive_species] = Result[[2]][,i,][alive_species]$add(tmp_res[[2]][alive_species]$div_(patches))
 
                 # Trees
-                Result[[3]][,i,][alive_species] = Result[[3]][,i,]$add(tmp_res[[3]])[alive_species]$div_(patches)
+                Result[[3]][,i,][alive_species] = Result[[3]][,i,][alive_species]$add(tmp_res[[3]][alive_species]$div_(patches))
               }
               #else Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])
               # for(v in 2:3){
