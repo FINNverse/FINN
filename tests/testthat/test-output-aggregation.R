@@ -1,5 +1,6 @@
 library(data.table)
 library(ggplot2)
+library(FINN)
 
 Ntimesteps = 500  # number of timesteps
 Nsites = 1 # number of sites
@@ -8,6 +9,7 @@ patch_size = 0.1
 Nsp = 10 # number of species
 
 FINN.seed(1234)
+torch::torch_manual_seed(1234)
 # we draw the same shade parameters for each process for simplicity
 # shade parameters correspond to the fraction of light a species needs to succesfully grow, regenerate, or survive.
 shadeSP = runif(Nsp, 0.01, 0.99)
@@ -97,6 +99,8 @@ predictions[["patches_2"]] =
                  debug = T
                  )
 
+
+
 predictions[["patches_100"]] =
   simulateForest(env = env_dt,
                  sp = Nsp,
@@ -146,22 +150,35 @@ print(p)
 out <- predictions[[2]]
 Npatches = max(out$wide$patch$patchID)
 cohort_dt <- out$wide$cohort
-patch_dt = cohort_dt[,.(
-  # dbh = sum(dbh*(trees-m*trees), na.rm = T)/sum(trees-m*trees, na.rm = T),
-  dbh = sum(dbh*(trees), na.rm = T)/sum(trees, na.rm = T),
-  ba = sum(BA_stem(dbh), na.rm = T),
-  trees = sum(trees, na.rm = T),
-  mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T),
-  growth = sum(g*trees, na.rm = T)/sum(trees, na.rm = T)
-), by = .(siteID, patchID, species, year)]
+# patch_dt = cohort_dt[,.(
+#   # dbh = sum(dbh*(trees-m*trees), na.rm = T)/sum(trees-m*trees, na.rm = T),
+#   dbh = sum(dbh*trees, na.rm = T),
+#   ba = sum(BA_stem(dbh) * trees, na.rm = T),
+#   trees = sum(trees, na.rm = T),
+#   mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T),
+#   growth = sum(g*trees, na.rm = T)/sum(trees, na.rm = T)
+# ), by = .(siteID, patchID, species, year)]
+#
+# site_dt = patch_dt[,.(
+#   dbh = sum(dbh, na.rm = T)/sum(trees),
+#   ba = sum(ba, na.rm = T)/Npatches,
+#   trees = sum(trees, na.rm = T)/Npatches,
+#   mort = sum(mort, na.rm = T)/Npatches,
+#   growth = sum(growth, na.rm = T)/Npatches
+# ), by = .(siteID, year, species)]
 
-site_dt = patch_dt[,.(
-  dbh = sum(dbh, na.rm = T)/Npatches,
-  ba = sum(ba, na.rm = T)/Npatches,
+site_dt = cohort_dt[,.(
+  dbh = sum(dbh*(trees), na.rm = F)/sum(trees, na.rm = F)/Npatches,
+  ba = sum(BA_stem(dbh)*trees, na.rm = T)/Npatches,
   trees = sum(trees, na.rm = T)/Npatches,
-  mort = sum(mort, na.rm = T)/Npatches,
-  growth = sum(growth, na.rm = T)/Npatches
-), by = .(siteID, year, species)]
+  # ba = sum(mort_count, na.rm = T),
+  #mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
+  mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
+
+  # mort_count = sum(mort_count, na.rm = T),
+  growth = sum(g*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
+  Ncohorts = sum(trees > 0, na.rm = T)/Npatches
+), by = .(siteID, species, year)]
 
 
 comp_dt <- merge(site_dt, patch_dt, by = c("siteID", "species", "year"), suffixes = c(".site", ".patch"))
@@ -213,7 +230,7 @@ ggplot(comp_out_dt, aes(x = ba.site, y = ba.finn, color = year)) +
   labs(x = "site ba", y = "finn ba") +
   ggtitle("ba site vs finn")+
   facet_wrap(~species)
-ggplot(comp_out_dt, aes(x = trees.site, y = trees.finn, color = year)) +
+ggplot(comp_out_dt, aes(x = mort.site, y = mort.finn, color = year)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
   labs(x = "site trees", y = "finn trees") +
@@ -231,3 +248,4 @@ comp_out_dt[,":="(
 
 fm = lm(diff_trees ~ year+mort.site+growth.site, data = comp_out_dt)
 summary(fm)
+

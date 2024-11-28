@@ -651,14 +651,14 @@ FINNModel = R6::R6Class(
           samples[[1]] = light*theoretical_alive_trees
           samples[[2]] = dbh_growth*theoretical_alive_trees
           samples[[3]] = theoretical_dead_trees
-          samples[[4]] = theoretical_alive_trees
+          samples[[4]] = theoretical_alive_trees + theoretical_dead_trees
 
           # count number of cohorts
-          Sp_tmp = species$to(dtype = g$dtype)
-          cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0)
-          cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0) # TODO: Better with gradients?  # here based on dbh because we also want the rates for the dead cohorts!!!
-          cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
-          alive_species = cohort_counts$gt(0)
+          # Sp_tmp = species$to(dtype = g$dtype)
+          # cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0)
+          # cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0) # TODO: Better with gradients?  # here based on dbh because we also want the rates for the dead cohorts!!!
+          # cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
+          # alive_species = cohort_counts$gt(0)
 
           Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
           tmp_res = aggregate_results(labels, samples, Results_tmp) # light, growth, mort werden aufsummiert und zwar ueber alles, pro species ueber cohorte und patches
@@ -666,15 +666,18 @@ FINNModel = R6::R6Class(
 
           # Aggregation [sites, patches, cohorts] --> [sites, species]:
 
-          if(as.numeric(alive_species$sum() > 0)) {
+          if(as.numeric(theoretical_alive_trees$sum() > 0)) {
             # Light
-            Result[[4]][,i,][alive_species] = Result[[4]][,i,][alive_species]$add(tmp_res[[1]][alive_species]/tmp_res[[4]][alive_species]) #
+            Result[[4]][,i,]=  Result[[4]][,i,]$add(tmp_res[[1]]/tmp_res[[4]])/patches #
+            Result[[4]][,i,][Result[[4]][,i,]$isinf()] = 0.0
 
             # Growth
-            Result[[5]][,i,][alive_species] = Result[[4]][,i,][alive_species]$add(tmp_res[[2]][alive_species]/tmp_res[[4]][alive_species]) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            Result[[5]][,i,] = Result[[5]][,i,]$add(tmp_res[[2]]/tmp_res[[4]])/patches # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            Result[[5]][,i,][Result[[5]][,i,]$isinf()] = 0.0
 
             # Mort
-            Result[[6]][,i,][alive_species] = Result[[6]][,i,][alive_species]$add(tmp_res[[3]][alive_species]/patches) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[3]]/patches) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            Result[[6]][,i,][Result[[6]][,i,]$isinf()] = 0.0
 
           }
 
@@ -693,29 +696,37 @@ FINNModel = R6::R6Class(
           r_mean = tmp_res[[1]]/patches
           Result[[8]][,i,] = r_mean
 
-          if (debug) {
-            Raw_cohort_results[[i]] = list(
-              "species" = torch::as_array(species$cpu()),
-              "trees" = torch::as_array(trees$cpu()),
-              "dbh" = torch::as_array(dbh$cpu()),
-              "m" = torch::as_array(m$cpu()),
-              "g" = torch::as_array(g$cpu())
-            )
-            Raw_patch_results[[i]] = list(
-              "r" = torch::as_array(r$cpu())
-              # "r_mean" = torch::as_array(r_mean$cpu())
-            )
-            Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
-          }
+        #   if (debug) {
+        #     Raw_cohort_results[[i]] = list(
+        #       "species" = NULL, #torch::as_array(species$cpu()),
+        #       "trees" = NULL, #torch::as_array(trees$cpu()),
+        #       "dbh" = NULL, #torch::as_array(dbh$cpu()),
+        #       "m" = torch::as_array(m$cpu()),
+        #       "g" = torch::as_array(g$cpu())
+        #     )
+        #     Raw_patch_results[[i]] = list(
+        #       "r" = torch::as_array(r$cpu())
+        #       # "r_mean" = torch::as_array(r_mean$cpu())
+        #     )
+        #   }
         }
 
         dbh = torch::torch_cat(list(dbh, new_dbh), 3)
         trees = torch::torch_cat(list(trees, new_trees), 3)
         species = torch::torch_cat(list(species, new_species), 3)
         cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
+
+        if (debug) {
+          tmp = torch::torch_zeros_like(new_dbh)
+          tmp[] = NaN
+          g = torch::torch_cat(list(g, tmp), 3)
+          m = torch::torch_cat(list(m, tmp), 3)
+        }
         rm(new_dbh,new_trees,new_species,new_cohort_id )
 
+
         # Combine
+
 
         # Pad tensors, expensive, currently each timestep
         if(i %% 1 == 0){
@@ -736,6 +747,12 @@ FINNModel = R6::R6Class(
           trees = trees$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
           cohort_ids = cohort_ids$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
           species = species$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+
+          if(debug) {
+            g = g$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+            m = m$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
+          }
+
           # })
         }
 
@@ -745,13 +762,13 @@ FINNModel = R6::R6Class(
           if(dbh$shape[3] != 0){
               #BA_stem = BA_stand(dbh = dbh, trees = trees, patch_size_ha = self$patch_size_ha)
 
-              dead_trees_mask = trees == 0
-              dbh$masked_fill_(dead_trees_mask, 0.0)
+              #dead_trees_mask = trees == 0
+              dbh = dbh*trees$gt(0.5)$float()
 
-              BA_stem = BA_stem(dbh = dbh)*trees
+              BA_stem_values = BA_stem(dbh = dbh)*trees
               labels = species
               samples = vector("list", 3)
-              mask = trees$gt(0.5)
+              #mask = trees$gt(0.5)
               #dbh_mask = dbh$gt(0) # TODO why?
 
               # samples[[1]] = dbh * mask
@@ -761,41 +778,71 @@ FINNModel = R6::R6Class(
               # Aggregation [sites, patches, cohorts] --> [sites, species]:
 
 
-              samples[[1]] = trees * dbh * mask
-              samples[[2]] = BA_stem * mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
-              samples[[3]] = trees * mask # torch_sigmoid((trees - 0.5)/1e-3)
+              samples[[1]] = trees * dbh #* mask
+              samples[[2]] = BA_stem_values #* mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
+              samples[[3]] = trees # torch_sigmoid((trees - 0.5)/1e-3)
               Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
 
               # count number of cohorts
-              Sp_tmp = species$to(dtype = g$dtype)
-              cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0)
-              cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0) # TODO: Better with gradients?  # here based on dbh because we also want the rates for the dead cohorts!!!
-              cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
-              alive_species = cohort_counts$gt(0)
+              # Sp_tmp = species$to(dtype = g$dtype)
+              # cohort_counts = aggregate_results(labels, list((Sp_tmp)/(Sp_tmp)), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0)
+              # cohort_counts_zeros = aggregate_results(labels, list(dbh$gt(0.0)$float()), list(torch_zeros_like(Result[[1]][,i,], dtype=g$dtype, device = self$device)))[[1]]$clamp(min = 0.0) # TODO: Better with gradients?  # here based on dbh because we also want the rates for the dead cohorts!!!
+              # cohort_counts = (cohort_counts - cohort_counts_zeros)$clamp(min = 0.0)
+              # alive_species = cohort_counts$gt(0)
 
               tmp_res = aggregate_results(labels, samples, Results_tmp)
               # BA and number of trees Result[[1]] and Result[[2]]
 
 
-              if(as.numeric(alive_species$sum() > 0)) {
+              if(as.numeric(trees$sum() > 0)) {
                 # dbh
-                Result[[1]][,i,][alive_species] = Result[[1]][,i,][alive_species]$add(tmp_res[[1]][alive_species]/tmp_res[[3]][alive_species]) # /cohort_counts[alive_species]
+                Result[[1]][,i,]= Result[[1]][,i,]$add((tmp_res[[1]]/tmp_res[[3]])$div_(patches)) # /cohort_counts[alive_species]
+                Result[[1]][,i,][Result[[1]][,i,]$isinf()] = 0.0
+                Result[[1]][,i,]$nan_to_num_(0.0)
 
                 # BA
-                Result[[2]][,i,][alive_species] = Result[[2]][,i,][alive_species]$add(tmp_res[[2]][alive_species]$div_(patches))
+                Result[[2]][,i,]= Result[[2]][,i,]$add(tmp_res[[2]]$div_(patches))
+                Result[[2]][,i,][Result[[2]][,i,]$isinf()] = 0.0
+                Result[[2]][,i,]$nan_to_num_(0.0)
 
                 # Trees
-                Result[[3]][,i,][alive_species] = Result[[3]][,i,][alive_species]$add(tmp_res[[3]][alive_species]$div_(patches))
+                Result[[3]][,i,]= Result[[3]][,i,]$add(tmp_res[[3]]$div_(patches))
+                Result[[3]][,i,][Result[[3]][,i,]$isinf()] = 0.0
+                Result[[3]][,i,]$nan_to_num_(0.0)
               }
               #else Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])
               # for(v in 2:3){
               #   Result[[v]][,i,] = Result[[v]][,i,]$add(tmp_res[[v]]$div_(patches))
               # }
-              rm(BA_stem)
+              rm(BA_stem_values)
 
 
           }
         }
+
+
+        # if (debug) {
+        #   Raw_cohort_results[[i]]$species = torch::as_array(species$cpu())
+        #   Raw_cohort_results[[i]]$trees = torch::as_array(trees$cpu())
+        #   Raw_cohort_results[[i]]$dbh = torch::as_array(dbh$cpu())
+        #   Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
+        # }
+
+          if (debug) {
+            Raw_cohort_results[[i]] = list(
+              "species" = torch::as_array(species$cpu()),
+              "trees" = torch::as_array(trees$cpu()),
+              "dbh" = torch::as_array(dbh$cpu()),
+              "m" = torch::as_array(m$cpu()),
+              "g" = torch::as_array(g$cpu())
+            )
+            Raw_patch_results[[i]] = list(
+              "r" = torch::as_array(r$cpu())
+              # "r_mean" = torch::as_array(r_mean$cpu())
+            )
+            Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
+          }
+
 
 
         loss = torch_zeros(6L, device = self$device)
@@ -831,6 +878,8 @@ FINNModel = R6::R6Class(
 
       }
 
+      #browser()
+
       names(Result) =  c("dbh","ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha")
       if(debug){
         Result_out = list(
@@ -850,7 +899,6 @@ FINNModel = R6::R6Class(
             Site = lapply(Result, function(x) torch::as_array(x))),
           loss = loss)
       }
-
 
       if(is.null(y)) {
         lapply(self$parameters, function(p) p$requires_grad_(TRUE) )
