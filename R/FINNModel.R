@@ -650,7 +650,7 @@ FINNModel = R6::R6Class(
           samples = vector("list", 3)
           samples[[1]] = light*theoretical_alive_trees
           samples[[2]] = dbh_growth*theoretical_alive_trees
-          samples[[3]] = theoretical_dead_trees
+          samples[[3]] = m #theoretical_dead_trees
           samples[[4]] = theoretical_alive_trees + theoretical_dead_trees
 
           # count number of cohorts
@@ -661,23 +661,29 @@ FINNModel = R6::R6Class(
           # alive_species = cohort_counts$gt(0)
 
           Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
-          tmp_res = aggregate_results(labels, samples, Results_tmp) # light, growth, mort werden aufsummiert und zwar ueber alles, pro species ueber cohorte und patches
+          tmp_res = aggregate_results(labels, samples, Results_tmp, aggregation = "sum") # light, growth, mort werden aufsummiert und zwar ueber alles, pro species ueber cohorte und patches
 
 
           # Aggregation [sites, patches, cohorts] --> [sites, species]:
 
           if(as.numeric(theoretical_alive_trees$sum() > 0)) {
             # Light
-            Result[[4]][,i,]=  Result[[4]][,i,]$add(tmp_res[[1]]/tmp_res[[4]])/patches #
-            Result[[4]][,i,][Result[[4]][,i,]$isinf()] = 0.0
+
+            mask = tmp_res[[4]]$gt(0.5)
+
+            Result[[4]][,i,][mask] =  Result[[4]][,i,][mask] + tmp_res[[1]][mask]/tmp_res[[4]][mask]/patches #
+            #Result[[4]][,i,]=  Result[[4]][,i,]$add(tmp_res[[1]])/patches #
+
+            #Result[[4]][,i,][Result[[4]][,i,]$isinf()] = 0.0
 
             # Growth
-            Result[[5]][,i,] = Result[[5]][,i,]$add(tmp_res[[2]]/tmp_res[[4]])/patches # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
-            Result[[5]][,i,][Result[[5]][,i,]$isinf()] = 0.0
+            Result[[5]][,i,][mask] = Result[[5]][,i,][mask]+tmp_res[[2]][mask]/tmp_res[[4]][mask]/patches # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            #Result[[5]][,i,] = Result[[5]][,i,]$add(tmp_res[[2]]/patches) #
+            #Result[[5]][,i,][Result[[5]][,i,]$isinf()] = 0.0
 
             # Mort
             Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[3]]/patches) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
-            Result[[6]][,i,][Result[[6]][,i,]$isinf()] = 0.0
+            #Result[[6]][,i,][Result[[6]][,i,]$isinf()] = 0.0
 
           }
 
@@ -796,19 +802,22 @@ FINNModel = R6::R6Class(
 
               if(as.numeric(trees$sum() > 0)) {
                 # dbh
-                Result[[1]][,i,]= Result[[1]][,i,]$add((tmp_res[[1]]/tmp_res[[3]])$div_(patches)) # /cohort_counts[alive_species]
-                Result[[1]][,i,][Result[[1]][,i,]$isinf()] = 0.0
-                Result[[1]][,i,]$nan_to_num_(0.0)
+
+                mask = tmp_res[[3]]$gt(0.5)
+
+                Result[[1]][,i,][mask] = Result[[1]][,i,][mask]+ (tmp_res[[1]][mask]/tmp_res[[3]][mask])$div_(patches) # /cohort_counts[alive_species]
+                #Result[[1]][,i,][Result[[1]][,i,]$isinf()] = 0.0
+                #Result[[1]][,i,]$nan_to_num_(0.0)
 
                 # BA
                 Result[[2]][,i,]= Result[[2]][,i,]$add(tmp_res[[2]]$div_(patches))
-                Result[[2]][,i,][Result[[2]][,i,]$isinf()] = 0.0
-                Result[[2]][,i,]$nan_to_num_(0.0)
+                #Result[[2]][,i,][Result[[2]][,i,]$isinf()] = 0.0
+                #Result[[2]][,i,]$nan_to_num_(0.0)
 
                 # Trees
                 Result[[3]][,i,]= Result[[3]][,i,]$add(tmp_res[[3]]$div_(patches))
-                Result[[3]][,i,][Result[[3]][,i,]$isinf()] = 0.0
-                Result[[3]][,i,]$nan_to_num_(0.0)
+                #Result[[3]][,i,][Result[[3]][,i,]$isinf()] = 0.0
+                #Result[[3]][,i,]$nan_to_num_(0.0)
               }
               #else Result[[1]][,i,] = Result[[1]][,i,]$add(tmp_res[[1]])
               # for(v in 2:3){
@@ -862,8 +871,10 @@ FINNModel = R6::R6Class(
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 #if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
-                if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+
-                    torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
+                if(as.logical(mask$max()$data()))
+                loss[j-1] = loss[j-1]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
+                #loss[j-1] = loss[j-1]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
+
               }
             }
             loss$sum()$backward()

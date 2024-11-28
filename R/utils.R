@@ -98,7 +98,7 @@ aggregate_results_old = function(labels, samples, Results, drop_rows = TRUE, sp_
 
 
 
-aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
+aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL, aggregation = "sum") {
 
   # if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
   # old_shape = labels$shape
@@ -111,8 +111,15 @@ aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max 
   # return(Results)
   if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
 
+  if(length(aggregation) == 1) aggregation = rep(aggregation, length(samples))
+
   for( v in 1:length(samples)) {
+    if(aggregation[v] == "sum") {
     Results[[v]]$add_(torch::torch_zeros(samples[[v]]$shape[1], samples[[v]]$shape[2], sp_max, dtype=samples[[v]]$dtype, device = samples[[v]]$device)$scatter_add(3, labels, samples[[v]]$expand(c(samples[[v]]$shape[1], samples[[v]]$shape[2], -1)))$sum(dim = 2))
+    } else {
+      Results[[v]]$add_(torch::torch_zeros(samples[[v]]$shape[1], samples[[v]]$shape[2], sp_max, dtype=samples[[v]]$dtype, device = samples[[v]]$device)$scatter_add(3, labels, samples[[v]]$expand(c(samples[[v]]$shape[1], samples[[v]]$shape[2], -1)))$mean(dim = 2))
+      }
+
   }
   return(Results)
 

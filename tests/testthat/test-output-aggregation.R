@@ -230,7 +230,7 @@ ggplot(comp_out_dt, aes(x = ba.site, y = ba.finn, color = year)) +
   labs(x = "site ba", y = "finn ba") +
   ggtitle("ba site vs finn")+
   facet_wrap(~species)
-ggplot(comp_out_dt, aes(x = mort.site, y = mort.finn, color = year)) +
+ggplot(comp_out_dt, aes(x = trees.site, y = trees.finn, color = year)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
   labs(x = "site trees", y = "finn trees") +
