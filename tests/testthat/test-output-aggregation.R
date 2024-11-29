@@ -2,7 +2,7 @@ library(data.table)
 library(ggplot2)
 library(FINN)
 
-Ntimesteps = 500  # number of timesteps
+Ntimesteps = 200  # number of timesteps
 Nsites = 1 # number of sites
 patch_size = 0.1
 # one species
@@ -63,7 +63,8 @@ env_dt$env1 = rep(0, Ntimesteps)
 # we can also specify the intensity of disturbances for each timestep
 
 # here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
-disturbance_frequency = 0.2
+# disturbance_frequency = 0.2
+disturbance_frequency = 0
 
 # the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
 # here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
@@ -71,6 +72,8 @@ disturbance_intensity = runif(Ntimesteps*Nsites, 0, 0.05)
 
 # this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
 dist_dt$intensity = dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
+
+# dist_dt$intensity[273]
 
 predictions <- list()
 predictions[["patches_1"]] =
@@ -101,10 +104,10 @@ predictions[["patches_2"]] =
 
 
 
-predictions[["patches_100"]] =
+predictions[["patches_20"]] =
   simulateForest(env = env_dt,
                  sp = Nsp,
-                 patches = 100,
+                 patches = 20,
                  patch_size = patch_size,
                  disturbance = dist_dt,
                  height = parHeight,
@@ -113,43 +116,43 @@ predictions[["patches_100"]] =
                  regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg),
                  debug = T
                  )
-
-for(i in c("patches_1", "patches_2", "patches_100")){
-  # p_dat <- predictions[[i]]$long$site[variable == "ba", .(value = mean(value)), by = .(year, species, variable)]
-  p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year, species, variable)]
-  p_dat[, variable2 := factor(
-    variable,
-    levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha"),
-    labels =  c("avg. DBH [cm]", "Basal Area [m²/ha]", "Trees [N/ha]",
-                "Available Light [%]", "Growth [cm/yr]", "Mortality [%]",
-                "Reg. Count [N/ha]", "Reg. Mean [N/ha]")
-    ),]
-  p_dat[variable %in% c("ba", "trees", "reg"), value := value/patch_size,]
-  p <- ggplot(p_dat, aes(x = year, y = value, color = factor(species))) +
-  geom_line() +
-  theme_minimal() +
-  labs(x = "Year", y = "Value") +
-  coord_cartesian(ylim = c(0, NA)) +
-  facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
-  theme(
-    axis.title.y = element_blank(),
-    strip.placement = "outside",
-    strip.text.y.left = element_text(angle = 90)
-  ) +
-  guides(color = guide_legend(title = "Species", override.aes = list(linewidth = 5), ncol = 2, title.position = "top")) +
-  scale_color_discrete(name = "Species") +
-  ggtitle(paste0("patches = ",gsub("patches_", "", i)))
-
-print(p)
-}
+#
+# for(i in c("patches_1", "patches_2", "patches_100")){
+#   # p_dat <- predictions[[i]]$long$site[variable == "ba", .(value = mean(value)), by = .(year, species, variable)]
+#   p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year, species, variable)]
+#   p_dat[, variable2 := factor(
+#     variable,
+#     levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha"),
+#     labels =  c("avg. DBH [cm]", "Basal Area [m²/ha]", "Trees [N/ha]",
+#                 "Available Light [%]", "Growth [cm/yr]", "Mortality [%]",
+#                 "Reg. Count [N/ha]", "Reg. Mean [N/ha]")
+#     ),]
+#   p_dat[variable %in% c("ba", "trees", "reg"), value := value/patch_size,]
+#   p <- ggplot(p_dat[year > 260 & year < 280], aes(x = year, y = value, color = factor(species))) +
+#   geom_line() +
+#   theme_minimal() +
+#   labs(x = "Year", y = "Value") +
+#   coord_cartesian(ylim = c(0, NA)) +
+#   facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
+#   theme(
+#     axis.title.y = element_blank(),
+#     strip.placement = "outside",
+#     strip.text.y.left = element_text(angle = 90)
+#   ) +
+#   guides(color = guide_legend(title = "Species", override.aes = list(linewidth = 5), ncol = 2, title.position = "top")) +
+#   scale_color_discrete(name = "Species")
+#
+# print(p)
+# }
 
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## test output aggregation ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-out <- predictions[[2]]
+out <- predictions[[3]]
 Npatches = max(out$wide$patch$patchID)
 cohort_dt <- out$wide$cohort
+patch_dt <- out$wide$patch
 # patch_dt = cohort_dt[,.(
 #   # dbh = sum(dbh*(trees-m*trees), na.rm = T)/sum(trees-m*trees, na.rm = T),
 #   dbh = sum(dbh*trees, na.rm = T),
@@ -167,56 +170,90 @@ cohort_dt <- out$wide$cohort
 #   growth = sum(growth, na.rm = T)/Npatches
 # ), by = .(siteID, year, species)]
 
-site_dt = cohort_dt[,.(
+summary(cohort_dt$year)
+
+# cohort_dt <- merge(cohort_dt, patch_dt[, .(patchID, siteID, year, species, r)], by = c("siteID", "patchID", "year", "species"))
+# assign trees_before to each cohort
+# cohort_dt[, trees_before := shift(trees, 1, type = "lag"), by = .(siteID,patchID,cohortID,species)]
+# cohort_dt[, dbh_before := shift(dbh, 1, type = "lag"), by = .(siteID,patchID,cohortID,species)]
+# cohort_dt[, g_before := shift(g, 1, type = "lag"), by = .(siteID,patchID,cohortID,species)]
+# cohort_dt[, g_after := shift(g, 1, type = "lead"), by = .(siteID,patchID,cohortID,species)]
+# cohort_dt[, m_before := shift(m, 1, type = "lag"), by = .(siteID,patchID,cohortID,species)]
+# cohort_dt[, r_before := shift(r, 1, type = "lag"), by = .(siteID,patchID,cohortID,species)]
+# cohort_dt[cohortID == 10]
+
+cohort_dt$trees_before
+site_dt = cohort_dt[!is.na(trees_before),.(
   dbh = sum(dbh*(trees), na.rm = F)/sum(trees, na.rm = F)/Npatches,
   ba = sum(BA_stem(dbh)*trees, na.rm = T)/Npatches,
   trees = sum(trees, na.rm = T)/Npatches,
-  # ba = sum(mort_count, na.rm = T),
-  #mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
-  mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
-
-  # mort_count = sum(mort_count, na.rm = T),
-  growth = sum(g*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
+  # mort = sum(m*trees, na.rm = T)/sum(trees, na.rm = T)/Npatches,
+  mort = sum(m*trees_before, na.rm = T)/sum(trees_before, na.rm = T)/Npatches,
+  growth = sum(g*trees_before, na.rm = T)/sum(trees_before, na.rm = T)/Npatches,
   Ncohorts = sum(trees > 0, na.rm = T)/Npatches
 ), by = .(siteID, species, year)]
 
 
-comp_dt <- merge(site_dt, patch_dt, by = c("siteID", "species", "year"), suffixes = c(".site", ".patch"))
 
-ggplot(comp_dt, aes(x = dbh.site, y = dbh.patch)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  labs(x = "site dbh mean", y = "patch dbh mean") +
-  ggtitle("dbh mean site vs patch")
-ggplot(comp_dt, aes(x = ba.site, y = ba.patch)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  labs(x = "site ba", y = "patch ba") +
-  ggtitle("ba site vs patch")
-ggplot(comp_dt, aes(x = trees.site, y = trees.patch)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  labs(x = "site trees", y = "patch trees") +
-  ggtitle("trees site vs patch")
-ggplot(comp_dt, aes(x = mort.site, y = mort.patch)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  labs(x = "site m", y = "patch m") +
-  ggtitle("m site vs patch")
-ggplot(comp_dt, aes(x = growth.site, y = growth.patch)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  labs(x = "site g", y = "patch g") +
-  ggtitle("g site vs patch")
+# ggplot(comp_dt, aes(x = dbh.site, y = dbh.patch)) +
+#   geom_point() +
+#   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+#   labs(x = "site dbh mean", y = "patch dbh mean") +
+#   ggtitle("dbh mean site vs patch")
+# ggplot(comp_dt, aes(x = ba.site, y = ba.patch)) +
+#   geom_point() +
+#   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+#   labs(x = "site ba", y = "patch ba") +
+#   ggtitle("ba site vs patch")
+# ggplot(comp_dt, aes(x = trees.site, y = trees.patch)) +
+#   geom_point() +
+#   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+#   labs(x = "site trees", y = "patch trees") +
+#   ggtitle("trees site vs patch")
+# ggplot(comp_dt, aes(x = mort.site, y = mort.patch)) +
+#   geom_point() +
+#   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+#   labs(x = "site m", y = "patch m") +
+#   ggtitle("m site vs patch")
+# ggplot(comp_dt, aes(x = growth.site, y = growth.patch)) +
+#   geom_point() +
+#   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+#   labs(x = "site g", y = "patch g") +
+#   ggtitle("g site vs patch")
 
 
 finn_site_dt <- out$wide$site
+
+summary(finn_site_dt$year)
 
 comp_out_dt <- merge(
   site_dt, finn_site_dt,
   by = c("siteID", "species", "year"),
   suffixes = c(".site", ".finn")
   )
+
+cohort_dt[year == 273]
+
+comp_out_dt[,growth_diff := growth.site - growth.finn,]
+table(comp_out_dt[abs(growth_diff) > 0.0020]$year)
+
+comp_out_dt[abs(growth_diff) > 0.0020]
+
+ggplot(comp_out_dt, aes(x = growth.site, y = growth.finn, color = year)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  labs(x = "site growth", y = "finn growth") +
+  ggtitle("growth site vs finn")+
+  facet_wrap(~species)
+
+ggplot(comp_out_dt, aes(x = mort.site, y = mort.finn, color = year)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  labs(x = "site mort", y = "finn mort") +
+  ggtitle("mort site vs finn")+
+  facet_wrap(~species)
+
+
 
 ggplot(comp_out_dt, aes(x = dbh.site, y = dbh.finn, color = year)) +
   geom_point() +
@@ -236,6 +273,12 @@ ggplot(comp_out_dt, aes(x = trees.site, y = trees.finn, color = year)) +
   labs(x = "site trees", y = "finn trees") +
   ggtitle("trees site vs finn")+
   facet_wrap(~species)
+
+
+
+
+
+
 
 
 comp_out_dt[,":="(
