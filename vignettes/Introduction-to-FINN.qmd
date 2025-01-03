@@ -33,11 +33,11 @@ library(FINN)
 library(data.table)
 library(ggplot2)
 
-Ntimesteps = 500  # number of timesteps
+Ntimesteps = 200  # number of timesteps
 Nsites = 1 # number of sites
 patch_size = 0.1
 # one species
-Nsp = 2 # number of species
+Nsp = 5 # number of species
 ```
 
 ## Species parameters
@@ -81,7 +81,12 @@ parMortEnv = list(matrix(c(
   ), Nsp, 2))
 
 # allometric parameters for the calculation of tree height from a trees diameter
-parHeight = runif(Nsp, 0.3, 0.7)
+# parHeight = runif(Nsp, 0.3, 0.7)
+# growth parameters
+parComp = matrix(c(
+  runif(Nsp, 0.3, 0.7), # parHeight
+  runif(Nsp, 0.2, 0.2) # Competition strength
+),Nsp, 2)
 ```
 
 ## Environment and disturbances {#sec-env-dist}
@@ -107,11 +112,11 @@ env_dt$env1 = rep(0, Ntimesteps)
 # we can also specify the intensity of disturbances for each timestep
 
 # here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
-disturbance_frequency = 0.2 
+disturbance_frequency = 0.05 
 
 # the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
 # here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
-disturbance_intensity = runif(Ntimesteps*Nsites, 0, 0.05)
+disturbance_intensity = rbinom(Ntimesteps*Nsites,1,0.2)*runif(Ntimesteps*Nsites, 0.5, 1)
 
 # this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
 dist_dt$intensity = dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
@@ -135,7 +140,7 @@ predictions[["patches_1"]] =
                  # disturbance = dist_dt, this argument is optional and we will not use it for one patch
                  patches = 1,
                  patch_size = patch_size,
-                 height = parHeight, 
+                 competitionProcess = createProcess(func = competition, initSpecies = parComp),
                  growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
                  mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
                  regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg),
@@ -143,12 +148,11 @@ predictions[["patches_1"]] =
                  )
 
 predictions[["patches_100"]] =
-  simulateForest(env = env_dt,
+  simulateForest(env = env_dt,disturbance = dist_dt,
                  sp = Nsp,
                  patches = 100,
                  patch_size = patch_size,
-                 disturbance = dist_dt,
-                 height = parHeight, 
+                 competitionProcess = createProcess(func = competition, initSpecies = parComp),
                  growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
                  mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
                  regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg),

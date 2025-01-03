@@ -83,6 +83,7 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
 #' CohortMat$new(obs_df = obs_df)
 #' }
 #' @importFrom stats rweibull
+#' @export
 rweibull_cohorts = function(
   trees = NULL, # integer
   dbh_shape = NULL, # numeric
@@ -181,6 +182,8 @@ array2obsDF <- function(obs_array) {
     }
   }
 
+  # remove rows with DBH == 0
+  obs_dt <- obs_dt[obs_dt$dbh != 0,]
   return(obs_dt)
 }
 

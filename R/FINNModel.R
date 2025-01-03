@@ -58,9 +58,9 @@ FINNModel = R6::R6Class(
     #' Device, "cpu" or "cuda:0" (backup R object)
     device_r = "cpu",
 
-    #' @field parHeight (`torch_tensor`) \cr
-    #' Height species parameters, Dimensions: \mjseqn{[n_{species}]}
-    parHeight = NULL,
+    #' @field parComp (`torch_tensor`) \cr
+    #' Competition species parameters, Dimensions: \mjseqn{[n_{species}]}
+    parComp = NULL,
 
     #' @field parGrowth (`torch_tensor`) \cr
     #' Growth species parameters, Dimensions: \mjseqn{[n_{species}, m_{growth}]}
@@ -177,7 +177,7 @@ FINNModel = R6::R6Class(
     #' @param output vector of output dimensions for the neural networks
     #' @param dtype dtype, should be either `torch::torch_float32()` or `torch::torch_float64()`
     #' @param device character. Device to use ('cpu' or 'cuda').
-    #' @param parHeight torch.Tensor. Global parameters for height.
+    #' @param parComp torch.Tensor. Global parameters for competition
     #' @param parGrowth torch.Tensor. Growth parameters.
     #' @param parMort torch.Tensor. Mortality parameters.
     #' @param parReg torch.Tensor. Regeneration parameters.
@@ -209,7 +209,8 @@ FINNModel = R6::R6Class(
                   output = NULL,
                   dtype = NULL,
                   device = 'cpu',
-                  parHeight = NULL, # must be dim [species]
+                  # parHeight = NULL, # must be dim [species]
+                  parComp = NULL, # must be dim [species, 2], first for height alometry, second for species competition strength
                   parGrowth = NULL, # must be dim [species, 2], first for shade tolerance
                   parMort = NULL, # must be dim [species, 2], first for shade tolerance,
                   parReg = NULL, # must be dim [species]
@@ -245,7 +246,11 @@ FINNModel = R6::R6Class(
 
       # ###### Defaults #####
       if(is.null(speciesPars_ranges)) speciesPars_ranges = default_speciesPars_ranges
-      if(is.null(parHeight)) parHeight = runif(sp, min = 0.45, max = 0.55)
+      # if(is.null(parHeight)) parHeight = runif(sp, min = 0.45, max = 0.55)
+      if(is.null(parComp)) parComp = cbind(
+        runif(sp, min = 0.45, 0.55),
+        runif(sp, min = 0.2, 0.2) # 0.2 corresponds to 0 light at 50m2/ha basal area
+      )
       if(is.null(parGrowth)) parGrowth = cbind(
         runif(sp, min = 0.5, 0.55),
         runif(sp, min = 1.90, 2.0)
@@ -263,13 +268,13 @@ FINNModel = R6::R6Class(
           parGrowth = parGrowth,
           parMort = parMort,
           parReg = parReg,
-          parHeight = parHeight
+          parComp = parComp
         ),
         speciesPars_ranges = list(
           parGrowth = speciesPars_ranges$parGrowth,
           parMort = speciesPars_ranges$parMort,
           parReg = speciesPars_ranges$parReg,
-          parHeight = speciesPars_ranges$parHeight
+          parComp = speciesPars_ranges$parComp
         )
       )
       # }
@@ -282,7 +287,7 @@ FINNModel = R6::R6Class(
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
-      self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
+      self$parComp = self$setPars(parComp, speciesPars_ranges$parComp)
 
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
@@ -339,8 +344,13 @@ FINNModel = R6::R6Class(
       self$parMortEnv = self$nnMortEnv$parameters
       self$parRegEnv = self$nnRegEnv$parameters
 
-      if(is.null(parHeight)){
-        parHeight = np_runif(0.3, 0.7, size = self$sp)
+      # if(is.null(parHeight)){
+      #   parHeight = np_runif(0.3, 0.7, size = self$sp)
+      # }
+      if(is.null(parGrowth)){
+        parHeight = np_runif(0.3, 0.7, size = c(self$sp,1))
+        parCompStr = np_runif(0, 2, size = c(self$sp,1))
+        parComp = cbind(parHeight, parCompStr)
       }
       if(is.null(parGrowth)){
         first = np_runif(0, 6, size = c(self$sp,1))
@@ -368,7 +378,8 @@ FINNModel = R6::R6Class(
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
-      self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
+      # self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
+      self$parComp = self$setPars(parComp, speciesPars_ranges$parComp)
 
       self$scale_2 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
       self$scale_4 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
@@ -380,11 +391,14 @@ FINNModel = R6::R6Class(
       # self$set_parMort(parMort)
       # self$set_parReg(parReg)
 
-      self$parameters = c(self$parHeight, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters, self$nnGrowthEnv$parameters, self$nnMortEnv$parameters,self$scale_2,
-                          self$scale_4,
-                          self$scale_5,
-                          self$scale_6)
-      names(self$parameters) = c("parHeight" , "parGrowth", "parMort", "parReg", "nnReg", "nnGrowth", "nnMort", "scale_2","scale_4", "scale_5", "scale_6")
+      self$parameters = c(
+        self$parComp, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters,
+        self$nnGrowthEnv$parameters, self$nnMortEnv$parameters,self$scale_2, self$scale_4,
+        self$scale_5, self$scale_6)
+      names(self$parameters) = c(
+        "parComp" , "parGrowth", "parMort", "parReg", "nnReg",
+        "nnGrowth", "nnMort", "scale_2",
+        "scale_4", "scale_5", "scale_6")
       self$parameter_to_r()
 
       return(invisible(self)) # Only for testing now
@@ -544,7 +558,8 @@ FINNModel = R6::R6Class(
         parMort = self$getPars(self$parMort, self$speciesPars_ranges$parMort)
         parGrowth = self$getPars(self$parGrowth, self$speciesPars_ranges$parGrowth)
         parReg = self$getPars(self$parReg, self$speciesPars_ranges$parReg)
-        parHeight = self$getPars(self$parHeight, self$speciesPars_ranges$parHeight)
+        # parHeight = self$getPars(self$parHeight, self$speciesPars_ranges$parHeight)
+        parComp = self$getPars(self$parComp, self$speciesPars_ranges$parComp)
 
 
         #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
@@ -558,13 +573,18 @@ FINNModel = R6::R6Class(
             dbh = dbh,
             species = species,
             trees = trees,
-            parHeight = parHeight,
+            # parHeight = parHeight,
+            parComp = parComp,
             h = NULL,
-            minLight = self$minLight,
+            # minLight = self$minLight,
             patch_size_ha = self$patch_size_ha,
             ba = NULL,
             cohortHeights = NULL
           )
+          # Convert tensor comparison result to a logical scalar
+          if (light$gt(1.0)$sum()$item() > 0) {
+            stop("Light values > 1")
+          }
 
           if(self$runEnvGrowth) pred = index_species(pred_growth, species)
           else pred = env[["growth"]][,i,]
@@ -586,9 +606,9 @@ FINNModel = R6::R6Class(
             dbh = dbh,
             species = species,
             trees = trees,
-            parHeight = parHeight,
+            parComp = parComp,
             h = NULL,
-            minLight = self$minLight,
+            # minLight = self$minLight,
             patch_size_ha = self$patch_size_ha,
             ba = NULL,
             cohortHeights = NULL
@@ -623,9 +643,9 @@ FINNModel = R6::R6Class(
           dbh = dbh,
           species = species,
           trees = trees,
-          parHeight = parHeight,
+          parComp = parComp,
           h = 1,
-          minLight = self$minLight,
+          # minLight = self$minLight,
           patch_size_ha = self$patch_size_ha,
           ba = NULL,
           cohortHeights = NULL
@@ -686,13 +706,13 @@ FINNModel = R6::R6Class(
             # Light
             mask = tmp_res[[4]]$gt(0.5)
 
-            Result[[4]][,i,][mask] =  Result[[4]][,i,][mask] + tmp_res[[1]][mask]/tmp_res[[4]][mask]/patches
+            Result[[4]][,i,][mask] =  Result[[4]][,i,][mask] + tmp_res[[1]][mask]/tmp_res[[4]][mask]
 
             # Growth
-            Result[[5]][,i,][mask] = Result[[5]][,i,][mask]+tmp_res[[2]][mask]/tmp_res[[4]][mask]/patches # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            Result[[5]][,i,][mask] = Result[[5]][,i,][mask]+tmp_res[[2]][mask]/tmp_res[[4]][mask] # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
 
             # Mort
-            Result[[6]][,i,][mask] = Result[[6]][,i,][mask]+tmp_res[[3]][mask]/tmp_res[[4]][mask]/patches # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+            Result[[6]][,i,][mask] = Result[[6]][,i,][mask]+tmp_res[[3]][mask]/tmp_res[[4]][mask] # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
             # Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[3]]/patches) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
             #Result[[6]][,i,][Result[[6]][,i,]$isinf()] = 0.0
           }
@@ -782,7 +802,7 @@ FINNModel = R6::R6Class(
                 # mask only alive trees
                 mask = tmp_res[[3]]$gt(0.5)
 
-                Result[[1]][,i,][mask] = Result[[1]][,i,][mask]+ (tmp_res[[1]][mask]/tmp_res[[3]][mask])$div_(patches) # /cohort_counts[alive_species]
+                Result[[1]][,i,][mask] = Result[[1]][,i,][mask]+ (tmp_res[[1]][mask]/tmp_res[[3]][mask]) # /cohort_counts[alive_species]
 
                 # BA
                 Result[[2]][,i,]= Result[[2]][,i,]$add(tmp_res[[2]]$div_(patches))
