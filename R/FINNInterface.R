@@ -23,7 +23,7 @@
 #'  Set of parameters defining the height-growth relationship, if applicable.
 #' @param optimizeHeight (`logical(1)`) \cr
 #'  Should the height-growth parameters be estimated or not.
-#' @param speciesPars_ranges (`list(parGrowth = list(matrix()), parMort = list(matrix()), parReg = list(matrix()), parHeight = list(matrix()))`) \cr
+#' @param speciesPars_ranges (`list(parGrowth = list(matrix()), parMort = list(matrix()), parReg = list(matrix()), parComp = list(matrix()))`) \cr
 #'  List of boundaries for species parameters.
 #' @param patches (`integer(1)`) \cr
 #'  An integer specifying the number of patches in the simulation. Default is 10.
@@ -115,7 +115,11 @@ finn = function(data = NULL,
                     c(0, 4)
                   ),
                   parReg = c(0.01, 0.99),
-                  parHeight = c(0.3, 0.7),
+                  # parHeight = c(0.3, 0.7),
+                  parComp = rbind(
+                    c(0.3, 0.7),
+                    c(0, 2)
+                  ),
                   parGrowthEnv = rbind(
                     c(-1, 1),
                     c(-1, 1)
@@ -298,7 +302,8 @@ finn = function(data = NULL,
                         parGrowth = growthProcess$initSpecies,
                         parMort = mortalityProcess$initSpecies,
                         parReg = regenerationProcess$initSpecies,
-                        parHeight = height,
+                        parComp = competitionProcess$initSpecies,
+                        # parHeight = height,
                         parGrowthEnv = growthProcess$initEnv,
                         parMortEnv = mortalityProcess$initEnv,
                         parRegEnv = regenerationProcess$initEnv,
@@ -309,7 +314,7 @@ finn = function(data = NULL,
   if(!mortalityProcess$optimizeSpecies) model$parMort$requires_grad_(FALSE)
   if(!growthProcess$optimizeSpecies) model$parGrowth$requires_grad_(FALSE)
   if(!regenerationProcess$optimizeSpecies) model$parReg$requires_grad_(FALSE)
-  if(!optimizeHeight) model$parHeight$requires_grad_(FALSE)
+  if(!optimizeHeight) model$parComp$requires_grad_(FALSE)
   if(!mortalityProcess$optimizeEnv) .n = lapply(model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
   if(!growthProcess$optimizeEnv) .n = lapply(model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
   if(!regenerationProcess$optimizeEnv) .n = lapply(model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
@@ -395,7 +400,8 @@ finn = function(data = NULL,
                                     parGrowth = growthProcess$initSpecies,
                                     parMort = mortalityProcess$initSpecies,
                                     parReg = regenerationProcess$initSpecies,
-                                    parHeight = height,
+                                    parComp = competitionProcess$initSpecies,
+                                    # parHeight = height,
                                     parGrowthEnv = growthProcess$initEnv,
                                     parMortEnv = mortalityProcess$initEnv,
                                     parRegEnv = regenerationProcess$initEnv,
@@ -405,7 +411,7 @@ finn = function(data = NULL,
           if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
           if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
           if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
-          if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
+          if(!competitionProcess$optimizeSpecies) tmp_model$parComp$requires_grad_(FALSE)
           if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
           if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
           if(!regenerationProcess$optimizeEnv) .n = lapply(tmp_model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
@@ -472,7 +478,8 @@ finn = function(data = NULL,
                                     parGrowth = growthProcess$initSpecies,
                                     parMort = mortalityProcess$initSpecies,
                                     parReg = regenerationProcess$initSpecies,
-                                    parHeight = height,
+                                    parComp = competitionProcess$initSpecies,
+                                    # parHeight = height,
                                     parGrowthEnv = growthProcess$initEnv,
                                     parMortEnv = mortalityProcess$initEnv,
                                     parRegEnv = regenerationProcess$initEnv,
@@ -482,7 +489,7 @@ finn = function(data = NULL,
           if(!mortalityProcess$optimizeSpecies) tmp_model$parMort$requires_grad_(FALSE)
           if(!growthProcess$optimizeSpecies) tmp_model$parGrowth$requires_grad_(FALSE)
           if(!regenerationProcess$optimizeSpecies) tmp_model$parReg$requires_grad_(FALSE)
-          if(!optimizeHeight) tmp_model$parHeight$requires_grad_(FALSE)
+          if(!competitionProcess$optimizeSpecies) tmp_model$parComp$requires_grad_(FALSE)
           if(!mortalityProcess$optimizeEnv) .n = lapply(tmp_model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
           if(!growthProcess$optimizeEnv) .n = lapply(tmp_model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
           if(!regenerationProcess$optimizeEnv) .n = lapply(tmp_model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))
@@ -680,9 +687,9 @@ print.finnModel = function(object, ...) {
     cat("\nGrowth Species Parameter: \n")
     print(object$model$parRegTR)
   }
-  if(attr(object$model$parHeight_r, "requires_grad")) {
+  if(attr(object$model$parComp_r, "requires_grad")) {
     cat("\nGrowth Species Parameter: \n")
-    print(object$model$parHeightTR)
+    print(object$model$parCompTR)
   }
   if(attr(object$model$parGrowthEnv_r[[1]], "requires_grad")) {
     cat("\nGrowth Environment Parameter: \n")
@@ -848,9 +855,12 @@ simulateForest = function(env,
                               c(0, 4)
                             ),
                             parReg = c(0.01, 0.99),
-                            parHeight = c(0.3, 0.7)
-                            ),
-                          height = NULL,
+                            parComp = rbind(
+                              c(0, 1),
+                              c(0, 2)
+                            )),
+                            # parHeight = c(0.3, 0.7)
+                          # height = NULL,
                           patches = 100L,
                           patch_size = 0.1,
                           sp = NULL,
@@ -962,7 +972,8 @@ simulateForest = function(env,
                         parGrowth = growthProcess$initSpecies,
                         parMort = mortalityProcess$initSpecies,
                         parReg = regenerationProcess$initSpecies,
-                        parHeight = height,
+                        # parHeight = height,
+                        parComp = competitionProcess$initSpecies,
                         parGrowthEnv = growthProcess$initEnv,
                         parMortEnv = mortalityProcess$initEnv,
                         parRegEnv = regenerationProcess$initEnv,

@@ -8,3 +8,5 @@ test_that("BA_stem calculates basal area correctly", {
   expected_result <- pi * (50 / 100 / 2)^2
   expect_equal(as.numeric(BA_stem(dbh)), expected_result, tolerance = 0.00001)
 })
+
+

@@ -2,6 +2,12 @@ library(testthat)
 library(FINN)
 library(ggplot2)
 
+
+# test that competition function works as expected
+
+#
+
+
 patch_size = 0.1
 
 trees_vec = c(1:99,10^(seq(2,4, length.out = 16)))
@@ -26,8 +32,10 @@ species = cohort$species
 trees = cohort$trees
 
 
-comp = competition(cohort$dbh, cohort$species, cohort$trees,
-                   parHeight = torch::torch_tensor(0.5), h=0)
+comp = competition(
+  cohort$dbh, cohort$species, cohort$trees,
+  parHeight = torch::torch_tensor(0.5), h=0,
+  patch_size_ha = 0.1)
 
 cohort_df1$light = torch::as_array(comp)[,1,1]
 

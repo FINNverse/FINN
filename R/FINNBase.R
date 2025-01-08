@@ -8,16 +8,16 @@ FINNBase <- R6::R6Class(
   lock_class = FALSE,
   public = list(
 
-    #' @field parHeight_r (`as.numeric(sp)`)\cr
-    #' parHeight parameters as R vector, internal useage
-    parHeight_r = NULL,
+    #' @field parComp_r (`as.matrix(sp)`)\cr
+    #' parComp parameters as R matrix, internal useage
+    parComp_r = NULL,
 
     #' @field parGrowth_r (`as.matrix(sp, ..)`)\cr
-    #' parGrowth parameters as R vector, internal useage
+    #' parGrowth parameters as R matrix, internal useage
     parGrowth_r = NULL,
 
     #' @field parMort_r (`as.matrix(sp, ...)`)\cr
-    #' parMort parameters as R vector, internal useage
+    #' parMort parameters as R matrix, internal useage
     parMort_r = NULL,
 
     #' @field parReg_r (`as.vector(sp)`)\cr
@@ -176,7 +176,7 @@ FINNBase <- R6::R6Class(
     #'
     parameter_to_r = function() {
 
-      self$parHeight_r = to_r(self$parHeight, TRUE)
+      self$parComp_r = to_r(self$parComp, TRUE)
       self$parGrowth_r = to_r(self$parGrowth)
       self$parMort_r = to_r(self$parMort)
       self$parReg_r = to_r(self$parReg, TRUE)
@@ -199,7 +199,7 @@ FINNBase <- R6::R6Class(
       self$dtype = torch::torch_float32()
 
       pars = list()
-      self$parHeight = check_and_recreate(self$parHeight, self$parHeight_r, dtype=torch::torch_float32(), device=self$device)
+      self$parComp = check_and_recreate(self$parComp, self$parComp_r, dtype=torch::torch_float32(), device=self$device)
       self$parGrowth = check_and_recreate(self$parGrowth, self$parGrowth_r, dtype=torch::torch_float32(), device=self$device)
       self$parMort = check_and_recreate(self$parMort, self$parMort_r, dtype=torch::torch_float32(), device=self$device)
       self$parReg = check_and_recreate(self$parReg, self$parReg_r, dtype=torch::torch_float32(), device=self$device)
@@ -240,7 +240,7 @@ FINNBase <- R6::R6Class(
     #' Update R fields of the parameters
     update_parameters = function() {
       pars = list()
-      if(self$parHeight$requires_grad) pars = c(pars, parHeight = self$parHeight)
+      if(self$parComp$requires_grad) pars = c(pars, parComp = self$parComp)
       if(self$parGrowth$requires_grad) pars = c(pars, parGrowth = self$parGrowth)
       if(self$parReg$requires_grad) pars = c(pars, parReg = self$parReg)
       if(self$parMort$requires_grad) pars = c(pars, parMort = self$parMort)
@@ -340,9 +340,9 @@ FINNBase <- R6::R6Class(
     parRegT = function() {
       return(self$getPars(self$parReg, self$speciesPars_ranges$parReg))
     },
-    #' @field parHeightT return transformed parHeight
-    parHeightT = function() {
-      return(self$getPars(self$parHeight, self$speciesPars_ranges$parHeight))
+    #' @field parCompT return transformed parComp
+    parCompT = function() {
+      return(self$getPars(self$parComp, self$speciesPars_ranges$parComp))
     },
 
     #' @field parGrowthTR return transformed parGrowth
@@ -357,9 +357,9 @@ FINNBase <- R6::R6Class(
     parRegTR = function() {
       return(self$getPars(self$parReg, self$speciesPars_ranges$parReg)  |> as.numeric())
     },
-    #' @field parHeightTR return transformed parHeight
-    parHeightTR = function() {
-      return(self$getPars(self$parHeight, self$speciesPars_ranges$parHeight)  |> as.numeric())
+    #' @field parCompTR return transformed parComp
+    parCompTR = function() {
+      return(self$getPars(self$parComp, self$speciesPars_ranges$parComp)  |> as.numeric())
     }
   )
 )
