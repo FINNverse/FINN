@@ -12,8 +12,8 @@ simulateForest(
   regenerationProcess = NULL,
   competitionProcess = NULL,
   speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0, 0.5)), parMort =
-    rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parHeight = c(0.3, 0.7)),
-  height = NULL,
+    rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parComp = rbind(c(0, 1), c(0,
+    2))),
   patches = 100L,
   patch_size = 0.1,
   sp = NULL,
@@ -27,8 +27,6 @@ simulateForest(
 }
 \arguments{
 \item{env}{A data frame containing the environmental variables used in the simulation.}
-
-\item{height}{A function or set of parameters defining the height-growth relationship, if applicable.}
 
 \item{patches}{An integer specifying the number of patches in the simulation. Default is 10.}
 
@@ -51,6 +49,8 @@ simulateForest(
 \item{regeneration}{A process object or formula defining the regeneration process.}
 
 \item{competition}{A function defining the competition process, if applicable.}
+
+\item{height}{A function or set of parameters defining the height-growth relationship, if applicable.}
 }
 \value{
 A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.

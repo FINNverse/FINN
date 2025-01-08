@@ -9,7 +9,7 @@
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
-\code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINNModel}
+\code{FINN::FINNbase} -> \code{FINNModel}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -47,8 +47,8 @@ Device, "cpu" or "cuda:0"}
 \item{\code{device_r}}{(\code{character(1)}) \cr
 Device, "cpu" or "cuda:0" (backup R object)}
 
-\item{\code{parHeight}}{(\code{torch_tensor}) \cr
-Height species parameters, Dimensions: \mjseqn{[n_{species}]}}
+\item{\code{parComp}}{(\code{torch_tensor}) \cr
+Competition species parameters, Dimensions: \mjseqn{[n_{species}]}}
 
 \item{\code{parGrowth}}{(\code{torch_tensor}) \cr
 Growth species parameters, Dimensions: \mjseqn{[n_{species}, m_{growth}]}}
@@ -172,7 +172,7 @@ Initializes the FINNModel model with the specified parameters.
   output = NULL,
   dtype = NULL,
   device = "cpu",
-  parHeight = NULL,
+  parComp = NULL,
   parGrowth = NULL,
   parMort = NULL,
   parReg = NULL,
@@ -212,7 +212,7 @@ Initializes the FINNModel model with the specified parameters.
 
 \item{\code{device}}{character. Device to use ('cpu' or 'cuda').}
 
-\item{\code{parHeight}}{torch.Tensor. Global parameters for height.}
+\item{\code{parComp}}{torch.Tensor. Global parameters for competition}
 
 \item{\code{parGrowth}}{torch.Tensor. Growth parameters.}
 

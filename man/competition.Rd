@@ -8,9 +8,8 @@ competition(
   dbh,
   species,
   trees,
-  parHeight,
+  parComp,
   h = NULL,
-  minLight = 50,
   patch_size_ha,
   ba = NULL,
   cohortHeights = NULL
@@ -23,9 +22,9 @@ competition(
 
 \item{trees}{Number of trees.}
 
-\item{parHeight}{torch.Tensor global parameters for all species.}
-
 \item{h}{torch.Tensor (Optional) Height of each cohort. Defaults to NULL.}
+
+\item{parHeight}{torch.Tensor global parameters for all species.}
 
 \item{minLight}{float (Optional) Minimum light requirement. Defaults to 50.}
 }

@@ -9,14 +9,14 @@ The \code{FINNBase} class provides core functionalities for building and managin
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{parHeight_r}}{(\code{as.numeric(sp)})\cr
-parHeight parameters as R vector, internal useage}
+\item{\code{parComp_r}}{(\code{as.matrix(sp)})\cr
+parComp parameters as R matrix, internal useage}
 
 \item{\code{parGrowth_r}}{(\code{as.matrix(sp, ..)})\cr
-parGrowth parameters as R vector, internal useage}
+parGrowth parameters as R matrix, internal useage}
 
 \item{\code{parMort_r}}{(\code{as.matrix(sp, ...)})\cr
-parMort parameters as R vector, internal useage}
+parMort parameters as R matrix, internal useage}
 
 \item{\code{parReg_r}}{(\code{as.vector(sp)})\cr
 parReg parameters as R vector, internal useage}
@@ -41,7 +41,7 @@ parRegEnv parameters as R vector, internal useage}
 
 \item{\code{parRegT}}{return transformed parReg}
 
-\item{\code{parHeightT}}{return transformed parHeight}
+\item{\code{parCompT}}{return transformed parComp}
 
 \item{\code{parGrowthTR}}{return transformed parGrowth}
 
@@ -49,7 +49,7 @@ parRegEnv parameters as R vector, internal useage}
 
 \item{\code{parRegTR}}{return transformed parReg}
 
-\item{\code{parHeightTR}}{return transformed parHeight}
+\item{\code{parCompTR}}{return transformed parComp}
 }
 \if{html}{\out{</div>}}
 }

@@ -852,7 +852,7 @@ FINNModel = R6::R6Class(
               if(j == 3) {
                 mask = c[, tmp_index,]$isnan()$bitwise_not()
                 if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
-                    torch::distr_poisson(Result[[2]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                    torch::distr_poisson(Result[[3]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
               } else if(j == 7) {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
@@ -861,8 +861,8 @@ FINNModel = R6::R6Class(
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 #if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
                 if(as.logical(mask$max()$data())) {
-                #loss[j-1] = loss[j-1]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
-                loss[j-1] = loss[j-1]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
+                loss[j-1] = loss[j-1]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
+                #loss[j-1] = loss[j-1]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
                 }
 
               }
