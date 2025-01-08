@@ -762,6 +762,8 @@ FINNModel = R6::R6Class(
         ## Aggregation of stand variables ####
         # from updated cohorts
         #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+
+
         if(i > 0){
           if(dbh$shape[3] != 0){
 
@@ -838,9 +840,10 @@ FINNModel = R6::R6Class(
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 #if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
-                if(as.logical(mask$max()$data()))
-                loss[j-1] = loss[j-1]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
-                #loss[j-1] = loss[j-1]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
+                if(as.logical(mask$max()$data())) {
+                #loss[j-1] = loss[j-1]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
+                loss[j-1] = loss[j-1]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
+                }
 
               }
             }
@@ -960,7 +963,7 @@ FINNModel = R6::R6Class(
                                 torch_tensor(disturbance, dtype=self$dtype, device=torch_device('cpu'))
           )
         }
-        DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=TRUE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
+        DataLoader = torch::dataloader(data, batch_size=batch_size, shuffle=FALSE, num_workers=0, pin_memory=pin_memory, drop_last=TRUE)
 
         self$history = list()
 
