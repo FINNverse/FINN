@@ -104,7 +104,7 @@ finn = function(data = NULL,
                 regenerationProcess = NULL,
                 competitionProcess = NULL,
                 height = NULL,
-                optimizeHeight = FALSE,
+                # optimizeHeight = FALSE,
                 speciesPars_ranges = list(
                   parGrowth = rbind(
                     c(0.01, 0.99),
@@ -314,7 +314,7 @@ finn = function(data = NULL,
   if(!mortalityProcess$optimizeSpecies) model$parMort$requires_grad_(FALSE)
   if(!growthProcess$optimizeSpecies) model$parGrowth$requires_grad_(FALSE)
   if(!regenerationProcess$optimizeSpecies) model$parReg$requires_grad_(FALSE)
-  if(!optimizeHeight) model$parComp$requires_grad_(FALSE)
+  if(!competitionProcess$optimizeSpecies) model$parComp$requires_grad_(FALSE)
   if(!mortalityProcess$optimizeEnv) .n = lapply(model$nnMortEnv$parameters, function(p) p$requires_grad_(FALSE))
   if(!growthProcess$optimizeEnv) .n = lapply(model$nnGrowthEnv$parameters, function(p) p$requires_grad_(FALSE))
   if(!regenerationProcess$optimizeEnv) .n = lapply(model$nnRegEnv$parameters, function(p) p$requires_grad_(FALSE))

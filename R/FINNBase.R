@@ -355,11 +355,11 @@ FINNBase <- R6::R6Class(
     },
     #' @field parRegTR return transformed parReg
     parRegTR = function() {
-      return(self$getPars(self$parReg, self$speciesPars_ranges$parReg)  |> as.numeric())
+      return(self$getPars(self$parReg, self$speciesPars_ranges$parReg)  |> as.matrix())
     },
     #' @field parCompTR return transformed parComp
     parCompTR = function() {
-      return(self$getPars(self$parComp, self$speciesPars_ranges$parComp)  |> as.numeric())
+      return(self$getPars(self$parComp, self$speciesPars_ranges$parComp)  |> as.matrix())
     }
   )
 )
