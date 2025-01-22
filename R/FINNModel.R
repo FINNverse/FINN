@@ -626,10 +626,7 @@ FINNModel = R6::R6Class(
             pred = pred,
             light = light
           )
-          # print("Mort:")
-          # print(m)
-          # print("++++")
-          trees_dead = binomial_from_gamma(trees+trees$le(0.5)$float(), m+0.001)*trees$ge(0.5)$float() #rbinom(n, trees, m) --> m*trees
+          trees_dead = binomial_from_gamma(trees+trees$le(0.5)$float(), m+0.001)*trees$ge(0.5)$float()
           trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
           trees_before = trees
 
@@ -654,13 +651,12 @@ FINNModel = R6::R6Class(
         if(self$runEnvReg) pred = pred_reg
         else pred = env[["reg"]][,i,]
 
-        r_mean = self$regenerationFunction(species = species,
+        r_mean_ha = self$regenerationFunction(species = species,
                                            parReg = parReg,
                                            pred = pred,
-                                           light = AL_reg)
+                                           light = AL_reg)*self$patch_size_ha
 
-
-        r = sample_poisson_gaussian(r_mean*self$patch_size_ha)
+        r = sample_poisson_gaussian(r_mean_ha)
         # ein nummerischer Trick um den Gradienten für die Zahlen beim Runden zu behalten
         r = r + r$round()$detach() - r$detach()
 
@@ -723,9 +719,9 @@ FINNModel = R6::R6Class(
         Result[[7]][,i,] = Result[[7]][,i,]$add(tmp_res[[1]])/patches
 
         ## Regeneration rate mean
-        tmp_res = aggregate_results(species_new, list(r_mean), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-        r_mean = tmp_res[[1]]/patches
-        Result[[8]][,i,] = r_mean
+        tmp_res = aggregate_results(species_new, list(r_mean_ha), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
+        r_mean_ha = tmp_res[[1]]/patches
+        Result[[8]][,i,] = r_mean_ha
         #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
         ## Update arrays ####
         # 1. Combine old cohorts and recruit cohorts
@@ -836,7 +832,7 @@ FINNModel = R6::R6Class(
             )
             Raw_patch_results[[i]] = list(
               "r" = torch::as_array(r$cpu())
-              # "r_mean" = torch::as_array(r_mean$cpu())
+              # "r_mean_ha" = torch::as_array(r_mean_ha$cpu())
             )
             Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
           }
@@ -856,7 +852,7 @@ FINNModel = R6::R6Class(
               } else if(j == 7) {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
-                    torch::distr_poisson((r_mean+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                    torch::distr_poisson((r_mean_ha+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 #if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
