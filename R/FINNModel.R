@@ -247,18 +247,18 @@ FINNModel = R6::R6Class(
       if(is.null(speciesPars_ranges)) speciesPars_ranges = default_speciesPars_ranges
       # if(is.null(parHeight)) parHeight = runif(sp, min = 0.45, max = 0.55)
       if(is.null(parComp)) parComp = cbind(
-        runif(sp, min = 0, 1),
+        runif(sp, min = 0.3, 0.7),
         runif(sp, min = 0.2, 0.2) # 0.2 corresponds to 0 light at 50m2/ha basal area
       )
       if(is.null(parGrowth)) parGrowth = cbind(
-        runif(sp, min = 0, 1),
-        runif(sp, min = 0.0001, 0.1)
+        runif(sp, min = 0.01, 0.99),
+        runif(sp, min = 0.01, 0.1)
       )
       if(is.null(parMort)) parMort = cbind(
-        runif(sp, min = 0, 1),
+        runif(sp, min = speciesPars_ranges$parMort[1,1], speciesPars_ranges$parMort[1,2]),
         runif(sp, min = 1, 4)
       )
-      if(is.null(parReg)) parReg = runif(sp, min = 0, max = 1)
+      if(is.null(parReg)) parReg = runif(sp, 0.01, 0.99)
       self$speciesPars_ranges = speciesPars_ranges
 
       # if(!is.null(speciesPars_ranges)){

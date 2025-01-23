@@ -170,7 +170,7 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 #' @param light available light
 #'
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 10, debug = F) {
+mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F) {
   # TODO remove constant part
   # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
 
