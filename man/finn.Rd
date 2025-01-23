@@ -13,7 +13,6 @@ finn(
   regenerationProcess = NULL,
   competitionProcess = NULL,
   height = NULL,
-  optimizeHeight = FALSE,
   speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0.01, 4)), parMort =
     rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parComp = rbind(c(0.3, 0.7),
     c(0, 2)), parGrowthEnv = rbind(c(-1, 1), c(-1, 1)), parMortEnv = rbind(c(-2, 2),
@@ -61,9 +60,6 @@ A function defining the competition process, if applicable. If \code{NULL}, defa
 \item{height}{(\code{numeric(sp)}) \cr
 Set of parameters defining the height-growth relationship, if applicable.}
 
-\item{optimizeHeight}{(\code{logical(1)}) \cr
-Should the height-growth parameters be estimated or not.}
-
 \item{speciesPars_ranges}{(\code{list(parGrowth = list(matrix()), parMort = list(matrix()), parReg = list(matrix()), parComp = list(matrix()))}) \cr
 List of boundaries for species parameters.}
 
@@ -110,6 +106,9 @@ If weights should be save (file argument), save every thin epochs.}
 Optimizer of the torch package}
 
 \item{...}{arguments passed to \code{simulateForest()}}
+
+\item{optimizeHeight}{(\code{logical(1)}) \cr
+Should the height-growth parameters be estimated or not.}
 }
 \value{
 A list of predicted values for each patch and species, containing arrays of tree diameters and tree counts.

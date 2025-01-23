@@ -456,3 +456,32 @@ to_r = function(par, numeric = FALSE) {
   attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
   return(tmp)
 }
+
+get_mort_thresholds = function(base_steepness) {
+
+  ff = function(parM, light = 1.0, base_steepness = 10) {
+    parM = torch::torch_tensor(parM, requires_grad = TRUE)
+    scaled_steepness <- base_steepness / (0.5 - abs(parM - 0.5))
+    shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parM))) - 1 / (1 + torch::torch_exp(scaled_steepness * parM))) /
+                   (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parM))) - 1 / (1 + torch::torch_exp(scaled_steepness * parM))))
+    shade$backward()
+    return(parM$grad |> as.numeric())
+  }
+
+  upper_high = cbind(seq(0, 1, length.out = 100), sapply(seq(0, 1, length.out = 100), function(x) ff(x, 1.0, base_steepness = base_steepness) |> as.numeric() ))
+  upper_limit_light_max = upper_high[which(is.na(upper_high[,2]), arr.ind = TRUE)[-1][1]-1, 1]
+  upper_low = cbind(seq(0, 1, length.out = 100), sapply(seq(0, 1, length.out = 100), function(x) ff(x, 0.0, base_steepness = base_steepness) |> as.numeric() ))
+  upper_limit_light_min = upper_low[which(is.na(upper_low[,2]), arr.ind = TRUE)[-1][1]-1, 1]
+  upper_limit = c(upper_limit_light_max, upper_limit_light_min)[which.min(c(upper_limit_light_max, upper_limit_light_min))]
+  upper_limit= 0.99*upper_limit
+
+  min = rev(which(is.na(upper_high[1:50,2]), arr.ind = TRUE))
+  lower_limit_light_max = upper_high[1:50][min+1][1]
+  min = rev(which(is.na(upper_low[1:50,2]), arr.ind = TRUE))
+  lower_limit_light_min = upper_low[1:50][min+1][1]
+
+  lower_limit = c(lower_limit_light_max, lower_limit_light_min)[which.min(c(lower_limit_light_max, lower_limit_light_min))]
+  lower_limit= 1.01*lower_limit
+  return(c(lower_limit, upper_limit))
+}
+

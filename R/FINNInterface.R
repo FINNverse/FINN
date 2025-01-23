@@ -150,6 +150,19 @@ finn = function(data = NULL,
                 ...
 ) {
 
+  speciesPars_ranges$parMort
+
+  limits = get_mort_thresholds(base_steepness = 10.0)
+  if(speciesPars_ranges$parMort[1,1] < limits[1]) {
+    cat('Mortality species parameter lower limit will be adjusted to improve numerical stability\n')
+    speciesPars_ranges$parMort[1,1] = limits[1]
+  }
+  if(speciesPars_ranges$parMort[1,2] > limits[2]) {
+    cat('Mortality species parameter upper limit will be adjusted to improve numerical stability\n')
+    speciesPars_ranges$parMort[1,2] = limits[2]
+  }
+
+
   if(is.null(data)) {
     cli::cli_text("No data provided, simulations will be generated...")
     return(simulateForest(env=env,

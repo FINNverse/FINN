@@ -9,7 +9,7 @@
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
-\code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINNModel}
+\code{FINN::FINNbase} -> \code{FINNModel}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
