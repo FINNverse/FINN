@@ -243,23 +243,22 @@ FINNModel = R6::R6Class(
       self$sp = sp
       self$device = device
 
-
       # ###### Defaults #####
       if(is.null(speciesPars_ranges)) speciesPars_ranges = default_speciesPars_ranges
       # if(is.null(parHeight)) parHeight = runif(sp, min = 0.45, max = 0.55)
       if(is.null(parComp)) parComp = cbind(
-        runif(sp, min = 0.45, 0.55),
+        runif(sp, min = 0, 1),
         runif(sp, min = 0.2, 0.2) # 0.2 corresponds to 0 light at 50m2/ha basal area
       )
       if(is.null(parGrowth)) parGrowth = cbind(
-        runif(sp, min = 0.5, 0.55),
-        runif(sp, min = 1.90, 2.0)
+        runif(sp, min = 0, 1),
+        runif(sp, min = 0.0001, 0.1)
       )
       if(is.null(parMort)) parMort = cbind(
-        runif(sp, min = 0.5, 0.55),
-        runif(sp, min = 1.90, 2.0)
+        runif(sp, min = 0, 1),
+        runif(sp, min = 1, 4)
       )
-      if(is.null(parReg)) parReg = runif(sp, min = 0.45, max = 0.55)
+      if(is.null(parReg)) parReg = runif(sp, min = 0, max = 1)
       self$speciesPars_ranges = speciesPars_ranges
 
       # if(!is.null(speciesPars_ranges)){
@@ -343,37 +342,6 @@ FINNModel = R6::R6Class(
       self$parGrowthEnv = self$nnGrowthEnv$parameters
       self$parMortEnv = self$nnMortEnv$parameters
       self$parRegEnv = self$nnRegEnv$parameters
-
-      # if(is.null(parHeight)){
-      #   parHeight = np_runif(0.3, 0.7, size = self$sp)
-      # }
-      if(is.null(parGrowth)){
-        parHeight = np_runif(0.3, 0.7, size = c(self$sp,1))
-        parCompStr = np_runif(0, 2, size = c(self$sp,1))
-        parComp = cbind(parHeight, parCompStr)
-      }
-      if(is.null(parGrowth)){
-        first = np_runif(0, 6, size = c(self$sp,1))
-        second = np_runif(0, 6, size = c(self$sp,1))
-        parGrowth = cbind(first, second)
-      }
-
-      if(is.null(parMort)){
-        first = np_runif(0, 2, size = c(self$sp,1))
-        second = np_runif(0.1, 5, size = c(self$sp,1))
-        parMort = cbind(first, second)
-      }
-
-      if(is.null(parReg)){
-        self$parReg = np_runif(0, 1, size = self$sp)
-      }
-
-      # self$set_parHeight(parHeight)
-      # self$set_parGrowth(parGrowth)
-      # self$set_parMort(parMort)
-      # self$set_parReg(parReg)
-
-      # browser()
 
       self$parGrowth = self$setPars(parGrowth, speciesPars_ranges$parGrowth)
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)

@@ -146,37 +146,115 @@ for(i in 1:length(test_set_list)){
 }
 out_dt2 <- merge(test_cohorts_dt, out_dt, by = c("siteID"))
 
-#### test cases ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+## Growth ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+out_dt_growth = data.table()
+i=1
+for(i in 1:length(test_set_list)){
+  i_test_set = test_set_list[[i]]
+  Nsp = i_test_set$base_config$Nspecies
 
-# no value is allowed to be outside the range of 0 and 1
-out_dt2[comp < 0 | comp > 1]
+  parGrowth = matrix(c(
+    runif(Nsp, 0.3, 0.7), # parHeight
+    runif(Nsp, 0, 0.05) # Competition strength
+  ),Nsp, 2)
 
-# tests for the competition function
-# high basal area must have lower light than low basal area
+  envpred = seq(-2, 2, 1)
 
-out_dt2[,":="(
-  height_rank = rank(rev(height))
-), by = .(simID, siteID, patchID)]
-plot_dt <-
-  out_dt2[,.(
-    mean_light = mean(comp),
-    mean_height = mean(height),
-    mean_dbh = mean(dbh)
-  ), by = .(siteID,height_rank)]
+  parGrowth_dt <- data.table(
+    species = 1:Nsp,
+    parGrowth1 = parGrowth[,1],
+    parGrowth2 = parGrowth[,2]
+  )
 
-ggplot(plot_dt, aes(x = mean_dbh, y = mean_light, color = mean_height))+
-  geom_point()+
-  facet_wrap(~height_rank)
+  parGrowth = torch_tensor(
+    cbind(
+      parGrowth[,1],parGrowth[,2]
+    ), requires_grad=TRUE, dtype=torch_float32()
+  )
+  # cat(i, "started competition function\n")
+  light = competition(
+    dbh = i_test_set$cohorts$dbh,
+    species = i_test_set$cohorts$species,
+    trees= i_test_set$cohorts$trees,
+    parComp = parComp,
+    h = NULL,
+    patch_size_ha = 0.1
+  )
 
-ggplot(plot_dt, aes(x = mean_ba, y = mean_light, color = mean_height))+
-  geom_point()+
-  facet_wrap(~height_rank)
 
+  growth_dt_temp <- data.table()
+  for(i_env in 1:length(envpred)){
+    pred = FINN::index_species(torch_ones(i_test_set$cohorts$species$shape[1],Nsp), i_test_set$cohorts$species)*envpred[i_env]
+    cat("envpred = ",envpred[i_env], "\n")
+    growth_out = growth(
+      dbh = i_test_set$cohorts$dbh,
+      species = i_test_set$cohorts$species,
+      parGrowth = parGrowth,
+      light = light,
+      pred = pred
+    )
+    cohortHeights = height(i_test_set$cohorts$dbh, parComp[,1][i_test_set$cohorts$species])$unsqueeze(4)
+    ba = BA_stand(i_test_set$cohorts$dbh, i_test_set$cohorts$trees, patch_size_ha = 0.1)
+    # cat(i, "finished competition function\n")
+
+    # cat("looping through results\n")
+    for(i_site in unique(i_test_set$cohorts_dt$siteID)){
+      # for(i_patch in unique(i_test_set$cohorts_dt[siteID == i_site]$patchID)){
+      for(i_cohort in unique(i_test_set$cohorts_dt[siteID == i_site]$cohortID)){
+        # cat("looping over site", i_site, "patch", i_patch, "cohort", i_cohort, "\n")
+        growth_dt_temp <- rbind(
+          growth_dt_temp,
+          data.table(
+            simID = i,
+            siteID = i_site,
+            patchID = 1:dim(growth_out)[2],
+            cohortID = i_cohort,
+            height = as.vector(torch::as_array(cohortHeights)[i_site,,i_cohort,]),
+            growth = as.vector(torch::as_array(growth_out)[i_site,,i_cohort]),
+            ba = as.vector(torch::as_array(ba)[i_site,,i_cohort]),
+            light = as.vector(torch::as_array(light)[i_site,,i_cohort]),
+            species = as.vector(torch::as_array(i_test_set$cohorts$species)[i_site,,i_cohort]),
+            envpred = envpred[i_env]
+          )
+        )
+      }
+    }
+    # }
+  }
+
+  growth_dt_temp <- merge(growth_dt_temp, parGrowth_dt, by = c("species"))
+
+  out_dt_growth = rbind(
+    out_dt_growth,
+    growth_dt_temp
+  )
+  cat(i, "finished\n")
+}
+out_dt_growth2 <- merge(test_cohorts_dt, out_dt_growth, by = c("siteID"))
+
+ggplot(out_dt_growth2[light == 1 & species == 6 & growth < 1], aes(x = as.factor(parGrowth2), y = as.factor(envpred)))+
+  geom_tile(aes(fill = growth))
+
+ggplot(out_dt_growth2[ba < 50], aes(x = cut(parGrowth2, breaks = 10), y = growth))+
+  geom_boxplot()+
+  coord_cartesian(ylim = c(0,0.5))
+
+summary(out_dt_growth2[growth < 0.2 & light > parGrowth1])
+nrow(out_dt_growth2[growth < 0.2 & light > parGrowth1 & parGrowth2 < 1 & envpred == 0])
+summary(out_dt_growth2[growth > 1 & light > parGrowth1 & parGrowth2 < 0.5])
+nrow(out_dt_growth2[growth > 1 & light > parGrowth1])
+nrow(out_dt_growth2[growth > 1 & light > parGrowth1 & parGrowth2 < 0.5 & envpred == 0])
+
+ggplot(out_dt_growth2, aes(x = parGrowth2, y = growth, color = species))+
+  geom_point()
 
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ### Regeneration  ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+
 
 out_dt = data.table()
 for(i in 1:length(test_set_list)){
