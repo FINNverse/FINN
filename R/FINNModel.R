@@ -684,12 +684,14 @@ FINNModel = R6::R6Class(
           samples = vector("list", 4)
           names(samples) = c(
             "light*trees_before",
-            "g*trees_before",
+            # "g*trees_before",
+            "dbh_growth*trees_before",
             "m*trees_before",
             "trees_before"
           )
           samples[[1]] = light*trees_before
-          samples[[2]] = g*trees_before
+          # samples[[2]] = g*trees_before
+          samples[[2]] = dbh_growth*trees_before
           samples[[3]] = m*trees_before
           samples[[4]] = trees_before # original number of trees
 
