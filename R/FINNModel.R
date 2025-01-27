@@ -632,10 +632,6 @@ FINNModel = R6::R6Class(
 
         r_mean_patch = r_mean_ha*self$patch_size_ha
 
-        if(sum(torch_tensor(r_mean_ha)$isnan() |> as.integer()) > 0.5) {
-          print(self$parameters)
-        }
-
         theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
         #r = sample_poisson_gaussian(r_mean_ha)
         r = rnbinom_torch(r_mean_patch, theta$abs())
