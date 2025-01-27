@@ -622,9 +622,11 @@ FINNModel = R6::R6Class(
         r_mean_ha = self$regenerationFunction(species = species,
                                            parReg = parReg,
                                            pred = pred,
-                                           light = AL_reg)*self$patch_size_ha
+                                           light = AL_reg)
 
-        r = sample_poisson_gaussian(r_mean_ha)
+        r_mean_patch = r_mean_ha*self$patch_size_ha # for loss calculation
+
+        r = sample_poisson_gaussian(r_mean_patch)
         # ein nummerischer Trick um den Gradienten für die Zahlen beim Runden zu behalten
         r = r + r$round()$detach() - r$detach()
 
