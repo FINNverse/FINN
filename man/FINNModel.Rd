@@ -9,7 +9,7 @@
 The \code{FINNModel} class provides tools to initialize, train, and predict using a Forest Informed Neural Network. This model is designed for predicting tree growth, mortality, and regeneration across multiple species. The class supports various configurations, including the use of different devices (CPU or CUDA) and hidden layers in the neural network models.
 }
 \section{Super class}{
-\code{FINN::FINNbase} -> \code{FINNModel}
+\code{\link[FINN:FINNbase]{FINN::FINNbase}} -> \code{FINNModel}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -179,6 +179,7 @@ Initializes the FINNModel model with the specified parameters.
   parGrowthEnv = NULL,
   parMortEnv = NULL,
   parRegEnv = NULL,
+  parThetaReg = NULL,
   nnRegEnv = NULL,
   nnGrowthEnv = NULL,
   nnMortEnv = NULL,
@@ -225,6 +226,8 @@ Initializes the FINNModel model with the specified parameters.
 \item{\code{parMortEnv}}{torch.Tensor. Mortality environment parameters.}
 
 \item{\code{parRegEnv}}{torch.Tensor. Regeneration environment parameters.}
+
+\item{\code{parThetaReg}}{numeric. Regeneration dispersion parameter}
 
 \item{\code{nnRegEnv}}{list of matrices. Initial parameters for the NN.}
 

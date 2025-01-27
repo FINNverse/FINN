@@ -485,3 +485,32 @@ get_mort_thresholds = function(base_steepness) {
   return(c(lower_limit, upper_limit))
 }
 
+
+rnbinom_torch = function(pred, theta) {
+  # cat("\nPred: ")
+  # print(pred$min())
+  # print(pred$max())
+  # cat("\nTheta: ")
+  # print(theta$min())
+  #pred = pred$abs()
+  #theta = theta$abs()
+  probs = 1.0 - theta/(theta + pred)
+  total_count = theta
+  logits = torch::torch_log(probs) - torch::torch_log1p(-probs)
+  return(sample_poisson_gaussian((torch::distr_gamma(total_count, (-logits)$exp() )$rsample() +0.001)$abs() ))
+  # stats::rgamma(length(pred),total_count, exp(- logits ))
+}
+
+dnbinom_torch = function(pred, true, theta) {
+  eps = 0.0001
+  #pred = torch::torch_exp(pred)
+  theta_tmp = theta#$abs() # 1.0/(torch::nnf_softplus(theta)+eps)
+  probs = torch::torch_clamp(1.0 - theta_tmp/(theta_tmp+pred)+eps, 0.0, 1.0-eps)
+  total_count = theta_tmp
+  value = true
+  logits = torch::torch_log(probs) - torch::torch_log1p(-probs)
+  log_unnormalized_prob <- total_count * torch::torch_log(torch::torch_sigmoid(-logits)) + value * torch::torch_log(torch::torch_sigmoid(logits))
+  log_normalization <- -torch::torch_lgamma(total_count + value) + torch::torch_lgamma(1 + value) + torch::torch_lgamma(total_count)
+  log_normalization <- torch::torch_where(total_count + value == 0, torch::torch_tensor(0, dtype = log_normalization$dtype, device = pred$device), log_normalization)
+  return( - (log_unnormalized_prob - log_normalization))
+  }

@@ -12,7 +12,7 @@ simulateForest(
   regenerationProcess = NULL,
   competitionProcess = NULL,
   speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0, 0.5)), parMort =
-    rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parComp = rbind(c(0, 1), c(0,
+    rbind(c(0.011, 0.93), c(0, 4)), parReg = c(0.01, 0.99), parComp = rbind(c(0, 1), c(0,
     2))),
   patches = 100L,
   patch_size = 0.1,

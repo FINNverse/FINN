@@ -146,7 +146,7 @@ finn = function(data = NULL,
                 file = NULL,
                 thin = 100,
                 sp = NULL,
-                optimizer = optim_adagrad,
+                optimizer = optim_ignite_adam,
                 ...
 ) {
 
@@ -313,6 +313,7 @@ finn = function(data = NULL,
                         parMort = mortalityProcess$initSpecies,
                         parReg = regenerationProcess$initSpecies,
                         parComp = competitionProcess$initSpecies,
+                        parThetaReg = regenerationProcess$dispersion_parameter,
                         # parHeight = height,
                         parGrowthEnv = growthProcess$initEnv,
                         parMortEnv = mortalityProcess$initEnv,
@@ -761,6 +762,7 @@ plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
 #' @param hidden A list specifying the hidden layers for neural network models. Default is an empty list.
 #' @param inputNN input dimension for NN, default is inferred from the formula. See details
 #' @param outputNN output dimension for NN, default is the number of species. See details
+#' @param dispersion_parameter init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -768,7 +770,7 @@ plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = NULL) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()

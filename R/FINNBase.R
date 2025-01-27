@@ -248,10 +248,12 @@ FINNBase <- R6::R6Class(
       if(self$nnGrowthEnv$parameters[[1]]$requires_grad) pars = c(pars, nnGrowth = self$nnGrowthEnv$parameters)
       if(self$nnMortEnv$parameters[[1]]$requires_grad) pars = c(pars, nnMort = self$nnMortEnv$parameters)
 
+      if(self$scale_1$requires_grad) pars = c(pars, scale_1 = self$scale_1)
       if(self$scale_2$requires_grad) pars = c(pars, scale_2 = self$scale_2)
       if(self$scale_4$requires_grad) pars = c(pars, scale_4 = self$scale_4)
       if(self$scale_5$requires_grad) pars = c(pars, scale_5 = self$scale_5)
       if(self$scale_6$requires_grad) pars = c(pars, scale_6 = self$scale_6)
+      if(self$theta_reg$requires_grad) pars = c(pars, theta_reg = self$theta_reg)
       self$parameters = pars
     },
 

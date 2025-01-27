@@ -14,7 +14,7 @@ finn(
   competitionProcess = NULL,
   height = NULL,
   speciesPars_ranges = list(parGrowth = rbind(c(0.01, 0.99), c(0.01, 4)), parMort =
-    rbind(c(0.01, 0.99), c(0, 4)), parReg = c(0.01, 0.99), parComp = rbind(c(0.3, 0.7),
+    rbind(c(0.011, 0.93), c(0, 4)), parReg = c(0.01, 0.99), parComp = rbind(c(0.3, 0.7),
     c(0, 2)), parGrowthEnv = rbind(c(-1, 1), c(-1, 1)), parMortEnv = rbind(c(-2, 2),
     c(-2, 2)), parRegEnv = rbind(c(-2, 2), c(-2, 2))),
   patches = 100L,
@@ -31,7 +31,7 @@ finn(
   file = NULL,
   thin = 100,
   sp = NULL,
-  optimizer = optim_adagrad,
+  optimizer = optim_ignite_adam,
   ...
 )
 }

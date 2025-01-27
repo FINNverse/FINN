@@ -11,7 +11,7 @@ mortality(
   parMort,
   pred,
   light,
-  base_steepness = 10,
+  base_steepness = 5,
   debug = F
 )
 }

@@ -184,6 +184,7 @@ FINNModel = R6::R6Class(
     #' @param parGrowthEnv torch.Tensor. Growth environment parameters.
     #' @param parMortEnv torch.Tensor. Mortality environment parameters.
     #' @param parRegEnv torch.Tensor. Regeneration environment parameters.
+    #' @param parThetaReg numeric. Regeneration dispersion parameter
     #' @param nnRegEnv list of matrices. Initial parameters for the NN.
     #' @param nnGrowthEnv list of matrices. Initial parameters for the NN.
     #' @param nnMortEnv list of matrices. Initial parameters for the NN.
@@ -217,6 +218,7 @@ FINNModel = R6::R6Class(
                   parGrowthEnv = NULL, # must be dim [species, 2], first for shade tolerance
                   parMortEnv = NULL, # must be dim [species, 2], first for shade tolerance,
                   parRegEnv = NULL, # must be dim [species]
+                  parThetaReg = NULL,
                   nnRegEnv = NULL,
                   nnGrowthEnv = NULL,
                   nnMortEnv = NULL,
@@ -349,6 +351,10 @@ FINNModel = R6::R6Class(
       # self$parHeight = self$setPars(parHeight, speciesPars_ranges$parHeight)
       self$parComp = self$setPars(parComp, speciesPars_ranges$parComp)
 
+      if(is.null(parThetaReg)) parThetaReg = 2.0
+
+      self$theta_reg = torch::torch_tensor(parThetaReg, requires_grad=TRUE, dtype = self$dtype, device = self$device)
+      self$scale_1 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
       self$scale_2 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
       self$scale_4 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
       self$scale_5 = torch::torch_tensor(1.0, requires_grad = TRUE, dtype = self$dtype, device = self$device)
@@ -361,12 +367,12 @@ FINNModel = R6::R6Class(
 
       self$parameters = c(
         self$parComp, self$parGrowth, self$parMort,self$parReg, self$nnRegEnv$parameters,
-        self$nnGrowthEnv$parameters, self$nnMortEnv$parameters,self$scale_2, self$scale_4,
-        self$scale_5, self$scale_6)
+        self$nnGrowthEnv$parameters, self$nnMortEnv$parameters,self$scale_1, self$scale_2, self$scale_4,
+        self$scale_5, self$scale_6, self$theta_reg)
       names(self$parameters) = c(
         "parComp" , "parGrowth", "parMort", "parReg", "nnReg",
-        "nnGrowth", "nnMort", "scale_2",
-        "scale_4", "scale_5", "scale_6")
+        "nnGrowth", "nnMort", "scale_1","scale_2",
+        "scale_4", "scale_5", "scale_6", "theta_reg")
       self$parameter_to_r()
 
       return(invisible(self)) # Only for testing now
@@ -622,9 +628,17 @@ FINNModel = R6::R6Class(
         r_mean_ha = self$regenerationFunction(species = species,
                                            parReg = parReg,
                                            pred = pred,
-                                           light = AL_reg)*self$patch_size_ha
+                                           light = AL_reg)
 
-        r = sample_poisson_gaussian(r_mean_ha)
+        r_mean_patch = r_mean_ha*self$patch_size_ha
+
+        if(sum(torch_tensor(r_mean_ha)$isnan() |> as.integer()) > 0.5) {
+          print(self$parameters)
+        }
+
+        theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
+        #r = sample_poisson_gaussian(r_mean_ha)
+        r = rnbinom_torch(r_mean_patch, theta$abs())
         # ein nummerischer Trick um den Gradienten für die Zahlen beim Runden zu behalten
         r = r + r$round()$detach() - r$detach()
 
@@ -807,31 +821,38 @@ FINNModel = R6::R6Class(
 
 
 
-        loss = torch_zeros(6L, device = self$device)
+        loss = torch_zeros(7L, device = self$device)
         if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
           if(i %in% year_sequence) {
             tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
-            for(j in 2:7) {
+            for(j in 1:7) {
               # 1 -> dbh, 2 -> ba, 3 -> counts, 4 -> AL, 5 -> growth rates, 6 -> mort rates, 7 -> reg rates
               if(j == 3) {
                 mask = c[, tmp_index,]$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
-                    torch::distr_poisson(Result[[3]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                if(as.logical(mask$max()$data()))  loss[j] = loss[j]+
+                    torch::distr_poisson(Result[[3]][,i,][mask]+0.01)$log_prob(c[, tmp_index,][mask])$mean()$negative()*(weights[j]+0.0001)
               } else if(j == 7) {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data()))  loss[j-1] = loss[j-1]+
-                    torch::distr_poisson((r_mean_ha+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001)
+                if(as.logical(mask$max()$data()))  {
+                  theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
+                  # torch::distr_poisson((r_mean_ha+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j]+0.0001)
+                  loss[j] = loss[j]+ dnbinom_torch((r_mean_ha+0.001)[mask], y[, tmp_index,,j][mask], theta$abs())$mean()*(weights[j]+0.0001)
+                }
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
-                #if(as.logical(mask$max()$data())) loss[j-1] = loss[j-1]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j-1]+0.0001)
+                #if(as.logical(mask$max()$data())) loss[j] = loss[j]+torch::nnf_mse_loss(y[, tmp_index,,j][mask], Result[[j]][,i,][mask])$mean()*(weights[j]+0.0001)
                 if(as.logical(mask$max()$data())) {
-                loss[j-1] = loss[j-1]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j-1]+0.0001) + 0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
-                #loss[j-1] = loss[j-1]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
+                loss[j] = loss[j]+ torch::distr_normal(Result[[j]][,i,][mask],  self$parameters[[paste0("scale_",j)]]$relu()+0.0001)$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j]+0.0001) +
+                  0.01*(self$parameters[[paste0("scale_",j)]]$relu()+0.0001)**2
+                #loss[j] = loss[j]+ torch::nnf_mse_loss(Result[[j]][,i,][mask],  y[, tmp_index,,j][mask])
                 }
 
               }
             }
             loss$sum()$backward()
+
+            error = tryCatch({.null = torch::nn_utils_clip_grad_norm_(self$parameters, 1.0)}, error = function(error) error)
+            if(inherits(error,"error")) browser()
           }
 
           # cat("Backprop....\n")
@@ -964,7 +985,7 @@ FINNModel = R6::R6Class(
         for(epoch in 1:epochs){
           counter = 1
           coro::loop(for (b in DataLoader) {
-            batch_loss = matrix(NA, nrow = 10000, ncol = 6L)
+            batch_loss = matrix(NA, nrow = 10000, ncol = 7L)
             x_mort = b[[1]]$to(device = self$device, non_blocking=TRUE)
             x_growth = b[[2]]$to(device = self$device, non_blocking=TRUE)
             x_reg = b[[3]]$to(device = self$device, non_blocking=TRUE)
@@ -1003,6 +1024,14 @@ FINNModel = R6::R6Class(
                                     year_sequence = year_sequence)
             pred = pred_tmp[[1]]
             loss = pred_tmp[[2]]
+
+            # cat("\nParameters: ")
+            # .null = sapply(self$parameters, function(p) print(p))
+            #
+            # cat("\nGradients: ")
+            # .null = sapply(self$parameters, function(p) print(p$grad))
+
+            .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
 
             self$optimizer$step()
             batch_loss[counter, ] =  as.numeric(loss$data()$cpu())

@@ -13,7 +13,8 @@ createProcess(
   optimizeSpecies = FALSE,
   optimizeEnv = TRUE,
   inputNN = NULL,
-  outputNN = NULL
+  outputNN = NULL,
+  dispersion_parameter = NULL
 )
 }
 \arguments{
@@ -30,6 +31,8 @@ createProcess(
 \item{inputNN}{input dimension for NN, default is inferred from the formula. See details}
 
 \item{outputNN}{output dimension for NN, default is the number of species. See details}
+
+\item{dispersion_parameter}{init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).}
 
 \item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 }
