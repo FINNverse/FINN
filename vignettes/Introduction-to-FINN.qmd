@@ -181,7 +181,8 @@ for(i in c("patches_1", "patches_100")){
                 "Available Light [%]", "Growth [cm/yr]", "Mortality [%]", 
                 "Reg. Count [N/ha]", "Reg. Mean [N/ha]")
     ),]
-  p_dat[variable %in% c("ba", "trees", "reg"), value := value/patch_size,]
+  # p_dat[variable %in% c("ba", "trees", "reg"), value := value/patch_size,]
+  p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
   p <- ggplot(p_dat, aes(x = year, y = value, color = factor(species))) +
   geom_line() +
   theme_minimal() +
