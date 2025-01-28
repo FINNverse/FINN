@@ -847,8 +847,6 @@ FINNModel = R6::R6Class(
             }
             loss$sum()$backward()
 
-            error = tryCatch({.null = torch::nn_utils_clip_grad_norm_(self$parameters, 1.0)}, error = function(error) error)
-            if(inherits(error,"error")) browser()
           }
 
           # cat("Backprop....\n")
