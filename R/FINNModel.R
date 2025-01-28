@@ -247,9 +247,8 @@ FINNModel = R6::R6Class(
 
       # ###### Defaults #####
       if(is.null(speciesPars_ranges)) speciesPars_ranges = default_speciesPars_ranges
-
       # initialize with similar light parameters if none or not all are given
-      allPars = list(parGrowth, parMort, parReg)
+      allPars = list(parComp, parGrowth, parMort, parReg)
       notNullPars = sapply(allPars, function(x) !is.null(x))
       if(any(notNullPars) & !all(notNullPars)){
         initLight = rowMeans(sapply(allPars[notNullPars], function(x) as.matrix(x)[,1]))
@@ -260,7 +259,7 @@ FINNModel = R6::R6Class(
       }
 
       if(is.null(parComp)) parComp = cbind(
-        runif(sp, min = 0.3, 0.7),
+        initLight,
         runif(sp, min = 0.2, 0.2) # 0.2 corresponds to 0 light at 50m2/ha basal area
       )
       if(is.null(parGrowth)) parGrowth = cbind(
@@ -271,7 +270,8 @@ FINNModel = R6::R6Class(
         initLight,
         runif(sp, min = 1, 4)
       )
-      if(is.null(parReg)) parReg = initLight
+      if(is.null(parReg)) parReg = as.vector(initLight)
+      self$speciesPars_ranges = speciesPars_ranges
 
       # if(!is.null(speciesPars_ranges)){
       checkParInput(
