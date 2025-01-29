@@ -792,6 +792,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$optimizeEnv = optimizeEnv
   out$inputNN = inputNN
   out$outputNN = outputNN
+  out$dispersion_parameter = dispersion_parameter
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }
