@@ -1,7 +1,7 @@
 Package: FINN
 Type: Package
 Title: Forest Informed Neural Networks
-Version: 0.0.900
+Version: 0.1.000
 Authors@R: 
     c(person(given = "Maximilian",
              family = "Pichler",

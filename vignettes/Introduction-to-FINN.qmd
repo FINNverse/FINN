@@ -143,7 +143,7 @@ predictions[["patches_1"]] =
                  competitionProcess = createProcess(func = competition, initSpecies = parComp),
                  growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
                  mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
-                 regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg),
+                 regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg, dispersion_parameter = 0.1),
                  debug = FALSE
                  )
 
@@ -155,7 +155,7 @@ predictions[["patches_100"]] =
                  competitionProcess = createProcess(func = competition, initSpecies = parComp),
                  growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
                  mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
-                 regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg),
+                 regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg, dispersion_parameter = 0.1),
                  debug = F
                  )
 
