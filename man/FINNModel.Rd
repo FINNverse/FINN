@@ -180,6 +180,7 @@ Initializes the FINNModel model with the specified parameters.
   parMortEnv = NULL,
   parRegEnv = NULL,
   parThetaReg = NULL,
+  sample_regeneration = TRUE,
   nnRegEnv = NULL,
   nnGrowthEnv = NULL,
   nnMortEnv = NULL,

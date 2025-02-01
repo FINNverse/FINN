@@ -219,6 +219,7 @@ FINNModel = R6::R6Class(
                   parMortEnv = NULL, # must be dim [species, 2], first for shade tolerance,
                   parRegEnv = NULL, # must be dim [species]
                   parThetaReg = NULL,
+                  sample_regeneration = TRUE,
                   nnRegEnv = NULL,
                   nnGrowthEnv = NULL,
                   nnMortEnv = NULL,
@@ -300,6 +301,7 @@ FINNModel = R6::R6Class(
       self$parMort = self$setPars(parMort, speciesPars_ranges$parMort)
       self$parReg = self$setPars(parReg, speciesPars_ranges$parReg)
       self$parComp = self$setPars(parComp, speciesPars_ranges$parComp)
+      self$sample_regeneration = sample_regeneration
 
       self$parGrowthEnv = parGrowthEnv
       self$parMortEnv = parMortEnv
@@ -643,11 +645,18 @@ FINNModel = R6::R6Class(
 
         r_mean_patch = r_mean_ha*self$patch_size_ha
 
-        theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
+        if(self$sample_regeneration) {
+
+          theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
         #r = sample_poisson_gaussian(r_mean_ha)
-        r = rnbinom_torch(r_mean_patch, theta$abs())
+          r = rnbinom_torch(r_mean_patch, theta$abs())
         # ein nummerischer Trick um den Gradienten für die Zahlen beim Runden zu behalten
+        } else {
+          r = r_mean_patch
+        }
+
         r = r + r$round()$detach() - r$detach()
+
 
         # print("Mort:")
         # print(r)
@@ -841,9 +850,16 @@ FINNModel = R6::R6Class(
               } else if(j == 7) {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()
                 if(as.logical(mask$max()$data()))  {
-                  theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
+
+                  if(self$sample_regeneration) {
+
+                    theta = 1.0/(torch::nnf_softplus(self$parameters[["theta_reg"]])+0.0001)
                   # torch::distr_poisson((r_mean_ha+0.001)[mask])$log_prob(y[, tmp_index,,j][mask])$mean()$negative()*(weights[j]+0.0001)
-                  loss[j] = loss[j]+ dnbinom_torch((r_mean_ha+0.001)[mask], y[, tmp_index,,j][mask], theta$abs())$mean()*(weights[j]+0.0001)
+                    loss[j] = loss[j]+ dnbinom_torch((r_mean_ha+0.001)[mask], y[, tmp_index,,j][mask], theta$abs())$mean()*(weights[j]+0.0001)
+
+                  } else {
+                    loss[j] = loss[j] + torch::nnf_mse_loss(r_mean_ha[mask],  y[, tmp_index,,j][mask] )
+                  }
                 }
               } else {
                 mask = y[, tmp_index,,j]$isnan()$bitwise_not()

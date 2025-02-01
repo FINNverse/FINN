@@ -314,6 +314,7 @@ finn = function(data = NULL,
                         parReg = regenerationProcess$initSpecies,
                         parComp = competitionProcess$initSpecies,
                         parThetaReg = regenerationProcess$dispersion_parameter,
+                        sample_regeneration = regenerationProcess$sample_regeneration,
                         # parHeight = height,
                         parGrowthEnv = growthProcess$initEnv,
                         parMortEnv = mortalityProcess$initEnv,
@@ -412,6 +413,8 @@ finn = function(data = NULL,
                                     parMort = mortalityProcess$initSpecies,
                                     parReg = regenerationProcess$initSpecies,
                                     parComp = competitionProcess$initSpecies,
+                                    parThetaReg = regenerationProcess$dispersion_parameter,
+                                    sample_regeneration = regenerationProcess$sample_regeneration,
                                     # parHeight = height,
                                     parGrowthEnv = growthProcess$initEnv,
                                     parMortEnv = mortalityProcess$initEnv,
@@ -489,6 +492,8 @@ finn = function(data = NULL,
                                     parGrowth = growthProcess$initSpecies,
                                     parMort = mortalityProcess$initSpecies,
                                     parReg = regenerationProcess$initSpecies,
+                                    parThetaReg = regenerationProcess$dispersion_parameter,
+                                    sample_regeneration = regenerationProcess$sample_regeneration,
                                     parComp = competitionProcess$initSpecies,
                                     # parHeight = height,
                                     parGrowthEnv = growthProcess$initEnv,
@@ -763,6 +768,7 @@ plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
 #' @param inputNN input dimension for NN, default is inferred from the formula. See details
 #' @param outputNN output dimension for NN, default is the number of species. See details
 #' @param dispersion_parameter init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).
+#' @param sample_regeneration sample regeneration rate or not. If not, loss will be calculated via mse.
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -770,7 +776,7 @@ plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = NULL, sample_regeneration = TRUE) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -793,6 +799,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$inputNN = inputNN
   out$outputNN = outputNN
   out$dispersion_parameter = dispersion_parameter
+  out$sample_regeneration = sample_regeneration
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }
@@ -986,6 +993,7 @@ simulateForest = function(env,
                         parMort = mortalityProcess$initSpecies,
                         parReg = regenerationProcess$initSpecies,
                         parThetaReg = regenerationProcess$dispersion_parameter,
+                        sample_regeneration = regenerationProcess$sample_regeneration,
                         # parHeight = height,
                         parComp = competitionProcess$initSpecies,
                         parGrowthEnv = growthProcess$initEnv,

@@ -14,7 +14,8 @@ createProcess(
   optimizeEnv = TRUE,
   inputNN = NULL,
   outputNN = NULL,
-  dispersion_parameter = NULL
+  dispersion_parameter = NULL,
+  sample_regeneration = TRUE
 )
 }
 \arguments{
@@ -33,6 +34,8 @@ createProcess(
 \item{outputNN}{output dimension for NN, default is the number of species. See details}
 
 \item{dispersion_parameter}{init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).}
+
+\item{sample_regeneration}{sample regeneration rate or not. If not, loss will be calculated via mse.}
 
 \item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 }
