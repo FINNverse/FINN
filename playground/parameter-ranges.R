@@ -130,9 +130,11 @@ for(i in 1:length(test_set_list)){
           siteID = i_site,
           patchID = 1:dim(comp_out)[2],
           cohortID = i_cohort,
-          height = as.vector(torch::as_array(cohortHeights)[i_site,,i_cohort,]),
-          ba = as.vector(torch::as_array(ba)[i_site,,i_cohort]),
-          comp = as.vector(torch::as_array(comp_out)[i_site,,i_cohort])
+          cohort_height = as.vector(torch::as_array(cohortHeights)[i_site,,i_cohort,]),
+          cohorts_ba = as.vector(torch::as_array(ba)[i_site,,i_cohort]),
+          cohort_comp = as.vector(torch::as_array(comp_out)[i_site,,i_cohort]),
+          cohort_dbh = as.vector(torch::as_array(i_test_set$cohorts$dbh)[i_site,,i_cohort]),
+          cohort_species = as.vector(torch::as_array(i_test_set$cohorts$species)[i_site,,i_cohort])
         )
       )
     }
@@ -145,6 +147,14 @@ for(i in 1:length(test_set_list)){
   cat(i, "finished\n")
 }
 out_dt2 <- merge(test_cohorts_dt, out_dt, by = c("siteID"))
+
+
+unique(out_dt2$dbh)
+ggplot(out_dt2[dbh < 40], aes(x = cohort_dbh, y = cohort_comp))+
+  geom_point()+
+  facet_wrap(~cohort_species)+
+  geom_smooth(se = F)
+
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## Growth ####
