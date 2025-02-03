@@ -187,6 +187,9 @@ Initializes the FINNModel model with the specified parameters.
   hidden_growth = list(),
   hidden_mort = list(),
   hidden_reg = list(),
+  NN_growth = NULL,
+  NN_mort = NULL,
+  NN_reg = NULL,
   runEnvGrowth = TRUE,
   runEnvMort = TRUE,
   runEnvReg = TRUE,
@@ -241,6 +244,12 @@ Initializes the FINNModel model with the specified parameters.
 \item{\code{hidden_mort}}{list. Hidden layers for the mortality model.}
 
 \item{\code{hidden_reg}}{list. Hidden layers for the regeneration model.}
+
+\item{\code{NN_growth}}{custom NN}
+
+\item{\code{NN_mort}}{custom NN}
+
+\item{\code{NN_reg}}{custom NN}
 
 \item{\code{runEnvGrowth}}{logical. Should the runEnvGrowth NN be run outside of the process functions on the environment.}
 

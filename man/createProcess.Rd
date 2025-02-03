@@ -15,7 +15,8 @@ createProcess(
   inputNN = NULL,
   outputNN = NULL,
   dispersion_parameter = NULL,
-  sample_regeneration = TRUE
+  sample_regeneration = TRUE,
+  NN = NULL
 )
 }
 \arguments{
@@ -36,6 +37,8 @@ createProcess(
 \item{dispersion_parameter}{init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).}
 
 \item{sample_regeneration}{sample regeneration rate or not. If not, loss will be calculated via mse.}
+
+\item{NN}{pass custom NN to model}
 
 \item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 }

@@ -170,6 +170,10 @@ FINNModel = R6::R6Class(
     #' Time points for loss calculation
     year_sequence = NULL,
 
+    g = NULL,
+
+    m = NULL,
+
     #' @description
     #' Initializes the FINNModel model with the specified parameters.
     #' @param sp integer. Number of species.
@@ -191,6 +195,9 @@ FINNModel = R6::R6Class(
     #' @param hidden_growth list. Hidden layers for the growth model.
     #' @param hidden_mort list. Hidden layers for the mortality model.
     #' @param hidden_reg list. Hidden layers for the regeneration model.
+    #' @param NN_growth custom NN
+    #' @param NN_mort custom NN
+    #' @param NN_reg custom NN
     #' @param runEnvGrowth logical. Should the runEnvGrowth NN be run outside of the process functions on the environment.
     #' @param runEnvMort logical. Should the runEnvMort NN be run outside of the process functions on the environment.
     #' @param runEnvReg logical. Should the runEnvReg NN be run outside of the process functions on the environment.
@@ -226,6 +233,9 @@ FINNModel = R6::R6Class(
                   hidden_growth = list(),
                   hidden_mort = list(),
                   hidden_reg = list(),
+                  NN_growth = NULL,
+                  NN_mort = NULL,
+                  NN_reg = NULL,
                   runEnvGrowth = TRUE,
                   runEnvMort = TRUE,
                   runEnvReg = TRUE,
@@ -325,14 +335,26 @@ FINNModel = R6::R6Class(
       if(is.null(output)) output = c(sp, sp, sp)
       self$output = output
 
-      self$nnMortConfig = list(input_shape=env[1], output_shape=output[1], hidden=hidden_mort, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
-      self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
+      if(is.null(NN_mort)) {
+        self$nnMortConfig = list(input_shape=env[1], output_shape=output[1], hidden=hidden_mort, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
+        self$nnMortEnv = do.call(self$build_NN, self$nnMortConfig)
+      } else {
+        self$nnMortEnv = NN_mort
+      }
 
-      self$nnGrowthConfig = list(input_shape=env[2], output_shape=output[2], hidden=hidden_growth, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
-      self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
+      if(is.null(NN_growth)) {
+        self$nnGrowthConfig = list(input_shape=env[2], output_shape=output[2], hidden=hidden_growth, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
+        self$nnGrowthEnv = do.call(self$build_NN, self$nnGrowthConfig)
+      } else {
+        self$nnGrowthEnv = NN_growth
+      }
 
-      self$nnRegConfig = list(input_shape=env[3], output_shape=output[3], hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
-      self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
+      if(is.null(NN_reg)) {
+        self$nnRegConfig = list(input_shape=env[3], output_shape=output[3], hidden=hidden_reg, activation="selu", bias=bias, dropout=-99, last_activation = "linear")
+        self$nnRegEnv = do.call(self$build_NN, self$nnRegConfig)
+      } else {
+        self$nnRegEnv = NN_reg
+      }
 
       if(!is.null(parGrowthEnv)) self$set_weights_nnGrowthEnv(parGrowthEnv)
       if(!is.null(parMortEnv)) self$set_weights_nnMortEnv(parMortEnv)
@@ -504,6 +526,8 @@ FINNModel = R6::R6Class(
         if(self$runEnvReg) predRegGlobal = self$nnRegEnv(env[["reg"]])
       }
 
+
+
       # create process bar
       if(verbose) cli::cli_progress_bar(format = "Year: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} ", total = time, clear = FALSE)
 
@@ -583,6 +607,7 @@ FINNModel = R6::R6Class(
             pred = pred,
             light = light
           )
+          self$g = g
           # print("Mort:")
           # print(g)
           # print("++++")
@@ -613,6 +638,7 @@ FINNModel = R6::R6Class(
             pred = pred,
             light = light
           )
+          self$m = m
           trees_dead = binomial_from_gamma(trees+trees$le(0.5)$float(), m+0.001)*trees$ge(0.5)$float()
           trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
           trees_before = trees

@@ -287,6 +287,16 @@ finn = function(data = NULL,
     runEnvReg = FALSE
   }
 
+  if(!is.null(mortalityProcess$NN)) {
+    runEnvMort = FALSE
+  }
+  if(!is.null(growthProcess$NN)) {
+    runEnvGrowth = FALSE
+  }
+  if(!is.null(regenerationProcess$NN)) {
+    runEnvReg = FALSE
+  }
+
   out$input_dimensions = input_dimensions
   output = c(sp, sp, sp)
   if(!is.null(mortalityProcess$outputNN)) output[1] = mortalityProcess$outputNN
@@ -302,6 +312,11 @@ finn = function(data = NULL,
                         hidden_growth = growthProcess$hidden,
                         hidden_mort = mortalityProcess$hidden,
                         hidden_reg = regenerationProcess$hidden,
+
+                        NN_growth = growthProcess$NN,
+                        NN_mort = mortalityProcess$NN,
+                        NN_reg = regenerationProcess$NN,
+
                         runEnvGrowth = runEnvGrowth,
                         runEnvMort = runEnvMort,
                         runEnvReg = runEnvReg,
@@ -402,6 +417,9 @@ finn = function(data = NULL,
                                     hidden_growth = growthProcess$hidden,
                                     hidden_mort = mortalityProcess$hidden,
                                     hidden_reg = regenerationProcess$hidden,
+                                    NN_growth = growthProcess$NN,
+                                    NN_mort = mortalityProcess$NN,
+                                    NN_reg = regenerationProcess$NN,
                                     runEnvGrowth = runEnvGrowth,
                                     runEnvMort = runEnvMort,
                                     runEnvReg = runEnvReg,
@@ -482,6 +500,9 @@ finn = function(data = NULL,
                                     hidden_growth = growthProcess$hidden,
                                     hidden_mort = mortalityProcess$hidden,
                                     hidden_reg = regenerationProcess$hidden,
+                                    NN_growth = growthProcess$NN,
+                                    NN_mort = mortalityProcess$NN,
+                                    NN_reg = regenerationProcess$NN,
                                     runEnvGrowth = runEnvGrowth,
                                     runEnvMort = runEnvMort,
                                     runEnvReg = runEnvReg,
@@ -564,6 +585,10 @@ finn = function(data = NULL,
 predict.finnModel = function(object, init = NULL, env = NULL, disturbance = NULL, ...) {
   object$model$check()
   object$init$check()
+
+  object$model$nnGrowthEnv$eval()
+  object$model$nnMortEnv$eval()
+  object$model$nnRegEnv$eval()
 
   if(is.null(env)) {
     mortality_env = object$env$mortality_env
@@ -769,6 +794,7 @@ plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
 #' @param outputNN output dimension for NN, default is the number of species. See details
 #' @param dispersion_parameter init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).
 #' @param sample_regeneration sample regeneration rate or not. If not, loss will be calculated via mse.
+#' @param NN pass custom NN to model
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -776,7 +802,7 @@ plot.finnModel = function(x,  plot = c("predictions", "loss"),...) {
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = NULL, sample_regeneration = TRUE) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = NULL, sample_regeneration = TRUE, NN = NULL) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -800,6 +826,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$outputNN = outputNN
   out$dispersion_parameter = dispersion_parameter
   out$sample_regeneration = sample_regeneration
+  out$NN = NN
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }
@@ -982,6 +1009,9 @@ simulateForest = function(env,
                         hidden_growth = growthProcess$hidden,
                         hidden_mort = mortalityProcess$hidden,
                         hidden_reg = regenerationProcess$hidden,
+                        NN_growth = growthProcess$NN,
+                        NN_mort = mortalityProcess$NN,
+                        NN_reg = regenerationProcess$NN,
                         runEnvGrowth = runEnvGrowth,
                         runEnvMort = runEnvMort,
                         runEnvReg = runEnvReg,
