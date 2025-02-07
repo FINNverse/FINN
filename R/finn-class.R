@@ -120,9 +120,9 @@ finn = nn_module(
 
     # if simulation mode, environmental predictions can be made a priori (it would interrupt the gradients in inference mode)
     if(is.null(y)) {
-      predGrowthGlobal = self$nn_growth(env[["growth"]])
-      predMortGlobal = self$nn_mortality(env[["mort"]])
-      predRegGlobal = self$nn_regeneration(env[["reg"]])
+      if(!inherits(self$process_growth, "hybrid")) predGrowthGlobal = self$nn_growth(env[["growth"]])
+      if(!inherits(self$process_mortality, "hybrid")) predMortGlobal = self$nn_mortality(env[["mort"]])
+      if(!inherits(self$process_regeneration, "hybrid")) predRegGlobal = self$nn_regeneration(env[["reg"]])
     }
 
     # create process bar
@@ -132,13 +132,13 @@ finn = nn_module(
       # In inference mode, make env predictions in each time step (to get the gradients)
       # otherwise, just take the i-th prediction
       if(!is.null(y)) {
-        pred_growth = self$nn_growth(env[["growth"]][,i,])
-        pred_mort = self$nn_mortality(env[["mort"]][,i,])
-        pred_reg = self$nn_regeneration(env[["reg"]][,i,])
+        if(!inherits(self$process_growth, "hybrid")) pred_growth = self$nn_growth(env[["growth"]][,i,])
+        if(!inherits(self$process_mortality, "hybrid")) pred_mort = self$nn_mortality(env[["mort"]][,i,])
+        if(!inherits(self$process_regeneration, "hybrid")) pred_reg = self$nn_regeneration(env[["reg"]][,i,])
       } else {
-        pred_growth = predGrowthGlobal[,i,]
-        pred_mort = predMortGlobal[,i,]
-        pred_reg = predRegGlobal[,i,]
+        if(!inherits(self$process_growth, "hybrid")) pred_growth = predGrowthGlobal[,i,]
+        if(!inherits(self$process_mortality, "hybrid")) pred_mort = predMortGlobal[,i,]
+        if(!inherits(self$process_regeneration, "hybrid")) pred_reg = predRegGlobal[,i,]
       }
 
       # empty rate objects/tensors
@@ -181,14 +181,17 @@ finn = nn_module(
         if (light$gt(1.0)$sum()$item() > 0) {
           stop("Light values > 1")
         }
-        pred = index_species(pred_growth, species)
+
+        if(!inherits(self$process_growth, "hybrid")) pred = index_species(pred_growth, species)
+        else pred = env[[1]][,i,]
 
         g = self$growth_func(
           dbh = dbh,
           species = species,
           parGrowth = self$par_growth,
           pred = pred,
-          light = light
+          light = light,
+          trees = trees
         )
         self$g = g
         dbh_growth = dbh*g
@@ -207,8 +210,8 @@ finn = nn_module(
         )
         # cat("Second section  B2\n")
 
-        pred = index_species(pred_mort, species)
-        #else pred = env[[2]][,i,]
+        if(!inherits(self$process_mortality, "hybrid")) pred = index_species(pred_mort, species)
+        else pred = env[[2]][,i,]
 
         m = self$mortality_func(
           dbh = dbh,
@@ -241,8 +244,9 @@ finn = nn_module(
         cohortHeights = NULL
       )
 
-      pred = pred_reg
-      #else pred = env[["reg"]][,i,]
+      if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
+      else pred = env[["reg"]][,i,]
+
       r_mean_ha = self$regeneration_func(species = species,
                                             parReg = self$par_regeneration[,1],
                                             pred = pred,
@@ -536,6 +540,8 @@ finn = nn_module(
       )
     }
 
+    self$eval()
+
     DataLoader = torch::dataloader(data, batch_size=batchsize, shuffle=FALSE, num_workers=0, pin_memory=TRUE, drop_last=FALSE)
 
     predictions_batch = list()
@@ -691,6 +697,8 @@ finn = nn_module(
       #httpgd::hgd_view()
     }
 
+    self$train()
+
     for(epoch in 1:epochs){
       counter = 1
       coro::loop(for (b in DataLoader) {
@@ -741,7 +749,7 @@ finn = nn_module(
       })
 
       # too expensive with many parameters
-      self$param_history = c(self$param_history, list(lapply(self$parameters, function(p) as.matrix(p$cpu()))))
+      if(epochs %% checkpoints == 0) self$param_history = c(self$param_history, list(lapply(self$parameters, function(p) as.matrix(p$cpu()))))
 
       bl = colMeans(batch_loss, na.rm = TRUE)
       bl = round(bl, 5)
@@ -872,13 +880,41 @@ finn = nn_module(
     },
 
     create_nn = function(obj, type, inputs) {
+      hybrid = inherits(obj, "hybrid")
       if(is.null(self[[paste0("nn_", type)]])) {
-        nn =
-          if(is.null(obj$NN)) build_NN(input_shape = inputs, output_shape = self$N_species, bias = TRUE, activation = "selu", hidden = obj$hidden, dropout = obj$dropout, last_activation = "linear")
-          else nn
+        if(!hybrid) {
+          nn =
+            if(is.null(obj$NN)) build_NN(input_shape = inputs, output_shape = self$N_species, bias = TRUE, activation = "selu", hidden = obj$hidden, dropout = obj$dropout, last_activation = "linear")
+            else nn
 
-        if(!is.null(obj$initEnv)) {
-          for(i in 1:length(nn$parameters)) nn$parameters[[i]]$set_data( obj$initEnv[[i]] )
+          if(!is.null(obj$initEnv)) {
+            for(i in 1:length(nn$parameters)) nn$parameters[[i]]$set_data( obj$initEnv[[i]] )
+          }
+
+        } else {
+          if(type == "mortality") {
+            nn = hybrid_transformer(num_species = self$N_species,
+                                    num_env_vars = inputs,
+                                    dgtl_embedder_dim = 4L,
+                                    max_len = 500L,
+                                    emb_dim=10L,
+                                    num_heads=1L,
+                                    num_layers=obj$encoder_layers,
+                                    dropout=0.1,
+                                    dim_feedforward = 256L)
+          }
+
+          if(type == "growth") {
+            nn = hybrid_transformer(num_species = self$N_species,
+                                    num_env_vars = inputs,
+                                    dgtl_embedder_dim = 3L,
+                                    max_len = 500L,
+                                    emb_dim=10L,
+                                    num_heads=1L,
+                                    num_layers=obj$encoder_layers,
+                                    dropout=0.1,
+                                    dim_feedforward = 256L)
+          }
         }
 
         if(!obj$optimizeEnv) {
@@ -897,11 +933,21 @@ finn = nn_module(
 
     add_process = function(obj, type = c("mortality", "growth", "regeneration", "competition")) {
       type = match.arg(type)
+
+      hybrid = FALSE
+      if(inherits(obj, "hybrid")) {
+        hybrid = TRUE
+        func = switch(type, growth= { growth_hybrid }, mortality = { mortality_hybrid })
+        obj$func = func
+
+      }
+
       if(is.null(obj)) {
         func = switch(type, mortality = { mortality }, growth = { growth }, regeneration = {regeneration}, competition = { competition })
         obj = createProcess(func = func)
       }
-      private$setup_species_parameters(obj, type)
+
+      private$setup_species_parameters(obj, type, hybrid)
 
       # Train env model or not
       self[[paste0("env_", type, "_optimized")]] = obj$optimizeEnv
@@ -913,13 +959,15 @@ finn = nn_module(
       }
 
     },
-    setup_species_parameters = function(obj, type) {
+    setup_species_parameters = function(obj, type, hybrid) {
       self[[paste0(type, "_func")]] = private$set_environment(obj$func)
       self[[paste0(type, "_formula")]] = obj$formula
       self[[paste0("par_", type, "_upper")]] = get_par_boundary(obj, type, upper = TRUE)
       self[[paste0("par_", type, "_lower")]] = get_par_boundary(obj, type, upper = FALSE)
 
       self[[paste0("par_", type, "_optimized")]] = obj$optimizeSpecies
+
+      # to keep things simple, in case of hybrid, we will just ignore the species parameters for now....TODO!
 
       # if null, random initialisierung
       # else recalclate from init values the required values

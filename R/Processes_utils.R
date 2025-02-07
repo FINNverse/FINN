@@ -63,6 +63,49 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 }
 
 
+#' Create a hybrid model Object
+#'
+#' This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
+#'
+#' @param formula An optional formula specifying the structure of the model. Default is `NULL`, which results in the formula `~.` being used.
+#' @param optimize Logical indicating whether the process function should be optimized. Default is `FALSE`.
+#' @param hidden A list specifying the hidden layers for neural network models. Default is an empty list.
+#' @param dispersion_parameter init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).
+#' @param NN pass custom NN to model
+#' @param dropout dropout rate of neural networks
+#'
+#' @return A list of class "process" containing the process definition and associated parameters.
+#'
+#' @examples
+#' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
+#'
+#' @export
+createHybrid = function(formula = NULL, hidden = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.0, encoder_layers = 1L) {
+  out = list()
+  if(!is.null(formula)){
+    mf = match.call()
+    m = match("formula", names(mf))
+    if(inherits(mf[3]$formula, "name")) mf[3]$formula = eval(mf[3]$formula, envir = parent.env(environment()))
+    formula = stats::as.formula(mf[m]$formula)
+    #X = stats::model.matrix(formula, data)
+  } else {
+    formula = stats::as.formula("~.")
+    #X = stats::model.matrix(formula, data)
+  }
+
+  out$formula = formula
+  out$custom = TRUE
+  out$optimizeSpecies = FALSE
+  out$optimizeEnv = optimize
+  out$dispersion_parameter = dispersion_parameter
+  out$NN = NN
+  out$dropout = dropout
+  out$encoder_layers = encoder_layers
+  out$hidden = hidden
+  class(out) = "hybrid"
+  return(out)
+}
+
 #' Extract Environmental Data for a Process
 #'
 #' This function extracts and transforms environmental data according to a specified process object. The environmental data is formatted into an array suitable for input into the simulation model.

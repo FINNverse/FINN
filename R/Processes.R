@@ -198,6 +198,13 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 
 
 
+mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F) {
+  m = self$nn_mortality(dbh = dbh, growth = self$g, trees = trees, light = light, species = species, env = pred)$sigmoid()
+  return(m)
+}
+
+
+
 #' Calculate growth
 #'
 #' This function calculates growth BA_stemsed on specified parameters.
@@ -214,7 +221,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 #' @import torch
 #'
 #' @export
-growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F){
+growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL){
   shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
          (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
 
@@ -224,6 +231,13 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment,growth = growth) else out = growth
   return(out)
 }
+
+
+growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+  g = self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)$exp()
+  return(g)
+}
+
 
 #' Calculate the regeneration of forest patches BA_stemsed on the input parameters.
 #'

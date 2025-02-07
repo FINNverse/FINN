@@ -4,7 +4,16 @@
 \alias{growth}
 \title{Calculate growth}
 \usage{
-growth(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F)
+growth(
+  dbh,
+  species,
+  parGrowth,
+  pred,
+  light,
+  light_steepness = 10,
+  debug = F,
+  trees = NULL
+)
 }
 \arguments{
 \item{dbh}{torch.Tensor Diameter at breast height.}
