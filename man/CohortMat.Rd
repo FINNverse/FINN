@@ -3,16 +3,48 @@
 \name{CohortMat}
 \alias{CohortMat}
 \title{Cohort Matrix Class}
-\description{
-Cohort Matrix Class
+\usage{
+CohortMat(
+  obs_df = NULL,
+  dbh = NULL,
+  trees = NULL,
+  species = NULL,
+  dims = c(50, 30, 10),
+  sp = 10,
+  device = "cpu"
+)
+}
+\arguments{
+\item{obs_df}{A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.}
 
-Cohort Matrix Class
+\item{dbh}{A tensor or array representing the diameter at breast height. Defaults to \code{self$dbh}.}
+
+\item{trees}{A tensor or array representing the number of trees. Defaults to \code{self$trees}.}
+
+\item{species}{A tensor or array representing the species. Defaults to \code{self$species}.}
+
+\item{dims}{A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to \code{self$dims}.}
+
+\item{sp}{An integer representing the number of species. Defaults to \code{self$sp}.}
+
+\item{device}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.
+@description
+
+Convert the tensors to a data frame format}
+
+\item{device_r}{Device as R character, internal useage}
+}
+\value{
+data.table object
+}
+\description{
+Initialize the CohortMat class
 }
 \details{
 An R6 class for managing cohorts of trees in forest models. This class allows for the initialization, transformation, and manipulation of cohorts represented by arrays of dbh, trees, and species.
 }
-\section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
+\section{Fields}{
+
 \describe{
 \item{\code{dbh}}{A tensor representing the diameter at breast height for each cohort.}
 
@@ -35,98 +67,5 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \item{\code{device_r}}{A character string specifying the device in R format ('cpu' or 'cuda').}
 
 \item{\code{obsDF2arrays}}{Transforms data.table into array}
-}
-\if{html}{\out{</div>}}
-}
-\section{Methods}{
-\subsection{Public methods}{
-\itemize{
-\item \href{#method-CohortMat-new}{\code{CohortMat$new()}}
-\item \href{#method-CohortMat-check}{\code{CohortMat$check()}}
-\item \href{#method-CohortMat-asDF}{\code{CohortMat$asDF()}}
-\item \href{#method-CohortMat-clone}{\code{CohortMat$clone()}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortMat-new"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortMat-new}{}}}
-\subsection{Method \code{new()}}{
-Initialize the CohortMat class
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortMat$new(
-  obs_df = NULL,
-  dbh = self$dbh,
-  trees = self$trees,
-  species = self$species,
-  dims = self$dims,
-  sp = self$sp,
-  device = self$device
-)}\if{html}{\out{</div>}}
-}
+}}
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{obs_df}}{A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.}
-
-\item{\code{dbh}}{A tensor or array representing the diameter at breast height. Defaults to \code{self$dbh}.}
-
-\item{\code{trees}}{A tensor or array representing the number of trees. Defaults to \code{self$trees}.}
-
-\item{\code{species}}{A tensor or array representing the species. Defaults to \code{self$species}.}
-
-\item{\code{dims}}{A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to \code{self$dims}.}
-
-\item{\code{sp}}{An integer representing the number of species. Defaults to \code{self$sp}.}
-
-\item{\code{device}}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortMat-check"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortMat-check}{}}}
-\subsection{Method \code{check()}}{
-Check if all tensors are initialized, if not, reinitialize them. Necessary after restarting r session or after loading the object into the session using \code{readRDS(..)} or \code{load(...)}
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortMat$check()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-nothing
-@description
-
-Convert the tensors to a data frame format
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortMat-asDF"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortMat-asDF}{}}}
-\subsection{Method \code{asDF()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortMat$asDF()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-data.table object
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortMat-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortMat-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortMat$clone(deep = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
-}

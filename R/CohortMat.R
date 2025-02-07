@@ -214,18 +214,7 @@ array2obsDF <- function(obs_array) {
 #' @param device_r Device as R character, internal useage
 #'
 #' @export
-CohortMat = R6::R6Class("CohortMat", public = list(
-  dbh = NULL,
-  trees = NULL,
-  species = NULL,
-  dbh_r = NULL,
-  trees_r = NULL,
-  species_r = NULL,
-  dims = c(50, 30, 10),
-  sp = 10,
-  device = 'cpu',
-  device_r = "cpu",
-  obsDF2arrays = NULL,
+CohortMat = torch::nn_module("CohortMat",
 
   #' @description
   #' Initialize the CohortMat class
@@ -236,7 +225,15 @@ CohortMat = R6::R6Class("CohortMat", public = list(
   #' @param dims A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to `self$dims`.
   #' @param sp An integer representing the number of species. Defaults to `self$sp`.
   #' @param device A character string specifying the device to use ('cpu' or 'cuda'). Defaults to `self$device`.
-  initialize = function(obs_df = NULL, dbh = self$dbh, trees = self$trees, species = self$species, dims = self$dims, sp = self$sp, device = self$device) {
+  initialize = function(obs_df = NULL, dbh = NULL, trees = NULL, species = NULL, dims =c(50, 30, 10), sp = 10, device = "cpu") {
+
+    self$dbh = dbh
+    self$trees = trees
+    self$species = species
+    self$dims = dims
+    self$sp = sp
+    self$device_r = device
+
     if (!is.null(obs_df)) {
       if (!all(c("siteID", "patchID", "species", "dbh", "trees") %in% colnames(obs_df)))
         stop('c("siteID", "patchID", "species", "dbh", "trees") %in% all(colnames(obs_df)) is not TRUE')
@@ -254,27 +251,10 @@ CohortMat = R6::R6Class("CohortMat", public = list(
     self$dims = dims
     self$sp = sp
     self$device_r = device
-    if (!("torch_device" %in% class(device))) self$device = torch::torch_device(device)
 
-    if (!inherits(self$dbh, "torch_tensor")) self$dbh = torch::torch_tensor(self$dbh, dtype = torch::torch_float32(), device = self$device)
-    if (!inherits(self$trees, "torch_tensor")) self$trees = torch::torch_tensor(self$trees, dtype = torch::torch_float32(), device = self$device)
-    if (!inherits(self$species, "torch_tensor")) self$species = torch::torch_tensor(self$species, dtype = torch::torch_int64(), device = self$device)
-
-    self$dbh_r = torch::as_array(self$dbh)
-    self$trees_r = torch::as_array(self$trees)
-    self$species_r = torch::as_array(self$species)
-  },
-
-  #' @description
-  #'
-  #' Check if all tensors are initialized, if not, reinitialize them. Necessary after restarting r session or after loading the object into the session using `readRDS(..)` or `load(...)`
-  #'
-  #' @return nothing
-  check = function() {
-    self$device = torch::torch_device(self$device_r)
-    self$dbh = check_and_recreate(self$dbh, self$dbh_r, dtype = torch::torch_float32(), device = self$device_r)
-    self$trees = check_and_recreate(self$trees, self$trees_r, dtype = torch::torch_float32(), device = self$device_r)
-    self$species = check_and_recreate(self$species, self$species_r, dtype = torch::torch_int64(), device = self$device_r)
+    if (!inherits(self$dbh, "torch_tensor")) self$register_buffer("dbh", torch::torch_tensor(self$dbh, dtype = torch::torch_float32()))
+    if (!inherits(self$trees, "torch_tensor")) self$register_buffer("trees", torch::torch_tensor(self$trees, dtype = torch::torch_float32()))
+    if (!inherits(self$species, "torch_tensor")) self$register_buffer("species", torch::torch_tensor(self$species, dtype = torch::torch_int64()))
   },
 
   #'  @description
@@ -284,5 +264,20 @@ CohortMat = R6::R6Class("CohortMat", public = list(
   #' @return data.table object
   asDF = function() {
     array2obsDF(list(dbh = torch::as_array(self$dbh), trees = torch::as_array(self$trees), species = torch::as_array(self$species)))
-  }
-))
+  },
+
+  active = list(
+    dbh_r = function(value) {
+      if(missing(value)) torch::as_array(self$dbh)
+      else self$register_buffer("dbh", torch::torch_tensor(value, dtype = torch::torch_float32()))
+    },
+    trees_r = function(value) {
+      if(missing(value)) torch::as_array(self$trees)
+      else self$register_buffer("trees", torch::torch_tensor(value, dtype = torch::torch_float32()))
+    },
+    species_r = function(value) {
+      if(missing(value)) torch::as_array(self$species)
+      else self$register_buffer("species", torch::torch_tensor(value, dtype = torch::torch_int64()))
+    }
+  )
+)

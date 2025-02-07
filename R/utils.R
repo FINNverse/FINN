@@ -1,3 +1,50 @@
+build_NN = function(input_shape,
+                    output_shape,
+                    hidden, # vector
+                    bias, # vector
+                    activation, # vector
+                    dropout,
+                    last_activation = "sigmoid") {
+
+  model_list <- list()
+  if (length(hidden) != length(activation)) {
+    activation <- rep(activation[1], length(hidden))
+  }
+
+  if (length(bias) == 1) {
+    bias <- rep(bias[1], length(hidden))
+  }
+  bias <- c(FALSE, bias)
+
+  if (length(hidden) > 0) {
+    for (i in 1:length(hidden)) {
+      if (i == 1) {
+        model_list <- c(model_list, torch::nn_linear(input_shape, hidden[i], bias = TRUE))
+      } else {
+        model_list <- c(model_list, torch::nn_linear(hidden[i - 1], hidden[i], bias = TRUE))
+      }
+      if (activation[i] == "relu") model_list <- c(model_list, torch::nn_relu())
+      if (activation[i] == "selu") model_list <- c(model_list, torch::nn_selu())
+      if (activation[i] == "leakyrelu") model_list <- c(model_list, torch::nn_leaky_relu())
+      if (activation[i] == "tanh") model_list <- c(model_list, torch::nn_tanh())
+      if (activation[i] == "sigmoid") model_list <- c(model_list, torch::nn_sigmoid())
+      if (dropout > 0.0) model_list <- c(model_list, torch::nn_dropout(p = dropout))
+    }
+  }
+
+  if (length(hidden) > 0) {
+    model_list <- c(model_list, torch::nn_linear(hidden[length(hidden)], output_shape, bias = TRUE))
+  } else {
+    model_list <- c(model_list, torch::nn_linear(input_shape, output_shape, bias = FALSE))
+  }
+  if (last_activation == "sigmoid") model_list <- c(model_list, torch::nn_sigmoid())
+  if (last_activation == "relu") model_list <- c(model_list, torch::nn_relu())
+  return(do.call(torch::nn_sequential, model_list))
+}
+
+
+
+
 #' Generate random numbers from a uniform distribution
 #'
 #' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.
