@@ -126,7 +126,7 @@ extract_env = function(formula, env) {
   return(env_array)
 }
 
-backward = function(value, upper, lower) stats::qlogis( t((t(value) - lower) / (upper - lower)) )
+backward = function(value, upper, lower) stats::qlogis( t((t(value) - as.numeric(lower)) / (as.numeric(upper) - as.numeric(lower)) ))
 forward =  function(value, upper, lower) torch::torch_sigmoid(value) * (upper - lower) + lower
 
 init_species_parameters = function(type, N_species){

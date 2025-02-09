@@ -962,8 +962,8 @@ finn = nn_module(
     setup_species_parameters = function(obj, type, hybrid) {
       self[[paste0(type, "_func")]] = private$set_environment(obj$func)
       self[[paste0(type, "_formula")]] = obj$formula
-      self[[paste0("par_", type, "_upper")]] = get_par_boundary(obj, type, upper = TRUE)
-      self[[paste0("par_", type, "_lower")]] = get_par_boundary(obj, type, upper = FALSE)
+      self$register_buffer(paste0("par_", type, "_upper"), torch::torch_tensor(get_par_boundary(obj, type, upper = TRUE)))
+      self$register_buffer(paste0("par_", type, "_lower"), torch::torch_tensor(get_par_boundary(obj, type, upper = FALSE)))
 
       self[[paste0("par_", type, "_optimized")]] = obj$optimizeSpecies
 
