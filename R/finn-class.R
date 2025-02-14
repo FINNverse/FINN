@@ -165,6 +165,7 @@ finn = nn_module(
       # check if there is at least one cohort alive (otherwise just jump directly to regeneration?)
       if(dbh$shape[3] > 0.5){
         # calculate available light for each cohort
+        ### Competition 1 ####
         light = self$competition_func(
           dbh = dbh,
           species = species,
@@ -182,6 +183,7 @@ finn = nn_module(
           stop("Light values > 1")
         }
 
+        ## Growth ####
         if(!inherits(self$process_growth, "hybrid")) pred = index_species(pred_growth, species)
         else pred = env[[1]][,i,]
 
@@ -197,6 +199,7 @@ finn = nn_module(
         dbh_growth = dbh*g
         dbh = dbh + dbh_growth
 
+        ## Competition 2 ####
         light = self$competition_func(
           dbh = dbh,
           species = species,
@@ -210,6 +213,7 @@ finn = nn_module(
         )
         # cat("Second section  B2\n")
 
+        ## Mortality ####
         if(!inherits(self$process_mortality, "hybrid")) pred = index_species(pred_mort, species)
         else pred = env[[2]][,i,]
 
@@ -231,6 +235,7 @@ finn = nn_module(
         trees = torch_clamp(trees - trees_dead, min = 0) #### TODO if trees = 0 then NA...prevent!
       }
 
+      ### Competition 3 ####
       # start reg
       AL_reg = self$competition_func( # must have dimension = n species in last dim
         dbh = dbh,
@@ -244,6 +249,7 @@ finn = nn_module(
         cohortHeights = NULL
       )
 
+      ### Regeneration ####
       if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
       else pred = env[["reg"]][,i,]
 
@@ -253,7 +259,13 @@ finn = nn_module(
                                             light = AL_reg)
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
-      r = rnbinom_torch(r_mean_patch, self$par_theta_recruits)
+
+      if(self$sample_regeneration){
+        r = rnbinom_torch(r_mean_patch, self$par_theta_recruits)
+      }else if(!self$sample_regeneration){
+        r = r_mean_patch
+      }
+
       r = r + r$round()$detach() - r$detach()
 
       # New recruits
@@ -967,11 +979,9 @@ finn = nn_module(
       self[[paste0("env_", type, "_optimized")]] = obj$optimizeEnv
       self[[paste0("process_", type)]] = obj
 
-      self$sample_regeneration = TRUE
-      if(type == "regeneration") self$sample_regeneration = obj$sample_regeneration
-
       # process specific parameters, e.g. theta for nbinom sampling of the recruits
       if(type == "regeneration") {
+        self$sample_regeneration = obj$sample_regeneration
         self$par_theta_recruits = obj$dispersion_parameter
       }
 
