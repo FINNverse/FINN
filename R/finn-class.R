@@ -498,7 +498,8 @@ finn = nn_module(
                       patch_size = 0.1,
                       init_cohort = NULL,
                       batchsize = NULL,
-                      device = c("cpu", "gpu")
+                      device = c("cpu", "gpu"),
+                      debug = FALSE
                       ) {
     device = match.arg(device)
     if(device == "gpu") device="cuda:0"
@@ -565,7 +566,8 @@ finn = nn_module(
                               species = species,
                               env = list(x_mort, x_growth, x_reg),
                               disturbance = dist,
-                              verbose = TRUE)
+                              verbose = TRUE,
+                              debug = debug)
       pred = pred_tmp[[1]]
       predictions_batch = append(predictions_batch, list(list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))))
 
@@ -574,6 +576,9 @@ finn = nn_module(
       list(long = list(site = rbindlist( lapply(predictions_batch, function(X) X$long$site ))),
            wide = list(site = rbindlist( lapply(predictions_batch, function(X) X$wide$site )))
       )
+    if(debug){
+      predictions = list(wide = pred2DF(pred_tmp, format = "wide"), long = pred2DF(pred_tmp, format = "long"))
+    }
     return(predictions)
 
   },
