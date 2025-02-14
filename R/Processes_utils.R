@@ -15,6 +15,7 @@
 #' @param upper upper boundaries of species parameters
 #' @param lower lower boundaries of species parameters
 #' @param dropout dropout rate of neural networks
+#' @param sample_regeneration sample recruits or not
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -22,7 +23,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()

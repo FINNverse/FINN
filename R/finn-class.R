@@ -221,8 +221,8 @@ finn = nn_module(
           pred = pred,
           light = light
         )
-        self$m = m
-        trees_dead = binomial_from_gamma(trees+trees$le(0.5)$float(), m+0.001)*trees$ge(0.5)$float()
+
+        trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
 
@@ -253,7 +253,6 @@ finn = nn_module(
                                             light = AL_reg)
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
-
       r = rnbinom_torch(r_mean_patch, self$par_theta_recruits)
       r = r + r$round()$detach() - r$detach()
 
@@ -407,6 +406,7 @@ finn = nn_module(
       }
 
       loss = torch_zeros(7L, device = self$device)
+
       ##### Rework #######
       if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
         if(i %in% year_sequence) {
@@ -430,6 +430,9 @@ finn = nn_module(
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2))
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,(i-period+1):(i),]$sum(2) )#(Result[[7]][,(i-period+1),] - Result[[7]][,i,])$clamp(min = 0.0)  )
+            self$obs_rec = y[,tmp_index,,6] |> as.matrix()
+            self$pred_rec = Result[[7]][,(i-period+1):(i),]$sum(2) |> as.matrix()
+            self$loss_raw = as.numeric(loss)
             loss$sum()$backward()
             for(j in 4:7) Result[[j]] = Result[[j]]$detach()
           } else {
@@ -438,6 +441,7 @@ finn = nn_module(
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,i,])
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,i,])
+            self$loss_raw = as.numeric(loss)
             loss$sum()$backward()
             for(j in 1:7) Result[[j]] = Result[[j]]$detach()
           }
@@ -594,6 +598,8 @@ finn = nn_module(
                  plot_progress = TRUE,
                  folder = NULL,
                  checkpoints = 100L,
+                 shuffle = TRUE,
+                 record_gradients = FALSE,
                  ...) {
 
     old_par = par(no.readonly = TRUE)
@@ -683,19 +689,15 @@ finn = nn_module(
       )
     }
 
-    DataLoader = torch::dataloader(data, batch_size=batchsize, shuffle=TRUE, num_workers=0, pin_memory=TRUE, drop_last=TRUE)
+    DataLoader = torch::dataloader(data, batch_size=batchsize, shuffle=shuffle, num_workers=0, pin_memory=TRUE, drop_last=TRUE)
 
     self$history = list()
+    self$gradients = list()
 
     self$optimizer = optimizer(self$parameters, lr = lr, ...)
 
     cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} DBH: {dbh_l} BA: {ba_l} Trees: {trees_l} g: {g_l} m: {m_l} r: {r_l}", total = epochs, clear = FALSE)
     if(is.null(year_sequence)) year_sequence = 1:envs[[1]]$shape[2]
-
-    if(plot_progress) {
-      # httpgd::hgd()
-      #httpgd::hgd_view()
-    }
 
     self$train()
 
@@ -743,13 +745,20 @@ finn = nn_module(
         .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
 
         self$optimizer$step()
+
         batch_loss[counter, ] =  as.numeric(loss$data()$cpu())
         counter <<- counter + 1
-
       })
 
       # too expensive with many parameters
-      if(epochs %% checkpoints == 0) self$param_history = c(self$param_history, list(lapply(self$parameters, function(p) as.matrix(p$cpu()))))
+      if(epoch %% checkpoints == 0) {
+        self$param_history = c(self$param_history, list(lapply(self$parameters, function(p) as.matrix(p$cpu()))))
+        if(record_gradients) {
+          self$gradients = c(self$gradients, list(lapply(self$parameters, function(p) {
+            if(prod(p$grad$shape) > 0.5) return(p$grad |> as.matrix())
+          })))
+        }
+      }
 
       bl = colMeans(batch_loss, na.rm = TRUE)
       bl = round(bl, 5)
@@ -952,6 +961,9 @@ finn = nn_module(
       # Train env model or not
       self[[paste0("env_", type, "_optimized")]] = obj$optimizeEnv
       self[[paste0("process_", type)]] = obj
+
+      self$sample_regeneration = TRUE
+      if(type == "regeneration") self$sample_regeneration = obj$sample_regeneration
 
       # process specific parameters, e.g. theta for nbinom sampling of the recruits
       if(type == "regeneration") {

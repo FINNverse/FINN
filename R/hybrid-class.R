@@ -39,15 +39,15 @@ hybrid_transformer = nn_module("hybrid_transformer",
 
                               if(!is.null(growth)) {
                                 cohort_context = torch_cat(list(
-                                  torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                  torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
                                   growth$view(c(-1L, orig_shape2))$unsqueeze(3L),
-                                  torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                  torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
                                   light$view(c(-1L, orig_shape2))$unsqueeze(3L)
                                 ), dim = 3L)
                               } else {
                                 cohort_context = torch_cat(list(
-                                  torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
-                                  torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                  torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
+                                  torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
                                   light$view(c(-1L, orig_shape2))$unsqueeze(3L)
                                 ), dim = 3L)
                               }
