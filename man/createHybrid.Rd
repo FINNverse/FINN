@@ -6,18 +6,19 @@
 \usage{
 createHybrid(
   formula = NULL,
-  hidden = NULL,
   optimize = TRUE,
   dispersion_parameter = 1,
   NN = NULL,
   dropout = 0,
-  encoder_layers = 1L
+  encoder_layers = 1L,
+  hidden = c(50L, 50L),
+  transformer = TRUE,
+  emb_dim = 20L,
+  dim_feedforward = 256L
 )
 }
 \arguments{
 \item{formula}{An optional formula specifying the structure of the model. Default is \code{NULL}, which results in the formula \code{~.} being used.}
-
-\item{hidden}{A list specifying the hidden layers for neural network models. Default is an empty list.}
 
 \item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 
@@ -26,6 +27,8 @@ createHybrid(
 \item{NN}{pass custom NN to model}
 
 \item{dropout}{dropout rate of neural networks}
+
+\item{hidden}{A list specifying the hidden layers for neural network models. Default is an empty list.}
 }
 \value{
 A list of class "process" containing the process definition and associated parameters.

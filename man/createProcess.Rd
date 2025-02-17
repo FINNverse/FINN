@@ -18,7 +18,8 @@ createProcess(
   NN = NULL,
   upper = NULL,
   lower = NULL,
-  dropout = 0
+  dropout = 0,
+  sample_regeneration = TRUE
 )
 }
 \arguments{
@@ -45,6 +46,8 @@ createProcess(
 \item{lower}{lower boundaries of species parameters}
 
 \item{dropout}{dropout rate of neural networks}
+
+\item{sample_regeneration}{sample recruits or not}
 
 \item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 }

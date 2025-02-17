@@ -81,7 +81,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createHybrid = function(formula = NULL, hidden = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.0, encoder_layers = 1L) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.0, encoder_layers = 1L, hidden = c(50L, 50L), transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -103,6 +103,9 @@ createHybrid = function(formula = NULL, hidden = NULL, optimize = TRUE, dispersi
   out$dropout = dropout
   out$encoder_layers = encoder_layers
   out$hidden = hidden
+  out$transformer = transformer
+  out$emb_dim = emb_dim
+  out$dim_feedforward = dim_feedforward
   class(out) = "hybrid"
   return(out)
 }
