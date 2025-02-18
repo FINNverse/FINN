@@ -46,7 +46,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$inputNN = inputNN
   out$outputNN = outputNN
   out$dispersion_parameter = dispersion_parameter
-  out$sample_regeneration = TRUE
+  out$sample_regeneration = sample_regeneration
   out$NN = NN
   out$upper = NULL
   out$lower = NULL
@@ -81,7 +81,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createHybrid = function(formula = NULL, hidden = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.0, encoder_layers = 1L) {
+createHybrid = function(formula = NULL, hidden = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.0, encoder_layers = 1L, sample_regeneration = TRUE) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -99,6 +99,7 @@ createHybrid = function(formula = NULL, hidden = NULL, optimize = TRUE, dispersi
   out$optimizeSpecies = FALSE
   out$optimizeEnv = optimize
   out$dispersion_parameter = dispersion_parameter
+  out$sample_regeneration = sample_regeneration
   out$NN = NN
   out$dropout = dropout
   out$encoder_layers = encoder_layers
