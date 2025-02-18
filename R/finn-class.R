@@ -910,24 +910,24 @@ finn = nn_module(
             nn = hybrid_transformer(num_species = self$N_species,
                                     num_env_vars = inputs,
                                     dgtl_embedder_dim = 4L,
-                                    max_len = 500L,
-                                    emb_dim=10L,
+                                    max_len = 1000L,
+                                    emb_dim=30L,
                                     num_heads=1L,
                                     num_layers=obj$encoder_layers,
                                     dropout=0.1,
-                                    dim_feedforward = 256L)
+                                    dim_feedforward = 512L)
           }
 
           if(type == "growth") {
             nn = hybrid_transformer(num_species = self$N_species,
                                     num_env_vars = inputs,
                                     dgtl_embedder_dim = 3L,
-                                    max_len = 500L,
-                                    emb_dim=10L,
+                                    max_len = 1000L,
+                                    emb_dim=30L,
                                     num_heads=1L,
                                     num_layers=obj$encoder_layers,
                                     dropout=0.1,
-                                    dim_feedforward = 256L)
+                                    dim_feedforward = 512L)
           }
         }
 
