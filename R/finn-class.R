@@ -927,7 +927,7 @@ finn = nn_module(
                                       emb_dim=obj$emb_dim,
                                       num_heads=1L,
                                       num_layers=obj$encoder_layers,
-                                      dropout=0.1,
+                                      dropout=obj$dropout,
                                       dim_feedforward = obj$dim_feedforward)
             } else {
                nn = hybrid_DNN(num_species = self$N_species,
@@ -947,7 +947,7 @@ finn = nn_module(
                                     emb_dim=obj$emb_dim,
                                     num_heads=1L,
                                     num_layers=obj$encoder_layers,
-                                    dropout=0.1,
+                                    dropout=obj$dropout,
                                     dim_feedforward = obj$dim_feedforward)
             } else {
               nn = hybrid_DNN(num_species = self$N_species,

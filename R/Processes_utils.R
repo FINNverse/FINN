@@ -154,8 +154,9 @@ init_species_parameters = function(type, N_species){
   }
   if(type == "mortality") {
     init =
-      cbind(initLight,
-            stats::runif(N_species, min = 2, 3))
+      cbind(stats::runif(N_species, min = -0.2, 0.2),
+            stats::runif(N_species, min = -0.2, 0.2),
+            stats::runif(N_species, min = -0.2, 0.2))
   }
   if(type == "regeneration") {
     init = matrix(initLight, ncol = 1L)
@@ -168,7 +169,8 @@ get_par_boundary = function(obj, type, upper = TRUE) {
   if(upper) {
     if(is.null(obj$upper)) {
       upper = switch(type,
-                     mortality = { c(0.93, 4.00) },
+                     #mortality = { c(0.93, 4.00) },
+                     mortality = { c(10.0, 10.0, 10.0) },
                      growth = {c(0.99, 4.0)},
                      regeneration = { 0.99 },
                      competition = { c(0.7, 2.0)})
@@ -179,7 +181,8 @@ get_par_boundary = function(obj, type, upper = TRUE) {
   } else {
     if(is.null(obj$lower)) {
       lower = switch(type,
-                     mortality = { c(0.011, 0.00) },
+                     mortality = { c(-10.0, -10.0, -10.0) },
+                     #mortality = { c(0.011, 0.00) },
                      growth =    {c(0.01, 0.01)},
                      regeneration = { 0.01 },
                      competition = { c(0.3, 0.0)})
