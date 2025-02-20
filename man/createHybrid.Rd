@@ -9,9 +9,10 @@ createHybrid(
   optimize = TRUE,
   dispersion_parameter = 1,
   NN = NULL,
-  dropout = 0,
+  dropout = 0.3,
   encoder_layers = 1L,
   hidden = c(50L, 50L),
+  sample_regeneration = TRUE,
   transformer = TRUE,
   emb_dim = 20L,
   dim_feedforward = 256L
@@ -28,7 +29,17 @@ createHybrid(
 
 \item{dropout}{dropout rate of neural networks}
 
-\item{hidden}{A list specifying the hidden layers for neural network models. Default is an empty list.}
+\item{encoder_layers}{number of encoder layers in the transformer}
+
+\item{hidden}{number of hidden layers in the MLP hybrid model}
+
+\item{sample_regeneration}{sample recruits or not}
+
+\item{transformer}{use transformer architecture or MLP structure}
+
+\item{emb_dim}{embedding dim}
+
+\item{dim_feedforward}{dimension of MLP head in transformer}
 }
 \value{
 A list of class "process" containing the process definition and associated parameters.

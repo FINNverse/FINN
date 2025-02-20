@@ -78,8 +78,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param hidden number of hidden layers in the MLP hybrid model
 #' @param sample_regeneration sample recruits or not
 #' @param transformer use transformer architecture or MLP structure
-#' @param emb_dim embedding dim 
-#' @param dim_feedforward dimension of MLP head in transformer 
+#' @param emb_dim embedding dim
+#' @param dim_feedforward dimension of MLP head in transformer
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -87,7 +87,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.0, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
