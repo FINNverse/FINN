@@ -814,7 +814,7 @@ finn = nn_module(
 
       if(!is.null(folder)) {
         if(!dir.exists(folder)) dir.create(folder)
-        if(epochs %% checkpoints == 0) torch::torch_save(self$clone(deep=FALSE), path = paste0(folder, "/", "epoch_", epoch, "model.pt"))
+        if(epoch %% checkpoints == 0) torch::torch_save(self$clone(deep=FALSE), path = paste0(folder, "/", "epoch_", epoch, "model.pt"))
       }
 
       cli::cli_progress_update()
