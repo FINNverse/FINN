@@ -919,27 +919,44 @@ finn = nn_module(
 
         } else {
           if(type == "mortality") {
-            nn = hybrid_transformer(num_species = self$N_species,
-                                    num_env_vars = inputs,
-                                    dgtl_embedder_dim = 4L,
-                                    max_len = 1000L,
-                                    emb_dim=30L,
-                                    num_heads=1L,
-                                    num_layers=obj$encoder_layers,
-                                    dropout=0.1,
-                                    dim_feedforward = 512L)
+            if(obj$transformer) {
+              nn = hybrid_transformer(num_species = self$N_species,
+                                      num_env_vars = inputs,
+                                      dgtl_embedder_dim = 4L,
+                                      max_len = 500L,
+                                      emb_dim=obj$emb_dim,
+                                      num_heads=1L,
+                                      num_layers=obj$encoder_layers,
+                                      dropout=obj$dropout,
+                                      dim_feedforward = obj$dim_feedforward)
+            } else {
+               nn = hybrid_DNN(num_species = self$N_species,
+                               num_env_vars = inputs+1, +1, # because of growth!
+                               emb_dim=obj$emb_dim,
+                               dropout=0.1,
+                               hidden = obj$hidden)
+            }
           }
 
           if(type == "growth") {
+            if(obj$transformer) {
             nn = hybrid_transformer(num_species = self$N_species,
                                     num_env_vars = inputs,
                                     dgtl_embedder_dim = 3L,
-                                    max_len = 1000L,
-                                    emb_dim=30L,
+                                    max_len = 500L,
+                                    emb_dim=obj$emb_dim,
                                     num_heads=1L,
                                     num_layers=obj$encoder_layers,
-                                    dropout=0.1,
-                                    dim_feedforward = 512L)
+                                    dropout=obj$dropout,
+                                    dim_feedforward = obj$dim_feedforward)
+            } else {
+              nn = hybrid_DNN(num_species = self$N_species,
+                              num_env_vars = inputs,
+                              emb_dim=obj$emb_dim,
+                              dropout=0.1,
+                              hidden = obj$hidden)
+            }
+
           }
         }
 
