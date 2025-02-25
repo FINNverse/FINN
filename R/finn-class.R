@@ -149,10 +149,23 @@ finn = nn_module(
       if(debug) trees_before = torch::torch_zeros_like(g)
 
       # detach previous cohort objects (to interrupt the gradients)
-      dbh=dbh$detach()
-      trees=trees$detach()
-      species=species$detach()
-      cohort_ids=cohort_ids$detach()
+
+      # if(!is.null(y)) {
+      #   #for(j in 1:3) Result[[j]] = Result[[j]]$detach()
+      #   # if period_length = NA on all sites, it is assumed that we need only yearly gradients
+      #   if(as.numeric(y[,,,7]$isnan()$bitwise_not()$sum()) < 0.5) {
+      #     dbh=dbh$detach()
+      #     trees=trees$detach()
+      #     species=species$detach()
+      #     cohort_ids=cohort_ids$detach()
+      #   }
+      #
+      # }
+
+      # dbh=dbh$detach()
+      # trees=trees$detach()
+      # species=species$detach()
+      # cohort_ids=cohort_ids$detach()
 
       # Apply disturbance
       if(!is.null(disturbance)) {
@@ -423,7 +436,7 @@ finn = nn_module(
       if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
-          #dbh
+          # #dbh
           loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
           # ba
           loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
@@ -436,6 +449,12 @@ finn = nn_module(
           accumulate_gradients = y[,tmp_index,,7] |> as.matrix()
           period = unique(accumulate_gradients[,1])
           if(!is.na(period)) {
+            # loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,(i-period+1):(i),]$mean(2) )
+            # # ba
+            # loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,(i-period+1):(i),]$mean(2) )
+            # # counts
+            # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,(i-period+1):(i),]$mean(2))
+
             #browser()
             loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,(i-period+1):(i),]$mean(2) )
             # mort rates
@@ -446,8 +465,15 @@ finn = nn_module(
             self$pred_rec = Result[[7]][,(i-period+1):(i),]$sum(2) |> as.matrix()
             self$loss_raw = as.numeric(loss)
             loss$sum()$backward()
-            for(j in 4:7) Result[[j]] = Result[[j]]$detach()
+            for(j in 1:7) Result[[j]] = Result[[j]]$detach()
           } else {
+
+            # loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
+            # # ba
+            # loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
+            # # counts
+            # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
+
             loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,i,])
             # mort rates
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,i,])
@@ -458,14 +484,19 @@ finn = nn_module(
             for(j in 1:7) Result[[j]] = Result[[j]]$detach()
           }
 
+          dbh=dbh$detach()
+          trees=trees$detach()
+          species=species$detach()
+          cohort_ids=cohort_ids$detach()
+
         }
         # for(j in 1:7) Result[[j]] = Result[[j]]$detach()
       }
 
       if(!is.null(y)) {
-        for(j in 1:3) Result[[j]] = Result[[j]]$detach()
+        #for(j in 1:3) Result[[j]] = Result[[j]]$detach()
         # if period_length = NA on all sites, it is assumed that we need only yearly gradients
-        if(as.numeric(y[,,,7]$isnan()$bitwise_not()$sum()) < 0.5) for(j in 4:7) Result[[j]] = Result[[j]]$detach()
+        if(as.numeric(y[,,,7]$isnan()$bitwise_not()$sum()) < 0.5) for(j in 1:7) Result[[j]] = Result[[j]]$detach()
 
       }
       loss$detach_()
