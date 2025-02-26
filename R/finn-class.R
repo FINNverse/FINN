@@ -580,9 +580,9 @@ finn = nn_module(
                             torch_arange(1,dim(envs[[1]])[1])$to(dtype = torch_int64() , device=torch_device('cpu'))
       )
     } else {
-      data = tensor_dataset(torch_tensor(env[[1]], dtype=self$dtype, device=torch_device('cpu')),
-                            torch_tensor(env[[2]], dtype=self$dtype, device=torch_device('cpu')),
-                            torch_tensor(env[[3]], dtype=self$dtype, device=torch_device('cpu')),
+      data = tensor_dataset(torch_tensor(envs[[1]], dtype=self$dtype, device=torch_device('cpu')),
+                            torch_tensor(envs[[2]], dtype=self$dtype, device=torch_device('cpu')),
+                            torch_tensor(envs[[3]], dtype=self$dtype, device=torch_device('cpu')),
                             torch_arange(1, dim(envs[[1]])[1] )$to(dtype = torch_int64() , device=torch_device('cpu')),
                             torch_tensor(disturbance, dtype=self$dtype, device=torch_device('cpu'))
       )
