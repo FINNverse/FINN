@@ -33,7 +33,7 @@ library(FINN)
 library(data.table)
 library(ggplot2)
 
-Ntimesteps = 200  # number of timesteps
+Ntimesteps = 500  # number of timesteps
 Nsites = 1 # number of sites
 patch_size = 0.1
 # one species
@@ -50,43 +50,71 @@ The following code generates random species parameters for a simple model with 1
 FINN.seed(1234)
 # we draw the same shade parameters for each process for simplicity
 # shade parameters correspond to the fraction of light a species needs to succesfully grow, regenerate, or survive.
-shadeSP = runif(Nsp, 0.01, 0.99)
+shadeSP = c(0.1,0.2,0.5,0.5,0.7)
 
 # regeneration parameters
 parReg = shadeSP # regeneration is only dependent on shade and environment
 parRegEnv = list(matrix(c(
-  runif(Nsp, 1, 4), # intercept regulating the overall effect size
+  c(1,2,3,3,5), # intercept regulating the overall effect size
+  # runif(Nsp, 1, 4), # intercept regulating the overall effect size
   runif(Nsp, -2, 2) # the second parameter modulates the effect of the environmental variable
   ),Nsp, 2))
 
 # growth parameters
 parGrowth = matrix(c(
   shadeSP, # see above
-  runif(Nsp, 0, 0.1) # the second growth parameter modulates the size dependent growth
+  c(0.04,0.05,0.05,0.06,0.1) # the second growth parameter modulates the size dependent growth
+  # runif(Nsp, 0, 0.1) # the second growth parameter modulates the size dependent growth
   ),Nsp, 2) 
 
 parGrowthEnv = list(matrix(c(
-  runif(Nsp, -1, 2), # intercept regulating the overall effect size
-  runif(Nsp, -1, 2) # the second parameter modulates the effect of the environmental variable
+  c(0.2,0.3,0.5,1,1)*0.5, # intercept regulating the overall effect size
+  # runif(Nsp, -2, -0.5), # intercept regulating the overall effect size
+  runif(Nsp, -2, -0.5) # the second parameter modulates the effect of the environmental variable
   ),Nsp, 2))
 
 # mortality parameters
 parMort = matrix(c(
-  shadeSP, # see above
-  runif(Nsp, 1, 4) # the second growth parameter modulates the size dependent mortality
-  ),Nsp, 2)
+  as.numeric(scale(shadeSP)), # see above
+  as.numeric(scale(parGrowth[,2])), # the second growth parameter modulates the size dependent mortality
+  # runif(Nsp, -1, -0.1), # the second mort parameter modulates the size dependent mortality
+  rep(0,Nsp) # the third mort parameter modulates the growth dependent mortality
+  # runif(Nsp, -1, -.1) # the third mort parameter modulates the growth dependent mortality
+  ),Nsp, 3)
 parMortEnv = list(matrix(c(
-  runif(Nsp, 0, 0.5), # intercept regulating the overall effect size
-  runif(Nsp, 0, .5) # the second parameter modulates the effect of the environmental variable
+  runif(Nsp, -3, -2), # intercept regulating the overall effect size
+  runif(Nsp, -3, -2) # the second parameter modulates the effect of the environmental variable
   ), Nsp, 2))
 
 # allometric parameters for the calculation of tree height from a trees diameter
 # parHeight = runif(Nsp, 0.3, 0.7)
 # growth parameters
 parComp = matrix(c(
-  runif(Nsp, 0.3, 0.7), # parHeight
-  runif(Nsp, 0.2, 0.2) # Competition strength
+  # runif(Nsp, 0.3, 0.7), # parHeight
+  c(0.5,0.5,0.4,0.7,0.6), # parHeight
+  # runif(Nsp, 0.2, 0.2) # Competition strength
+  c(0.3,0.2,0.2,0.2,0.1) # parHeight
 ),Nsp, 2)
+
+# Create a wide-format data.table with one row per species
+pars_dt <- data.table(
+  speciesID   = 1:Nsp,
+  reg         = parReg,
+  growth1      = parGrowth[, 1],
+  growth2      = parGrowth[, 2],
+  mort1        = parMort[, 1],
+  mort2        = parMort[, 2],
+  mort3        = parMort[, 3],
+  compHeight  = parComp[, 1],
+  compStrength= parComp[, 2],
+  regEnv1     = sapply(parRegEnv, function(x) x[1, 1]),
+  regEnv2     = sapply(parRegEnv, function(x) x[1, 2]),
+  growthEnv1  = sapply(parGrowthEnv, function(x) x[1, 1]),
+  growthEnv2  = sapply(parGrowthEnv, function(x) x[1, 2]),
+  mortEnv1    = sapply(parMortEnv, function(x) x[1, 1]),
+  mortEnv2    = sapply(parMortEnv, function(x) x[1, 2])
+)
+pars_dt
 ```
 
 ## Environment and disturbances {#sec-env-dist}
@@ -119,7 +147,7 @@ disturbance_frequency = 0.05
 disturbance_intensity = rbinom(Ntimesteps*Nsites,1,0.2)*runif(Ntimesteps*Nsites, 0.5, 1)
 
 # this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
-dist_dt$intensity = dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
+dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
 ```
 
 ## Simulate
@@ -134,30 +162,25 @@ The effect of environmental variable supplied with the environmental data can be
 
 ```{r simulate1}
 predictions <- list()
-predictions[["patches_1"]] =
-  simulateForest(env = env_dt,
-                 sp = Nsp,
-                 # disturbance = dist_dt, this argument is optional and we will not use it for one patch
-                 patches = 1,
-                 patch_size = patch_size,
-                 competitionProcess = createProcess(func = competition, initSpecies = parComp),
-                 growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
-                 mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
-                 regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg, dispersion_parameter = 0.1),
-                 debug = FALSE
-                 )
+simulationModel = finn(N_species = Nsp, 
+  competition_process = createProcess(~0, func = FINN::competition),
+  growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
+  regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
+  mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
+)
 
-predictions[["patches_100"]] =
-  simulateForest(env = env_dt,disturbance = dist_dt,
-                 sp = Nsp,
-                 patches = 100,
-                 patch_size = patch_size,
-                 competitionProcess = createProcess(func = competition, initSpecies = parComp),
-                 growthProcess = createProcess(~ 1 + env1, func = growth, initEnv = parGrowthEnv, initSpecies = parGrowth),
-                 mortalityProcess = createProcess(~ 1 + env1, func = mortality, initEnv = parMortEnv, initSpecies = parMort),
-                 regenerationProcess = createProcess(~ 1 + env1, func = regeneration, initEnv = parRegEnv, initSpecies = parReg, dispersion_parameter = 0.1),
-                 debug = F
-                 )
+predictions[["patches_1"]] = 
+  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance= dist_dt, device = "cpu", patches = 1)
+
+simulationModel = finn(N_species = Nsp, 
+  competition_process = createProcess(~0, func = FINN::competition),
+  growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
+  regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
+  mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
+)
+
+predictions[["patches_100"]] = 
+  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 100)
 
 ```
 
@@ -183,7 +206,7 @@ for(i in c("patches_1", "patches_100")){
     ),]
   # p_dat[variable %in% c("ba", "trees", "reg"), value := value/patch_size,]
   p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
-  p <- ggplot(p_dat, aes(x = year, y = value, color = factor(species))) +
+  p <- ggplot(p_dat[year <= 100], aes(x = year, y = value, color = factor(species))) +
   geom_line() +
   theme_minimal() +
   labs(x = "Year", y = "Value") +
@@ -200,266 +223,12 @@ for(i in c("patches_1", "patches_100")){
 
 print(p)
 }
+# plot(dist_dt$year, dist_dt$intensity)
 ```
 
-# Model description
+```{r fit-finn}
 
-## Difference of FINN to other forest models
 
-FINN does share many attributes with existing dynamic forest models like JABOWA or ForClim (see @sec-basic-structure). In contrast to other forest models FINN is designed to be fit to data. There is no set of default species-parameters and only a few very basic default parameters that define the model structure. 
 
-Our goal is to provide a model in which processes can be easily modified, and its components can be extended or replaced by deep neural networks. All state variables within FINN are stored as tensors (N-dimensional arrays), which allows for seamless integration between process-based modeling and neural networks. This design enables the propagation of gradients through the entire model, allowing the neural network to learn and update parameters efficiently through backpropagation. Specifically, this means that any process or component within FINN can be modeled using neural networks while maintaining the ability to compute derivatives, facilitating optimization and model fitting. An additional advantage of this design is that the model can be executed on GPUs, enabling efficient scaling for parameter calibration with larger datasets and simulation tasks.
 
-In the future different versions of FINN are defined by a unique set of parameters estimated via deep neural networks from data, mechanistic process equations, or a combination of both. FINN shall serve as a platform that covers the range from detailed process equations to purely data-driven models. The user can choose the level of detail and complexity that fits the available data and the research question.
-
-However, the current version of FINN is still in an early stage of development and includes only some of the functionality outlined above. At present, FINN acts as a pioneering framework, guiding new approaches and perspectives on hybrid modeling of forest ecosystems.
-
-## Basic model structure {#sec-basic-structure}
-
-FINN shares its basic model structure with a range of other dynamic forest models. Basic model parameters can be specified in the `simulateForest` and `finn` functions.
-
--   The model runs on an annual timestep
-
--   A forest is simulated on multiple independent patches
-
-    -   The patch size can be modified with the `patch_size` argument. The default patch size is 0.1 ha.
-
-    -   The Number of patches is specified with the `patches` argument. The default number of patches is 100.
-
--   Individual trees are represented in cohorts
-
-    -   Cohorts represented with different tensors (trees, DBH, and species), each with the dimensions N of sites, N of patches, N of Cohorts
-
-    -   Cohorts can be initialized with the `CohortMat$new()` function. The function requires a data.table with the columns `dbh`, `trees`, and `species`. The `sp` argument specifies the number of species. The returned object can be used with the `ìnit` argument in the `simulateForest` function.
-
--   Environment is represented with an tensor with the dimensions N of sites, N of timesteps, N of environmental variables. It is defined with the argument `env` that requires a data.frame/data.table (@sec-env-dist).
-
--   Disturbances are represented with an tensor with the dimensions N of sites, N of timesteps, N patches. It is defined with the argument `disturbance` that requires a data.frame/data.table (@sec-env-dist).
-
--   Crowns are represented as indefinitely thin layer at the top of the tree
-
--   Tree height is calculated using the allometric parameter `parHeight` and the tree's DBH.
-
-$$
-\text{height} = \left( e^{\frac{{\text{dbh} \times \text{parHeight}}}{{\text{dbh} + 100}}} - 1 \right) \times 100 + 0.001
-$$
-
-## Processes
-
-FINN simulates the dynamics of a forest ecosystem through four main processes: competition, environmental effects, regeneration, and mortality. Each process is influenced by species-specific parameters and environmental conditions. These processes to simulate the growth, mortality, and regeneration of trees in a forest patch over time. The following sections describe each process in detail.
-
-![FINN process model](finn-process.png){#fig-finn-process}
-
-### Competition
-
-The competition function calculates the fraction of available light for each cohort based on their diameter at breast height (DBH) and the density of the stand. The available light is reduced by the shading effect of neighboring trees.
-
-For this the basal area of the focal cohort must be put in relation to the sum of basal area of all trees that are taller than the focal cohort. 
-First, the basal area ($\text{ba}_i$) for each cohort $i$ is calculated, based on their diameter at breast height (DBH).
-
-$$
-\text{ba}_i = \frac{\pi \cdot \left( \frac{\text{dbh}}{100 \cdot 2} \right)^2 \cdot \text{trees}}{\text{patch\_size\_ha}}
-$$
-
-where $\text{dbh}$ is the diameter at breast height in cm, $\text{trees}$ is the number of trees in the cohort, and $\text{patch\_size\_ha}$ is the size of the patch in hectares. The basal area is then adjusted to account for the shape of the tree crown.
-
-Next, the height difference ($\Delta h$) between cohorts is computed. 
-
-$$
-\Delta h = \text{cohortHeights}_i - h_j
-$$
-
-This difference is then adjusted by subtracting 0.1 and scaled by multiplying by 100, resulting in a scaled height difference ($\Delta h_{\text{scaled}}$).
-
-$$
-\Delta h_{\text{scaled}} = 100 \cdot (\text{cohortHeights}_i - h_j - 0.1)
-$$
-
-The scaled height difference is passed through a sigmoid function ($S(\Delta h_{\text{scaled}})$), which normalizes the result to a value between 0 and 1, representing the relative height of each cohort, with 1 being the tallest cohort and 0 being the forest floor.
-
-$$
-S(\Delta h_{\text{scaled}}) = \frac{1}{1 + e^{-100 \cdot (\text{cohortHeights}_i - h_j - 0.1)}}
-$$
-
-The normalized result is then multiplied by the basal area ($\text{ba}_{\text{adjusted}, i}$) to account for the contribution of each taller cohort's size.
-
-$$
-\text{ba}_{\text{adjusted}, i} = \text{ba}_i \cdot S(\Delta h_{\text{scaled}})
-$$
-
-The adjusted basal area values are summed across cohorts to produce the total basal area height ($\text{ba\_height}_i$), representing the cumulative shading effect due to height differences.
-
-$$
-\text{ba\_height}_i = \sum_j \left( \text{ba}_i \cdot S(\Delta h_{\text{scaled}}) \right)
-$$
-
-Finally, the available light for each cohort is calculated.
-
-$$
-\text{light}_i = 1 - \frac{\text{ba\_height}_i}{\text{minLight}}
-$$
-
-where $\text{light}_i$ represents the fraction of available light for cohort $i$, and $\text{ba\_height}_i$ is the sum basal area of all trees that are taller than the cohort $i$. The term $\text{minLight}$ represents the basal area at which no light is available anymore. By default this value is set to $50 m^2$ per ha.
-
-#### Summary of the Competition Process
-
-1. **Basal Area Calculation**: The basal area of each cohort is calculated based on the diameter at breast height (DBH) and the number of trees in the cohort.
-2. **Height Difference**: The height difference between cohorts is computed, scaled, and adjusted.
-3. **Sigmoid Transformation**: The scaled height difference is passed through a sigmoid function to model the relative height dominance of each cohort.
-4. **Shading Effect**: The basal area is weighted by the sigmoid result to calculate the shading effect of taller cohorts.
-5. **Available Light**: The available light for each cohort is computed based on the total shading effect from taller trees.
-
-### Environmental Effects
-
-Each process is influenced by environmental conditions through the predictions of a neural network, which predicts how environmental variables regulate the process. The environmental effect ($\text{environment}_i$) is species-specific and, in the simplest case, is modeled as a linear function of environmental predictors. For species $i$, the environmental effect can be represented as:
-
-$$
-\text{pred}_i = \beta_{i,0} + \beta_{i,1} \cdot \text{env}_1 + \beta_{i,2} \cdot \text{env}_2 + \cdots + \beta_{i,n} \cdot \text{env}_n
-$$
-
-where $\text{pred}_i$ is the intermediate predicted value for species $i$ from the linear combination of environmental variables, $\beta_{i,0}$ is the species-specific intercept (baseline environmental effect), and $\beta_{i,1}, \beta_{i,2}, \dots, \beta_{i,n}$ are the species-specific coefficients for environmental predictors. The variables $\text{env}_1, \text{env}_2, \dots, \text{env}_n$ represent environmental factors like temperature, precipitation, or soil moisture.
-
-The linear model is used within the neural network to predict the environmental effect on each process. After computing $\text{pred}_i$, the output is passed through a sigmoid function to ensure the environmental effect is within a bounded range (usually between 0 and 1):
-
-$$
-\text{environment}_i = \sigma(\text{pred}_i) = \frac{1}{1 + e^{-\text{pred}_i}}
-$$
-
-This sigmoid transformation normalizes the environmental impact, providing a smooth and bounded effect across all environmental conditions.
-
-The structure of this model is similar to an expression like `~ 1 + env1 + env2`, where each environmental predictor has its own species-specific effect, and the neural network adjusts the coefficients $\beta_{i,k}$ for each species based on training data.
-
-#### Summary of the Environmental Effects Process
-
-1. **Species-Specific Linear Model**: The environmental effect is modeled as a species-specific linear combination of environmental variables (e.g., temperature, precipitation). This produces an intermediate prediction, $\text{pred}_i$, for each species.
-2. **Neural Network Prediction**: A neural network calculates the impact of environmental factors on the processes. The prediction ($\text{pred}_i$) is transformed into an environmental effect using a sigmoid function to ensure a smooth, bounded influence on the process.
-3. **Environmental Adjustment**: The predicted environmental effect ($\text{environment}_i$) modulates the outcomes of the species-specific processes, making each process responsive to external environmental conditions.
-
-
-### Regeneration
-
-The regeneration function models the ability of new trees to establish in a forest patch based on species-specific light requirements and the availability of light. The regeneration potential is calculated as a function of the available light for each cohort and the species-specific light requirement for regeneration.
-
-First, the available light ($\text{light}_i$) is computed for each cohort $i$ using the competition process, as described earlier.
-
-Next, the regeneration potential ($\lambda_i$) for each cohort $i$ is calculated based on the available light and the species-specific regeneration parameter ($\text{parReg}_i$), which defines the fraction of light required for successful regeneration. The regeneration potential is computed using a sigmoid function to model the non-linear response of species to light availability:
-
-$$
-\lambda_i = \frac{1}{1 + e^{-10 \cdot (\text{light}_i - \text{parReg}_i)}} - \frac{1}{1 + e^{10 \cdot \text{parReg}_i}}
-$$
-
-In this formula, $\lambda_i$ represents the regeneration potential (or mean) for cohort $i$, $\text{light}_i$ is the available light for cohort $i$, and $\text{parReg}_i$ is a species-specific parameter representing the fraction of light required for regeneration. Smaller values of $\text{parReg}_i$ represent species that can regenerate in low-light conditions, while larger values represent species that require more light to regenerate.
-
-The term $\frac{1}{1 + e^{-10 \cdot (\text{light}_i - \text{parReg}_i)}}$ models how the regeneration potential increases as the available light approaches or exceeds the species' light requirement. The subtraction of $\frac{1}{1 + e^{10 \cdot \text{parReg}_i}}$ ensures that species with low light requirements have a higher base potential for regeneration, while species with higher light requirements have a lower base potential unless light levels are sufficient.
-
-The regeneration potential $\lambda_i$ is adjusted by the environmental effect to account for species-specific responses to environmental conditions:
-
-$$
-\lambda_i = \lambda_i \cdot \text{environment}_i
-$$
-After adjusting for environmental effects, the final regeneration potential ($\lambda_i$) is used to draw the actual number of regenerated trees ($r_i$) from a **Poisson distribution**. This is done because tree regeneration events are discrete and randomly distributed. The Poisson distribution models the number of events (trees regenerating) based on the expected rate ($\lambda_i \cdot \text{patch\_size\_ha}$):
-
-$$
-r_i \sim \text{Poisson}(\lambda_i \cdot \text{patch\_size\_ha})
-$$
-
-This equation models the number of newly regenerated trees in each cohort, taking into account both the mean regeneration rate and the spatial size of the patch.
-
-#### Summary of the Regeneration Process
-
-1. **Light Requirement**: Regeneration potential is computed as a sigmoid function of available light, representing the species-specific light requirement for regeneration.
-2. **Environmental Effect**: A neural network predicts the environmental effect, which modulates the regeneration potential based on external environmental factors.
-3. **Regeneration Potential**: The regeneration potential is adjusted by the environmental effect, representing species-specific responses to light and environmental conditions.
-4. **Regeneration Event**: The final number of regenerated trees is drawn from a Poisson distribution, based on the adjusted regeneration potential and patch size.
-
-### Growth
-
-The growth process models the increase in tree diameter for each cohort based on light availability, competition, tree size, and environmental effects. Growth is influenced by how much light each cohort receives, the size of the trees (diameter at breast height, DBH), and the external environmental conditions predicted by a neural network.
-
-1. **Shading Effect**: The growth potential of a cohort is influenced by the amount of light it receives. The shading effect ($\text{shade}_i$) is modeled using a sigmoid function of available light ($\text{light}_i$), where species-specific growth parameters ($\text{parGrowth}_{1,i}$) control the light requirement for growth:
-
-$$
-\text{shade}_i = \frac{1}{1 + e^{-10 \cdot (\text{light}_i - \text{parGrowth}_{1,i})}} - \frac{1}{1 + e^{10 \cdot \text{parGrowth}_{1,i}}}
-$$
-
-This equation ensures that the cohort's growth response to light is non-linear, with species-specific tolerance for light levels. Higher values of $\text{parGrowth}_{1,i}$ correspond to species that require more light to grow.
-
-2. **Size-Dependent Growth**: The growth potential also depends on the size of the trees, as larger trees tend to grow more slowly. The size-dependent growth potential ($\text{gPSize}_i$) is modeled as an exponential decay function of the tree's diameter at breast height (DBH):
-
-$$
-\text{gPSize}_i = e^{-\frac{\text{dbh}_i}{\text{parGrowth}_{2,i} \cdot 100}}
-$$
-
-Here, $\text{parGrowth}_{2,i}$ is a species-specific parameter that modulates how tree size affects growth. As $\text{dbh}_i$ increases, the growth potential decreases, reflecting the natural slowdown in growth as trees get larger.
-
-3. **Environmental Effect**: The growth process is further influenced by external environmental conditions (such as temperature, rainfall, or soil moisture), which are predicted by a neural network. The output of the neural network is transformed into an environmental effect ($\text{environment}_i$), as explained in the environmental effects section.
-
-4. **Growth Prediction**: Finally, the growth rate ($\text{growth}_i$) for cohort $i$ is computed by combining the shading effect, size-dependent growth potential, and environmental effect:
-
-$$
-\text{growth}_i = \text{shade}_i \cdot \text{environment}_i \cdot \text{gPSize}_i
-$$
-
-This formula multiplies the species-specific response to light availability, tree size, and environmental factors to predict the growth rate for each cohort. The resulting growth rate is a product of how much light is available, how large the trees are, and how favorable the environmental conditions are for growth.
-
-#### Summary of the Growth Process
-
-1. **Light Availability**: Growth potential is influenced by the available light, which is reduced by shading from taller trees. The light availability for each cohort is computed using the competition process.
-2. **Shading Effect**: The shading effect is modeled using a sigmoid function of available light, with species-specific parameters controlling the response to shading.
-3. **Size-Dependent Growth**: Growth decreases as tree size (DBH) increases, represented by an exponential decay function.
-4. **Environmental Effect**: A neural network predicts the effect of environmental conditions, which adjusts the growth potential for each species.
-5. **Growth Prediction**: The final growth rate for each cohort is the product of the shading effect, size-dependent growth, and environmental conditions.
-
-### Mortality
-
-The mortality function models the probability of tree death based on species-specific characteristics, competition for light, and environmental conditions. It incorporates the effect of shading from other trees, tree size, and environmental factors to estimate the likelihood of mortality for each cohort.
-
-The first step is to calculate the **shading effect** ($\text{shade}_i$) for cohort $i$. The shading effect is influenced by the amount of available light ($\text{light}_i$) and a species-specific shade tolerance parameter ($\text{parMort}_{1,i}$). This relationship is modeled using a sigmoid function, where the steepness of the sigmoid is adjusted based on the species' shade tolerance:
-
-$$
-\text{shade}_i = 1 - \frac{\frac{1}{1 + e^{-\text{scaled\_steepness}_i \cdot (\text{light}_i - \text{parMort}_{1,i})}} - \frac{1}{1 + e^{\text{scaled\_steepness}_i \cdot \text{parMort}_{1,i}}}}{\frac{1}{1 + e^{-\text{scaled\_steepness}_i \cdot (1 - \text{parMort}_{1,i})}} - \frac{1}{1 + e^{\text{scaled\_steepness}_i \cdot \text{parMort}_{1,i}}}}
-$$
-
-where $\text{parMort}_{1,i}$ is the species-specific shade tolerance parameter and $\text{scaled\_steepness}_i$ is the adjusted steepness of the sigmoid curve, calculated as:
-
-$$
-\text{scaled\_steepness}_i = \frac{\text{base\_steepness}}{0.5 - |\text{parMort}_{1,i} - 0.5|}
-$$
-
-This ensures that species with intermediate shade tolerance have a more gradual response, while shade-intolerant or shade-tolerant species have sharper transitions.
-
-Next, the **size-dependent growth potential** ($\text{gPSize}_i$) is calculated based on the diameter at breast height (DBH) of the trees. Larger trees generally have lower growth potential, reflecting the natural slowdown in growth as trees age. The growth potential is modeled as:
-
-$$
-\text{gPSize}_i = 1 - e^{-\frac{\text{dbh}_i}{\text{parMort}_{2,i} \cdot 100}}
-$$
-
-where $\text{parMort}_{2,i}$ is a species-specific parameter that modulates the effect of tree size on growth potential, and $\text{dbh}_i$ is the diameter at breast height of the trees in cohort $i$.
-
-The **environmental effect** ($\text{environment}_i$) is then calculated using a neural network model that predicts how environmental factors (such as temperature, precipitation, etc.) affect mortality for each species. The output of the neural network is a sigmoid-transformed prediction, representing the environmental influence on the mortality process:
-
-$$
-\text{environment}_i = \sigma(\text{pred}_i)
-$$
-
-where $\text{pred}_i$ is the output of the neural network for cohort $i$ and $\sigma$ is the sigmoid function.
-
-Finally, the overall **mortality prediction** ($\text{predM}_i$) for cohort $i$ is calculated by combining the shading effect, the growth potential, and the environmental influence:
-
-$$
-\text{predM}_i = \text{environment}_i \cdot \frac{\text{shade}_i \cdot \text{gPSize}_i + \text{shade}_i + \text{gPSize}_i}{3}
-$$
-
-This formula takes the average of the shading effect and growth potential, weighted by the environmental influence, to produce the final mortality probability.
-
-#### Summary of the Mortality Process
-
-1. **Shading Effect**: Modeled as a species-specific sigmoid function of available light, representing how shade tolerance affects mortality.
-2. **Size-Dependent Growth Potential**: Larger trees have reduced growth potential, represented as an exponential decay function of DBH.
-3. **Environmental Effect**: Predicted by a neural network, which calculates how environmental conditions modulate the mortality process.
-4. **Mortality Prediction**: Combines the shading effect, growth potential, and environmental effect to predict the probability of mortality for each cohort.
-
-## Neural Networks in FINN
-
-## Custom functions
-
+```
