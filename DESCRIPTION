@@ -34,7 +34,9 @@ Imports:
     torch,
     ggplot2,
     viridis,
-    parallel
+    parallel,
+    scales,
+    httpgd
 Suggests:
     testthat (>= 3.0.0),
     knitr,
@@ -44,15 +46,3 @@ Roxygen: list(old_usage = FALSE, markdown = TRUE)
 VignetteBuilder: quarto
 RdMacros: mathjaxr
 Config/testthat/edition: 3
-Collate: 
-    'CohortMat.R'
-    'FINNBase.R'
-    'FINNInterface.R'
-    'FINNModel.R'
-    'Processes.R'
-    'RcppExports.R'
-    'climateDF2array.R'
-    'convenience_functions.R'
-    'create-help-plots.R'
-    'pred2DF.R'
-    'utils.R'
