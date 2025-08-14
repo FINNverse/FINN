@@ -6,9 +6,9 @@ state and is being actively
 developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
 [![License: GPL
 v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
+<!-- [![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml) -->
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # Forest Informed Neural Networks (FINN)
@@ -40,33 +40,7 @@ You can install the development version of FINN from
 devtools::install_github("FINNverse/FINN")
 ```
 
-## Example
+## Introduction
 
-This is a basic example which shows you how to solve a common problem:
-
-Simulate:
-
-``` r
-library(FINN)
-env = data.table(siteID = rep(1:100, each = 200),
-                 year = rep(1:200, 100L),
-                 env1 = runif(200*100, -1, 1))
-simulations = simulateForest(env = env, sp = 3L)
-head(simulations$long)
-```
-
-Estimate (inference, calibrate) environmental responses within the three
-processes:
-
-``` r
-model = 
-  finn(data = simulations$wide$site,
-       env = env,
-       mortalityProcess = createProcess(~env1, func = mortality, optimizeEnv = TRUE, optimizeSpecies = FALSE),
-       growthProcess = createProcess(~env1, func = growth, optimizeEnv = TRUE, optimizeSpecies = FALSE),
-       regenerationProcess = createProcess(~env1, func = regeneration, optimizeEnv = TRUE, optimizeSpecies = FALSE),
-       optimizeHeight = FALSE,
-       batchsize = 100L,
-       epochs = 20L
-       )
-```
+An introduction to FINN can be found in the package vignette, or
+[online](https://github.com/FINNverse/FINN/blob/main/vignettes/Introduction-to-FINN.qmd)
