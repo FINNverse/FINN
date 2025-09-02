@@ -11,128 +11,70 @@
 #' @return A data.table with resolved siteID and patchID indices along with their original IDs and years.
 #' @import data.table
 #' @export
-resolveSiteIDs <- function(site_dt, tree_dt, env_dt = NULL, obs_dt = NULL,initCohort_dt = NULL, years2periods = F,
-                           selection_priority = "fixed patches",
-                           Npatches_fixed = 4,
-                           Nyears_fixed = NULL, species2IDs = T,
-                           all = F, createInitCohorts = F){
+resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
+  # browser()
+  siteID_dt <- unique(env_dt[,.(siteName, year)])
 
-  only_sites <- unique(site_dt[,.(siteID2 = siteID, year)])
-  only_patches <- unique(tree_dt[,.(siteID2 = siteID, patchID2 = patchID, year)])
-  siteID_dt <- merge(only_patches, only_sites, by.x = c("siteID2", "year"), by.y = c("siteID2", "year"), all = all)
+  siteID_dt <- merge(siteID_dt, unique(tree_dt[living == T,.(siteName, year)]), by = c("siteName", "year"), all = F)
 
-  siteID_dt[, NpatchesPerSite := uniqueN(patchID2), by = siteID2]
-  siteID_dt[, NpatchesPerYear := uniqueN(patchID2), by = .(siteID2, year)]
-  siteID_dt[, Nyears := uniqueN(year), by = siteID2]
-  siteID_dt[, NyearsPerPatch := uniqueN(year), by = .(siteID2, patchID2)]
-  siteID_dt[, NperPatch := .N, by = .(siteID2, patchID2)]
-  siteID_dt[, NperYear := .N, by = year]
-  siteID_dt[, maxYears := max(Nyears), by = .(siteID2, patchID2)]
+  siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = F)
 
-  if(selection_priority == "fixed patches"){
-    siteID_dt <- siteID_dt[NpatchesPerYear == Npatches_fixed]
-  }else if(selection_priority == "many years"){
-    siteID_dt <- siteID_dt[NyearsPerPatch == max(NyearsPerPatch)]
-  }
-  if(!is.null(Nyears_fixed)){
-    siteID_dt <- siteID_dt[Nyears >= Nyears_fixed]
-  }
-
-  if(!is.null(env_dt)) {
-    siteID_dt <- merge(siteID_dt, unique(env_dt[,.(siteID2 = siteID, year)]), by = c("siteID2", "year"), all = all)
-  }
-
-  if(!is.null(obs_dt)) {
-    siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteID2 = siteID, patchID2 = patchID, year)]), by = c("siteID2", "patchID2", "year"), all = all)
-  }
-
-  if(!is.null(initCohort_dt)){
-    siteID_dt <- merge(siteID_dt, unique(initCohort_dt[,.(siteID2 = siteID, patchID2 = patchID)]), by = c("siteID2", "patchID2"), all = all)
-  }
-
-  siteID_dt[, siteID := as.integer(as.factor(siteID2)),]
-  siteID_dt[, patchID := as.integer(as.factor(patchID2)), by = siteID]
+  siteID_dt[, siteID := as.integer(as.factor(siteName)),]
+  siteID_dt[, patchID := as.integer(as.factor(patchName)), by = siteID]
   siteID_dt[, period := as.integer(as.factor(year)), by = .(siteID, patchID)]
 
-  names(tree_dt)[names(tree_dt) == "siteID"] <- "siteID2"
-  names(tree_dt)[names(tree_dt) == "patchID"] <- "patchID2"
-  tree_dt <- merge(tree_dt, siteID_dt, by = c("siteID2", "patchID2", "year"), all = all)
-  if(species2IDs){
-    tree_dt[,species := as.integer(as.factor(species_name)),]
-    species_dt <- unique(tree_dt[,.(species,species_name)])
-  }
+  tree_dt <- merge(tree_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = F)
 
-  if(years2periods) {
-    tree_dt[, year2 := year,]
-    tree_dt[, year := period,]
-    tree_dt <- tree_dt[, -"period"]
-  }
+  species_levels <- sort(unique(tree_dt$species_name))
+  species_levels <- c(species_levels[species_levels != "other"], "other")
 
-  names(site_dt)[names(site_dt) == "siteID"] <- "siteID2"
-  site_dt <- merge(site_dt, siteID_dt[,.(siteID2, siteID, year, period)], by = c("siteID2", "year"), all = all)
-  if(years2periods) {
-    site_dt[, year2 := year,]
-    site_dt[, year := period,]
-    site_dt <- site_dt[, -"period"]
-  }
+  tree_dt[,species := as.integer(factor(species_name, levels = species_levels, labels = 1:length(species_levels))),]
+  species_dt <- unique(tree_dt[,.(species,species_name)])
 
-  if(!is.null(env_dt)){
-    names(env_dt)[names(env_dt) == "siteID"] <- "siteID2"
-    env_dt <- merge(env_dt, siteID_dt[,.(siteID2, siteID, year, period)], by = c("siteID2","year"), all = all)
-    if(years2periods) {
-      env_dt[, year2 := year,]
-      env_dt[, year := period,]
-      env_dt <- env_dt[, -"period"]
-    }
-  }
+  tree_dt[, OrigYear := year,]
+  tree_dt[, year := period-1,]
+  tree_dt <- tree_dt[, -"period"]
 
-  if(!is.null(obs_dt)){
-    names(obs_dt)[names(obs_dt) == "siteID"] <- "siteID2"
-    names(obs_dt)[names(obs_dt) == "patchID"] <- "patchID2"
-    obs_dt <- merge(obs_dt, siteID_dt, by = c("siteID2", "patchID2", "year"), all = all)
-    if(years2periods) {
-      obs_dt[, year2 := year,]
-      obs_dt[, year := period,]
-      obs_dt <- obs_dt[, -"period"]
-    }
-    if(species2IDs){
-      obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = T)
-      out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
-    }else{
-      out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species_name")
-    }
-  }
+  env_dt <- merge(env_dt, siteID_dt[,.(siteName, siteID, year, period)], by = c("siteName","year"), all = F)
+  env_dt[, OrigYear := year,]
+  env_dt[, year := period-1,]
+  env_dt <- env_dt[, -"period"]
 
-  if(!is.null(initCohort_dt)){
-    names(initCohort_dt)[names(initCohort_dt) == "siteID"] <- "siteID2"
-    names(initCohort_dt)[names(initCohort_dt) == "patchID"] <- "patchID2"
-    initCohort_dt <- merge(initCohort_dt, siteID_dt, by = c("siteID2", "patchID2"), all = all)
-  }
+  obs_dt <- merge(obs_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = F)
+  obs_dt[, OrigYear := year,]
+  obs_dt[, year := period-1,]
+  obs_dt <- obs_dt[, -"period"]
+  obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = T)
+  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
 
-  if(years2periods) {
-    siteID_dt[, year2 := year, by = .(siteID, patchID)]
-    siteID_dt[, year := period, by = .(siteID, patchID)]
-    out_cols_siteID_dt <- c("siteID", "patchID", "siteID2", "patchID2", "year", "year2")
-  } else {
-    out_cols_siteID_dt <- c("siteID", "patchID", "siteID2", "patchID2", "year", "period")
-  }
+  obs_dt_aggr <- obs_dt[,.(ba = sum(ba, na.rm = T),
+                        dbh = mean(dbh, na.rm = T),
+                        trees = sum(trees, na.rm = T),
+                        growth = mean(growth, na.rm = T),
+                        mort = mean(mort, na.rm = T),
+                        reg = mean(reg, na.rm = T)),
+                    by = .(siteID, patchID, year, species, species_name)]
+  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
+
+  siteID_dt[, OrigYear := year, by = .(siteID, patchID)]
+  siteID_dt[, year := period, by = .(siteID, patchID)]
+  out_cols_siteID_dt <- c("siteID", "patchID", "siteName", "patchName", "year", "OrigYear")
 
   out <- list(
     siteID_dt = as.data.table(siteID_dt[,..out_cols_siteID_dt], key = NULL),
     tree_dt = as.data.table(tree_dt, key = NULL),
-    site_dt = as.data.table(site_dt, key = NULL),
     env_dt = as.data.table(env_dt, key = NULL),
-    obs_dt = as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL),
-    initCohort_dt = as.data.table(initCohort_dt, key = NULL)
+    obs_dt = as.data.table(obs_dt_aggr[,..out_cols_obs_dt_aggr], key = NULL),
+    obs_dt_patches = as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL)
+    # initCohort_dt = as.data.table(initCohort_dt, key = NULL)
   )
 
   if(createInitCohorts){
-    init_trees <- tree_dt[living == T & year == 1 & dbh > 0]
+    init_trees <- tree_dt[living == T & year == 1]
     if(!any(colnames(init_trees) %in% "trees")) init_trees[, trees := 1,]
     out[["initCohorts"]] <- makeInitCohorts(init_trees, Nspecies = uniqueN(obs_dt$species), treeID_table = F)
     out[["initCohort_dt"]] <- init_trees
   }
-
   return(out)
 }
 
@@ -146,29 +88,106 @@ dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
 }
 
-makeObsData <- function(tree_dt, plotsize){
+makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
+  # browser()
   tree_dt <- copy(as.data.table(tree_dt))
-  tree_dt[, dbh_before := data.table::shift(dbh,1,type = "lag"), by = treeID]
+  tree_dt[, dbh_before := data.table::shift(dbh,1,type = "lag"), by = treeName]
   tree_dt[, dbh_growth := dbh - dbh_before,]
   tree_dt[status == "alive", rel_growth := dbh/dbh_before - 1,]
   tree_dt[rel_growth < 0, rel_growth := 0,]
   tree_dt[living == T,trees := 1,]
-  tree_dt[, cohortID := as.integer(as.factor(treeID)), by = .(siteID,patchID)]
+
+  if(!is.null(Nspecies)){
+    alive_species <- names(sort(table(td[status %chin% c("alive","new")]$species_name), decreasing = TRUE))
+    selected_species <- alive_species[seq_len(min(Nspecies, length(alive_species)))]
+    message(paste0("Nspecies set to ", Nspecies))
+  }else if(!is.null(NspeciesQuantile)){
+    species_table = sort(table(tree_dt[status %chin% c("alive","new")]$species_name), decreasing = TRUE)
+    cumsum_species = cumsum(species_table)/sum(species_table)
+    Nspecies = which(cumsum_species >= NspeciesQuantile)[1]
+    selected_species <- names(cumsum_species)[1:Nspecies]
+    message(paste0("Nspecies set to ", Nspecies, " to cover ", round(NspeciesQuantile*100,1), "% of individuals"))
+  }else{
+    Nspecies = uniqueN(tree_dt[status %chin% c("alive","new")]$species_name)
+    selected_species = unique(tree_dt[status %chin% c("alive","new")]$species_name)
+    message(paste0("Nspecies set to all species (", Nspecies, ")"))
+  }
+  message(paste0("Selected species: ", paste(selected_species, collapse = ", ")))
+
+  other_species <- unique(tree_dt[!(species_name %in% selected_species)]$species_name)
+  tree_dt <- tree_dt[!(species_name %in% selected_species), species_name := "other",]
+  message(paste0("Combined ", uniqueN(other_species), " unselected species into 'other'"))
 
   obs_dt <- tree_dt[,.(
-    ba = sum(dbh2ba(dbh)*(living == T)),
+    ba = sum(dbh2ba(dbh)*(living == T), na.rm = T),
     growth = mean(rel_growth[living == T], na.rm = T),
     dbh = mean(dbh[living == T], na.rm = T),
     trees = sum(living == T, na.rm = T),
     n_mort = sum(mort == T, na.rm = T),
     reg = sum(status == "new", na.rm = T)/plotsize
-  ),by= .(siteID,patchID, year, species_name)]
+  ),by= .(siteName,patchName, year, species_name)]
 
+  selected_species <- sort(unique(obs_dt$species_name))[1:min(Nspecies, uniqueN(obs_dt$species_name))]
 
-  obs_dt[, trees_before := data.table::shift(trees, 1, type = "lag"), by = .(siteID, patchID, species_name)]
+  obs_dt[, trees_before := data.table::shift(trees, 1, type = "lag"), by = .(siteName, patchName, species_name)]
   obs_dt[, mort := 1-((trees_before-n_mort)/trees_before)^(1/1),]
 
-  return(obs_dt[,.(siteID, patchID, year, species_name, ba, dbh, trees, growth, mort, reg)])
+  # 1) Build, per site, the full cartesian grid of patch × year × species
+  grid <- obs_dt[, CJ(
+    patchName    = unique(patchName),
+    year         = unique(year),
+    species_name = unique(obs_dt$species_name),
+    unique = TRUE
+  ), by = siteName]
+
+  # 2) Key both tables on the join columns
+  setkey(obs_dt,  siteName, patchName, year, species_name)
+  setkey(grid,    siteName, patchName, year, species_name)
+
+  # 3) Join existing data onto the full grid (fills non-matches with NA)
+  obs_dt <- obs_dt[grid]
+
+  obs_dt[is.na(ba), ba := 0]
+  obs_dt[is.na(trees), trees := 0]
+  obs_dt[is.na(reg), reg := 0]
+  obs_dt[is.na(growth), growth := NA_real_]
+  obs_dt[is.na(mort), mort := NA_real_]
+  obs_dt[is.na(dbh), dbh := NA_real_]
+  obs_dt = obs_dt[order(siteName, patchName, species_name, year)]
+
+  if(!is.null(minNyears)){
+    obs_dt[, NyearsPerPatch := uniqueN(year), by = .(siteName, patchName)]
+    obs_dt[, sameYearsAllPatches := all(NyearsPerPatch == max(NyearsPerPatch)), by = siteName]
+    obs_dt <- obs_dt[sameYearsAllPatches == T & minNyears <= NyearsPerPatch]
+    message(paste0("Filtered to sites with at least ", minNyears, " years and all patches having the same number of years:\n", paste0("Sites with ",names(table(obs_dt$NyearsPerPatch)), " Inventories: ",table(obs_dt$NyearsPerPatch), collapse = "\n")))
+  }
+
+  if(!is.null(Npatches)){
+    obs_dt[, NpatchesPerSite := uniqueN(patchName), by = siteName]
+    obs_dt <- obs_dt[NpatchesPerSite == Npatches]
+    message(paste0("Filtered to sites with exactly ", Npatches, " patches: ", table(obs_dt$NpatchesPerSite)))
+  }else{
+    obs_dt[, NpatchesPerSite := uniqueN(patchName), by = siteName]
+    message(paste0("Sites have between ", min(obs_dt$NpatchesPerSite), " and ", max(obs_dt$NpatchesPerSite), " patches"))
+  }
+
+  if(aggregate_by_site){
+    obs_dt <- obs_dt[,.(
+      ba = mean(ba, na.rm = T),
+      trees = mean(trees, na.rm = T),
+      dbh = mean(dbh, na.rm = T),
+      growth = mean(growth, na.rm = T),
+      mort = mean(mort, na.rm = T),
+      reg = mean(reg, na.rm = T),
+      Npatches = uniqueN(patchName)
+    ), by = .(siteName, year, species_name)]
+    message("Aggregated obs_dt by siteName. For unaggregated data, set aggregate_by_site = FALSE")
+  }else{
+    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, mort, reg)]
+    message("Kept obs_dt unaggregated by siteName. For aggregated data, set aggregate_by_site = TRUE")
+  }
+
+  return(list(obs_dt = obs_dt, tree_dt = tree_dt))
 }
 
 
@@ -178,7 +197,7 @@ makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspe
     dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = T) + dbh_binsize, by = dbh_binsize)
     init_trees <- init_trees[,.(
       trees = sum(trees)),
-      by = .(siteID, patchID, species, treeID,
+      by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
                cut(dbh, breaks = dbh_intervals, labels = dbh_intervals[-1]-dbh_binsize/2, include.lowest = TRUE)
                ))
@@ -222,8 +241,6 @@ createInputs <- function(site_dt, tree_dt, Nspecies, patchsize = patchsize, dbh_
   env_dt <- makeEnvData(site_dt)
 
   obs_dt <- makeObsData(tree_dt, Nspecies = Nspecies)
-
-
 
   initCohort <- makeInitCohorts(tree_dt, dbh_binsize, Nspecies = Nspecies, site_dt)
 
