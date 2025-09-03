@@ -262,6 +262,7 @@ finn = nn_module(
         cohortHeights = NULL
       )
 
+      # browser()
       ### Regeneration ####
       if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
       else pred = env[["reg"]][,i,]
@@ -436,12 +437,13 @@ finn = nn_module(
       if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
+          # browser()
           # #dbh
           loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
           # ba
           loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
           # counts
-          loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
+          loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,]+0.00001)
 
 
           # growth rates - check for NA in period_length, if not, then accumulate gradients?
@@ -480,9 +482,29 @@ finn = nn_module(
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,i,])
             self$loss_raw = as.numeric(loss)
-            loss$sum()$backward()
-            for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+            # ---- Check loss before backward ----
+            if (!as.logical(loss$isfinite()$all()$item())) {
+              cat("\n>>> Non-finite loss detected at time step", i, "\n")
+
+              # Inspect each component
+              for (k in 1:length(loss)) {
+                cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
+                    " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
+              }
+
+              # Drop into debug mode
+              browser()
+
+              # You can choose to skip backward() and continue:
+              # next
+            } else {
+              loss$sum()$backward()
+              for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+            }
           }
+          # Also check each component tensor you pass into distribution losses
+
+
 
           dbh=dbh$detach()
           trees=trees$detach()
@@ -505,7 +527,7 @@ finn = nn_module(
 
     }
 
-    #browser()
+    # browser()
 
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
     if(debug){
@@ -548,7 +570,7 @@ finn = nn_module(
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
-
+    # browser()
     envs = private$extract_env_method(env)
 
     if(!is.null(disturbance)) {
@@ -788,9 +810,53 @@ finn = nn_module(
                                 verbose = FALSE,
                                 year_sequence = year_sequence)
 
+        # browser()
         pred = pred_tmp[[1]]
         loss = pred_tmp[[2]]
-        .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
+        # ---- Guard before gradient clipping ----
+        # Safe gradient checker: skips NULL or undefined grads
+        check_grads <- function(params) {
+          bad <- list()
+
+          has_defined_grad <- function(p) {
+            if (is.null(p$grad)) return(FALSE)
+            ok <- tryCatch({
+              # if this fails, grad is undefined
+              g <- p$grad$detach()
+              TRUE
+            }, error = function(e) FALSE)
+            ok
+          }
+
+          for (nm in names(params)) {
+            p <- params[[nm]]
+            if (!has_defined_grad(p)) next
+
+            g <- p$grad$detach()
+
+            all_finite <- as.logical(g$isfinite()$all()$item())
+            if (!all_finite) {
+              bad[[nm]] <- list(
+                n_nan  = as.numeric(g$isnan()$sum()$item()),
+                n_inf  = as.numeric(g$isinf()$sum()$item()),
+                max_abs = tryCatch(as.numeric(g$abs()$max()$item()),
+                                   error = function(e) NA_real_)
+              )
+            }
+          }
+
+          bad
+        }
+
+        bad <- check_grads(self$parameters)
+
+        if (length(bad) > 0) {
+          cat("\n>>> Non-finite gradients detected before clipping!\n")
+          print(bad)
+          browser()   # enter interactive debugger
+        } else {
+          .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
+        }
 
         self$optimizer$step()
 

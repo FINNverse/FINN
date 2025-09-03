@@ -15,7 +15,7 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   # browser()
   siteID_dt <- unique(env_dt[,.(siteName, year)])
 
-  siteID_dt <- merge(siteID_dt, unique(tree_dt[living == T,.(siteName, year)]), by = c("siteName", "year"), all = F)
+  siteID_dt <- merge(siteID_dt, unique(tree_dt[,.(siteName, year)]), by = c("siteName", "year"), all = F)
 
   siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = F)
 
@@ -65,7 +65,8 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
     tree_dt = as.data.table(tree_dt, key = NULL),
     env_dt = as.data.table(env_dt, key = NULL),
     obs_dt = as.data.table(obs_dt_aggr[,..out_cols_obs_dt_aggr], key = NULL),
-    obs_dt_patches = as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL)
+    obs_dt_patches = as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL),
+    species_dt = species_dt
     # initCohort_dt = as.data.table(initCohort_dt, key = NULL)
   )
 

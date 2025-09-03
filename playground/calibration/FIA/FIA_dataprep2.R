@@ -98,11 +98,18 @@ td[status == "dead" & status_before == "alive", mort := TRUE]
 td[status %chin% c("alive", "new"),          living := TRUE]
 
 # Aggregate to FINN obs structure (ba/trees/dbh/growth/mort/reg per site/patch/species/year)
-sampled_siteNames <- sample(unique(td$siteName), 100)
-obs_list <- makeObsData(tree_dt = td[siteName %in% sampled_siteNames], plotsize = 0.06, aggregate_by_site = F, Nspecies = 0, Npatches = 4)
+# sampled_siteNames <- sample(unique(td$siteName), 500)
+obs_list <- makeObsData(
+  tree_dt = td,
+  plotsize = 0.06,
+  aggregate_by_site = F,
+  Nspecies = 5, Npatches = 4, minNyears = 3)
 
-obs_dt = obs_list$obs_dt
-tree_dt = obs_list$tree_dt
+obs_list$obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
+obs_dt = obs_list$obs_dt[siteName %in% sample(unique(obs_list$obs_dt$siteName), 200)]
+obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
+tree_dt = obs_list$tree_dt[siteName %in% unique(obs_dt$siteName)]
+tree_dt[,.(Nyear = uniqueN(year)), by = siteName]
 
 ## 7) Select sites (species & patch consistency)  [select sites] ----
 # Example selection: keep top N species and patches with full time coverage
@@ -116,46 +123,103 @@ inputs <- resolveSiteIDs(
   env_dt             = as.data.table(env_dt),
   createInitCohorts = F
 )
-
 tree_dt <- inputs$tree_dt[year != 0]
 obs_dt <- inputs$obs_dt[year != 0]
-env_dt <- inputs$env_dt[year != 0, .(siteID, year, temp = as.numeric(scale(temp)),prec = as.numeric(scale(prec)))]
+env_dt <- unique(inputs$env_dt[year != 0, .(siteID, year, temp = as.numeric(scale(temp)),prec = as.numeric(scale(prec)))])
 init_trees <- inputs$tree_dt[year == 0 & living == T]
 init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(init_trees$species))
 
 m1 <- finn(
   N_species            = uniqueN(obs_dt$species),
-  recruits_dbh         = 12.9,
+  recruits_dbh         = 1,
   competition_process  = createProcess(~0,     FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~1+temp, FINN::growth,   optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~1+temp, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~1+temp, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createProcess(~1+temp+prec, FINN::growth,   optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~1+temp+prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~1+temp+prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 
+# env2 <- data.table(expand.grid(list(
+#   siteID = 1:10,
+#   year = 1:2
+# )))
+#
+# env2$temp = rnorm(nrow(env2), 0, 1)
+# sim2 = m1$simulate(env2, patches = 4L, patch_size = 0.06)
+# obs_dt2 <- sim2$wide$site
+# obs_dt2[,reg:=r_mean_ha,]
+# summary(obs_dt2)
+
+# obs_dt2[,trees := round(trees+1),]
+
+# m1$fit(
+#   env        = env2,
+#   data       = obs_dt2,
+#   init       = NULL,
+#   device     = "cpu",
+#   epochs     = 500,
+#   batchsize  = 10L,
+#   patch_size = 0.06,
+#   patches    = 4,
+#   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse")
+# )
+
 m1$fit(
-  env        = env_dt[,-c("prec")],
-  data       = obs_dt,
+  env        = env_dt,
+  data       = unique(obs_dt),
   init       = init_cohorts,
   device     = "cpu",
   epochs     = 500,
   batchsize  = 10L,
   patch_size = 0.06,
   patches    = 4,
-  lr         = 0.0000001
+  lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
 
-str(m1$raw_g)
+env_dt2 <- env_dt[year == 1]
+for(i in 2:200){
+  env_dt2 <- rbind(env_dt2, env_dt[year == 1,.(siteID, year = i, prec, temp)])
+}
 
 
-## (Optional) Minimal model to debug growth/mortality structure ----
-# m1 <- finn(
-#   N_species = uniqueN(obs_dt$species), recruits_dbh = 12.9,
-#   competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
-#   growth_process       = createProcess(~1, FINN::growth,      optimizeSpecies = TRUE, optimizeEnv = TRUE),
-#   regeneration_process = createProcess(~1, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-#   mortality_process    = createProcess(~1, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
-# )
-# m1$fit(env = env_dt[, .(siteID, year, temp, prec)], data = obs_dt, init = init_dt, ...)
+species_dt <- unique(inputs$obs_dt[,.(species, species_name)])
+sim2 <- m1$simulate(env_dt2)
+p_dat <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable)]
+p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
+p_dat[variable %in% c("ba","trees"), value := value/0.06]
+
+library(ggplot2)
+ggplot(p_dat,
+       aes(x = year, y = value, color = factor(species_name))) +
+  geom_line() +
+  facet_wrap(~variable, scales = "free_y")
+
+p_dat2 <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable,siteID)]
+p_dat2 <- merge(env_dt, p_dat2, by = c("year","siteID"), all.x = TRUE)
+p_dat2[variable %in% c("ba","trees"), value := value/0.06]
+p_dat2 <- merge(p_dat2, species_dt, by = "species", all.x = TRUE)
+
+# add prec and value to variable column by making it long
+
+p1 = ggplot(p_dat2,
+       aes(x = prec, y = value, color = factor(species_name))) +
+  geom_point() +
+  geom_smooth()+
+  facet_wrap(~variable, scales = "free_y", ncol = 1)+
+  theme_minimal()+
+  scale_color_discrete(name = "Species")
+
+p2 = ggplot(p_dat2,
+       aes(x = temp, y = value, color = factor(species_name))) +
+  geom_point() +
+  geom_smooth()+
+  facet_wrap(~variable, scales = "free_y", ncol = 1)+
+  theme_minimal()+
+  scale_color_discrete(name = "Species")
+
+#arrange with common legend
+library(patchwork)
+(p1 | p2) + plot_layout(guides = "collect") & theme(legend.position = 'bottom')
+
 
 ## 12) Save (optional) ----
 fwrite(site_dt, "vignettes/FIAsubset_sites.csv")
