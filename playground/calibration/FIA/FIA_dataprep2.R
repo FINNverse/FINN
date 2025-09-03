@@ -131,7 +131,7 @@ init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(init_trees$species))
 
 m1 <- finn(
   N_species            = uniqueN(obs_dt$species),
-  recruits_dbh         = 1,
+  recruits_dbh         = 12.9,
   competition_process  = createProcess(~0,     FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~1+temp+prec, FINN::growth,   optimizeSpecies = TRUE, optimizeEnv = TRUE),
   regeneration_process = createProcess(~1+temp+prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
