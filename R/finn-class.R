@@ -585,14 +585,16 @@ finn = nn_module(
     if(is.null(batchsize)) batchsize = nrow(envs[[1]])
     sites =  nrow(envs[[1]])
 
-    if(is.null(init_cohort)) {
-      sp = self$N_species
-      self$init_cohort = CohortMat(dims = c(sites, patches, sp),
-                                   dbh = array(1, dim = c(sites, patches, sp)),
-                                   trees = array(1, dim = c(sites, patches, sp)),
-                                   sp = sp)
+    sp <- self$N_species
+    local_init <- if (is.null(init_cohort)) {
+      CohortMat(
+        dims  = c(sites, patches, sp),
+        dbh   = array(1, dim = c(sites, patches, sp)),
+        trees = array(1, dim = c(sites, patches, sp)),
+        sp    = sp
+      )
     } else {
-      self$init_cohort = init_cohort
+      init_cohort
     }
     self$to(device = device)
     if(is.null(disturbance)) {
@@ -623,9 +625,9 @@ finn = nn_module(
       dist = NULL
       if(!is.null(disturbance)) dist = b[[5]]$to(device = self$device, non_blocking=TRUE)
 
-      trees = self$init_cohort$trees$to(device = self$device, non_blocking=TRUE)[ind,]
-      species = self$init_cohort$species$to(device = self$device, non_blocking=TRUE)[ind,]
-      dbh = self$init_cohort$dbh$to(device = self$device, non_blocking=TRUE)[ind,]
+      trees   = local_init$trees$to(device = self$device, non_blocking = TRUE)[ind,]
+      species = local_init$species$to(device = self$device, non_blocking = TRUE)[ind,]
+      dbh     = local_init$dbh$to(device = self$device, non_blocking = TRUE)[ind,]
       pred_tmp = self$forward(dbh = dbh,
                               trees = trees,
                               species = species,
@@ -764,7 +766,7 @@ finn = nn_module(
     self$history = list()
     self$gradients = list()
 
-    self$optimizer = optimizer(self$parameters, lr = lr, ...)
+    if(is.null(self$optimizer)) self$optimizer = optimizer(self$parameters, lr = lr, ...)
 
     cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} DBH: {dbh_l} BA: {ba_l} Trees: {trees_l} g: {g_l} m: {m_l} r: {r_l}", total = epochs, clear = FALSE)
     if(is.null(year_sequence)) year_sequence = 1:envs[[1]]$shape[2]
