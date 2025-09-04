@@ -14,9 +14,7 @@
 resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   # browser()
   siteID_dt <- unique(env_dt[,.(siteName, year)])
-
   siteID_dt <- merge(siteID_dt, unique(tree_dt[,.(siteName, year)]), by = c("siteName", "year"), all = F)
-
   siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = F)
 
   siteID_dt[, siteID := as.integer(as.factor(siteName)),]
@@ -117,7 +115,8 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npa
 
   other_species <- unique(tree_dt[!(species_name %in% selected_species)]$species_name)
   tree_dt <- tree_dt[!(species_name %in% selected_species), species_name := "other",]
-  message(paste0("Combined ", uniqueN(other_species), " unselected species into 'other'"))
+  Nspecies = Nspecies + 1
+  message(paste0("Combined ", uniqueN(other_species), " unselected species into 'other'\nactuall number of species including 'others' is ", Nspecies))
 
   obs_dt <- tree_dt[,.(
     ba = sum(dbh2ba(dbh)*(living == T), na.rm = T),
@@ -127,8 +126,6 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npa
     n_mort = sum(mort == T, na.rm = T),
     reg = sum(status == "new", na.rm = T)/plotsize
   ),by= .(siteName,patchName, year, species_name)]
-
-  selected_species <- sort(unique(obs_dt$species_name))[1:min(Nspecies, uniqueN(obs_dt$species_name))]
 
   obs_dt[, trees_before := data.table::shift(trees, 1, type = "lag"), by = .(siteName, patchName, species_name)]
   obs_dt[, mort := 1-((trees_before-n_mort)/trees_before)^(1/1),]
@@ -248,4 +245,51 @@ createInputs <- function(site_dt, tree_dt, Nspecies, patchsize = patchsize, dbh_
   if(checkInputs(env_dt, obs_dt, initCohort, patchsize) == FALSE) stop("Input check failed")
 
   return(list(env_dt = env_dt, obs_dt = obs_dt, initCohort = initCohort, patchsize = patchsize, Nspecies = Nspecies))
+}
+
+
+
+add_site_completeness_flags <- function(env_dt = NULL,
+                                        tree_dt = NULL,
+                                        obs_dt = NULL) {
+  stopifnot(!is.null(env_dt) || !is.null(tree_dt) || !is.null(obs_dt))
+
+  # Collect all provided inputs
+  inputs <- list(env_dt = env_dt, tree_dt = tree_dt, obs_dt = obs_dt)
+  inputs <- inputs[!vapply(inputs, is.null, logical(1))]
+
+  # Extract (siteName, year) keys for each
+  key_list <- lapply(inputs, function(DT) unique(DT[, .(siteName, year)]))
+
+  # Find intersection across provided tables
+  common_keys <- Reduce(
+    function(x, y) merge(x, y, by = c("siteName", "year"), all = FALSE),
+    key_list
+  )
+  common_years <- common_keys[, .(common = list(sort(unique(year)))), by = siteName]
+  setkey(common_years, siteName)
+
+  # Helper: add flag to one DT by reference
+  add_flag <- function(DT) {
+    sy <- unique(DT[, .(siteName, year)])[
+      , .(years = list(sort(unique(year)))), by = siteName
+    ]
+    setkey(sy, siteName)
+
+    comp <- sy[common_years][
+      , .(siteName, is_complete = unlist(Map(identical, years, common)))
+    ]
+
+    DT[, complete := FALSE]
+    DT[comp, on = "siteName",
+       complete := fifelse(is.na(i.is_complete), FALSE, i.is_complete)]
+    invisible(NULL)
+  }
+
+  # Apply to each provided table
+  if (!is.null(env_dt))  add_flag(env_dt)
+  if (!is.null(tree_dt)) add_flag(tree_dt)
+  if (!is.null(obs_dt))  add_flag(obs_dt)
+
+  invisible(NULL)
 }
