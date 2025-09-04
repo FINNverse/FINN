@@ -5,7 +5,6 @@
 ############################################################
 
 ## 0) Setup ----
-library(rFIA)
 library(dplyr)
 library(data.table)
 library(terra)
@@ -14,62 +13,73 @@ library(FINN)
 
 source("R/createInputs.R")   # supplies makeObsData(), resolveSiteIDs(), createInitCohorts() if present
 
-dir.path <- "data/FIA"       # <— adjust to your layout
+if(!file.exists("data/FIA/FIA_trees_raw.csv")){
 
-## 1) Download / Load FIA (state = OR) ----
-# rFIA::getFIA(states = "OR", dir = dir.path, common = TRUE)
-fia <- readFIA(dir = dir.path, common = TRUE, states = "OR")
+  library(rFIA)
+  dir.path <- "data/FIA"       # <— adjust to your layout
 
-## 2) Build site_dt (from PLOT)  [site_dt] ----
-site_dt <- fia$PLOT %>%
-  mutate(siteName = paste(COUNTYCD, PLOT, sep = "_")) %>%
-  filter(INVYR > 2000, PLOT_STATUS_CD == 1) %>%
-  transmute(
-    siteName,
-    year = MEASYEAR,
-    x = LON,
-    y = LAT
-  ) %>%
-  distinct() %>%
-  as.data.table()
+  ## 1) Download / Load FIA (state = OR) ----
+  # rFIA::getFIA(states = "OR", dir = dir.path, common = TRUE)
+  fia <- readFIA(dir = dir.path, common = TRUE, states = "OR")
 
-## 3) Build raw tree_dt (from TREE + PLOT year)  [tree_dt] ----
-tree_dt <- fia$TREE %>%
-  filter(INVYR > 2000, DIA > 5) %>%            # annual program, subplots only
-  left_join(fia$PLOT %>% select(CN, MEASYEAR),
-            by = c("PLT_CN" = "CN")) %>%
-  mutate(
-    treeName  = paste(COUNTYCD, PLOT, SUBP, TREE, sep = "_"),
-    siteName  = paste(COUNTYCD, PLOT, sep = "_"),
-    patchName = paste(COUNTYCD, PLOT, SUBP, sep = "_"),
-    year    = MEASYEAR,
-    dbh     = DIA * 2.54                         # in → cm
-  ) %>%
-  select(siteName, patchName, treeName, year, SPCD, dbh, STATUSCD,
-         PREV_TRE_CN, PREV_STATUS_CD, AGENTCD) %>%
-  as.data.table()
+  ## 2) Build site_dt (from PLOT)  [site_dt] ----
+  site_dt <- fia$PLOT %>%
+    mutate(siteName = paste(COUNTYCD, PLOT, sep = "_")) %>%
+    filter(INVYR > 2000, PLOT_STATUS_CD == 1) %>%
+    transmute(
+      siteName,
+      year = MEASYEAR,
+      x = LON,
+      y = LAT
+    ) %>%
+    distinct() %>%
+    as.data.table()
 
-## 3a) Attach species names (optional but handy) ----
-species_dt <- as.data.table(read_xlsx("data/FIA/v9-5_2024-10_Natl_MasterTreeSpeciesList.xlsx"))[
-  , .(SPCD = `FIA Code`, species_name = SCIENTIFIC_NAME)
-]
-tree_dt <- merge(tree_dt, species_dt, by = "SPCD", all.x = TRUE)
+  ## 3) Build raw tree_dt (from TREE + PLOT year)  [tree_dt] ----
+  tree_dt <- fia$TREE %>%
+    filter(INVYR > 2000, DIA > 5) %>%            # annual program, subplots only
+    left_join(fia$PLOT %>% select(CN, MEASYEAR),
+              by = c("PLT_CN" = "CN")) %>%
+    mutate(
+      treeName  = paste(COUNTYCD, PLOT, SUBP, TREE, sep = "_"),
+      siteName  = paste(COUNTYCD, PLOT, sep = "_"),
+      patchName = paste(COUNTYCD, PLOT, SUBP, sep = "_"),
+      year    = MEASYEAR,
+      dbh     = DIA * 2.54                         # in → cm
+    ) %>%
+    select(siteName, patchName, treeName, year, SPCD, dbh, STATUSCD,
+           PREV_TRE_CN, PREV_STATUS_CD, AGENTCD) %>%
+    as.data.table()
 
-## 4) Define status flags on trees  [define status] ----
-# (new/alive/dead + mort cause) — strictly on tree records
-tree_dt[, status :=
-          fifelse(STATUSCD == 1 & is.na(PREV_TRE_CN), "new",
-                  fifelse(STATUSCD == 1 & !is.na(PREV_TRE_CN), "alive",
-                          fifelse(STATUSCD == 2, "dead", NA_character_)))]
+  ## 3a) Attach species names (optional but handy) ----
+  species_dt <- as.data.table(read_xlsx("data/FIA/v9-5_2024-10_Natl_MasterTreeSpeciesList.xlsx"))[
+    , .(SPCD = `FIA Code`, species_name = SCIENTIFIC_NAME)
+  ]
+  tree_dt <- merge(tree_dt, species_dt, by = "SPCD", all.x = TRUE)
 
-tree_dt[, mort_cause := fifelse(STATUSCD == 2 & AGENTCD %in% c(0, 70), "unknown",
-                                fifelse(STATUSCD == 2 & AGENTCD == 10, "insect",
-                                        fifelse(STATUSCD == 2 & AGENTCD == 20, "disease",
-                                                fifelse(STATUSCD == 2 & AGENTCD == 30, "fire",
-                                                        fifelse(STATUSCD == 2 & AGENTCD == 40, "animal",
-                                                                fifelse(STATUSCD == 2 & AGENTCD == 50, "weather",
-                                                                        fifelse(STATUSCD == 2 & AGENTCD == 60, "competition",
-                                                                                fifelse(STATUSCD == 2 & AGENTCD == 80, "land use", NA_character_))))))))]
+  ## 4) Define status flags on trees  [define status] ----
+  # (new/alive/dead + mort cause) — strictly on tree records
+  tree_dt[, status :=
+            fifelse(STATUSCD == 1 & is.na(PREV_TRE_CN), "new",
+                    fifelse(STATUSCD == 1 & !is.na(PREV_TRE_CN), "alive",
+                            fifelse(STATUSCD == 2, "dead", NA_character_)))]
+
+  tree_dt[, mort_cause := fifelse(STATUSCD == 2 & AGENTCD %in% c(0, 70), "unknown",
+                                  fifelse(STATUSCD == 2 & AGENTCD == 10, "insect",
+                                          fifelse(STATUSCD == 2 & AGENTCD == 20, "disease",
+                                                  fifelse(STATUSCD == 2 & AGENTCD == 30, "fire",
+                                                          fifelse(STATUSCD == 2 & AGENTCD == 40, "animal",
+                                                                  fifelse(STATUSCD == 2 & AGENTCD == 50, "weather",
+                                                                          fifelse(STATUSCD == 2 & AGENTCD == 60, "competition",
+                                                                                  fifelse(STATUSCD == 2 & AGENTCD == 80, "land use", NA_character_))))))))]
+
+  #write output so that the data can be read without rFIA package
+  fwrite(tree_dt, "data/FIA/FIA_trees_raw.csv")
+  fwrite(site_dt, "data/FIA/FIA_sites_raw.csv")
+}else{
+  tree_dt <- fread("data/FIA/FIA_trees_raw.csv")
+  sites_dt <- fread("data/FIA/FIA_sites_raw.csv")
+}
 
 # convenience lag for obs building
 setorder(tree_dt, treeName, year)
