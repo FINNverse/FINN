@@ -968,22 +968,22 @@ finn = nn_module(
                   else return(0.0)
                 }
               })
-          } else if(tmp_loss == "nbinom") {
-            # Trees can be also set to nbinom, recruits always (?) have theta, so create theta only for trees, otherwise use self$par_theta_recruits
-            if(tmp_loss_name == "trees") {
-              self[[paste0("par_loss_",tmp_loss_name, "_theta")]] = torch::nn_parameter(torch_tensor(0.5413))
-              func =
-                local({
-                  local_tmp_loss_name = tmp_loss_name
-                  local_l = l
-                  local_weights = weights
-                  function(true, pred) {
-                    mask = true$isnan()$bitwise_not()
-                    theta = 1.0/torch::nnf_softplus( self[[paste0("par_loss_",local_tmp_loss_name, "_theta")]] )
-                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta)$mean()*local_weights[local_l])
-                    else return(0.0)
+          } else if (tmp_loss == "nbinom") {
+            if (tmp_loss_name == "trees") {
+              func <- local({
+                local_l <- l
+                local_weights <- weights
+                function(true, pred) {
+                  mask <- true$isnan()$bitwise_not()
+                  if (!as.logical(mask$max()$data())) {
+                    # return a zero scalar on the right device/dtype
+                    return(torch_zeros(1, device = pred$device, dtype = pred$dtype)$squeeze())
                   }
-                })
+                  theta <- self$par_theta_trees                # uses active getter (positive)
+                  mu    <- torch::nnf_softplus(pred) + 1e-8    # ensure positive mean
+                  dnbinom_torch(mu[mask], true[mask], theta)$mean() * local_weights[local_l]
+                }
+              })
             } else if(tmp_loss_name == "regeneration") {
               func =
                 local({
@@ -1099,6 +1099,10 @@ finn = nn_module(
         self$par_theta_recruits = obj$dispersion_parameter
       }
 
+      if (is.null(self$par_theta_trees_raw)) {
+        self$par_theta_trees <- 0.5413  # calls the setter above, creates the param
+      }
+
     },
     setup_species_parameters = function(obj, type, hybrid) {
       self[[paste0(type, "_func")]] = private$set_environment(obj$func)
@@ -1171,6 +1175,19 @@ finn = nn_module(
       } else {
         value = 1.0 / value - 0.0001
         self$par_theta_recruits_raw = torch::nn_parameter( torch_tensor(log( exp(value) - 1.0 )) )
+      }
+    },
+
+    par_theta_trees = function(value) {
+      if (missing(value)) {
+        # getter: return constrained theta (>0)
+        return(1.0 / (torch::nnf_softplus(self$par_theta_trees_raw) + 1e-4))
+      } else {
+        # setter: accept theta (>0), store as raw nn_parameter
+        value <- 1.0 / value - 1e-4
+        self$par_theta_trees_raw <- torch::nn_parameter(
+          torch_tensor(log(exp(value) - 1.0))
+        )
       }
     },
 
