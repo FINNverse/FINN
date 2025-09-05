@@ -12,7 +12,8 @@ competition(
   h = NULL,
   patch_size_ha,
   ba = NULL,
-  cohortHeights = NULL
+  cohortHeights = NULL,
+  n_quantiles = 10
 )
 }
 \arguments{
