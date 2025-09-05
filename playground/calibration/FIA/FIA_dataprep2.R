@@ -10,7 +10,7 @@ library(data.table)
 library(terra)
 library(readxl)
 library(FINN)
-
+Sys.setenv(CUDA_VISIBLE_DEVICES=3)
 source("R/createInputs.R")   # supplies makeObsData(), resolveSiteIDs(), createInitCohorts() if present
 
 if(!file.exists("data/FIA/FIA_trees_raw.csv")){
@@ -78,7 +78,7 @@ if(!file.exists("data/FIA/FIA_trees_raw.csv")){
   fwrite(site_dt, "data/FIA/FIA_sites_raw.csv")
 }else{
   tree_dt <- fread("data/FIA/FIA_trees_raw.csv")
-  sites_dt <- fread("data/FIA/FIA_sites_raw.csv")
+  site_dt <- fread("data/FIA/FIA_sites_raw.csv")
 }
 
 # convenience lag for obs building
@@ -116,12 +116,13 @@ obs_list <- makeObsData(
   plotsize = 0.06,
   aggregate_by_site = F,
   # NspeciesQuantile = 0.9,
-  Nspecies = 5,
+  Nspecies = 10,
   Npatches = 4, minNyears = 3)
 
 # obs_list$obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 set.seed(2)
-obs_dt = obs_list$obs_dt[siteName %in% sample(unique(obs_list$obs_dt$siteName), 50)]
+# uniqueN(obs_list$obs_dt$siteName)
+obs_dt = obs_list$obs_dt[siteName %in% sample(unique(obs_list$obs_dt$siteName), 500)]
 # obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 tree_dt = obs_list$tree_dt[siteName %in% unique(obs_dt$siteName)]
 # tree_dt[,.(Nyear = uniqueN(year)), by = siteName]
@@ -166,126 +167,13 @@ m1$fit(
   env        = env_dt,
   data       = unique(obs_dt),
   init_cohort = init_cohorts,
-  device     = "cpu",
-  epochs     = 100,
-  batchsize  = 50L,
+  device     = "gpu",
+  epochs     = 200,
+  batchsize  = 250L,
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
-
-par1 = m1$parameters_r
-
-# simulate ####
-env_dt2 <- env_dt[year == 1]
-for(i in 2:200){
-  env_dt2 <- rbind(env_dt2, env_dt[year == 1,.(siteID, year = i, prec, temp)])
-}
-species_dt <- unique(inputs$obs_dt[,.(species, species_name)])
-sim2 <- m1$simulate(env_dt2, init_cohort = NULL)
-p_dat <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable)]
-p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
-p_dat[variable %in% c("ba","trees"), value := value/0.06]
-wide_dt <- sim2$wide$site
-wide_dt <- merge(wide_dt, species_dt, by = "species", all.x = TRUE)
-wide_dt[,.(ba = mean(ba)), by = species_name]
-library(ggplot2)
-ggplot(p_dat[year <= 200],
-       aes(x = year, y = value, color = factor(species_name))) +
-  geom_line() +
-  facet_wrap(~variable, scales = "free_y")
-
-
-pred <- m1$simulate(env_dt, init_cohort = init_cohorts)
-pred_dt <- pred$wide$site
-
-obs_dt_long <- melt(obs_dt, id.vars = c("siteID","year","species"), measure.vars = c("ba","trees","growth","mort","reg"), value.name = "Obs")
-# obs_dt_long$SimObs <- "obs"
-pred_dt_long <- melt(pred_dt, id.vars = c("siteID","year","species"), measure.vars = c("ba","trees","growth","mort","reg"), value.name = "Sim")
-# pred_dt_long$SimObs <- "sim"
-
-comp_dt_long <- merge(obs_dt_long, pred_dt_long, by = c("siteID","year","species","variable"), all = TRUE)
-
-#calculate cors
-comp_dt_long[,.(cor = cor(Sim, Obs, use = "complete.obs")), by = .(variable)]
-
-ggplot(comp_dt_long,
-       aes(x = Sim, y = Obs, color = factor(species))) +
-  geom_point() +
-  geom_smooth(method = "lm")+
-  facet_wrap(~variable, scales = "free_y")
-
-
-par1afterSimulate = m1$parameters_r
-
-# fit again ####
-m1$fit(
-  env        = env_dt,
-  data       = unique(obs_dt),
-  init_cohort = init_cohorts,
-  device     = "cpu",
-  epochs     = 500,
-  batchsize  = 10L,
-  patch_size = 0.06,
-  patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-  lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
-)
-# sim0 <- m1$simulate(env_dt, init_cohort = NULL)
-par2 <- m1$parameters_r
-par1$par_theta_recruits_raw
-par2$par_theta_recruits_raw
-
-# print difference between each element in par1 and par2
-for(i in names(par1)){
-  print(i)
-  print(par1[[i]] - par2[[i]])
-}
-
-# simulate again ####
-sim2 <- m1$simulate(env_dt2, init_cohort = NULL)
-p_dat <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable)]
-p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
-p_dat[variable %in% c("ba","trees"), value := value/0.06]
-wide_dt <- sim2$wide$site
-wide_dt <- merge(wide_dt, species_dt, by = "species", all.x = TRUE)
-wide_dt[,.(ba = mean(ba)), by = species_name]
-library(ggplot2)
-ggplot(p_dat[year <= 200],
-       aes(x = year, y = value, color = factor(species_name))) +
-  geom_line() +
-  facet_wrap(~variable, scales = "free_y")
-
-
-
-par1$par_theta_recruits_raw
-par2$par_theta_recruits_raw
-
-
-par1$par_theta_recruits_raw
-par2$par_theta_recruits_raw
-par1$par_competition_unconstrained
-par2$par_competition_unconstrained
-m1$fit(
-  env        = env_dt,
-  data       = unique(obs_dt),
-  init       = init_cohorts,
-  device     = "cpu",
-  epochs     = 100,
-  batchsize  = 10L,
-  patch_size = 0.06,
-  patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-  lr         = 0.000000000000000000000001#, loss = c("mse","mse","mse","mse","mse","mse","mse")
-)
-par3 <- m1$parameters_r
-par3$par_theta_recruits_raw
-identical(par1,par3)
-
-
-env_dt2 <- env_dt[year == 1]
-for(i in 2:200){
-  env_dt2 <- rbind(env_dt2, env_dt[year == 1,.(siteID, year = i, prec, temp)])
-}
-
 
 species_dt <- unique(inputs$obs_dt[,.(species, species_name)])
 sim2 <- m1$simulate(env_dt2, init_cohort = NULL)
@@ -310,19 +198,19 @@ p_dat2 <- merge(p_dat2, species_dt, by = "species", all.x = TRUE)
 
 # add prec and value to variable column by making it long
 
-p1 = ggplot(p_dat2,
-       aes(x = prec, y = value, color = factor(species_name))) +
+p1 = ggplot(p_dat2[variable == "growth"],
+            aes(x = prec, y = value)) +
   geom_point() +
   geom_smooth()+
-  facet_wrap(~variable, scales = "free_y", ncol = 1)+
+  facet_wrap(~species_name, scales = "free_y", ncol = 2)+
   theme_minimal()+
   scale_color_discrete(name = "Species")
 
-p2 = ggplot(p_dat2,
-       aes(x = temp, y = value, color = factor(species_name))) +
+p2 = ggplot(p_dat2[variable == "growth"],
+            aes(x = temp, y = value)) +
   geom_point() +
   geom_smooth()+
-  facet_wrap(~variable, scales = "free_y", ncol = 1)+
+  facet_wrap(~species_name, scales = "free_y", ncol = 2)+
   theme_minimal()+
   scale_color_discrete(name = "Species")
 
@@ -337,3 +225,37 @@ fwrite(tree_dt, "vignettes/FIAsubset_trees.csv")
 fwrite(env_dt,  "vignettes/FIAsubset_env.csv")
 fwrite(obs_dt,  "vignettes/FIAsubset_obs.csv")
 if (!is.null(init_dt)) fwrite(init_dt, "vignettes/FIAsubset_init.csv")
+
+growth = m1$parameters_r$nn_growth.0.weight
+
+growth <- cbind(species_dt[,-"species"], growth)
+growth_dt <- data.table::melt(growth, id.vars = "species_name")
+ggplot(growth_dt, aes(x = value, y = species_name,))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~variable)
+
+mort = m1$parameters_r$nn_mortality.0.weight
+mort <- cbind(species_dt[,-"species"], mort)
+mort_dt <- data.table::melt(mort, id.vars = "species_name")
+ggplot(mort_dt, aes(x = value, y = species_name,))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~variable)
+
+reg = m1$parameters_r$nn_regeneration.0.weight
+reg <- cbind(species_dt[,-"species"], reg)
+reg_dt <- data.table::melt(reg, id.vars = "species_name")
+ggplot(reg_dt, aes(x = value, y = species_name,))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~variable)
+
+comp1_dt <- rbindlist(list(
+  data.table(growth_dt, process = "growth"),
+  data.table(mort_dt, process = "mort"),
+  data.table(reg_dt, process = "reg")
+))
+
+ggplot(comp1_dt, aes(x = value, y = species_name, fill = process))+
+  geom_bar(stat = "identity", position = position_dodge2())+
+  facet_wrap(~variable)
+
+

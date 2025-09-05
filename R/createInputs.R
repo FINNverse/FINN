@@ -189,11 +189,12 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npa
 }
 
 
-makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = F){
+makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = F, singleCohortTreeNames = NULL){
+  # browser()
   if(!is.null(dbh_binsize)){
     if(is.null(min_dbh)) min_dbh = min(init_trees$dbh, na.rm = T)
     dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = T) + dbh_binsize, by = dbh_binsize)
-    init_trees <- init_trees[,.(
+    init_trees <- init_trees[!(treeName %in% singleCohortTreeNames),.(
       trees = sum(trees)),
       by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
@@ -201,14 +202,100 @@ makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspe
                ))
              )
       ]
+    if(!is.null(singelCohortTreeNames)) {
+      singleCohort_init_trees <- init_trees[treeName %in% singleCohortTreeNames,.(siteID, patchID, species, dbh)]
+      init_trees <- rbind(init_trees, singleCohort_init_trees[,.(siteID, patchID, species, dbh, trees = 1)])
+      }
   }
 
-  init_trees$cohortID = 1:nrow(init_trees)
+  init_trees[,cohortID := 1:.N, by = .(siteID, patchID)]
 
   initCohort <- FINN::CohortMat$new(obs_df = init_trees, sp = Nspecies)
 
   if(treeID_table) out = list(initCohort = initCohort, init_trees = init_trees) else if(!treeID_table) out = initCohort
   return(out)
+}
+
+makeInitCohorts2 <- function(
+    init_trees,
+    dbh_bins,                   # numeric vector (same length as tree_groups)
+    tree_groups,                # list of character vectors (tree names)
+    Nspecies,
+    min_dbh = NULL,             # optional: scalar lower bound for all binning
+    return_tree_table = FALSE   # formerly treeID_table
+){
+  stopifnot(is.list(tree_groups), length(dbh_bins) == length(tree_groups))
+
+  # ensure data.table
+  init_trees <- data.table::as.data.table(init_trees)
+
+  required_cols <- c("siteID","patchID","species","dbh","treeName")
+  missing_cols  <- setdiff(required_cols, names(init_trees))
+  if (length(missing_cols))
+    stop("init_trees is missing required columns: ", paste(missing_cols, collapse=", "))
+
+  # count expression: support either explicit 'trees' counts or one-row-per-tree
+  has_trees_col <- "trees" %in% names(init_trees)
+  count_expr <- if (has_trees_col) quote(sum(trees, na.rm = TRUE)) else quote(.N)
+
+  # helper: cohort a subset of trees with a given bin size
+  cohort_subset <- function(sub, binsize){
+    sub <- data.table::copy(sub)
+
+    if (binsize == 0) {
+      # keep actual DBH; one row per tree with trees = 1 (or existing trees if provided)
+      if (!has_trees_col) sub[, trees := 1L]
+      out <- sub[, .(trees = eval(count_expr)),
+                 by = .(siteID, patchID, species, dbh)]
+      return(out[])
+    }
+
+    # Positive bin size: cut DBH to mid-bin values and aggregate
+    if (is.null(min_dbh)) {
+      min_cut <- min(sub$dbh, na.rm = TRUE)
+    } else {
+      min_cut <- min_dbh
+    }
+
+    # Build breaks and labels (midpoints)
+    max_dbh <- max(sub$dbh, na.rm = TRUE)
+    brks    <- seq(min_cut, max_dbh + binsize, by = binsize)
+    mids    <- brks[-length(brks)] + binsize/2
+
+    sub[, dbh_binned := as.numeric(as.character(
+      cut(dbh, breaks = brks, labels = mids, include.lowest = TRUE)
+    ))]
+
+    out <- sub[, .(trees = eval(count_expr)),
+               by = .(siteID, patchID, species, dbh = dbh_binned)]
+    out[]
+  }
+
+  # Build per-group cohorts, then combine
+  cohorts <- lapply(seq_along(dbh_bins), function(i){
+    grp_names <- tree_groups[[i]]
+    binsize   <- dbh_bins[i]
+    sub       <- init_trees[treeName %in% grp_names]
+    if (nrow(sub) == 0L) return(data.table::data.table(
+      siteID=character(), patchID=character(), species=character(),
+      dbh=numeric(), trees=integer()
+    ))
+    cohort_subset(sub, binsize)
+  })
+
+  init_tbl <- data.table::rbindlist(cohorts, use.names = TRUE)
+
+  # deterministic cohort IDs
+  init_tbl[, cohortID := .I]
+
+  # FINN object
+  initCohort <- FINN::CohortMat$new(obs_df = init_tbl, sp = Nspecies)
+
+  if (return_tree_table) {
+    list(initCohort = initCohort, init_trees = init_tbl[])
+  } else {
+    initCohort
+  }
 }
 
 
