@@ -189,21 +189,26 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npa
 }
 
 
-makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = F){
+makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = F, singleCohortTreeNames = NULL){
+  # browser()
   if(!is.null(dbh_binsize)){
     if(is.null(min_dbh)) min_dbh = min(init_trees$dbh, na.rm = T)
     dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = T) + dbh_binsize, by = dbh_binsize)
-    init_trees <- init_trees[,.(
+    init_trees <- init_trees[!(treeName %in% singleCohortTreeNames),.(
       trees = sum(trees)),
       by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
                cut(dbh, breaks = dbh_intervals, labels = dbh_intervals[-1]-dbh_binsize/2, include.lowest = TRUE)
-               ))
-             )
-      ]
+             ))
+      )
+    ]
+    if(!is.null(singelCohortTreeNames)) {
+      singleCohort_init_trees <- init_trees[treeName %in% singleCohortTreeNames,.(siteID, patchID, species, dbh)]
+      init_trees <- rbind(init_trees, singleCohort_init_trees[,.(siteID, patchID, species, dbh, trees = 1)])
+    }
   }
 
-  init_trees$cohortID = 1:nrow(init_trees)
+  init_trees[,cohortID := 1:.N, by = .(siteID, patchID)]
 
   initCohort <- FINN::CohortMat$new(obs_df = init_trees, sp = Nspecies)
 
