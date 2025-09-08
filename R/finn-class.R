@@ -189,7 +189,9 @@ finn = nn_module(
           # minLight = self$minLight,
           patch_size_ha = self$patch_size_ha,
           ba = NULL,
-          cohortHeights = NULL
+          cohortHeights = NULL,
+          n_quantiles = self$n_quantiles,
+          continuous = self$continuous
         )
 
         if (light$gt(1.0)$sum()$item() > 0) {
@@ -222,7 +224,9 @@ finn = nn_module(
           # minLight = self$minLight,
           patch_size_ha = self$patch_size_ha,
           ba = NULL,
-          cohortHeights = NULL
+          cohortHeights = NULL,
+          n_quantiles = self$n_quantiles,
+          continuous = self$continuous
         )
         # cat("Second section  B2\n")
 
@@ -242,6 +246,9 @@ finn = nn_module(
         trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
+        # trees_dead = (trees*m)*trees$ge(0.5)$float()
+        # trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
+        # trees_before = trees
 
         #.unsqueeze(3) # TODO check!
         #trees$sub_(m)$clamp_(min = 0.0)
@@ -259,7 +266,9 @@ finn = nn_module(
         # minLight = self$minLight,
         patch_size_ha = self$patch_size_ha,
         ba = NULL,
-        cohortHeights = NULL
+        cohortHeights = NULL,
+        n_quantiles = self$n_quantiles,
+        continuous = self$continuous
       )
 
       # browser()
@@ -1001,7 +1010,8 @@ finn = nn_module(
                   function(true, pred) {
                     mask = true$isnan()$bitwise_not()
                     theta = self$par_theta_recruits
-                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta)$mean()*local_weights[local_l])
+                    theta = theta$squeeze(1)$`repeat`(c(pred$shape[1], 1))
+                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta[mask])$mean()*local_weights[local_l])
                     else return(0.0)
                   }
                 })
@@ -1037,7 +1047,7 @@ finn = nn_module(
                                       dim_feedforward = obj$dim_feedforward)
             } else {
                nn = hybrid_DNN(num_species = self$N_species,
-                               num_env_vars = inputs+1, +1, # because of growth!
+                               num_env_vars = inputs+2,
                                emb_dim=obj$emb_dim,
                                dropout=0.1,
                                hidden = obj$hidden)
@@ -1106,6 +1116,11 @@ finn = nn_module(
       if(type == "regeneration") {
         self$sample_regeneration = obj$sample_regeneration
         self$par_theta_recruits = obj$dispersion_parameter
+      }
+
+      if(type == "competition") {
+        self$n_quantiles = obj$n_quantiles
+        self$continuous = obj$continuous
       }
 
     },
@@ -1179,6 +1194,7 @@ finn = nn_module(
         return(1.0/(torch::nnf_softplus(self$par_theta_recruits_raw)+0.0001))
       } else {
         value = 1.0 / value - 0.0001
+        if(length(value) == 1) value = rep(value, self$N_species)
         self$par_theta_recruits_raw = torch::nn_parameter( torch_tensor(log( exp(value) - 1.0 )) )
       }
     },

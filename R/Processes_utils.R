@@ -16,6 +16,8 @@
 #' @param lower lower boundaries of species parameters
 #' @param dropout dropout rate of neural networks
 #' @param sample_regeneration sample recruits or not
+#' @param n_quantiles quantiles for height classes (competition)
+#' @param continuous continuous height classes or not (competition)
 #'
 #' @return A list of class "process" containing the process definition and associated parameters.
 #'
@@ -23,7 +25,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE) {
   out = list()
   if(!is.null(formula)){
     mf = match.call()
@@ -51,6 +53,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$upper = NULL
   out$lower = NULL
   out$dropout = dropout
+  out$n_quantiles = n_quantiles
+  out$continuous = continuous
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }
