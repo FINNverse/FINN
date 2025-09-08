@@ -19,7 +19,9 @@ createProcess(
   upper = NULL,
   lower = NULL,
   dropout = 0,
-  sample_regeneration = TRUE
+  sample_regeneration = TRUE,
+  n_quantiles = 10L,
+  continuous = FALSE
 )
 }
 \arguments{
@@ -48,6 +50,10 @@ createProcess(
 \item{dropout}{dropout rate of neural networks}
 
 \item{sample_regeneration}{sample recruits or not}
+
+\item{n_quantiles}{quantiles for height classes (competition)}
+
+\item{continuous}{continuous height classes or not (competition)}
 
 \item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
 }
