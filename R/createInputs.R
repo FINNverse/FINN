@@ -199,23 +199,10 @@ makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspe
       by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
                cut(dbh, breaks = dbh_intervals, labels = dbh_intervals[-1]-dbh_binsize/2, include.lowest = TRUE)
-<<<<<<< HEAD
-             ))
-      )
-    ]
-    if(!is.null(singelCohortTreeNames)) {
-      singleCohort_init_trees <- init_trees[treeName %in% singleCohortTreeNames,.(siteID, patchID, species, dbh)]
-      init_trees <- rbind(init_trees, singleCohort_init_trees[,.(siteID, patchID, species, dbh, trees = 1)])
-    }
-=======
+
                ))
              )
       ]
-    if(!is.null(singelCohortTreeNames)) {
-      singleCohort_init_trees <- init_trees[treeName %in% singleCohortTreeNames,.(siteID, patchID, species, dbh)]
-      init_trees <- rbind(init_trees, singleCohort_init_trees[,.(siteID, patchID, species, dbh, trees = 1)])
-      }
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
   }
 
   init_trees[,cohortID := 1:.N, by = .(siteID, patchID)]

@@ -135,13 +135,8 @@ obs_list <- makeObsData(
   tree_dt = td[complete == T],
   plotsize = 0.06,
   aggregate_by_site = F,
-<<<<<<< HEAD
   NspeciesQuantile = 0.95,
-  # Nspecies = 5,
-=======
-  # NspeciesQuantile = 0.9,
-  Nspecies = 10,
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
+  #Nspecies = 10,
   Npatches = 4, minNyears = 3)
 
 # select sites from obs_list in sites_pts and plot
@@ -152,21 +147,10 @@ points(selected_sites_pts, col = "red", pch = 19)
 
 # obs_list$obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 set.seed(2)
-<<<<<<< HEAD
 obs_dt = obs_list$obs_dt
-uniqueN(obs_dt$siteName)
-# obs_dt = obs_list$obs_dt[siteName %in% sample(unique(obs_list$obs_dt$siteName), 50)]
-=======
-# uniqueN(obs_list$obs_dt$siteName)
-obs_dt = obs_list$obs_dt[siteName %in% sample(unique(obs_list$obs_dt$siteName), 500)]
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
 # obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 tree_dt = obs_list$tree_dt[siteName %in% unique(obs_dt$siteName)]
 # tree_dt[,.(Nyear = uniqueN(year)), by = siteName]
-
-uniqueN(tree_dt$species_name)
-unique(tree_dt$species_name)
-unique(obs_dt$species_name)
 
 ## 7) Select sites (species & patch consistency)  [select sites] ----
 # Example selection: keep top N species and patches with full time coverage
@@ -214,32 +198,25 @@ m1$fit(
   data       = unique(obs_dt),
   init_cohort = init_cohorts,
   device     = "gpu",
-<<<<<<< HEAD
-  epochs     = 1000,
+  epochs     = 10000,
   batchsize  = 200L,
-=======
-  epochs     = 200,
-  batchsize  = 250L,
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
 
-<<<<<<< HEAD
-torch::torch_save(m1, "data/fia_v4_process_finn.pt")
+torch::torch_save(m1, "data/fia_v5_process_finn.pt")
 
+m1$par_theta_recruits
 # simulate ####
 sampled_sites <- sample(unique(env_dt$siteID),50)
 env_dt2 <- env_dt[siteID %in% sampled_sites & year == 1]
-for(i in i:500){
+for(i in 1:2500){
   env_dt_temp <- env_dt[siteID %in% sampled_sites & year == 1]
   env_dt_temp$year = i
   env_dt2 <- rbind(env_dt2, env_dt_temp)
 }
 
-=======
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
 species_dt <- unique(inputs$obs_dt[,.(species, species_name)])
 sim2 <- m1$simulate(env_dt2, init_cohort = NULL, device = "gpu", patches = 20, patch_size = 0.06)
 p_dat <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable)]
@@ -250,8 +227,9 @@ wide_dt <- sim2$wide$site
 wide_dt <- merge(wide_dt, species_dt, by = "species", all.x = TRUE)
 wide_dt[,.(ba = mean(ba)), by = species_name][order(ba)]
 
+m1$par_theta_recruits
 library(ggplot2)
-ggplot(p_dat[year <= 50],
+ggplot(p_dat[year <= 2500],
        aes(x = year, y = value, color = factor(species_name))) +
   geom_line() +
   facet_wrap(~variable, scales = "free_y")
@@ -274,7 +252,6 @@ ggplot(p_dat4, aes(x = lon, y = ba_share, fill = species_name))+
 
 # add prec and value to variable column by making it long
 
-<<<<<<< HEAD
 
 p_dat2_env <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable,siteID)]
 p_dat2_env <- merge(unique(env_dt[,-"year"]), p_dat2_env, by = c("siteID"), all.x = TRUE)
@@ -282,24 +259,15 @@ p_dat2_env[variable %in% c("ba","trees"), value := value/0.06]
 p_dat2_env <- merge(p_dat2_env, species_dt, by = "species", all.x = TRUE)
 
 p1 = ggplot(p_dat2_env[variable == "reg"],
-       aes(x = prec, y = value)) +
-=======
-p1 = ggplot(p_dat2[variable == "growth"],
             aes(x = prec, y = value)) +
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
   geom_point() +
   geom_smooth()+
   facet_wrap(~species_name, scales = "free_y", ncol = 2)+
   theme_minimal()+
   scale_color_discrete(name = "Species")
 
-<<<<<<< HEAD
 p2 = ggplot(p_dat2_env[variable == "reg"],
-       aes(x = temp, y = value)) +
-=======
-p2 = ggplot(p_dat2[variable == "growth"],
             aes(x = temp, y = value)) +
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
   geom_point() +
   geom_smooth()+
   facet_wrap(~species_name, scales = "free_y", ncol = 2)+
@@ -340,29 +308,28 @@ ggplot(reg_dt, aes(x = value, y = species_name,))+
   geom_bar(stat = "identity")+
   facet_wrap(~variable)
 
+
 comp1_dt <- rbindlist(list(
   data.table(growth_dt, process = "growth"),
   data.table(mort_dt, process = "mort"),
   data.table(reg_dt, process = "reg")
 ))
 
-<<<<<<< HEAD
-comp1_dt[, variable := factor(variable, levels = c("V1","V2","V3"), labels = c("intercept", "temp", "prec")),]
-
 comp1_dt[, variable := factor(
   variable,
-  levels = paste0("V", 1:(ncol(env_dt)-1)),
-  labels = c("intercept", names(env_dt)[-(1:2)])
-  ),]
+  levels = paste0("V", 1:(length(scale_vals)+1)),
+  labels = c("intercept", names(scale_vals))),]
 
 
 ggplot(comp1_dt, aes(x = value, y = species_name, fill = process))+
   geom_bar(stat = "identity", position = position_dodge2())+
   facet_wrap(~variable,nrow = 1)
-=======
-ggplot(comp1_dt, aes(x = value, y = species_name, fill = process))+
-  geom_bar(stat = "identity", position = position_dodge2())+
-  facet_wrap(~variable)
->>>>>>> 853311c2462e44a6150221ace3a11fcffaa04ab6
 
+disp_dt <- data.table(
+  disp_recr = torch::as_array(m1$par_theta_recruits_raw),
+  species_name = species_dt$species_name
+)
+ggplot(disp_dt, aes(x = disp_recr, y = forcats::fct_reorder(species_name, disp_recr)))+
+  geom_bar(stat = "identity")
 
+m1$par_theta_recruits_raw

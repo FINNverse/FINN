@@ -91,4 +91,10 @@ ggplot(p_dat[year <= 50],
   geom_line() +
   facet_wrap(~variable, scales = "free_y")
 
+p_map <- wide_dt[year == 500,.(ba = sum(ba)), by = .(siteID,species_name)]
+p_map <- p_map[, .(max_sp = species_name[which.max(ba)]), by = siteID]
 
+p_map <- merge(sites_dt, p_map, by = "siteID")
+
+ggplot(p_map, aes(x = x, y=y, color = max_sp))+
+  geom_point(size = 5, alpha = 0.5)
