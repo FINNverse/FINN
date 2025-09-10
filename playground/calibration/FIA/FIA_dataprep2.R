@@ -10,7 +10,7 @@ library(data.table)
 library(terra)
 library(readxl)
 library(FINN)
-Sys.setenv(CUDA_VISIBLE_DEVICES=3)
+Sys.setenv(CUDA_VISIBLE_DEVICES=0)
 source("R/createInputs.R")   # supplies makeObsData(), resolveSiteIDs(), createInitCohorts() if present
 
 if(!file.exists("data/FIA/FIA_trees_raw.csv")){
