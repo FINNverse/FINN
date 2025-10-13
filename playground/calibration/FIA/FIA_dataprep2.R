@@ -10,7 +10,7 @@ library(data.table)
 library(terra)
 library(readxl)
 library(FINN)
-Sys.setenv(CUDA_VISIBLE_DEVICES=3)
+Sys.setenv(CUDA_VISIBLE_DEVICES=0)
 source("R/createInputs.R")   # supplies makeObsData(), resolveSiteIDs(), createInitCohorts() if present
 
 if(!file.exists("data/FIA/FIA_trees_raw.csv")){
@@ -81,6 +81,8 @@ if(!file.exists("data/FIA/FIA_trees_raw.csv")){
   site_dt <- fread("data/FIA/FIA_sites_raw.csv")
 }
 
+hist(tree_dt[,.(Ntrees = uniqueN(treeName)), by = .(siteName, patchName)]$Ntrees)
+
 # convenience lag for obs building
 setorder(tree_dt, treeName, year)
 tree_dt[, status_before := shift(status, 1, type = "lag"), by = treeName]
@@ -92,13 +94,26 @@ env_dt <- copy(site_dt)   # keep siteID, year, x, y
 site_pts <- vect(env_dt, geom = c("x", "y"), crs = "EPSG:4326")
 
 # Example: WorldClim BIO1 (temp) & BIO12 (prec)
-temp <- terra::rast("../worldclim/wc2.1_10m_bio/wc2.1_10m_bio_1.tif")
-prec <- terra::rast("../worldclim/wc2.1_10m_bio/wc2.1_10m_bio_12.tif")
+temp <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_1.tif")
+tempmax <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_5.tif")
+tempmin <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_6.tif")
+prec <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_12.tif")
+precseas <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_15.tif")
+precwarmq <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_18.tif")
 
 v_proj <- project(site_pts, crs(temp))
-env_dt[, temp := extract(temp, v_proj, method = "near")[, 2] ]
-env_dt[, prec := extract(prec, v_proj, method = "near")[, 2] ]
-env_dt <- env_dt[, .(siteName, year, temp, prec)]
+# env_dt[, temp := extract(temp, v_proj, method = "near")[, 2] ]
+# env_dt[, prec := extract(prec, v_proj, method = "near")[, 2] ]
+env_dt[, ":="(
+  temp = extract(temp, v_proj, method = "near")[, 2],
+  tempmax = extract(tempmax, v_proj, method = "near")[, 2],
+  tempmin = extract(tempmin, v_proj, method = "near")[, 2],
+  prec = extract(prec, v_proj, method = "near")[, 2],
+  precseas = extract(precseas, v_proj, method = "near")[, 2],
+  precwarmq = extract(precwarmq, v_proj, method = "near")[, 2]
+),]
+
+env_dt <- env_dt[, -c("x","y")]
 
 ## 6) Create observation table  [tree_dt ➜ create obs_dt] ----
 # flags required by makeObsData(): reg/mort/living per (tree, year)
@@ -107,29 +122,35 @@ td[status == "new",                          reg := TRUE]
 td[status == "dead" & status_before == "alive", mort := TRUE]
 td[status %chin% c("alive", "new"),          living := TRUE]
 
+td <- td[!(siteName %in% unique(td[mort_cause %in% c("land use", "fire")]$siteName))]
+
 # Aggregate to FINN obs structure (ba/trees/dbh/growth/mort/reg per site/patch/species/year)
 # sampled_siteNames <- sample(unique(td$siteName), 500)
 add_site_completeness_flags(env_dt, td)
+
+td[,.(Npatches = uniqueN(patchName)),.(siteName)]$Npatches |> table()
+td[,.(Nyears = uniqueN(year)),.(siteName)]$Nyears |> table()
 
 obs_list <- makeObsData(
   tree_dt = td[complete == T],
   plotsize = 0.06,
   aggregate_by_site = F,
-  # NspeciesQuantile = 0.9,
-  Nspecies = 10,
+  NspeciesQuantile = 0.99,
+  #Nspecies = 10,
   Npatches = 4, minNyears = 3)
+
+# select sites from obs_list in sites_pts and plot
+selected_sites_pts <- site_pts[site_pts$siteName %in% unique(obs_list$obs_dt$siteName),]
+plot(site_pts)
+# add selected_sites_pts to plot
+points(selected_sites_pts, col = "red", pch = 19)
 
 # obs_list$obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 set.seed(2)
-# uniqueN(obs_list$obs_dt$siteName)
-obs_dt = obs_list$obs_dt[siteName %in% sample(unique(obs_list$obs_dt$siteName), 500)]
+obs_dt = obs_list$obs_dt
 # obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 tree_dt = obs_list$tree_dt[siteName %in% unique(obs_dt$siteName)]
 # tree_dt[,.(Nyear = uniqueN(year)), by = siteName]
-
-uniqueN(tree_dt$species_name)
-unique(tree_dt$species_name)
-unique(obs_dt$species_name)
 
 ## 7) Select sites (species & patch consistency)  [select sites] ----
 # Example selection: keep top N species and patches with full time coverage
@@ -143,12 +164,22 @@ inputs <- resolveSiteIDs(
   env_dt             = as.data.table(env_dt),
   createInitCohorts = F
 )
-inputs$obs_dt_patches[siteID == 1]
 tree_dt <- inputs$tree_dt[year != 0]
 obs_dt <- inputs$obs_dt[year != 0]
-uniqueN(inputs$tree_dt[year != 0]$species)
-uniqueN(inputs$obs_dt[year != 0]$species)
-env_dt <- unique(inputs$env_dt[year != 0, .(siteID, year, temp = as.numeric(scale(temp)),prec = as.numeric(scale(prec)))])
+env_dt <- inputs$env_dt[,-c("complete","OrigYear","siteName")]
+#scale env_dt
+env_dt_names <- c("siteID","year", names(env_dt)[!(names(env_dt) %in% c("siteID","year"))])
+env_dt <- env_dt[, ..env_dt_names]
+
+scale_vals <- list()
+par(mfrow = c(3,3))
+for(i in names(env_dt)[!(names(env_dt) %in% c("siteID","year"))]){
+  hist(env_dt[[i]], main = i)
+  scale_vals[[i]]$mean <- mean(env_dt[[i]])
+  scale_vals[[i]]$sd <- sd(env_dt[[i]])
+  env_dt[[i]] <- as.numeric(scale(env_dt[[i]]))
+}
+
 init_trees <- inputs$tree_dt[year == 0]
 init_trees[living == F, trees := 0,]
 init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(obs_dt$species))
@@ -157,10 +188,12 @@ m1 <- finn(
   N_species            = uniqueN(obs_dt$species),
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0,     FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~1+temp+prec, FINN::growth,   optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~1+temp+prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~1+temp+prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createProcess(~., FINN::growth,   optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
+
+# m1 <- torch::torch_load("data/fia_v5_process_finn.pt")
 
 # first fit ####
 m1$fit(
@@ -168,37 +201,68 @@ m1$fit(
   data       = unique(obs_dt),
   init_cohort = init_cohorts,
   device     = "gpu",
-  epochs     = 200,
-  batchsize  = 250L,
+  epochs     = 10000,
+  batchsize  = 200L,
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
 
+torch::torch_save(m1, "data/fia_v7_process_finn.pt")
+
+m1$par_theta_recruits
+# simulate ####
+sampled_sites <- sample(unique(env_dt$siteID),100)
+env_dt2 <- env_dt[siteID %in% sampled_sites & year == 1]
+for(i in 1:1500){
+  env_dt_temp <- env_dt[siteID %in% sampled_sites & year == 1]
+  env_dt_temp$year = i
+  env_dt2 <- rbind(env_dt2, env_dt_temp)
+}
+
 species_dt <- unique(inputs$obs_dt[,.(species, species_name)])
-sim2 <- m1$simulate(env_dt2, init_cohort = NULL)
+sim2 <- m1$simulate(env_dt2, init_cohort = NULL, device = "gpu", patches = 100, patch_size = 0.06)
 p_dat <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable)]
 p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
 p_dat[variable %in% c("ba","trees"), value := value/0.06]
 
 wide_dt <- sim2$wide$site
 wide_dt <- merge(wide_dt, species_dt, by = "species", all.x = TRUE)
-wide_dt[,.(ba = mean(ba)), by = species_name]
+wide_dt[,.(ba = mean(ba)), by = species_name][order(ba)]
+wide_dt[,.(mort = mean(mort)), by = species_name][order(mort)]
 
+m1$par_theta_recruits
 library(ggplot2)
-ggplot(p_dat[year <= 200],
+ggplot(p_dat[year <= 1500],
        aes(x = year, y = value, color = factor(species_name))) +
   geom_line() +
   facet_wrap(~variable, scales = "free_y")
 
 p_dat2 <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable,siteID)]
-p_dat2 <- merge(env_dt, p_dat2, by = c("year","siteID"), all.x = TRUE)
+# p_dat2 <- merge(env_dt[,-"year"], p_dat2, by = c("siteID"), all.x = TRUE)
 p_dat2[variable %in% c("ba","trees"), value := value/0.06]
 p_dat2 <- merge(p_dat2, species_dt, by = "species", all.x = TRUE)
 
+site_dt2 <- fread("data/FIA/FIA_sites_raw.csv")
+
+site_dt2 <- merge(site_dt2, unique(inputs$siteID_dt[,.(siteName, siteID)]), by = "siteName")
+
+p_dat3 <- merge(p_dat2, unique(site_dt2[,.(siteID,x,y)]), by = "siteID")
+
+p_dat4 <- p_dat3[variable == "ba" & year == 1500, .(ba_share = mean(value, na.rm = T)), by = .(lon = cut(x, breaks= 50), species_name)]
+ggplot(p_dat4, aes(x = lon, y = ba_share, fill = species_name))+
+  geom_bar(stat = "identity")
+
+
 # add prec and value to variable column by making it long
 
-p1 = ggplot(p_dat2[variable == "growth"],
+
+p_dat2_env <- sim2$long$site[, .(value = mean(value)), by = .(year, species, variable,siteID)]
+p_dat2_env <- merge(unique(env_dt[,-"year"]), p_dat2_env, by = c("siteID"), all.x = TRUE)
+p_dat2_env[variable %in% c("ba","trees"), value := value/0.06]
+p_dat2_env <- merge(p_dat2_env, species_dt, by = "species", all.x = TRUE)
+
+p1 = ggplot(p_dat2_env[variable == "reg"],
             aes(x = prec, y = value)) +
   geom_point() +
   geom_smooth()+
@@ -206,7 +270,7 @@ p1 = ggplot(p_dat2[variable == "growth"],
   theme_minimal()+
   scale_color_discrete(name = "Species")
 
-p2 = ggplot(p_dat2[variable == "growth"],
+p2 = ggplot(p_dat2_env[variable == "reg"],
             aes(x = temp, y = value)) +
   geom_point() +
   geom_smooth()+
@@ -248,14 +312,40 @@ ggplot(reg_dt, aes(x = value, y = species_name,))+
   geom_bar(stat = "identity")+
   facet_wrap(~variable)
 
+
 comp1_dt <- rbindlist(list(
   data.table(growth_dt, process = "growth"),
   data.table(mort_dt, process = "mort"),
   data.table(reg_dt, process = "reg")
 ))
+fwrite(comp1_dt, "data/fia_v7_process_finn_envpars.csv")
+
+print.data.frame(comp1_dt,max = 500)
+
+comp1_dt[, variable := factor(
+  variable,
+  levels = paste0("V", 1:(length(scale_vals)+1)),
+  labels = c("intercept", names(scale_vals))),]
+
 
 ggplot(comp1_dt, aes(x = value, y = species_name, fill = process))+
   geom_bar(stat = "identity", position = position_dodge2())+
-  facet_wrap(~variable)
+  facet_wrap(~variable,nrow = 1)
+
+disp_dt <- data.table(
+  disp_recr = torch::as_array(m1$par_theta_recruits),
+  species_name = species_dt$species_name
+)
+ggplot(disp_dt, aes(x = disp_recr, y = forcats::fct_reorder(species_name, disp_recr)))+
+  geom_bar(stat = "identity")
+
+m1$par_theta_recruit
+
+par_mort <- m1$parameters_r$par_mortality_unconstrained
+colnames(par_mort) <- c("mortLight", "mortSize", "mortGrowth")
+
+par_growth <- m1$parameters_r$par_mortality_unconstrained
+colnames(par_mort) <- c("mortLight", "mortSize", "mortGrowth")
+
 
 

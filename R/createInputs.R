@@ -62,8 +62,8 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
     siteID_dt = as.data.table(siteID_dt[,..out_cols_siteID_dt], key = NULL),
     tree_dt = as.data.table(tree_dt, key = NULL),
     env_dt = as.data.table(env_dt, key = NULL),
-    obs_dt = as.data.table(obs_dt_aggr[,..out_cols_obs_dt_aggr], key = NULL),
-    obs_dt_patches = as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL),
+    obs_dt = unique(as.data.table(obs_dt_aggr[,..out_cols_obs_dt_aggr], key = NULL)),
+    obs_dt_patches = unique(as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL)),
     species_dt = species_dt
     # initCohort_dt = as.data.table(initCohort_dt, key = NULL)
   )
@@ -199,13 +199,10 @@ makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspe
       by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
                cut(dbh, breaks = dbh_intervals, labels = dbh_intervals[-1]-dbh_binsize/2, include.lowest = TRUE)
+
                ))
              )
       ]
-    if(!is.null(singelCohortTreeNames)) {
-      singleCohort_init_trees <- init_trees[treeName %in% singleCohortTreeNames,.(siteID, patchID, species, dbh)]
-      init_trees <- rbind(init_trees, singleCohort_init_trees[,.(siteID, patchID, species, dbh, trees = 1)])
-      }
   }
 
   init_trees[,cohortID := 1:.N, by = .(siteID, patchID)]
