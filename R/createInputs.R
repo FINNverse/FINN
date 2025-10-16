@@ -153,6 +153,15 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npa
   obs_dt[is.na(dbh), dbh := NA_real_]
   obs_dt = obs_dt[order(siteName, patchName, species_name, year)]
 
+  obs_dt <- obs_dt[,.(
+    ba = mean(ba, na.rm = T),
+    growth = mean(growth, na.rm = T),
+    dbh = mean(dbh, na.rm = T),
+    trees = mean(trees, na.rm = T),
+    mort = mean(mort, na.rm = T),
+    reg = mean(reg, na.rm = T)
+  ),by= .(siteName, year, species_name)]
+
   if(!is.null(minNyears)){
     obs_dt[, NyearsPerPatch := uniqueN(year), by = .(siteName, patchName)]
     obs_dt[, sameYearsAllPatches := all(NyearsPerPatch == max(NyearsPerPatch)), by = siteName]
