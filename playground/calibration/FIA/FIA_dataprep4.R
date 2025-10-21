@@ -119,7 +119,7 @@ env_dt <- env_dt[, -c("x","y")]
 # flags required by makeObsData(): reg/mort/living per (tree, year)
 td <- copy(tree_dt)
 td[status == "new",                          reg := TRUE]
-td[status == "dead" & status_before == "alive", mort := TRUE]
+td[status == "dead" & status_before %in% c("alive","new"), mort := TRUE]
 td[status %chin% c("alive", "new"),          living := TRUE]
 
 td <- td[!(siteName %in% unique(td[mort_cause %in% c("land use", "fire")]$siteName))]
@@ -135,7 +135,7 @@ obs_list <- makeObsData(
   tree_dt = td[complete == T],
   plotsize = 0.06,
   aggregate_by_site = F,
-  NspeciesQuantile = 0.9,
+  NspeciesQuantile = 0.98,
   #Nspecies = 5,
   Npatches = 4, minNyears = 3)
 
@@ -147,9 +147,12 @@ points(selected_sites_pts, col = "red", pch = 19)
 
 # obs_list$obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 set.seed(2)
-excluded_sites <- obs_list$obs_dt[species_name == "other",.(ba = sum(ba,na.rm = T)), by = siteName][ba > 0]$siteName
-dev.off()
-obs_dt = obs_list$obs_dt[!(siteName %in% excluded_sites)]
+# uniqueN(obs_list$obs_dt$siteName)
+# uniqueN(excluded_sites)
+# excluded_sites <- obs_list$obs_dt[,.(ba = sum(ba,na.rm = T)), by = .(siteName,year)][ba == 0]$siteName
+# dev.off()
+obs_dt = obs_list$obs_dt
+# obs_dt = obs_list$obs_dt[!(siteName %in% excluded_sites)]
 # obs_dt[,.(Nyear = uniqueN(year)), by = siteName]
 tree_dt = obs_list$tree_dt[siteName %in% unique(obs_dt$siteName)]
 # tree_dt[,.(Nyear = uniqueN(year)), by = siteName]
@@ -166,12 +169,15 @@ inputs <- resolveSiteIDs(
   env_dt             = as.data.table(env_dt),
   createInitCohorts = F
 )
-tree_dt <- inputs$tree_dt[year != 0 & species_name != "other"]
-obs_dt <- inputs$obs_dt[year != 0 & species_name != "other"]
+
+tree_dt <- inputs$tree_dt[year != 0]
+obs_dt <- inputs$obs_dt[year != 0]
 env_dt <- inputs$env_dt[,-c("complete","OrigYear","siteName")]
 #scale env_dt
 env_dt_names <- c("siteID","year", names(env_dt)[!(names(env_dt) %in% c("siteID","year"))])
 env_dt <- env_dt[, ..env_dt_names]
+
+
 
 scale_vals <- list()
 par(mfrow = c(3,3))
@@ -182,7 +188,7 @@ for(i in names(env_dt)[!(names(env_dt) %in% c("siteID","year"))]){
   env_dt[[i]] <- as.numeric(scale(env_dt[[i]]))
 }
 
-init_trees <- inputs$tree_dt[year == 0 & species_name != "other"]
+init_trees <- inputs$tree_dt[year == 0]
 init_trees[living == F, trees := 0,]
 init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(obs_dt$species))
 
@@ -203,15 +209,15 @@ m1$fit(
   data       = unique(obs_dt),
   init_cohort = init_cohorts,
   device     = "cpu",
-  epochs     = 10000,
+  epochs     = 2000,
   batchsize  = 200L,
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
-
-torch::torch_save(m1, paste0("data/fia_v9(proposal_noOther)_process_finn.pt"))
-m1 <- torch::torch_load("data/fia_v9(proposal_noOther)_process_finn.pt")
+#
+torch::torch_save(m1, paste0("data/fia_v10_process_finn.pt"))
+# m1 <- torch::torch_load("data/fia_v9(proposal_noOther)_process_finn.pt")
 
 # simulate for fit evaluation
 sim2 <- m1$simulate(env_dt, init_cohort = init_cohorts, device = "cpu", patches = 4, patch_size = 0.06)
@@ -229,8 +235,8 @@ comp_dt <- merge(
     r_mean_ha = mean(r_mean_ha, na.rm = T)
   ), by = .(siteID, year, species)],
   obs_dt[,.(
-    ba = sum(ba, na.rm = T),
-    trees = sum(trees, na.rm = T),
+    ba = sum(ba, na.rm = T)/0.06,
+    trees = sum(trees, na.rm = T)/0.06,
     growth = mean(growth, na.rm = T),
     mort = mean(mort, na.rm = T),
     r_mean_ha = mean(reg, na.rm = T)/0.06
@@ -266,6 +272,7 @@ comp_dt[, .(
 
 cors_long <- melt(cors_dt, id.vars = "species_name", variable.name = "metric", value.name = "correlation")
 
+library(ggplot2)
 ggplot(cors_long, aes(x = correlation, y = species_name)) +
   geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
   geom_vline(xintercept = 0, color = "grey50", linetype = "dashed") +
@@ -311,7 +318,7 @@ ggplot(comp_dt_long[variable == "growth"], aes(x = sim, y = obs))+
   geom_smooth(method = "lm", se = F)+
   facet_wrap(species_name~variable)+
   geom_abline(slope = 1)+
-  coord_cartesian(xlim = c(0,1), ylim = c(0,1))# viele ausreißer
+  coord_equal(xlim = c(0,1), ylim = c(0,1))# viele ausreißer
 
 ggplot(comp_dt_long[variable == "mort"], aes(x = sim, y = obs))+
   geom_point()+
@@ -334,7 +341,7 @@ ggplot(comp_dt_long[variable == "r_mean_ha"], aes(x = sim, y = obs))+
 
 env_dt2 <- data.table(
   siteID = 1,
-  year = 1:1000,
+  year = 1:2000,
   temp = 0,
   tempmax = 0,
   tempmin = 0,
@@ -359,18 +366,54 @@ env_dt2 <- data.table(
 
 species_dt <- unique(inputs$obs_dt[,.(species, species_name)])
 
-sim2 <- m1$simulate(env_dt2, init_cohort = NULL, device = "cpu", patches = 1, patch_size = 0.06)
+# Grab the leaf parameter
+w <- m1$nn_regeneration[[1]]$weight  # this is the 1st layer's weight
+
+# Work on CPU/R array, change it, then copy back on the right device/dtype
+parmat <- torch::as_array(w)
+parmat[28, 1] <- -50
+
+torch::with_no_grad({
+  w$copy_(torch::torch_tensor(
+    parmat,
+    dtype  = w$dtype,
+    device = w$device
+  ))
+})
+
+sim2 <- m1$simulate(env_dt2, init_cohort = NULL, device = "cpu", patches = 100, patch_size = 0.06)
 # sim2 <- m1$simulate(env = env_dt2, patch_size = 0.1, patches = 4, init_cohort = init_cohorts, device = "cpu")
-sim_long_out <- sim2$long$site
-sim_wide_out <- sim2$wide$site
+sim_long_out <- copy(sim2$long$site)
+sim_wide_out <- copy(sim2$wide$site)
+
 
 p_dat <- sim_long_out[, .(value = mean(value)), by = .(year, species, variable)]
 # p_dat <- sim_long_out
 p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
 p_dat[variable %in% c("ba","trees"), value := value/0.06]
 
+
+# sim_wide_out[year == 1000, .(ba = sum(ba)), .(species)][order(ba)]$species
+sim_wide_out[, ba_rank := as.integer(factor(ba,ordered = T)), .(siteID,year)]
+selected_species <- unique(sim_wide_out[ba > 2.5*0.06,]$species)
+hist(sim_wide_out$ba)
+ggplot(p_dat[species %in% selected_species],
+       aes(x = year, y = value, color = species_name)) +
+  geom_line() +
+  facet_wrap(~variable, scales = "free")
+
+ggplot(p_dat[species %in% selected_species & variable == "ba"],
+       aes(x = year, y = value, color = species_name)) +
+  geom_line() +
+  facet_wrap(~variable, scales = "free_x")
+ggplot(p_dat[variable == "ba"],
+       aes(x = year, y = value)) +
+  geom_line() +
+  ggplot2::ylab("Basal Area (m2/ha)")+
+  facet_wrap(~species_name, scales = "free_x")
+
 ggplot(p_dat,
-       aes(x = year, y = value, color = factor(species_name))) +
+       aes(x = year, y = value, color = as.character(species_name))) +
   geom_line() +
   facet_wrap(~variable, scales = "free")
 
