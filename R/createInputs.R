@@ -45,13 +45,13 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = T)
   out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
 
-  obs_dt_aggr <- obs_dt[,.(ba = sum(ba, na.rm = T),
+  obs_dt_aggr <- obs_dt[,.(ba = mean(ba, na.rm = T),
                         dbh = mean(dbh, na.rm = T),
-                        trees = sum(trees, na.rm = T),
+                        trees = mean(trees, na.rm = T),
                         growth = mean(growth, na.rm = T),
                         mort = mean(mort, na.rm = T),
                         reg = mean(reg, na.rm = T)),
-                    by = .(siteID, patchID, year, species, species_name)]
+                    by = .(siteID, year, species, species_name)]
   out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
 
   siteID_dt[, OrigYear := year, by = .(siteID, patchID)]
@@ -62,8 +62,8 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
     siteID_dt = as.data.table(siteID_dt[,..out_cols_siteID_dt], key = NULL),
     tree_dt = as.data.table(tree_dt, key = NULL),
     env_dt = as.data.table(env_dt, key = NULL),
-    obs_dt = unique(as.data.table(obs_dt_aggr[,..out_cols_obs_dt_aggr], key = NULL)),
-    obs_dt_patches = unique(as.data.table(obs_dt[,..out_cols_obs_dt], key = NULL)),
+    obs_dt = as.data.table(obs_dt_aggr[,..out_cols_obs_dt_aggr]),
+    obs_dt_patches = as.data.table(obs_dt[,..out_cols_obs_dt]),
     species_dt = species_dt
     # initCohort_dt = as.data.table(initCohort_dt, key = NULL)
   )
@@ -87,7 +87,7 @@ dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
 }
 
-makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
+makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2, Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
   # browser()
   tree_dt <- copy(as.data.table(tree_dt))
   tree_dt[, dbh_before := data.table::shift(dbh,1,type = "lag"), by = treeName]
@@ -152,15 +152,6 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site, minNyears = 2, Npa
   obs_dt[is.na(mort), mort := NA_real_]
   obs_dt[is.na(dbh), dbh := NA_real_]
   obs_dt = obs_dt[order(siteName, patchName, species_name, year)]
-
-  obs_dt <- obs_dt[,.(
-    ba = mean(ba, na.rm = T),
-    growth = mean(growth, na.rm = T),
-    dbh = mean(dbh, na.rm = T),
-    trees = mean(trees, na.rm = T),
-    mort = mean(mort, na.rm = T),
-    reg = mean(reg, na.rm = T)
-  ),by= .(siteName, year, species_name)]
 
   if(!is.null(minNyears)){
     obs_dt[, NyearsPerPatch := uniqueN(year), by = .(siteName, patchName)]

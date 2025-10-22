@@ -163,6 +163,9 @@ tree_dt = obs_list$tree_dt[siteName %in% unique(obs_dt$siteName)]
 ## 9) Resolve IDs & finalize model inputs  [resolve IDs ➜ {env_dt, obs_dt, init_dt}] ----
 # This step aligns site/patch/species IDs across env_dt, obs_dt, init_dt and optionally
 # converts years→periods and fixes the number of patches, as in your original call.
+
+# obs_dt[, period := as.integer(as.factor(year)), by = .(siteName)]
+
 inputs <- resolveSiteIDs(
   tree_dt            = as.data.table(tree_dt),
   obs_dt             = as.data.table(obs_dt),
@@ -177,8 +180,6 @@ env_dt <- inputs$env_dt[,-c("complete","OrigYear","siteName")]
 env_dt_names <- c("siteID","year", names(env_dt)[!(names(env_dt) %in% c("siteID","year"))])
 env_dt <- env_dt[, ..env_dt_names]
 
-
-
 scale_vals <- list()
 par(mfrow = c(3,3))
 for(i in names(env_dt)[!(names(env_dt) %in% c("siteID","year"))]){
@@ -190,6 +191,18 @@ for(i in names(env_dt)[!(names(env_dt) %in% c("siteID","year"))]){
 
 init_trees <- inputs$tree_dt[year == 0]
 init_trees[living == F, trees := 0,]
+
+if(!dir.exists("vignettes/fit-fia-data")){
+  dir.create("vignettes/fit-fia-data")
+}
+
+# fwrite(env_dt, "vignettes/fit-fia-data/env_dt.csv")
+# fwrite(obs_dt, "vignettes/fit-fia-data/obs_dt.csv")
+# fwrite(inputs$obs_dt, "vignettes/fit-fia-data/full_obs_dt.csv")
+# fwrite(inputs$tree_dt, "vignettes/fit-fia-data/full_tree_dt.csv")
+# fwrite(init_trees, "vignettes/fit-fia-data/init_trees.csv")
+# fwrite(unique(obs_dt[,.(species,species_name)]), "vignettes/fit-fia-data/species_dt.csv")
+
 init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(obs_dt$species))
 
 m1 <- finn(
@@ -209,14 +222,18 @@ m1$fit(
   data       = unique(obs_dt),
   init_cohort = init_cohorts,
   device     = "cpu",
-  epochs     = 2000,
-  batchsize  = 200L,
+  epochs     = 1000,
+  batchsize  = 250L,
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
+
+ggplot(tree_dt, aes(x = dbh))+
+  geom_histogram(stat = "count")+
+  facet_wrap(~species_name, scale = "free", ncol = 3)
 #
-torch::torch_save(m1, paste0("data/fia_v10_process_finn.pt"))
+torch::torch_save(m1, paste0("data/fia_v11_process_finn.pt"))
 # m1 <- torch::torch_load("data/fia_v9(proposal_noOther)_process_finn.pt")
 
 # simulate for fit evaluation
