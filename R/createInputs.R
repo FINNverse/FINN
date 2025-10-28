@@ -129,6 +129,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
 
   obs_dt[, trees_before := data.table::shift(trees, 1, type = "lag"), by = .(siteName, patchName, species_name)]
   obs_dt[, mort := 1-((trees_before-n_mort)/trees_before)^(1/1),]
+  obs_dt[is.infinite(mort), mort := NA,]
 
   # 1) Build, per site, the full cartesian grid of patch × year × species
   grid <- obs_dt[, CJ(
