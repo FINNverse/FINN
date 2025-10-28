@@ -10,15 +10,18 @@ library(data.table)
 library(terra)
 library(readxl)
 library(FINN)
+library(ggplot2)
 Sys.setenv(CUDA_VISIBLE_DEVICES=0)
 source("R/createInputs.R")   # supplies makeObsData(), resolveSiteIDs(), createInitCohorts() if present
 
 if(!file.exists("data/FIA/FIA_trees_raw.csv")){
+# if(T){
 
   library(rFIA)
   dir.path <- "data/FIA"       # <— adjust to your layout
 
   ## 1) Download / Load FIA (state = OR) ----
+  # options(timeout = 999999)
   # rFIA::getFIA(states = "OR", dir = dir.path, common = TRUE)
   fia <- readFIA(dir = dir.path, common = TRUE, states = "OR")
 
@@ -65,13 +68,13 @@ if(!file.exists("data/FIA/FIA_trees_raw.csv")){
                             fifelse(STATUSCD == 2, "dead", NA_character_)))]
 
   tree_dt[, mort_cause := fifelse(STATUSCD == 2 & AGENTCD %in% c(0, 70), "unknown",
-                                  fifelse(STATUSCD == 2 & AGENTCD == 10, "insect",
-                                          fifelse(STATUSCD == 2 & AGENTCD == 20, "disease",
-                                                  fifelse(STATUSCD == 2 & AGENTCD == 30, "fire",
-                                                          fifelse(STATUSCD == 2 & AGENTCD == 40, "animal",
-                                                                  fifelse(STATUSCD == 2 & AGENTCD == 50, "weather",
-                                                                          fifelse(STATUSCD == 2 & AGENTCD == 60, "competition",
-                                                                                  fifelse(STATUSCD == 2 & AGENTCD == 80, "land use", NA_character_))))))))]
+                          fifelse(STATUSCD == 2 & AGENTCD == 10, "insect",
+                          fifelse(STATUSCD == 2 & AGENTCD == 20, "disease",
+                          fifelse(STATUSCD == 2 & AGENTCD == 30, "fire",
+                          fifelse(STATUSCD == 2 & AGENTCD == 40, "animal",
+                          fifelse(STATUSCD == 2 & AGENTCD == 50, "weather",
+                          fifelse(STATUSCD == 2 & AGENTCD == 60, "competition",
+                          fifelse(STATUSCD == 2 & AGENTCD == 80, "land use", NA_character_))))))))]
 
   #write output so that the data can be read without rFIA package
   fwrite(tree_dt, "data/FIA/FIA_trees_raw.csv")
@@ -176,6 +179,7 @@ inputs <- resolveSiteIDs(
 tree_dt <- inputs$tree_dt[year != 0]
 obs_dt <- inputs$obs_dt[year != 0]
 env_dt <- inputs$env_dt[,-c("complete","OrigYear","siteName")]
+summary(obs_dt)
 #scale env_dt
 env_dt_names <- c("siteID","year", names(env_dt)[!(names(env_dt) %in% c("siteID","year"))])
 env_dt <- env_dt[, ..env_dt_names]
@@ -199,6 +203,7 @@ if(!dir.exists("vignettes/fit-fia-data")){
   dir.create("vignettes/fit-fia-data")
 }
 
+summary(obs_dt)
 fwrite(env_scales_dt, "vignettes/fit-fia-data/env_scales_dt.csv")
 fwrite(env_dt, "vignettes/fit-fia-data/env_dt.csv")
 fwrite(obs_dt, "vignettes/fit-fia-data/obs_dt.csv")
@@ -295,20 +300,48 @@ for(i in 1:Nyears){
     )
 }
 
-sim1 <- m1$simulate(sim_env_dt_BugSol2000scaled, init_cohort = NULL, device = "cpu", patches = 100, patch_size = 0.06)
+dist_dt <- sim_env_dt_BugSol2000scaled[,.(siteID,year)]
+
+dist_dt$intensity <- rbinom(nrow(dist_dt),1,0.01)*runif(nrow(dist_dt),0.1,0.2)
+
+
+dist_dt[, intensity := rbinom(.N,1,0.01)*runif(.N,0.1,0.2), by = siteID]
+
+hist(dist_dt$intensity)
+table(dist_dt$intensity)
+
+sim1 <- m1$simulate(sim_env_dt_BugSol2000scaled,disturbance = dist_dt, init_cohort = NULL, device = "cpu", patches = 100, patch_size = 0.06)
 
 sim_long_out <- copy(sim1$long$site)
 sim_wide_out <- copy(sim1$wide$site)
 
 
-p_dat <- sim_long_out[, .(value = mean(value)), by = .(year, species, variable)]
+sim_long_out <- merge(sim_long_out, species_dt, by = "species", all.x = TRUE)
+sim_long_out[variable %in% c("ba","trees"), value := value/0.06]
+pdf("succesions.pdf",width = 15,height = 10)
+for(i in unique(sim_long_out$siteID)){
+  p =   ggplot(sim_long_out[species %in% selected_species & siteID == i],
+           aes(x = year, y = value, color = species_name)) +
+      geom_line() +
+      facet_wrap(~variable, scales = "free")+
+      ggtitle(paste0(i))
+  print(p)
+}
+dev.off()
+dev.off()
+par(mfrow = c(2,1), mar = c(5, 4, 4, 1))
+plot(temp~x,data = env_dt_BugSol2000, type = "b", las = 1, ylab = "Temperature (°C)", xlab = "Longitude (°W)")
+plot(prec/10~x,data = env_dt_BugSol2000, type = "b", las = 1, ylab = "Precipitation (cm)", xlab = "Longitude (°W)")
+
+p_dat <- sim_long_out[, .(value = mean(value)), by = .(year, species_name, variable)]
 # p_dat <- sim_long_out
-p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
-p_dat[variable %in% c("ba","trees"), value := value/0.06]
+# p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
+# p_dat[variable %in% c("ba","trees"), value := value/0.06]
 
 
 # sim_wide_out[year == 1000, .(ba = sum(ba)), .(species)][order(ba)]$species
 sim_wide_out[, ba_rank := as.integer(factor(ba,ordered = T)), .(siteID,year)]
+
 selected_species <- unique(sim_wide_out[ba > 3*0.06,]$species)
 hist(sim_wide_out$ba)
 ggplot(p_dat[species %in% selected_species],
@@ -335,7 +368,7 @@ Bug_species <- c(
   )
 p_dat2[!(species_name %in% Bug_species), species_name := "other",]
 
-p_dat4 <- p_dat2[variable == "ba" & year == 1000, .(ba_share = sum(value, na.rm = T)), by = .(siteID, species_name)]
+p_dat4 <- p_dat2[variable == "ba" & year > 800, .(ba_share = sum(value, na.rm = T)), by = .(siteID,year, species_name)][, .(ba_share = mean(ba_share, na.rm = T)), by = .(siteID, species_name)]
 
 p_dat5 <- merge(unique(env_dt_BugSol2000scaled[, .(siteID, x, y)]), p_dat4, by = "siteID", all.x = TRUE)
 
