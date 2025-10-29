@@ -230,7 +230,7 @@ m1$fit(
   data       = obs_dt,
   init_cohort = init_cohorts,
   device     = "cpu",
-  epochs     = 1000,
+  epochs     = 5000,
   batchsize  = 200L,
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
@@ -366,15 +366,21 @@ Bug_species <- c(
   "Tsuga heterophylla",
   "Tsuga mertensiana"
   )
-p_dat2[!(species_name %in% Bug_species), species_name := "other",]
+p_dat2[!(species_name %in% Bug_species), species_name := "Other species",]
 
-p_dat4 <- p_dat2[variable == "ba" & year > 800, .(ba_share = sum(value, na.rm = T)), by = .(siteID,year, species_name)][, .(ba_share = mean(ba_share, na.rm = T)), by = .(siteID, species_name)]
+p_dat4 <- p_dat2[variable == "ba" & year < 500, .(ba = sum(value, na.rm = T)/.N), by = .(siteID, species_name)]
 
 p_dat5 <- merge(unique(env_dt_BugSol2000scaled[, .(siteID, x, y)]), p_dat4, by = "siteID", all.x = TRUE)
 
+p_dat5$lon <- format(abs(p_dat5$x), 2)
+p_dat5$lon <- factor(p_dat5$lon, levels = sort(unique(p_dat5$lon), decreasing = T))
+p_dat5[,species_name := factor(species_name, levels = c(Bug_species,"Other species")),]
+ggplot(p_dat5, aes(x = lon, y = ba, fill = species_name))+
+  geom_bar(stat = "identity")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 70, hjust = 1))+
+  xlab("Longitude (°W)")
 
-ggplot(p_dat5, aes(x = factor(x), y = ba_share, fill = as.character(species_name)))+
-  geom_bar(stat = "identity")
 ggplot(p_dat5[species_name != "other"], aes(x = factor(x), y = ba_share, fill = as.character(species_name)))+
   geom_bar(stat = "identity")
 
