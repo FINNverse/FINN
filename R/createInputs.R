@@ -87,14 +87,30 @@ dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
 }
 
-makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2, Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
+makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
   # browser()
   tree_dt <- copy(as.data.table(tree_dt))
-  tree_dt[, dbh_before := data.table::shift(dbh,1,type = "lag"), by = treeName]
+  tree_dt[, ":="(
+    year_before = data.table::shift(year,1,type = "lag"),
+    dbh_before = data.table::shift(dbh,1,type = "lag")
+    ), by = treeName]
+  tree_dt[, period_length := year - year_before,]
+  # exclude all plots without consistent period length
   tree_dt[, dbh_growth := dbh - dbh_before,]
   tree_dt[status == "alive", rel_growth := dbh/dbh_before - 1,]
-  tree_dt[rel_growth < 0, rel_growth := 0,]
+  # tree_dt[rel_growth < 0, rel_growth := 0,]
   tree_dt[living == T,trees := 1,]
+
+  if(!is.null(fix_period_length)){
+    excluded_sites <- unique(tree_dt[period_length != fix_period_length]$siteName)
+    tree_dt <- tree_dt[!(siteName %in% excluded_sites)]
+    message(paste0("excluded ", length(excluded_sites)," sites due to period length not beeing ", fix_period_length))
+  }
+  if(!is.null(dbh_growth_thresh)){
+    excluded_sites <- unique(tree_dt[dbh_growth < dbh_growth_thresh[1] | dbh_growth > dbh_growth_thresh[2]]$siteName)
+    tree_dt <- tree_dt[!(siteName %in% excluded_sites)]
+    message(paste0("excluded ", length(excluded_sites)," sites due to dbh_growth being not within the range of ", dbh_growth_thresh[1], " and ", dbh_growth_thresh[2]))
+  }
 
   if(!is.null(Nspecies)){
     alive_species <- names(sort(table(td[status %chin% c("alive","new")]$species_name), decreasing = TRUE))

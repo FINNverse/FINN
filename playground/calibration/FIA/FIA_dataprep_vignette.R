@@ -139,8 +139,15 @@ obs_list <- makeObsData(
   plotsize = 0.06,
   aggregate_by_site = F,
   NspeciesQuantile = 0.98,
+  fix_period_length = 10,
+  dbh_growth_thresh = c(-10,50),
   #Nspecies = 5,
   Npatches = 4, minNyears = 3)
+
+trees_dt <- obs_list$tree_dt
+
+hist(trees_dt$dbh_growth)
+hist(trees_dt$rel_growth)
 
 # select sites from obs_list in sites_pts and plot
 selected_sites_pts <- site_pts[site_pts$siteName %in% unique(obs_list$obs_dt$siteName),]
@@ -230,8 +237,8 @@ m1$fit(
   data       = obs_dt,
   init_cohort = init_cohorts,
   device     = "cpu",
-  epochs     = 5000,
-  batchsize  = 200L,
+  epochs     = 100,
+  batchsize  = 500L,
   patch_size = 0.06,
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
@@ -316,11 +323,43 @@ sim_long_out <- copy(sim1$long$site)
 sim_wide_out <- copy(sim1$wide$site)
 
 
+# sim_long_out <- merge(sim_long_out, species_dt, by = "species", all.x = TRUE)
+# sim_long_out[variable %in% c("ba","trees"), value := value/0.06]
+# pdf("succesions.pdf",width = 15,height = 10)
+# for(i in unique(sim_long_out$siteID)){
+#   p =   ggplot(sim_long_out[species %in% selected_species & siteID == i],
+#            aes(x = year, y = value, color = species_name)) +
+#       geom_line() +
+#       facet_wrap(~variable, scales = "free")+
+#       ggtitle(paste0(i))
+#   print(p)
+# }
+# dev.off()
+# dev.off()
+par(mfrow = c(2,1), mar = c(5, 4, 4, 1))
+plot(temp~x,data = env_dt_BugSol2000, type = "b", las = 1, ylab = "Temperature (°C)", xlab = "Longitude (°W)")
+plot(prec/10~x,data = env_dt_BugSol2000, type = "b", las = 1, ylab = "Precipitation (cm)", xlab = "Longitude (°W)")
+
+p_dat <- sim_long_out[, .(value = mean(value)), by = .(year, species, variable)]
+# p_dat <- sim_long_out
+p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
+p_dat[variable %in% c("ba","trees"), value := value/0.06]
+
+
+# sim_wide_out[year == 1000, .(ba = sum(ba)), .(species)][order(ba)]$species
+# sim_wide_out[, ba_rank := as.integer(factor(ba,ordered = T)), .(siteID,year)]
+
+ggplot(p_dat,
+       aes(x = year, y = value, color = species_name)) +
+  geom_line() +
+  facet_wrap(~variable, scales = "free")
+
+selected_species = unique(p_dat[variable == "ba" & value > 3]$species_name)
 sim_long_out <- merge(sim_long_out, species_dt, by = "species", all.x = TRUE)
 sim_long_out[variable %in% c("ba","trees"), value := value/0.06]
 pdf("succesions.pdf",width = 15,height = 10)
 for(i in unique(sim_long_out$siteID)){
-  p =   ggplot(sim_long_out[species %in% selected_species & siteID == i],
+  p =   ggplot(sim_long_out[species_name %in% selected_species & siteID == i],
            aes(x = year, y = value, color = species_name)) +
       geom_line() +
       facet_wrap(~variable, scales = "free")+
@@ -328,26 +367,6 @@ for(i in unique(sim_long_out$siteID)){
   print(p)
 }
 dev.off()
-dev.off()
-par(mfrow = c(2,1), mar = c(5, 4, 4, 1))
-plot(temp~x,data = env_dt_BugSol2000, type = "b", las = 1, ylab = "Temperature (°C)", xlab = "Longitude (°W)")
-plot(prec/10~x,data = env_dt_BugSol2000, type = "b", las = 1, ylab = "Precipitation (cm)", xlab = "Longitude (°W)")
-
-p_dat <- sim_long_out[, .(value = mean(value)), by = .(year, species_name, variable)]
-# p_dat <- sim_long_out
-# p_dat <- merge(p_dat, species_dt, by = "species", all.x = TRUE)
-# p_dat[variable %in% c("ba","trees"), value := value/0.06]
-
-
-# sim_wide_out[year == 1000, .(ba = sum(ba)), .(species)][order(ba)]$species
-sim_wide_out[, ba_rank := as.integer(factor(ba,ordered = T)), .(siteID,year)]
-
-selected_species <- unique(sim_wide_out[ba > 3*0.06,]$species)
-hist(sim_wide_out$ba)
-ggplot(p_dat[species %in% selected_species],
-       aes(x = year, y = value, color = species_name)) +
-  geom_line() +
-  facet_wrap(~variable, scales = "free")
 
 
 p_dat2 <- sim1$long$site[, .(value = mean(value)), by = .(year, species, variable,siteID)]
@@ -368,7 +387,7 @@ Bug_species <- c(
   )
 p_dat2[!(species_name %in% Bug_species), species_name := "Other species",]
 
-p_dat4 <- p_dat2[variable == "ba" & year < 500, .(ba = sum(value, na.rm = T)/.N), by = .(siteID, species_name)]
+p_dat4 <- p_dat2[variable == "ba" & year == 10, .(ba = sum(value, na.rm = T)/.N), by = .(siteID, species_name)]
 
 p_dat5 <- merge(unique(env_dt_BugSol2000scaled[, .(siteID, x, y)]), p_dat4, by = "siteID", all.x = TRUE)
 
