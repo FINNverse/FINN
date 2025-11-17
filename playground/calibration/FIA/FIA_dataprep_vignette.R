@@ -184,11 +184,13 @@ inputs <- resolveSiteIDs(
 )
 
 tree_dt <- inputs$tree_dt[year != 0]
+tree_dt_complete <- inputs$tree_dt
 obs_dt <- inputs$obs_dt[year != 0]
 env_dt <- inputs$env_dt[,-c("complete","OrigYear","siteName")]
 summary(obs_dt)
 #scale env_dt
 env_dt_names <- c("siteID","year", names(env_dt)[!(names(env_dt) %in% c("siteID","year"))])
+env_unscaled_dt <- copy(env_dt[, ..env_dt_names])
 env_dt <- env_dt[, ..env_dt_names]
 
 env_scales_dt <- data.table()
@@ -212,6 +214,7 @@ if(!dir.exists("vignettes/fit-fia-data")){
 
 summary(obs_dt)
 fwrite(env_scales_dt, "vignettes/fit-fia-data/env_scales_dt.csv")
+fwrite(env_unscaled_dt, "vignettes/fit-fia-data/env_unscaled_dt.csv")
 fwrite(env_dt, "vignettes/fit-fia-data/env_dt.csv")
 fwrite(obs_dt, "vignettes/fit-fia-data/obs_dt.csv")
 fwrite(inputs$obs_dt, "vignettes/fit-fia-data/full_obs_dt.csv")
@@ -232,19 +235,20 @@ m1 <- finn(
 )
 
 # first fit ####
-m1$fit(
-  env        = env_dt,
-  data       = obs_dt,
-  init_cohort = init_cohorts,
-  device     = "cpu",
-  epochs     = 100,
-  batchsize  = 500L,
-  patch_size = 0.06,
-  patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-  lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
-)
+# m1$fit(
+#   env        = env_dt,
+#   data       = obs_dt,
+#   init_cohort = init_cohorts,
+#   device     = "cpu",
+#   epochs     = 5000,
+#   batchsize  = 500L,
+#   patch_size = 0.06,
+#   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
+#   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
+# )
 
-
+# torch::torch_save(m1, "data/fia_v15_10k_process_finn.pt")
+m1 <- torch::torch_load("data/fia_v15_10k_process_finn.pt")
 
 
 ## 1. numeric coordinates from the figure
@@ -294,7 +298,7 @@ for(i in names(env_dt_BugSol2000)[!(names(env_dt_BugSol2000) %in% c("x","y"))]){
   env_dt_BugSol2000scaled[[i]] <- (env_dt_BugSol2000[[i]] - scale_mean) / scale_sd
 }
 
-# m1 <- torch::torch_load("data/fia_v12_process_finn.pt")
+# m1 <- torch::torch_load("data/fia_v15_10k_process_finn.pt")
 
 env_dt_BugSol2000scaled[, siteID := 1:.N]
 
@@ -387,20 +391,239 @@ Bug_species <- c(
   )
 p_dat2[!(species_name %in% Bug_species), species_name := "Other species",]
 
-p_dat4 <- p_dat2[variable == "ba" & year == 10, .(ba = sum(value, na.rm = T)/.N), by = .(siteID, species_name)]
+p_dat4 <- p_dat2[variable == "ba" & year > 999, .(ba = sum(value, na.rm = T)/.N), by = .(siteID, species_name)]
 
 p_dat5 <- merge(unique(env_dt_BugSol2000scaled[, .(siteID, x, y)]), p_dat4, by = "siteID", all.x = TRUE)
 
 p_dat5$lon <- format(abs(p_dat5$x), 2)
 p_dat5$lon <- factor(p_dat5$lon, levels = sort(unique(p_dat5$lon), decreasing = T))
 p_dat5[,species_name := factor(species_name, levels = c(Bug_species,"Other species")),]
+
 ggplot(p_dat5, aes(x = lon, y = ba, fill = species_name))+
   geom_bar(stat = "identity")+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 70, hjust = 1))+
   xlab("Longitude (°W)")
 
-ggplot(p_dat5[species_name != "other"], aes(x = factor(x), y = ba_share, fill = as.character(species_name)))+
+
+ggplot(p_dat5[species_name != "Other species"], aes(x = lon, y = ba, fill = as.character(species_name)))+
   geom_bar(stat = "identity")
+
+library(ggplot2)
+library(patchwork)
+
+
+unique(p_dat2$variable)
+p_dat4 <- p_dat2[year == 1000, .(
+  ba = sum(value[variable == "ba"], na.rm = T)/.N,
+  trees = sum(value[variable == "trees"], na.rm = T)/.N
+  ), by = .(siteID, species_name)]
+
+p_dat5 <- merge(unique(env_dt_BugSol2000scaled[, .(siteID, x, y)]), p_dat4, by = "siteID", all.x = TRUE)
+
+p_dat5$lon <- format(abs(p_dat5$x), 2)
+p_dat5$lon <- factor(p_dat5$lon, levels = sort(unique(p_dat5$lon), decreasing = T))
+p_dat5[,species_name := factor(species_name, levels = c(Bug_species,"Other species")),]
+
+
+# Temperaturplot
+p_temp <- ggplot(env_dt_BugSol2000, aes(x = x, y = temp)) +
+  geom_line(colour = "firebrick", linewidth = 1) +
+  geom_point(colour = "firebrick") +
+  theme_bw() +
+  labs(x = "Longitude (°W)", y = "Temperature (°C)") +
+  theme(legend.position = "none")
+
+# Niederschlagsplot
+p_prec <- ggplot(env_dt_BugSol2000, aes(x = x, y = prec / 10)) +
+  geom_line(colour = "steelblue", linewidth = 1) +
+  geom_point(colour = "steelblue") +
+  theme_bw() +
+  labs(x = "Longitude (°W)", y = "Precipitation (cm)") +
+  theme(legend.position = "none")
+
+# Balkendiagramm der Arten
+hist(p_dat5$trees)
+p_species <- ggplot(p_dat5, aes(x = as.integer(lon), y = ba, fill = species_name)) +
+  geom_bar(stat = "identity") +
+  # geom_line(linewidth = 2) +
+  theme_bw() +
+  labs(x = "Longitude (°W)", y = "Basal area") +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1),
+        legend.position = "bottom",
+        legend.title = element_blank())
+
+# Kombination: Temperatur oben, Niederschlag darunter, Balken unten
+combined_plot <- p_temp / p_prec / p_species +
+  plot_layout(heights = c(1, 1, 1.2))
+
+combined_plot
+
+
+bug_pars <- fread("data/SpecParsPNW.DAT", sep = "\t", skip = 6, encoding = "Latin-1")
+chr <- names(bug_pars)[vapply(bug_pars, is.character, logical(1))]
+bug_pars[, (chr) := lapply(.SD, function(x) chartr("\u00CA", " ", x)), .SDcols = chr]
+# bug_pars[,species_name := gsub("(g)","",,Species),]
+bug_pars[Species != "Pinus contorta(l)"]
+bug_pars[Species == "Pinus contorta(c)", Species == "Pinus contorta" ,]
+bug_pars[Species != "Pseudotsuga menziesii(g)"]
+bug_pars[Species == "Pseudotsuga menziesii(m)", Species == "Pseudotsuga menziesii" ,]
+
+growth = m1$parameters_r$nn_growth.0.weight
+
+growth <- cbind(species_dt[,-"species"], growth)
+growth_dt <- data.table::melt(growth, id.vars = "species_name")
+ggplot(growth_dt, aes(x = value, y = species_name,))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~variable)
+
+mort = m1$parameters_r$nn_mortality.0.weight
+mort <- cbind(species_dt[,-"species"], mort)
+mort_dt <- data.table::melt(mort, id.vars = "species_name")
+ggplot(mort_dt, aes(x = value, y = species_name,))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~variable)
+
+reg = m1$parameters_r$nn_regeneration.0.weight
+reg <- cbind(species_dt[,-"species"], reg)
+reg_dt <- data.table::melt(reg, id.vars = "species_name")
+ggplot(reg_dt, aes(x = value, y = species_name,))+
+  geom_bar(stat = "identity")+
+  facet_wrap(~variable)
+
+
+comp1_dt <- rbindlist(list(
+  data.table(growth_dt, process = "growth"),
+  data.table(mort_dt, process = "mort"),
+  data.table(reg_dt, process = "reg")
+))
+
+env_names = names(env_dt)[-c(1:2)]
+comp1_dt[, variable := factor(
+  variable,
+  levels = paste0("V", 1:(length(env_names)+1)),
+  labels = c("intercept", env_names)),]
+
+
+bug_pars[,species_name := Species,]
+bug_pars[,WiTN := as.numeric(WiTN),]
+
+
+
+disp_dt <- data.table(
+  disp_recr = torch::as_array(m1$par_theta_recruits),
+  species_name = species_dt$species_name
+)
+ggplot(disp_dt, aes(x = disp_recr, y = forcats::fct_reorder(species_name, disp_recr)))+
+  geom_bar(stat = "identity")
+
+
+par_mort <- data.table(m1$parameters_r$par_mortality_unconstrained)
+par_mort$species_name <- species_dt$species_name
+colnames(par_mort) <- c("mortLight", "mortSize", "mortGrowth","species")
+
+par_growth <- data.table(m1$parameters_r$par_growth_unconstrained)
+par_growth$species_name <- species_dt$species_name
+colnames(par_growth) <- c("growthLight", "growthSize","species")
+
+par_reg <- data.table(m1$parameters_r$par_regeneration_unconstrained)
+par_reg$species_name <- species_dt$species_name
+colnames(par_reg) <- c("regLight","species")
+
+par_mort <- melt(data.table(par_mort), measure.vars = colnames(par_mort)[-length(colnames(par_mort))])
+par_growth <- melt(data.table(par_growth), measure.vars = colnames(par_growth)[-length(colnames(par_growth))])
+par_reg <- melt(data.table(par_reg), measure.vars = colnames(par_reg)[-length(colnames(par_reg))])
+
+process_par_dt <- rbindlist(list(
+  data.table(par_mort, process = "mort"),
+  data.table(par_growth, process = "growth"),
+  data.table(par_reg, process = "reg"),
+  data.table(species_name = disp_dt$species_name, variable = "regDispersion", value = disp_dt$disp_recr, process = "reg")
+))
+
+names(process_par_dt)[1] <- "species_name"
+comp1_dt <- rbind(process_par_dt,comp1_dt)
+
+comp_p_dt <- merge(bug_pars,comp1_dt, by = "species_name")
+c("Dm" = "evaporative demand")
+forclimpars = names(bug_pars[,-c("Species","species_name")])
+
+names(bug_pars[,-c("Species","species_name")])
+param_defs <- c(
+  sType = "species type",
+  Dm    = "max diameter",
+  Hm    = "max height",
+  Am    = "max age",
+  G     = "growth rate",
+  DDMin = "min degree days",
+  WiTN  = "winter Tmin",
+  WiTX  = "winter Tmax",
+  DrT   = "drought tolerance",
+  kFlT  = "foliage turnover",
+  NTol  = "nutrient tolerance",
+  Brow  = "browsing tolerance",
+  Ly    = "light requirements young trees",
+  La    = "light requirements old trees",
+  LQ    = "litter quality",
+  Imm   = "immaturity age"
+)
+
+
+pdf("comp_pars.pdf",width = 10, height = 10)
+p = ggplot(comp_p_dt, aes(y = value, x = sType, color = process))+
+  geom_boxplot()+
+  facet_wrap(~variable)+
+  ggtitle(param_defs[1])
+print(p)
+for(i in 2:length(param_defs)){
+  p = ggplot(comp_p_dt, aes_string(y = "value", x = names(param_defs)[i], color = "process"))+
+    geom_point()+
+    geom_smooth(method = "lm")+
+    facet_wrap(~variable, scales = "free")+
+    ggtitle(param_defs[i])
+  print(p)
+}
+dev.off()
+cors_dt <- data.table()
+summary(comp_p_dt)
+cor(comp_p_dt[variable == "mortLight"]$Dm,comp_p_dt[variable == "mortLight"]$value)
+cor2 <- function(x,y,...){
+  if(length(x) > 0) cor(x,y,...) else NA
+}
+
+cors_temp <- comp_p_dt[,.(
+  Dm = cor(Dm, value,method = "spearman", use = "complete.obs"),
+  Hm = cor(Hm, value,method = "spearman", use = "complete.obs"),
+  Am = cor(Am, value,method = "spearman", use = "complete.obs"),
+  G = cor(G, value,method = "spearman", use = "complete.obs"),
+  DDMin = cor(DDMin, value,method = "spearman", use = "complete.obs"),
+  WiTN = cor(WiTN, value,method = "spearman", use = "complete.obs"),
+  WiTX = cor(WiTX, value,method = "spearman", use = "complete.obs"),
+  DrT = cor(DrT, value,method = "spearman", use = "complete.obs"),
+  kFlT = cor(kFlT, value,method = "spearman", use = "complete.obs"),
+  NTol = cor(NTol, value,method = "spearman", use = "complete.obs"),
+  Brow = cor(Brow, value,method = "spearman", use = "complete.obs"),
+  Ly = cor(Ly, value,method = "spearman", use = "complete.obs"),
+  La = cor(La, value,method = "spearman", use = "complete.obs"),
+  LQ = cor(LQ, value,method = "spearman", use = "complete.obs")
+  ), by = .(variable,process)]
+p_cors <- melt(cors_temp, id.vars = c("variable","process"))
+ggplot(p_cors, aes(y = variable, x = variable.1, fill = value))+
+  geom_tile()+
+  facet_wrap(~process, scales = "free", ncol = 2)+
+  scale_fill_gradient2(limits = c(-1,1))+
+  geom_text(aes(label = round(value, 2)))
+
+p = ggplot(comp_p_dt[Brow < 2], aes_string(y = "value", x = "Brow", color = "process"))+
+  geom_point()+
+  geom_smooth(method = "lm")+
+  facet_grid(process~variable)+
+  ggtitle(param_defs[i])
+print(p)
+
+ggplot(comp_p_dt, aes(y = value, x = Hm, color = process))+
+  geom_point()+
+  facet_wrap(process~variable)
+
 
 
