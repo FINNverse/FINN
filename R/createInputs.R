@@ -1,14 +1,30 @@
 
-#' Resolve siteIDs into array dimensions needed for the FINN simulation
+#' Resolve site, patch, and year indices for FINN inputs
 #'
-#' This function processes raw site and tree data to create a mapping of siteIDs and patchIDs into integer indices suitable for array dimensions in the FINN model.
+#' Joins tree, environment, and observation tables; assigns integer indices
+#' for site, patch, period; standardizes species coding; and returns aligned
+#' data plus optional initial cohorts.
 #'
-#' @param site_raw A data.table containing raw site-level data with columns "siteID" and "year".
-#' @param tree_raw A data.table containing raw tree-level data with columns "siteID", "patchID", and "year".
-#' @param selection_priority A string indicating the priority for selecting sites. Options are "fixed patches" or "many years". Default is "fixed patches".
-#' @param Npatches_fixed An integer specifying the number of patches to fix when selection_priority is "fixed patches". Default is 4.
-#' @param all A logical indicating whether to include all sites and patches, even if they do not match. Default is FALSE.
-#' @return A data.table with resolved siteID and patchID indices along with their original IDs and years.
+#' @param tree_dt data.table with tree-level data including siteName, patchName, year,
+#'   species_name, dbh, status, living, and optional trees.
+#' @param env_dt data.table with environment data including siteName and year.
+#' @param obs_dt data.table with observations including siteName, patchName, year,
+#'   species_name, and stand metrics (ba, dbh, trees, growth, mort, reg).
+#' @param createInitCohorts logical. If TRUE, build FINN initial cohorts from
+#'   trees with \code{living == TRUE} and \code{year == 1}. Default TRUE.
+#'
+#' @return A list with:
+#' \itemize{
+#'   \item \code{siteID_dt}: site/patch/year index map.
+#'   \item \code{tree_dt}: tree table with indices and standardized species.
+#'   \item \code{env_dt}: environment table with indices.
+#'   \item \code{obs_dt}: site-aggregated observations by species.
+#'   \item \code{obs_dt_patches}: patch-level observations by species.
+#'   \item \code{species_dt}: species lookup (\code{species}, \code{species_name}).
+#'   \item \code{initCohorts} (optional): FINN \code{CohortMat} object.
+#'   \item \code{initCohort_dt} (optional): trees used to build cohorts.
+#' }
+#'
 #' @import data.table
 #' @export
 resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
@@ -83,10 +99,46 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
 #   return(env_dt)
 # }
 
+#' Convert DBH to basal area
+#'
+#' Computes basal area in m^2 from diameter at breast height in cm:
+#' \deqn{BA = \pi \left(\frac{\mathrm{DBH}}{200}\right)^2}
+#'
+#' @param dbh numeric vector of diameters (cm).
+#' @return numeric vector of basal areas (m^2).
+#' @export
 dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
 }
 
+#' Create observation data from trees
+#'
+#' Derives stand metrics by site/patch/species/year from tree measurements,
+#' filters sites, harmonizes years, optionally aggregates by site.
+#'
+#' @param tree_dt data.table of tree records with siteName, patchName, year,
+#'   treeName, species_name, dbh, status, living, and optional \code{mort}.
+#' @param plotsize numeric plot area used to scale recruitment.
+#' @param aggregate_by_site logical. Aggregate patches to site level. Default TRUE.
+#' @param minNyears integer or NULL. Keep sites with at least this many years and
+#'   equal counts across patches. Default 2.
+#' @param fix_period_length integer or NULL. If set, drop sites whose inventory
+#'   interval differs. Default NULL.
+#' @param dbh_growth_thresh length-2 numeric or NULL. Drop sites where any tree
+#'   \code{dbh} change falls outside this range. Default \code{c(-10, 50)}.
+#' @param Npatches integer or NULL. If set, keep only sites with exactly this many patches.
+#' @param Nspecies integer or NULL. Cap species to the top N (others merged to "other").
+#' @param NspeciesQuantile numeric in (0,1] or NULL. Choose the smallest N covering
+#'   this fraction of individuals; overrides \code{Nspecies} if supplied.
+#'
+#' @return A list with:
+#' \itemize{
+#'   \item \code{obs_dt}: observations at site or patch level.
+#'   \item \code{tree_dt}: input trees with added growth fields and species recode.
+#' }
+#'
+#' @import data.table
+#' @export
 makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
   # browser()
   tree_dt <- copy(as.data.table(tree_dt))
@@ -205,7 +257,65 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   return(list(obs_dt = obs_dt, tree_dt = tree_dt))
 }
 
-
+#' Make initial cohorts for FINN
+#'
+#' Aggregates initial trees into cohorts by DBH bins or exact DBH and
+#' constructs a \code{FINN::CohortMat} object.
+#'
+#' @description
+#' This function prepares \code{obs_df} in the exact format expected by
+#' \code{FINN::CohortMat$new()} and calls it. The required long-table schema is:
+#' \itemize{
+#'   \item \strong{siteID} integer index of sites \eqn{1..S}.
+#'   \item \strong{patchID} integer index of patches within site \eqn{1..P_s}.
+#'   \item \strong{species} integer species code \eqn{1..sp}.
+#'   \item \strong{dbh} numeric DBH in cm (either exact or binned midpoints).
+#'   \item \strong{trees} integer count of trees in the cohort.
+#' }
+#'
+#' @details
+#' Internally calls:
+#' \preformatted{
+#' FINN::CohortMat$new(
+#'   obs_df = <data.frame with columns siteID, patchID, species, dbh, trees>,
+#'   dbh    = NULL,
+#'   trees  = NULL,
+#'   species= NULL,
+#'   dims   = c(S, P, K),   # inferred from obs_df
+#'   sp     = Nspecies,     # passed from argument
+#'   device = "cpu"
+#' )
+#' }
+#' Key fields of the resulting R6 object:
+#' \itemize{
+#'   \item \code{dbh}, \code{trees}, \code{species}: tensors per cohort.
+#'   \item \code{dims}: integer vector \code{c(S, P, K)} for sites, patches, cohorts.
+#'   \item \code{sp}: integer number of species.
+#'   \item \code{device}: "cpu" or "cuda".
+#'   \item \code{dbh_r}, \code{trees_r}, \code{species_r}: R arrays.
+#'   \item \code{obsDF2arrays}: method converting \code{obs_df} into arrays.
+#' }
+#'
+#' @param init_trees data.table of initial trees with columns
+#'   \code{siteID}, \code{patchID}, \code{species}, \code{dbh}, \code{treeName};
+#'   optional \code{trees} for pre-counted individuals.
+#' @param dbh_binsize numeric or NULL. Bin width in cm. If NULL, keep exact DBH.
+#' @param min_dbh numeric or NULL. Lower bound for binning. If NULL, uses min DBH.
+#' @param Nspecies integer. Number of species levels passed to \code{sp}.
+#' @param treeID_table logical. If TRUE, also return the cohort table used.
+#' @param singleCohortTreeNames character vector or NULL. Tree names excluded from
+#'   binning and kept as single-tree cohorts.
+#'
+#' @return If \code{treeID_table = FALSE}, a \code{FINN::CohortMat} object.
+#'   If \code{TRUE}, a list with:
+#'   \itemize{
+#'     \item \code{initCohort}: the \code{CohortMat} object.
+#'     \item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat$new()}.
+#'   }
+#'
+#' @seealso \code{\link[FINN]{CohortMat}}
+#' @import data.table
+#' @export
 makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = F, singleCohortTreeNames = NULL){
   # browser()
   if(!is.null(dbh_binsize)){
@@ -230,124 +340,88 @@ makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspe
   return(out)
 }
 
-makeInitCohorts2 <- function(
-    init_trees,
-    dbh_bins,                   # numeric vector (same length as tree_groups)
-    tree_groups,                # list of character vectors (tree names)
-    Nspecies,
-    min_dbh = NULL,             # optional: scalar lower bound for all binning
-    return_tree_table = FALSE   # formerly treeID_table
-){
-  stopifnot(is.list(tree_groups), length(dbh_bins) == length(tree_groups))
-
-  # ensure data.table
-  init_trees <- data.table::as.data.table(init_trees)
-
-  required_cols <- c("siteID","patchID","species","dbh","treeName")
-  missing_cols  <- setdiff(required_cols, names(init_trees))
-  if (length(missing_cols))
-    stop("init_trees is missing required columns: ", paste(missing_cols, collapse=", "))
-
-  # count expression: support either explicit 'trees' counts or one-row-per-tree
-  has_trees_col <- "trees" %in% names(init_trees)
-  count_expr <- if (has_trees_col) quote(sum(trees, na.rm = TRUE)) else quote(.N)
-
-  # helper: cohort a subset of trees with a given bin size
-  cohort_subset <- function(sub, binsize){
-    sub <- data.table::copy(sub)
-
-    if (binsize == 0) {
-      # keep actual DBH; one row per tree with trees = 1 (or existing trees if provided)
-      if (!has_trees_col) sub[, trees := 1L]
-      out <- sub[, .(trees = eval(count_expr)),
-                 by = .(siteID, patchID, species, dbh)]
-      return(out[])
-    }
-
-    # Positive bin size: cut DBH to mid-bin values and aggregate
-    if (is.null(min_dbh)) {
-      min_cut <- min(sub$dbh, na.rm = TRUE)
-    } else {
-      min_cut <- min_dbh
-    }
-
-    # Build breaks and labels (midpoints)
-    max_dbh <- max(sub$dbh, na.rm = TRUE)
-    brks    <- seq(min_cut, max_dbh + binsize, by = binsize)
-    mids    <- brks[-length(brks)] + binsize/2
-
-    sub[, dbh_binned := as.numeric(as.character(
-      cut(dbh, breaks = brks, labels = mids, include.lowest = TRUE)
-    ))]
-
-    out <- sub[, .(trees = eval(count_expr)),
-               by = .(siteID, patchID, species, dbh = dbh_binned)]
-    out[]
-  }
-
-  # Build per-group cohorts, then combine
-  cohorts <- lapply(seq_along(dbh_bins), function(i){
-    grp_names <- tree_groups[[i]]
-    binsize   <- dbh_bins[i]
-    sub       <- init_trees[treeName %in% grp_names]
-    if (nrow(sub) == 0L) return(data.table::data.table(
-      siteID=character(), patchID=character(), species=character(),
-      dbh=numeric(), trees=integer()
-    ))
-    cohort_subset(sub, binsize)
-  })
-
-  init_tbl <- data.table::rbindlist(cohorts, use.names = TRUE)
-
-  # deterministic cohort IDs
-  init_tbl[, cohortID := .I]
-
-  # FINN object
-  initCohort <- FINN::CohortMat$new(obs_df = init_tbl, sp = Nspecies)
-
-  if (return_tree_table) {
-    list(initCohort = initCohort, init_trees = init_tbl[])
-  } else {
-    initCohort
-  }
-}
-
-
-#' Create inputs for the forest model
-#' This function prepares input data for FINN by processing site and tree data. It resolves siteIDs into array dimensions needed for the FINN simulation.
-#' @param site_dt A data.table containing site-level data.
-#' @param tree_dt A data.table containing tree-level data.
-#' @param Nspecies An integer specifying the maximum number of species to consider.
-#' @param patchsize A numeric value specifying the patch size for the simulations. Default is 0.06.
-#' @param dbh_binsize A numeric value specifying the bin size for diameter at breast height (DBH) when creating initial cohorts. Default is 0.5.
-#' @return A list containing the following elements:
-#' \item{env_dt}{A data.table with environmental data.}
-#' \item{obs_dt}{A data.table with observation data.}
-#' \item{initCohort}{An object representing the initial cohorts of trees.}
-#' \item{patchsize}{The patch size used for the simulations.}
-#' \item{Nspecies}{The maximum number of species considered.}
-#' @import data.table
-#' @export
-createInputs <- function(site_dt, tree_dt, Nspecies, patchsize = patchsize, dbh_binsize = 0.1){
-
-  siteID_dt <- resolveSiteIDs(env_dt, obs_dt, initCohort)
-
-  tree_dt <- merge(tree_dt, siteID_dt, by = "siteID", all.x = TRUE)
-  site_dt <- merge(site_dt, siteID_dt, by = "siteID", all.x = TRUE)
-  env_dt <- merge(env_dt, siteID_dt, by = "siteID", all.x = TRUE)
-  obs_dt <- merge(obs_dt, siteID_dt, by = "siteID", all.x = TRUE)
-
-  env_dt <- makeEnvData(site_dt)
-
-  obs_dt <- makeObsData(tree_dt, Nspecies = Nspecies)
-
-  initCohort <- makeInitCohorts(tree_dt, dbh_binsize, Nspecies = Nspecies, site_dt)
-
-  if(checkInputs(env_dt, obs_dt, initCohort, patchsize) == FALSE) stop("Input check failed")
-
-  return(list(env_dt = env_dt, obs_dt = obs_dt, initCohort = initCohort, patchsize = patchsize, Nspecies = Nspecies))
-}
-
+#
+# makeInitCohorts2 <- function(
+#     init_trees,
+#     dbh_bins,                   # numeric vector (same length as tree_groups)
+#     tree_groups,                # list of character vectors (tree names)
+#     Nspecies,
+#     min_dbh = NULL,             # optional: scalar lower bound for all binning
+#     return_tree_table = FALSE   # formerly treeID_table
+# ){
+#   stopifnot(is.list(tree_groups), length(dbh_bins) == length(tree_groups))
+#
+#   # ensure data.table
+#   init_trees <- data.table::as.data.table(init_trees)
+#
+#   required_cols <- c("siteID","patchID","species","dbh","treeName")
+#   missing_cols  <- setdiff(required_cols, names(init_trees))
+#   if (length(missing_cols))
+#     stop("init_trees is missing required columns: ", paste(missing_cols, collapse=", "))
+#
+#   # count expression: support either explicit 'trees' counts or one-row-per-tree
+#   has_trees_col <- "trees" %in% names(init_trees)
+#   count_expr <- if (has_trees_col) quote(sum(trees, na.rm = TRUE)) else quote(.N)
+#
+#   # helper: cohort a subset of trees with a given bin size
+#   cohort_subset <- function(sub, binsize){
+#     sub <- data.table::copy(sub)
+#
+#     if (binsize == 0) {
+#       # keep actual DBH; one row per tree with trees = 1 (or existing trees if provided)
+#       if (!has_trees_col) sub[, trees := 1L]
+#       out <- sub[, .(trees = eval(count_expr)),
+#                  by = .(siteID, patchID, species, dbh)]
+#       return(out[])
+#     }
+#
+#     # Positive bin size: cut DBH to mid-bin values and aggregate
+#     if (is.null(min_dbh)) {
+#       min_cut <- min(sub$dbh, na.rm = TRUE)
+#     } else {
+#       min_cut <- min_dbh
+#     }
+#
+#     # Build breaks and labels (midpoints)
+#     max_dbh <- max(sub$dbh, na.rm = TRUE)
+#     brks    <- seq(min_cut, max_dbh + binsize, by = binsize)
+#     mids    <- brks[-length(brks)] + binsize/2
+#
+#     sub[, dbh_binned := as.numeric(as.character(
+#       cut(dbh, breaks = brks, labels = mids, include.lowest = TRUE)
+#     ))]
+#
+#     out <- sub[, .(trees = eval(count_expr)),
+#                by = .(siteID, patchID, species, dbh = dbh_binned)]
+#     out[]
+#   }
+#
+#   # Build per-group cohorts, then combine
+#   cohorts <- lapply(seq_along(dbh_bins), function(i){
+#     grp_names <- tree_groups[[i]]
+#     binsize   <- dbh_bins[i]
+#     sub       <- init_trees[treeName %in% grp_names]
+#     if (nrow(sub) == 0L) return(data.table::data.table(
+#       siteID=character(), patchID=character(), species=character(),
+#       dbh=numeric(), trees=integer()
+#     ))
+#     cohort_subset(sub, binsize)
+#   })
+#
+#   init_tbl <- data.table::rbindlist(cohorts, use.names = TRUE)
+#
+#   # deterministic cohort IDs
+#   init_tbl[, cohortID := .I]
+#
+#   # FINN object
+#   initCohort <- FINN::CohortMat$new(obs_df = init_tbl, sp = Nspecies)
+#
+#   if (return_tree_table) {
+#     list(initCohort = initCohort, init_trees = init_tbl[])
+#   } else {
+#     initCohort
+#   }
+# }
 
 
 add_site_completeness_flags <- function(env_dt = NULL,
