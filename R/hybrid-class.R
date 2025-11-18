@@ -74,12 +74,19 @@ hybrid_DNN = nn_module("hybrid_DNN",
                                              emb_dim=2L,
                                              dropout=0.1,
                                              hidden = c(50L, 50L),
+                                             regeneration = FALSE,
                                              ...
                        ) {
-                         self$species_embedder = nn_embedding(num_species, emb_dim)
-
+                         if(!regeneration) self$species_embedder = nn_embedding(num_species, emb_dim)
+                         self$num_species = num_species
+                         self$regeneration = regeneration
                          layers = list()
-                         layers[[1]] = nn_linear(num_env_vars+3L+emb_dim-1, hidden[1])
+                         layers[[1]] =
+                           if(!regeneration) {
+                               nn_linear(num_env_vars+3L+emb_dim-1, hidden[1])
+                             } else {
+                               nn_linear(num_env_vars+1, hidden[1])
+                             }
                          counter = 2L
                          for(i in 2:length(hidden)) {
                            layers[[counter]] = nn_selu()
@@ -91,33 +98,54 @@ hybrid_DNN = nn_module("hybrid_DNN",
                          }
                          layers[[counter]] = nn_selu()
                          layers[[counter+1]] = nn_dropout(dropout)
-                         layers[[counter+2]] = nn_linear(hidden[length(hidden)], 1L)
+                         layers[[counter+2]] =
+                           if(!regeneration) {
+                              nn_linear(hidden[length(hidden)], 1L)
+                            } else {
+                              nn_linear(hidden[length(hidden)], num_species)
+                            }
                          self$nn = do.call(nn_sequential, layers)
 
                        },
-                       forward = function(dbh, growth = NULL, trees = NULL, light, species, env) {
-                         if(is.null(growth)) {
-                           input =
-                             torch::torch_cat(
-                               list(dbh$unsqueeze(4L) /100., # rescale dbh wird das noch benoetigt?
-                                    env$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
-                                    light$unsqueeze(4L)),
-                               dim = 4L)
+                       forward = function(dbh = NULL, growth = NULL, trees = NULL, light, species, env) {
+
+                         if(!self$regeneration) {
+
+                             if(is.null(growth)) {
+                                 # Growth
+                                 input =
+                                   torch::torch_cat(
+                                     list(dbh$unsqueeze(4L) /100., # rescale dbh wird das noch benoetigt?
+                                          env$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+                                          light$unsqueeze(4L)),
+                                     dim = 4L)
+                             } else {
+                               # Mortality
+                               input =
+                                 torch::torch_cat(
+                                   list(dbh$unsqueeze(4L) /100., # rescale dbh wird das noch benoetigt?
+                                        growth$unsqueeze(4L),
+                                        (trees$unsqueeze(4L)+1.0)$log(),
+                                        env$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+                                        light$unsqueeze(4L)),
+                                   dim = 4L)
+                             }
+
+                             species_embeddings = self$species_embedder(species) # [sites, patches, cohorts, species_embeddings]
+                             input_together = torch::torch_cat(list(input, species_embeddings), dim = 4L)
+                             predictions = self$nn(input_together) # [sites, patches, cohorts, 1]
+                             return(predictions[,,,1])
                          } else {
                            input =
                              torch::torch_cat(
-                               list(dbh$unsqueeze(4L) /100., # rescale dbh wird das noch benoetigt?
-                                    growth$unsqueeze(4L),
-                                    (trees$unsqueeze(4L)+1.0)$log(),
-                                    env$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
-                                    light$unsqueeze(4L)),
-                               dim = 4L)
+                               list(env$unsqueeze(2L)$`repeat`(c(1L, light$shape[2], 1L)),
+                                    light),
+                               dim = 3L)
+                           predictions = self$nn(input) # [sites, patches,  5]
+                           return(predictions)
                          }
-
-                         species_embeddings = self$species_embedder(species) # [sites, patches, cohorts, species_embeddings]
-                         input_together = torch::torch_cat(list(input, species_embeddings), dim = 4L)
-                         predictions = self$nn(input_together) # [sites, patches, cohorts, 1]
-                         return(predictions[,,,1])
                        }
 
 )
+
+

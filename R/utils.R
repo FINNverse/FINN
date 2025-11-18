@@ -45,6 +45,37 @@ build_NN = function(input_shape,
 
 
 
+visualize.training <- function(losses,epoch,max_epoch = 100L, main, new = FALSE, baseline = NULL){
+  if (epoch==1|new){
+
+    graphics::plot(c(),c(),xlim=c(1, max_epoch),ylim=c(0,1.0),
+                   main= main,
+                   xlab= "epoch",
+                   ylab= "Loss in %",
+                   las = 1)
+
+      graphics::legend("topright", pch = 15, bty = "n", col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
+                                    legend = c("dbh", "ba", "trees", "growth", "mort", "reg"))
+
+      matplot(losses[,1:6,drop=FALSE], type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
+              lwd = 1.5,
+              las = 1, add = TRUE,
+              pch = 16)
+
+  } else{
+
+    matplot(c(epoch-1,epoch),
+            losses[(epoch-1):(epoch),1:6, drop = FALSE],
+            type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
+            lwd = 1.5,
+            las = 1, add = TRUE,
+            pch = 16)
+  }
+}
+
+
+
+
 #' Generate random numbers from a uniform distribution
 #'
 #' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.

@@ -269,7 +269,7 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 
 
 growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
-  g = self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)$exp()
+  g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)- exp(1))$exp()
   return(g)
 }
 
@@ -298,6 +298,10 @@ regeneration = function(species, parReg, pred, light, debug = F) {
   #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   if(debug == T) out = list(regP = regP, mean = mean) else out = mean
   return(out)
+}
+
+regeneration_hybrid = function(species, parReg, pred, light, debug = F) {
+ r = self$nn_regeneration(light = light, species = species, env = pred)$exp()
 }
 
 

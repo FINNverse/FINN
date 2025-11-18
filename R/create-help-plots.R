@@ -59,7 +59,7 @@ create_help_plots <- function(){
 
     basal_area <- BA_stand(cohort$dbh, cohort$trees, patch_size_ha = i)
     light <- competition(dbh = cohort$dbh, species = cohort$species,
-                         trees = cohort$trees, parHeight = torch::torch_tensor(c(0.5)),
+                         trees = cohort$trees,
                          patch_size_ha = i,
                          h = 0)
 
@@ -138,7 +138,7 @@ create_help_plots <- function(){
     # dim(torch::as_array(cohortHeights2))
     # cohort_dt_out$height <- c(torch::as_array(cohortHeights2)[,,1,], torch::as_array(cohortHeights2)[,,2,])
     light <- competition(dbh = cohort$dbh, species = cohort$species,
-                         trees = cohort$trees, parHeight = torch::torch_tensor(parHeight_vec),
+                         trees = cohort$trees,
                          h = NULL, patch_size_ha = patch_size_ha)
     cohort_dt_out$basal_area <- as.vector(torch::as_array(basal_area)[, 1, ])
     cohort_dt_out$light <- as.vector(torch::as_array(light)[, 1, ])
@@ -196,8 +196,7 @@ create_help_plots <- function(){
   cohort_df1$siteID <- 1:nrow(cohort_df1)
   cohort <- CohortMat$new(obs_df = cohort_df1)
 
-  light <- competition(cohort$dbh, cohort$species, cohort$trees,
-                       parHeight = torch::torch_tensor(0.5), h = 0, patch_size_ha = patch_size)
+  light <- competition(cohort$dbh, cohort$species, cohort$trees, h = 0, patch_size_ha = patch_size)
   cohort_df1$light <- torch::as_array(light)[, 1, 1]
 
   # use BA_stand to calculate basal area of the stand
@@ -242,8 +241,7 @@ create_help_plots <- function(){
    species = cohort$species
    trees = cohort$trees
 
-   light = competition(cohort$dbh, cohort$species, cohort$trees,
-                       parHeight = torch::torch_tensor(0.5), h=0, patch_size_ha = 0.1)
+   light = competition(cohort$dbh, cohort$species, cohort$trees, h=0, patch_size_ha = 0.1)
    cohort_df1$light = torch::as_array(light)[,1,1]
 
 

@@ -78,10 +78,10 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
 }
 
 
-makeEnvData <- function(){
-
-  return(env_dt)
-}
+# makeEnvData <- function(){
+#
+#   return(env_dt)
+# }
 
 dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
