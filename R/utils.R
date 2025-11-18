@@ -561,3 +561,75 @@ dnbinom_torch = function(pred, true, theta) {
   log_normalization <- torch::torch_where(total_count + value == 0, torch::torch_tensor(0, dtype = log_normalization$dtype, device = pred$device), log_normalization)
   return( - (log_unnormalized_prob - log_normalization))
   }
+
+
+
+#' @export
+plot.finn = function(x, pars = c("process", "env"), env_names = NULL, species_names = NULL, ...) {
+  if(is.null(species_names)) species_names = 1:m1$N_species
+  if(tolower(pars) == "env"){
+    growth = x$parameters_r$nn_growth.0.weight
+    mort = x$parameters_r$nn_mortality.0.weight
+    reg = x$parameters_r$nn_regeneration.0.weight
+    if(any(c(is.null(growth), is.null(mort), is.null(reg)))){
+      return(print("no environmental effects fitted"))
+    }else{
+      env_effects_dt <- rbindlist(list(
+        data.table(growth, process = "growth", species = species_names),
+        data.table(mort, process = "mort", species = species_names),
+        data.table(reg, process = "reg", species = species_names)
+      ))
+      env_effects_dt <- melt(env_effects_dt, id.vars = c("species","process"))
+      if(is.null(env_names)) env_names = paste0("x",2:(ncol(growth)))
+      env_effects_dt[, variable := factor(
+        variable,
+        levels = paste0("V", 1:(ncol(growth))),
+        labels = c("intercept", env_names)),]
+      p = ggplot(env_effects_dt, aes(x = value, y = as.factor(species)))+
+        geom_bar(stat = "identity")+
+        facet_wrap(~variable)+
+        theme_bw()+
+        geom_vline(xintercept = 0)+
+        ylab("Species")
+      print(p)
+    }
+  }
+  if(tolower(pars) == "process"){
+    disp_dt <- data.table(
+      disp_recr = torch::as_array(x$par_theta_recruits),
+      species = species_names
+    )
+    par_mort <- data.table(x$par_mortality_r)
+    par_mort$species <- species_names
+    colnames(par_mort) <- c("mortLight", "mortSize", "mortGrowth","species")
+
+    par_growth <- data.table(x$par_growth_r)
+    par_growth$species <- species_names
+    colnames(par_growth) <- c("growthLight", "growthSize","species")
+
+    par_reg <- data.table(x$par_regeneration_r)
+    par_reg$species <- species_names
+    colnames(par_reg) <- c("regLight","species")
+
+    par_mort <- melt(data.table(par_mort), measure.vars = colnames(par_mort)[-length(colnames(par_mort))])
+    par_growth <- melt(data.table(par_growth), measure.vars = colnames(par_growth)[-length(colnames(par_growth))])
+    par_reg <- melt(data.table(par_reg), measure.vars = colnames(par_reg)[-length(colnames(par_reg))])
+
+    process_par_dt <- rbindlist(list(
+      data.table(par_mort, process = "mort"),
+      data.table(par_growth, process = "growth"),
+      data.table(par_reg, process = "reg"),
+      data.table(species = disp_dt$species, variable = "regDispersion", value = disp_dt$disp_recr, process = "reg")
+    ))
+    p = ggplot(process_par_dt, aes(x = value, y = as.factor(species), fill = process))+
+      geom_bar(stat = "identity")+
+      facet_wrap(~variable+process, scales = "free_x")+
+      theme_bw()+
+      geom_vline(xintercept = 0)+
+      ylab("Species ID")
+    print(p)
+  }
+}
+# usage
+# plot(m1, pars = "env", env_names = env_scales_dt$variable)
+# plot(m1, pars = "process", species_names = species_dt$species_name)
