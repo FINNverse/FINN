@@ -2,7 +2,7 @@
 % Please edit documentation in R/finn-class.R
 \name{finn}
 \alias{finn}
-\title{finn module}
+\title{Forest Informed Neural Network}
 \usage{
 finn(
   N_species,
@@ -14,45 +14,18 @@ finn(
 )
 }
 \arguments{
-\item{dbh}{torch.Tensor (Optional). Diameter at breast height of the trees.}
+\item{N_species}{(\code{integer(1)})\cr Number of species.}
 
-\item{trees}{torch.Tensor (Optional). Number of trees.}
+\item{mortality_process}{(\code{function})\cr Mortality function.}
 
-\item{species}{torch.Tensor (Optional). Species of the trees.}
+\item{growth_process}{(\code{function})\cr Growth function.}
 
-\item{env}{torch.Tensor. Environmental data.}
+\item{regeneration_process}{(\code{function})\cr Regeneration function.}
 
-\item{disturbance}{torch.Tensor. Disturbance rates.}
+\item{competition_process}{(\code{function})\cr Competition function.}
 
-\item{start_time}{integer. Time at which to start recording the results.}
-
-\item{pred_growth}{torch.Tensor (Optional). Predicted growth values.}
-
-\item{pred_mort}{torch.Tensor (Optional). Predicted mortality values.}
-
-\item{pred_reg}{torch.Tensor (Optional). Predicted regeneration values.}
-
-\item{patches}{numeric. Number of patches.}
-
-\item{debug}{logical. Run in debug mode if TRUE.}
-
-\item{y}{torch.Tensor. Response tensor for target data.}
-
-\item{c}{torch.Tensor. Number of tree tensor.}
-
-\item{update_step}{integer. Backpropagation step length.}
-
-\item{verbose}{logical. Print progress if TRUE.}
-
-\item{weights}{weights for reweighting the loss}
-
-\item{year_sequence}{at which year indices should the predictions compared with the observed values}
-}
-\value{
-list. A list of predicted values for dbh, number of trees, and other recorded time points. If \code{debug} is TRUE, raw results and cohorts are also returned.
+\item{recruits_dbh}{(\code{numeric(1)})\cr Starting dbh for recruits. Has value 1.0 as default.}
 }
 \description{
-Predicts the growth, mortality, and regeneration of trees based on the given inputs.
-
-The \code{forward} method generates predictions for tree growth, mortality, and regeneration for the specified species across different environmental conditions. It uses the initialized model parameters and can handle optional input tensors like diameter at breast height (dbh), number of trees, and species. If these are not provided, they will be initialized internally.
+Creates a Forest Informed Neural Network (FINN) object. Environmental components or the entire process can be replaced by deep neural networks.
 }

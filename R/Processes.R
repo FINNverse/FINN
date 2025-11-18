@@ -140,14 +140,33 @@ height = function(dbh, parHeight) {
 #' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
 #'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
 #' @export
-competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL){
+competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE){
   parHeight = parComp[,1]
   parCompStr = parComp[,2]
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)*parCompStr[species]*0.1
   if(is.null(cohortHeights)) cohortHeights = height(dbh, parHeight[species])$unsqueeze(4)
+
   if(is.null(h)) {
-    h = cohortHeights
-    ba_height = (ba$unsqueeze_(4)$multiply(((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2)$sigmoid_() ))$sum(-2) # AUFPASSEN
+    if(continuous) {
+      h = cohortHeights
+      ba_height = (ba$unsqueeze_(4)$multiply(((cohortHeights - h$permute(c(1,2, 4, 3)) - 0.1)/1e-2)$sigmoid_() ))$sum(-2)
+    } else {
+      device = dbh$device
+      quants = torch::torch_linspace(0, 1, steps = n_quantiles+1, dtype = dbh$dtype, device = device)
+      # Quantiles and their indices
+      cohortHeights_quant = torch::torch_quantile(cohortHeights, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
+      indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L), cohortHeights$squeeze(4), right = TRUE) + 1L
+      # Calculation of comp
+      cohortHeights_quant = cohortHeights_quant$unsqueeze(4)
+      h_quant = cohortHeights_quant
+      threshold_indices = ( (cohortHeights_quant - h_quant$permute(c(1,2, 4, 3)) - 0.1)  /1e-2)$sigmoid_()
+      # ba must be grouped by indices
+      ba_accum = torch_zeros(ba$shape[1], ba$shape[2], quants$shape, device = device)$scatter_add(3, index=indices, src = ba)
+      ba_height_accum = (ba_accum$unsqueeze(4)$multiply( threshold_indices )) $sum(-2)
+      ba_height = torch_gather(ba_height_accum,3, index = indices)
+    }
+
+
   }else{
     ba_height = (ba$unsqueeze_(4)$multiply_(((cohortHeights - 0.1)/1e-2)$sigmoid_() ))$sum(-2)
   }
@@ -250,7 +269,7 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 
 
 growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
-  g = self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)$exp()
+  g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)- exp(1))$exp()
   return(g)
 }
 
@@ -279,6 +298,10 @@ regeneration = function(species, parReg, pred, light, debug = F) {
   #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   if(debug == T) out = list(regP = regP, mean = mean) else out = mean
   return(out)
+}
+
+regeneration_hybrid = function(species, parReg, pred, light, debug = F) {
+ r = self$nn_regeneration(light = light, species = species, env = pred)$exp()
 }
 
 

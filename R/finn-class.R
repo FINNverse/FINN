@@ -1,8 +1,120 @@
-#' finn module
+#' Forest Informed Neural Network
+#'
+#' @description
+#' Creates a Forest Informed Neural Network (FINN) object. Environmental components or the entire process can be replaced by deep neural networks.
+#'
+#' @param N_species (`integer(1)`)\cr Number of species.
+#' @param mortality_process (`function`)\cr Mortality function.
+#' @param growth_process (`function`)\cr Growth function.
+#' @param regeneration_process (`function`)\cr Regeneration function.
+#' @param competition_process (`function`)\cr Competition function.
+#' @param recruits_dbh (`numeric(1)`)\cr Starting dbh for recruits. Has value 1.0 as default.
+#'
+#'
 #'
 #' @export
-finn = nn_module(
-  "finn",
+finn = function(N_species,
+                mortality_process = NULL,
+                growth_process = NULL,
+                regeneration_process = NULL,
+                competition_process = NULL,
+                recruits_dbh = 1.0) {
+  call <- match.call()
+  call[[1]] <- finn_class
+  eval(call, parent.frame())
+}
+
+
+#' Fit FINN
+#'
+#' @description
+#' Fit (calibrate) the FINN model.
+#'
+#' @param model (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
+#' @param data (`data.table|data.frame`)\cr Data about demographic rates and stand variables must be passed as `data.table` or `data.frame`.
+#' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
+#' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
+#' @param patches (`integer(1)`)\cr Number of patches.
+#' @param patch_size (`numeric(1)`)\cr Patch size.
+#' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat]
+#' @param epochs (`integer(1)`)\cr Number of iteration steps.
+#' @param lr (`numeric(1)`)\cr Learning rate of the optimizer.
+#' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, and `gaussian`.
+#' @param weights (`numeric(6)`)\cr Weights of the different losses.
+#' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
+#' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
+#' @param device (`charachter(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
+#' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
+#' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
+#' @param folder (`character(1)`)\cr Path to folder for saving checkpoint models. If `NULL`, no models will be saved during the training.
+#' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
+#' @param shuffle (`logical(1)`)\cr Shuffle data or not.
+#' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
+#'
+#' @export
+fit = function(model,
+               data = NULL,
+               env,
+               disturbance = NULL,
+               patches = 100L,
+               patch_size = 0.1,
+               init_cohort = NULL,
+               epochs = 20L,
+               lr = 0.01,
+               loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom"), #
+               weights = rep(1, 6),
+               optimizer = torch::optim_ignite_adam,
+               batchsize = NULL,
+               device = c("cpu", "gpu"),
+               update_step = 1L,
+               start_time = 1L,
+               plot_progress = TRUE,
+               folder = NULL,
+               checkpoints = 100L,
+               shuffle = TRUE,
+               record_gradients = FALSE) {
+  args = as.list(match.call())[-(1:2)]
+  return(invisible(do.call(model$fit, args)))
+}
+
+
+#' Simulate
+#'
+#' @details
+#' Simulate from a fitted FINN model
+#'
+#' @param model (` `)\cr
+#' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
+#' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
+#' @param patches (`integer(1)`)\cr Number of patches.
+#' @param patch_size (`numeric(1)`)\cr Patch size.
+#' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
+#' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
+#' @param device (`charachter(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
+#'
+#' @export
+simulateForest =
+  function(model,
+           env,
+           disturbance = NULL,
+           patches = 100L,
+           patch_size = 0.1,
+           init_cohort = NULL,
+           batchsize = NULL,
+           device = c("cpu", "gpu"),
+           debug = FALSE) {
+    args = as.list(match.call())[-(1:2)]
+    do.call(model$simulate, args)
+}
+
+#' finn class
+#'
+#' @description
+#' internal class representation of FINN
+finn_class = nn_module(
+  "finn_class",
   initialize = function(
     N_species,
     mortality_process = NULL,
@@ -29,6 +141,7 @@ finn = nn_module(
   #' @param trees torch.Tensor (Optional). Number of trees.
   #' @param species torch.Tensor (Optional). Species of the trees.
   #' @param env torch.Tensor. Environmental data.
+  #' @param y torch.Tensor. Response tensor for target data.
   #' @param disturbance torch.Tensor. Disturbance rates.
   #' @param start_time integer. Time at which to start recording the results.
   #' @param pred_growth torch.Tensor (Optional). Predicted growth values.
@@ -36,11 +149,8 @@ finn = nn_module(
   #' @param pred_reg torch.Tensor (Optional). Predicted regeneration values.
   #' @param patches numeric. Number of patches.
   #' @param debug logical. Run in debug mode if TRUE.
-  #' @param y torch.Tensor. Response tensor for target data.
-  #' @param c torch.Tensor. Number of tree tensor.
   #' @param update_step integer. Backpropagation step length.
   #' @param verbose logical. Print progress if TRUE.
-  #' @param weights weights for reweighting the loss
   #' @param year_sequence at which year indices should the predictions compared with the observed values
   #' @return list. A list of predicted values for dbh, number of trees, and other recorded time points. If `debug` is TRUE, raw results and cohorts are also returned.
   forward = function(dbh = NULL,
@@ -189,7 +299,9 @@ finn = nn_module(
           # minLight = self$minLight,
           patch_size_ha = self$patch_size_ha,
           ba = NULL,
-          cohortHeights = NULL
+          cohortHeights = NULL,
+          n_quantiles = self$n_quantiles,
+          continuous = self$continuous
         )
 
         if (light$gt(1.0)$sum()$item() > 0) {
@@ -222,7 +334,9 @@ finn = nn_module(
           # minLight = self$minLight,
           patch_size_ha = self$patch_size_ha,
           ba = NULL,
-          cohortHeights = NULL
+          cohortHeights = NULL,
+          n_quantiles = self$n_quantiles,
+          continuous = self$continuous
         )
         # cat("Second section  B2\n")
 
@@ -242,6 +356,9 @@ finn = nn_module(
         trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
+        # trees_dead = (trees*m)*trees$ge(0.5)$float()
+        # trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
+        # trees_before = trees
 
         #.unsqueeze(3) # TODO check!
         #trees$sub_(m)$clamp_(min = 0.0)
@@ -259,17 +376,20 @@ finn = nn_module(
         # minLight = self$minLight,
         patch_size_ha = self$patch_size_ha,
         ba = NULL,
-        cohortHeights = NULL
+        cohortHeights = NULL,
+        n_quantiles = self$n_quantiles,
+        continuous = self$continuous
       )
 
+      # browser()
       ### Regeneration ####
       if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
       else pred = env[["reg"]][,i,]
 
       r_mean_ha = self$regeneration_func(species = species,
-                                            parReg = self$par_regeneration[,1],
-                                            pred = pred,
-                                            light = AL_reg)
+                                          parReg = self$par_regeneration[,1],
+                                          pred = pred,
+                                          light = AL_reg)
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
@@ -436,6 +556,7 @@ finn = nn_module(
       if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
+          # browser()
           # #dbh
           loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
           # ba
@@ -480,9 +601,28 @@ finn = nn_module(
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,i,])
             self$loss_raw = as.numeric(loss)
-            loss$sum()$backward()
-            for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+            # ---- Check loss before backward ----
+            if (!as.logical(loss$isfinite()$all()$item())) {
+              cat("\n>>> Non-finite loss detected at time step", i, "\n")
+
+              # Inspect each component
+              for (k in 1:length(loss)) {
+                cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
+                    " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
+              }
+
+              # Drop into debug mode
+
+              # You can choose to skip backward() and continue:
+              # next
+            } else {
+              loss$sum()$backward()
+              for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+            }
           }
+          # Also check each component tensor you pass into distribution losses
+
+
 
           dbh=dbh$detach()
           trees=trees$detach()
@@ -505,7 +645,7 @@ finn = nn_module(
 
     }
 
-    #browser()
+    # browser()
 
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
     if(debug){
@@ -548,7 +688,7 @@ finn = nn_module(
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
-
+    # browser()
     envs = private$extract_env_method(env)
 
     if(!is.null(disturbance)) {
@@ -563,14 +703,16 @@ finn = nn_module(
     if(is.null(batchsize)) batchsize = nrow(envs[[1]])
     sites =  nrow(envs[[1]])
 
-    if(is.null(init_cohort)) {
-      sp = self$N_species
-      self$init_cohort = CohortMat(dims = c(sites, patches, sp),
-                                   dbh = array(1, dim = c(sites, patches, sp)),
-                                   trees = array(1, dim = c(sites, patches, sp)),
-                                   sp = sp)
+    sp <- self$N_species
+    local_init <- if (is.null(init_cohort)) {
+      CohortMat(
+        dims  = c(sites, patches, sp),
+        dbh   = array(1, dim = c(sites, patches, sp)),
+        trees = array(1, dim = c(sites, patches, sp)),
+        sp    = sp
+      )
     } else {
-      self$init_cohort = init_cohort
+      init_cohort
     }
     self$to(device = device)
     if(is.null(disturbance)) {
@@ -601,9 +743,9 @@ finn = nn_module(
       dist = NULL
       if(!is.null(disturbance)) dist = b[[5]]$to(device = self$device, non_blocking=TRUE)
 
-      trees = self$init_cohort$trees$to(device = self$device, non_blocking=TRUE)[ind,]
-      species = self$init_cohort$species$to(device = self$device, non_blocking=TRUE)[ind,]
-      dbh = self$init_cohort$dbh$to(device = self$device, non_blocking=TRUE)[ind,]
+      trees   = local_init$trees$to(device = self$device, non_blocking = TRUE)[ind,]
+      species = local_init$species$to(device = self$device, non_blocking = TRUE)[ind,]
+      dbh     = local_init$dbh$to(device = self$device, non_blocking = TRUE)[ind,]
       pred_tmp = self$forward(dbh = dbh,
                               trees = trees,
                               species = species,
@@ -742,7 +884,7 @@ finn = nn_module(
     self$history = list()
     self$gradients = list()
 
-    self$optimizer = optimizer(self$parameters, lr = lr, ...)
+    if(is.null(self$optimizer)) self$optimizer = optimizer(self$parameters, lr = lr, ...)
 
     cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} DBH: {dbh_l} BA: {ba_l} Trees: {trees_l} g: {g_l} m: {m_l} r: {r_l}", total = epochs, clear = FALSE)
     if(is.null(year_sequence)) year_sequence = 1:envs[[1]]$shape[2]
@@ -788,9 +930,53 @@ finn = nn_module(
                                 verbose = FALSE,
                                 year_sequence = year_sequence)
 
+        # browser()
         pred = pred_tmp[[1]]
         loss = pred_tmp[[2]]
-        .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
+        # ---- Guard before gradient clipping ----
+        # Safe gradient checker: skips NULL or undefined grads
+        check_grads <- function(params) {
+          bad <- list()
+
+          has_defined_grad <- function(p) {
+            if (is.null(p$grad)) return(FALSE)
+            ok <- tryCatch({
+              # if this fails, grad is undefined
+              g <- p$grad$detach()
+              TRUE
+            }, error = function(e) FALSE)
+            ok
+          }
+
+          for (nm in names(params)) {
+            p <- params[[nm]]
+            if (!has_defined_grad(p)) next
+
+            g <- p$grad$detach()
+
+            all_finite <- as.logical(g$isfinite()$all()$item())
+            if (!all_finite) {
+              bad[[nm]] <- list(
+                n_nan  = as.numeric(g$isnan()$sum()$item()),
+                n_inf  = as.numeric(g$isinf()$sum()$item()),
+                max_abs = tryCatch(as.numeric(g$abs()$max()$item()),
+                                   error = function(e) NA_real_)
+              )
+            }
+          }
+
+          bad
+        }
+
+        bad <- check_grads(self$parameters)
+
+        if (length(bad) > 0) {
+          cat("\n>>> Non-finite gradients detected before clipping!\n")
+          print(bad)
+          browser()   # enter interactive debugger # TODO: rausloeschen oder?
+        } else {
+          .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
+        }
 
         self$optimizer$step()
 
@@ -823,24 +1009,36 @@ finn = nn_module(
 
 
       if(plot_progress) {
+        if(epoch == 1) max_losses = self$history[[1]]*1.1
         losses = do.call(rbind, self$history)
-        losses = apply(losses, 2, scales::rescale)
+        losses = losses/matrix(max_losses, nrow = nrow(losses), ncol = ncol(losses), byrow = TRUE)
 
-        par(mfrow = c(1,1))
-          e = tryCatch({
-
-             matplot(losses[,1:6], type = "l", lty = 1, col = c("#FA4D19", "#49777A", "#42DA5D","#FA8A19", "#000000", "#1992FA"),
-                     lwd = 1.5,
-                     las = 1, xlab = "Epochs", ylab = "Loss in %")
-             legend("topright", pch = 15, bty = "n", col = c("#FA4D19", "#49777A", "#42DA5D","#FA8A19", "#000000", "#1992FA"),
-                    legend = c("dbh", "ba", "trees", "growth", "mort", "reg"))
+        if(epoch == 1) {
+          visualize.training(losses, epoch, epochs, "Loss", new = TRUE)
+        } else {
+          visualize.training(losses, epoch, epochs, "Loss", new = FALSE)
+        }
 
 
-          # plot(1:epochs, y = losses[,i],
-          #      xlab = "Epochs",
-          #      ylab = paste0("Loss ", c("dbh", "ba", "trees", "growth", "mort", "regeneration")[i]),
-          #      type = "l")
-          }, error = function(e) e)
+
+      #   losses = apply(losses, 2, scales::rescale)
+      #
+      #   par(mfrow = c(1,1))
+      #     e = tryCatch({
+      #
+      #        matplot(losses[,1:6], type = "l", lty = 1, col = c("#FA4D19", "#49777A", "#42DA5D","#FA8A19", "#000000", "#1992FA"),
+      #                lwd = 1.5,
+      #                las = 1, xlab = "Epochs", ylab = "Loss in %")
+      #        legend("topright", pch = 15, bty = "n", col = c("#FA4D19", "#49777A", "#42DA5D","#FA8A19", "#000000", "#1992FA"),
+      #               legend = c("dbh", "ba", "trees", "growth", "mort", "reg"))
+      #
+      #
+      #     # plot(1:epochs, y = losses[,i],
+      #     #      xlab = "Epochs",
+      #     #      ylab = paste0("Loss ", c("dbh", "ba", "trees", "growth", "mort", "regeneration")[i]),
+      #     #      type = "l")
+      #     }, error = function(e) e)
+      #
       }
 
       if(!is.null(folder)) {
@@ -878,7 +1076,11 @@ finn = nn_module(
               }
             })
           } else if(tmp_loss == "gaussian") {
-            self[[paste0("par_loss_",tmp_loss_name, "_scale")]] = torch::nn_parameter(torch_tensor(0.55))
+
+            if(is.null(self[[paste0("par_loss_",tmp_loss_name, "_scale")]])) {
+              self[[paste0("par_loss_",tmp_loss_name, "_scale")]] = torch::nn_parameter(torch_tensor(0.55))
+            }
+
             func = local({
               local_tmp_loss_name = tmp_loss_name
               local_l = l
@@ -898,14 +1100,17 @@ finn = nn_module(
                 local_weights = weights
                 function(true, pred) {
                   mask = true$isnan()$bitwise_not()
-                  if(as.logical(mask$max()$data())) return(torch::distr_poisson(pred[mask])$log_prob(true[mask])$negative()$mean()*local_weights[local_l])
+                  if(as.logical(mask$max()$data())) return(torch::distr_poisson(pred[mask] + 0.00001)$log_prob(true[mask])$negative()$mean()*local_weights[local_l])
                   else return(0.0)
                 }
               })
-          } else if(tmp_loss == "nbinom") {
-            # Trees can be also set to nbinom, recruits always (?) have theta, so create theta only for trees, otherwise use self$par_theta_recruits
-            if(tmp_loss_name == "trees") {
-              self[[paste0("par_loss_",tmp_loss_name, "_theta")]] = torch::nn_parameter(torch_tensor(0.5413))
+          } else if (tmp_loss == "nbinom") {
+            if (tmp_loss_name == "trees") {
+
+              if(is.null(self[[paste0("par_loss_",tmp_loss_name, "_theta")]] )) {
+                self[[paste0("par_loss_",tmp_loss_name, "_theta")]] = torch::nn_parameter(torch_tensor(0.5413))
+              }
+
               func =
                 local({
                   local_tmp_loss_name = tmp_loss_name
@@ -916,8 +1121,8 @@ finn = nn_module(
                     theta = 1.0/torch::nnf_softplus( self[[paste0("par_loss_",local_tmp_loss_name, "_theta")]] )
                     if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta)$mean()*local_weights[local_l])
                     else return(0.0)
-                  }
-                })
+                }
+              })
             } else if(tmp_loss_name == "regeneration") {
               func =
                 local({
@@ -926,7 +1131,8 @@ finn = nn_module(
                   function(true, pred) {
                     mask = true$isnan()$bitwise_not()
                     theta = self$par_theta_recruits
-                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta)$mean()*local_weights[local_l])
+                    theta = theta$squeeze(1)$`repeat`(c(pred$shape[1], 1))
+                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta[mask])$mean()*local_weights[local_l])
                     else return(0.0)
                   }
                 })
@@ -962,7 +1168,7 @@ finn = nn_module(
                                       dim_feedforward = obj$dim_feedforward)
             } else {
                nn = hybrid_DNN(num_species = self$N_species,
-                               num_env_vars = inputs+1, +1, # because of growth!
+                               num_env_vars = inputs+2,
                                emb_dim=obj$emb_dim,
                                dropout=0.1,
                                hidden = obj$hidden)
@@ -989,6 +1195,19 @@ finn = nn_module(
             }
 
           }
+
+          if(type == "regeneration") {
+            # TODO: I guess for regeneration we should only recommend the non-transformer option, always the same number numbers of cohorts etc, maybe add a warning or message informing the user about it??
+
+              nn = hybrid_DNN(num_species = self$N_species,
+                              num_env_vars = inputs,
+                              emb_dim=obj$emb_dim,
+                              dropout=0.1,
+                              hidden = obj$hidden,
+                              regeneration = TRUE)
+
+          }
+
         }
 
         if(!obj$optimizeEnv) {
@@ -1011,7 +1230,7 @@ finn = nn_module(
       hybrid = FALSE
       if(inherits(obj, "hybrid")) {
         hybrid = TRUE
-        func = switch(type, growth= { growth_hybrid }, mortality = { mortality_hybrid })
+        func = switch(type, growth= { growth_hybrid }, mortality = { mortality_hybrid }, regeneration = { regeneration_hybrid })
         obj$func = func
 
       }
@@ -1031,6 +1250,11 @@ finn = nn_module(
       if(type == "regeneration") {
         self$sample_regeneration = obj$sample_regeneration
         self$par_theta_recruits = obj$dispersion_parameter
+      }
+
+      if(type == "competition") {
+        self$n_quantiles = obj$n_quantiles
+        self$continuous = obj$continuous
       }
 
     },
@@ -1104,6 +1328,7 @@ finn = nn_module(
         return(1.0/(torch::nnf_softplus(self$par_theta_recruits_raw)+0.0001))
       } else {
         value = 1.0 / value - 0.0001
+        if(length(value) == 1) value = rep(value, self$N_species)
         self$par_theta_recruits_raw = torch::nn_parameter( torch_tensor(log( exp(value) - 1.0 )) )
       }
     },
@@ -1250,3 +1475,4 @@ finn = nn_module(
 # }
 # binomial_likelihood(7, 10, 0.3)
 # dbinom(7, 10, 0.3, log = TRUE)
+
