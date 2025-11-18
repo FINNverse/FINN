@@ -30,7 +30,7 @@ m1 <- finn(
   mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 
-m1$fit(
+m1 |> fit(
   env        = env_dt,
   data       = obs_dt,
   init_cohort = init_cohorts,
@@ -41,6 +41,9 @@ m1$fit(
   patches    = 4, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr         = 0.01#, loss = c("mse","mse","mse","mse","mse","mse","mse")
 )
+
+predictions =
+  m1 |> simulateForest(env = env_dt)
 
 plot(m1, pars = "env", env_names = env_scales_dt$variable, species_names = species_dt$species_name)
 plot(m1, pars = "process", species_names = species_dt$species_name)

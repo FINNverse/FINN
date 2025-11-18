@@ -596,7 +596,7 @@ dnbinom_torch = function(pred, true, theta) {
 
 
 #' @export
-plot.finn = function(x, pars = c("process", "env"), env_names = NULL, species_names = NULL, ...) {
+plot.finn_class = function(x, pars = c("process", "env"), env_names = NULL, species_names = NULL, ...) {
   if(is.null(species_names)) species_names = 1:m1$N_species
   if(tolower(pars) == "env"){
     growth = x$parameters_r$nn_growth.0.weight

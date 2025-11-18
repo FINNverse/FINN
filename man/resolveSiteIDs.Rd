@@ -2,24 +2,37 @@
 % Please edit documentation in R/createInputs.R
 \name{resolveSiteIDs}
 \alias{resolveSiteIDs}
-\title{Resolve siteIDs into array dimensions needed for the FINN simulation}
+\title{Resolve site, patch, and year indices for FINN inputs}
 \usage{
 resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = T)
 }
 \arguments{
-\item{site_raw}{A data.table containing raw site-level data with columns "siteID" and "year".}
+\item{tree_dt}{data.table with tree-level data including siteName, patchName, year,
+species_name, dbh, status, living, and optional trees.}
 
-\item{tree_raw}{A data.table containing raw tree-level data with columns "siteID", "patchID", and "year".}
+\item{env_dt}{data.table with environment data including siteName and year.}
 
-\item{selection_priority}{A string indicating the priority for selecting sites. Options are "fixed patches" or "many years". Default is "fixed patches".}
+\item{obs_dt}{data.table with observations including siteName, patchName, year,
+species_name, and stand metrics (ba, dbh, trees, growth, mort, reg).}
 
-\item{Npatches_fixed}{An integer specifying the number of patches to fix when selection_priority is "fixed patches". Default is 4.}
-
-\item{all}{A logical indicating whether to include all sites and patches, even if they do not match. Default is FALSE.}
+\item{createInitCohorts}{logical. If TRUE, build FINN initial cohorts from
+trees with \code{living == TRUE} and \code{year == 1}. Default TRUE.}
 }
 \value{
-A data.table with resolved siteID and patchID indices along with their original IDs and years.
+A list with:
+\itemize{
+\item \code{siteID_dt}: site/patch/year index map.
+\item \code{tree_dt}: tree table with indices and standardized species.
+\item \code{env_dt}: environment table with indices.
+\item \code{obs_dt}: site-aggregated observations by species.
+\item \code{obs_dt_patches}: patch-level observations by species.
+\item \code{species_dt}: species lookup (\code{species}, \code{species_name}).
+\item \code{initCohorts} (optional): FINN \code{CohortMat} object.
+\item \code{initCohort_dt} (optional): trees used to build cohorts.
+}
 }
 \description{
-This function processes raw site and tree data to create a mapping of siteIDs and patchIDs into integer indices suitable for array dimensions in the FINN model.
+Joins tree, environment, and observation tables; assigns integer indices
+for site, patch, period; standardizes species coding; and returns aligned
+data plus optional initial cohorts.
 }
