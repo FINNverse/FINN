@@ -12,7 +12,8 @@ mortality(
   pred,
   light,
   base_steepness = 5,
-  debug = F
+  debug = F,
+  growth = NULL
 )
 }
 \arguments{

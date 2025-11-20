@@ -107,7 +107,7 @@ hybrid_DNN = nn_module("hybrid_DNN",
                          self$nn = do.call(nn_sequential, layers)
 
                        },
-                       forward = function(dbh = NULL, growth = NULL, trees = NULL, light, species, env) {
+                       forward = function(dbh = NULL, growth = NULL, trees = NULL, light, species=NULL, env) {
 
                          if(!self$regeneration) {
 

@@ -223,8 +223,17 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #' @param light available light
 #'
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F) {
-  environment = torch::torch_sigmoid(pred+self$g*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
+mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F, growth = NULL) {
+  if(is.null(growth)) growth = self$g
+  if(self$record_raws) {
+    self$raw_m = c(self$raw_m,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
+                                                                     growth$unsqueeze(4),
+                                                                     light$unsqueeze(4),
+                                                                     trees$unsqueeze(4),
+                                                                     species$unsqueeze(4)$float()), dim = 4)) ))
+  }
+
+  environment = torch::torch_sigmoid(pred+growth*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
   predM = environment
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM)
   else out = predM
@@ -233,8 +242,16 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 
 
 
-mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F) {
-  m = self$nn_mortality(dbh = dbh, growth = self$g, trees = trees, light = light, species = species, env = pred)$sigmoid()
+mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F, growth = NULL) {
+  if(is.null(growth)) growth = self$g
+  m = self$nn_mortality(dbh = dbh, growth = growth, trees = trees, light = light, species = species, env = pred)$sigmoid()
+  if(self$record_raws) {
+    self$raw_m = c(self$raw_m,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
+                                                                     growth$unsqueeze(4),
+                                                                     light$unsqueeze(4),
+                                                                     trees$unsqueeze(4),
+                                                                     species$unsqueeze(4)$float()), dim = 4)) ))
+  }
   return(m)
 }
 
@@ -257,6 +274,14 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 #'
 #' @export
 growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL){
+
+  if(self$record_raws) {
+    self$raw_g = c(self$raw_g,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
+                                                                     light$unsqueeze(4),
+                                                                     trees$unsqueeze(4),
+                                                                     species$unsqueeze(4)$float()), dim = 4)) ))
+  }
+
   shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
          (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
 
@@ -269,6 +294,14 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 
 
 growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+
+  if(self$record_raws) {
+    self$raw_g = c(self$raw_g,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
+                                                                     light$unsqueeze(4),
+                                                                     trees$unsqueeze(4),
+                                                                     species$unsqueeze(4)$float()), dim = 4)) ))
+  }
+
   g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)- exp(1))$exp()
   return(g)
 }
@@ -291,6 +324,11 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #' @importFrom torch torch_sigmoid
 #' @export
 regeneration = function(species, parReg, pred, light, debug = F) {
+  if(self$record_raws) {
+    self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))
+  }
+
+
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = torch::torch_exp(pred) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
@@ -301,6 +339,11 @@ regeneration = function(species, parReg, pred, light, debug = F) {
 }
 
 regeneration_hybrid = function(species, parReg, pred, light, debug = F) {
+
+  if(self$record_raws) {
+    self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))
+  }
+
  r = self$nn_regeneration(light = light, species = species, env = pred)$exp()
 }
 

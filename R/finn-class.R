@@ -125,6 +125,7 @@ finn_class = nn_module(
   ) {
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
+    self$record_raws = FALSE
     private$add_process(mortality_process, "mortality")
     private$add_process(growth_process, "growth")
     private$add_process(regeneration_process, "regeneration")
@@ -350,7 +351,8 @@ finn_class = nn_module(
           trees = trees + 0.001,
           parMort = self$par_mortality,
           pred = pred,
-          light = light
+          light = light,
+          growth = g
         )
 
         trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
