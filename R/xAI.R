@@ -3,11 +3,13 @@
 #' @description
 #' Calculates accumulated local effects (ALE) for the three processes
 #'
-#' @param model (`finn_class`)\cr model object of class `finn_class`
-#' @param env (`data.table|data.frame`)\cr environmental covariates for which the ALE should be calculated
+#' @param model (`finn_class`)\cr Model object of class `finn_class`.
+#' @param env (`data.table|data.frame`)\cr Environmental covariates for which the ALE should be calculated.
+#' @param init_cohort (`CohortMat`)\cr Initial cohort of class `CohortMat`, if `NULL` then simulated from bare ground.
+#' @param ... \cr Not supported yet.
 #'
 #' @export
-ALE = function(model, env, ...) {
+ALE = function(model, env, init_cohort = NULL, ...) {
 
   env_dt = as.data.table(env)
 
@@ -16,7 +18,7 @@ ALE = function(model, env, ...) {
   model$raw_r = NULL
 
   model$record_raws = TRUE
-  sim = model |> simulateForest(env = env_dt, init_cohort = init_cohorts)
+  sim = model |> simulateForest(env = env_dt, init_cohort = init_cohort)
   model$record_raws = FALSE
 
   out = list()
@@ -64,6 +66,7 @@ ALE = function(model, env, ...) {
     if(!process == "regeneration") df = df[df$dbh > 0.5,]
 
     df_results_ale_process = data.frame()
+    internal_df = data.frame()
 
     if(!process == "regeneration") {
 
@@ -113,8 +116,12 @@ ALE = function(model, env, ...) {
           df_tmp[,time:=NULL]
           df_tmp[,species:=NULL]
           df_tmp[,trees:=NULL]
-          ales = ALE_ce(as.data.frame(df_tmp), grads)
+          ales = ALE_ce(as.data.frame(df_tmp), grads, predictions = process_output[,1,1] |> as.numeric())
           ales$species = i
+          copy_df = as.data.frame(df_tmp)
+          copy_df$pred = process_output[,1,1] |> as.numeric()
+          copy_df$species = i
+          internal_df = rbind(internal_df, copy_df)
           df_results_ale_process = rbind(df_results_ale_process, ales)
         }
       }
@@ -149,7 +156,7 @@ ALE = function(model, env, ...) {
           env_grad = torch::autograd_grad(process_output[,1,J], inputs = pred, retain_graph = TRUE, grad_outputs = torch_ones_like(process_output[,1,1]))[[1]]|> as.matrix()
           grads = cbind(stand_vars_grad, env_grad)
 
-          ales = ALE_ce(as.data.frame(df_tmp), grads)
+          ales = ALE_ce(as.data.frame(df_tmp), grads, predictions = process_output[,1,J] |> as.numeric())
           ales$species = J
           df_results_ale_process = rbind(df_results_ale_process, ales)
         }
@@ -157,7 +164,74 @@ ALE = function(model, env, ...) {
 
     }
     out[[process]] = df_results_ale_process
+    #out[[paste0(process, "internal", collapse = "_")]] = internal_df
   }
   class(out) = c("FINNale")
   return(out)
 }
+
+
+
+# ALE_ce = function(X, ce, predictions = NULL, center = FALSE) {
+#   ales =
+#     lapply(1:ncol(X), function(i) {
+#       effs = ce[,i]
+#       data = X[,i]
+#       ord = order(data)
+#
+#       x_sorted <- data[ord]
+#       g_sorted <- effs[ord]
+#
+#       if(!is.null(predictions)) {
+#         intercept = predictions[ord][1]
+#       } else {
+#         intercept = 0
+#       }
+#
+#       ale_vals <- cumsum( (g_sorted[-1] + g_sorted[-length(g_sorted)]) / 2 * diff(x_sorted) )
+#       if(!center) ale_vals <- ale_vals - mean(ale_vals)
+#       ale_vals = ale_vals + intercept
+#       data.frame(x = x_sorted[-1], ale = ale_vals, var = colnames(X)[i])
+#     })
+#   return(do.call(rbind, ales))
+# }
+ALE_ce <- function(X, ce, predictions = NULL, center = FALSE) {
+  stopifnot(nrow(X) == nrow(ce), ncol(X) == ncol(ce))
+  vars <- colnames(X)
+
+  ales <- lapply(seq_len(ncol(X)), function(j) {
+    xj <- X[, j]
+    gj <- ce[, j]
+
+    # 1) unique x values
+    ux <- sort(unique(xj))
+    n_ux <- length(ux)
+
+    if (n_ux == 1L) {
+      return(data.frame(
+        x   = ux,
+        ale = 0,
+        var = if (!is.null(vars)) vars[j] else j
+      ))
+    }
+    g_mean <- vapply(ux, function(val) {
+      idx <- which(xj == val)
+      mean(gj[idx], na.rm = TRUE)
+    }, numeric(1))
+
+    # trapezoidal integration
+    dx      <- diff(ux)
+    g_mid   <- (g_mean[-1] + g_mean[-length(g_mean)]) / 2
+    increments <- g_mid * dx
+
+    ale_vals <- c(0, cumsum(increments)) #+ mean(predictions)
+    ale_vals = ale_vals - mean(ale_vals) + mean(predictions)
+    data.frame(
+      x   = ux,
+      ale = ale_vals,
+      var = if (!is.null(vars)) vars[j] else j
+    )
+  })
+  do.call(rbind, ales)
+}
+

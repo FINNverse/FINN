@@ -4,12 +4,16 @@
 \alias{ALE}
 \title{Accumulated local effect plots}
 \usage{
-ALE(model, env, ...)
+ALE(model, env, init_cohort = NULL, ...)
 }
 \arguments{
-\item{model}{(\code{finn_class})\cr model object of class \code{finn_class}}
+\item{model}{(\code{finn_class})\cr Model object of class \code{finn_class}.}
 
-\item{env}{(\code{data.table|data.frame})\cr environmental covariates for which the ALE should be calculated}
+\item{env}{(\code{data.table|data.frame})\cr Environmental covariates for which the ALE should be calculated.}
+
+\item{init_cohort}{(\code{CohortMat})\cr Initial cohort of class \code{CohortMat}, if \code{NULL} then simulated from bare ground.}
+
+\item{...}{\cr Not supported yet.}
 }
 \description{
 Calculates accumulated local effects (ALE) for the three processes
