@@ -1,3 +1,21 @@
+ALE_ce = function(X, ce) {
+  ales =
+    lapply(1:ncol(X), function(i) {
+      effs = ce[,i]
+      data = X[,i]
+      ord = order(data)
+
+      x_sorted <- data[ord]
+      g_sorted <- effs[ord]
+
+      # simple trapezoidal integration
+      ale_vals <- cumsum( (g_sorted[-1] + g_sorted[-length(g_sorted)]) / 2 * diff(x_sorted) )
+      ale_vals <- ale_vals - mean(ale_vals)
+      data.frame(x = x_sorted[-1], ale = ale_vals, var = colnames(X)[i])
+    })
+  return(do.call(rbind, ales))
+}
+
 #' Accumulated local effect plots
 #'
 #' @description
