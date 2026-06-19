@@ -1,16 +1,65 @@
 #' Forest Informed Neural Network
 #'
 #' @description
-#' Creates a Forest Informed Neural Network (FINN) object. Environmental components or the entire process can be replaced by deep neural networks.
+#' Creates a Forest Informed Neural Network (FINN), a differentiable, cohort-based
+#' dynamic forest (gap) model in the tradition of JABOWA/ForClim-style models, in
+#' which any of the four demographic processes (growth, mortality, regeneration,
+#' competition for light) can either be specified mechanistically or replaced by a
+#' deep neural network (DNN). Mechanistic and DNN-based processes are calibrated
+#' jointly, end-to-end, via gradient descent (see [FINN::fit]).
+#'
+#' @details
+#' FINN represents the forest as cohorts of trees, grouped by site, patch and
+#' cohort, each characterized by diameter at breast height (dbh), number of trees,
+#' and species identity. Starting from an initial state, FINN simulates the forest
+#' forward in discrete annual time steps by sequentially applying the four
+#' demographic processes: competition (light availability, based on basal area
+#' and species-specific shading), growth (diameter increment as a function of
+#' light, size and environment), mortality (binomial death of trees as a function
+#' of growth, light, size and environment) and regeneration (recruitment of new
+#' cohorts as a function of light and environment, drawn from a negative binomial
+#' distribution). Each process additionally depends on a species- and
+#' process-specific environmental-response function that maps site-level
+#' environmental predictors to a scalar effect on the process.
+#'
+#' Every process and its environmental-response function can be configured in one
+#' of two ways: (1) mechanistically, with an explicit functional form and
+#' interpretable parameters (e.g. light-response thresholds, allometric
+#' coefficients), created via [FINN::createProcess]; or (2) as a hybrid process, in
+#' which the environmental-response function or the entire process equation is
+#' replaced by a DNN, created via [FINN::createHybrid]. The remaining mechanistic
+#' processes constrain the DNN to ecologically plausible behaviour, while the DNN
+#' absorbs misalignments and structural simplifications that would otherwise bias
+#' the mechanistic processes; both are estimated jointly rather than calibrated in
+#' isolation and plugged in afterwards. If a process argument is left at its
+#' default `NULL`, the corresponding default mechanistic process (as described in
+#' Pichler & Käber, 2026, Methods in Ecology and Evolution) is used.
+#'
+#' `finn()` only assembles the model architecture (analogous to instantiating a
+#' `torch` `nn_module`); none of the process or environmental-response parameters
+#' are estimated yet. Use [FINN::fit] to calibrate the returned object against
+#' observed data, and [FINN::predict.finn_class]/[FINN::simulateForest] to
+#' simulate forest dynamics from a (fitted) model.
 #'
 #' @param N_species (`integer(1)`)\cr Number of species.
-#' @param mortality_process (`function`)\cr Mortality function.
-#' @param growth_process (`function`)\cr Growth function.
-#' @param regeneration_process (`function`)\cr Regeneration function.
-#' @param competition_process (`function`)\cr Competition function.
+#' @param mortality_process (`function`)\cr Mortality process, created by
+#'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
+#'   `NULL` (default), the default mechanistic mortality process is used.
+#' @param growth_process (`function`)\cr Growth process, created by
+#'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
+#'   `NULL` (default), the default mechanistic growth process is used.
+#' @param regeneration_process (`function`)\cr Regeneration process, created by
+#'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
+#'   `NULL` (default), the default mechanistic regeneration process is used.
+#' @param competition_process (`function`)\cr Competition (light availability)
+#'   process, created by [FINN::createProcess]. If `NULL` (default), the default
+#'   mechanistic competition process is used.
 #' @param recruits_dbh (`numeric(1)`)\cr Starting dbh for recruits. Has value 1.0 as default.
 #'
-#'
+#' @references
+#' Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
+#' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
+#' \doi{10.1111/2041-210x.70347}
 #'
 #' @export
 finn = function(N_species,
@@ -19,16 +68,55 @@ finn = function(N_species,
                 regeneration_process = NULL,
                 competition_process = NULL,
                 recruits_dbh = 1.0) {
-  call <- match.call()
-  call[[1]] <- finn_class
-  eval(call, parent.frame())
+  finn_class(N_species = N_species,
+             mortality_process = mortality_process,
+             growth_process = growth_process,
+             regeneration_process = regeneration_process,
+             competition_process = competition_process,
+             recruits_dbh = recruits_dbh)
 }
 
 
 #' Fit FINN
 #'
 #' @description
-#' Fit (calibrate) the FINN model.
+#' Fit (calibrate) a FINN model end-to-end by gradient-descent optimization. All
+#' mechanistic process parameters, environmental-response coefficients and, if
+#' present, the weights of any hybrid (DNN-based) processes are estimated jointly
+#' in a single optimization, rather than calibrating each process in isolation.
+#'
+#' @details
+#' Calibration relies on the fact that FINN is implemented in `torch` for R and is
+#' therefore fully differentiable: at each simulated time step the predicted stand
+#' variables and demographic rates are compared to the observed data through a
+#' joint loss function, and gradients of this loss with respect to every model
+#' parameter are obtained via automatic differentiation (backpropagation) and used
+#' to update the parameters with a `torch` optimizer (Adam, [torch::optim_ignite_adam],
+#' by default).
+#'
+#' The joint loss is the sum of per-variable losses (akin to negative
+#' log-likelihoods), one for each of `dbh`, `ba` (basal area), `trees` (number of
+#' trees), `growth`, `mortality` and `regeneration`. Following Pichler & Käber
+#' (2026), reasonable choices are mean squared error (`"mse"`, equivalent to a
+#' Gaussian likelihood) for `dbh` and `ba`, Poisson likelihood for `trees`,
+#' negative binomial (`"nbinom"`) for `regeneration`, and `"mse"` for `mortality`
+#' and `growth` as continuous rates (the model also supports `"gaussian"` and
+#' `"poisson"` as alternatives via the `loss` argument; see Appendix B of the
+#' paper for details). Each loss can be weighted individually via `weights`, and
+#' missing values in the observed data are masked out of the corresponding loss
+#' term. The model is trained for `epochs` iterations over the (optionally
+#' batched and shuffled) data using `optimizer` with learning rate `lr`.
+#'
+#' Backpropagating gradients through a long simulated time series is prone to
+#' vanishing gradients and is computationally expensive. FINN therefore uses
+#' truncated backpropagation through time: the computational graph is detached
+#' every `update_step` simulated years, gradients are accumulated and the
+#' parameters are updated, before the simulation continues. Smaller `update_step`
+#' values are faster and avoid vanishing gradients but provide a more short-sighted
+#' learning signal; larger values let the loss integrate over a longer trajectory
+#' at increased computational cost. `start_time` allows discarding an initial
+#' burn-in period of the simulation from the loss, and `checkpoints`/`folder`
+#' allow periodically saving the model state during training.
 #'
 #' @param model (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
 #' @param data (`data.table|data.frame`)\cr Data about demographic rates and stand variables must be passed as `data.table` or `data.frame`.
@@ -43,7 +131,7 @@ finn = function(N_species,
 #' @param weights (`numeric(6)`)\cr Weights of the different losses.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
-#' @param device (`charachter(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
 #' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
 #' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
 #' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
@@ -51,6 +139,7 @@ finn = function(N_species,
 #' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
 #' @param shuffle (`logical(1)`)\cr Shuffle data or not.
 #' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
+#' @param ... \cr Additional arguments passed to `optimizer`.
 #'
 #' @export
 fit = function(model,
@@ -64,7 +153,7 @@ fit = function(model,
                lr = 0.01,
                loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom"), #
                weights = rep(1, 6),
-               optimizer = torch::optim_ignite_adam,
+               optimizer = optim_ignite_adam,
                batchsize = NULL,
                device = c("cpu", "gpu"),
                update_step = 1L,
@@ -73,40 +162,108 @@ fit = function(model,
                folder = NULL,
                checkpoints = 100L,
                shuffle = TRUE,
-               record_gradients = FALSE) {
-  args = as.list(match.call())[-(1:2)]
-  return(invisible(do.call(model$fit, args)))
+               record_gradients = FALSE,
+               ...) {
+  invisible(model$fit(data = data,
+                      env = env,
+                      disturbance = disturbance,
+                      patches = patches,
+                      patch_size = patch_size,
+                      init_cohort = init_cohort,
+                      epochs = epochs,
+                      lr = lr,
+                      loss = loss,
+                      weights = weights,
+                      optimizer = optimizer,
+                      batchsize = batchsize,
+                      device = device,
+                      update_step = update_step,
+                      start_time = start_time,
+                      plot_progress = plot_progress,
+                      folder = folder,
+                      checkpoints = checkpoints,
+                      shuffle = shuffle,
+                      record_gradients = record_gradients,
+                      ...))
 }
 
 
-#' Simulate
+#' Predict from a FINN model
 #'
 #' @details
-#' Simulate from a fitted FINN model
+#' Simulate from a (fitted) FINN model. This is an S3 method for the
+#' [stats::predict] generic, so it is dispatched as `predict(model, ...)`.
 #'
-#' @param model (` `)\cr
+#' @param object (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
 #' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
 #' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
 #' @param patches (`integer(1)`)\cr Number of patches.
 #' @param patch_size (`numeric(1)`)\cr Patch size.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
-#' @param device (`charachter(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
+#' @param ... \cr Not used.
+#'
+#' @method predict finn_class
+#' @export
+predict.finn_class = function(object,
+                              env,
+                              disturbance = NULL,
+                              patches = 100L,
+                              patch_size = 0.1,
+                              init_cohort = NULL,
+                              batchsize = NULL,
+                              device = c("cpu", "gpu"),
+                              debug = FALSE,
+                              ...) {
+  object$simulate(env = env,
+                  disturbance = disturbance,
+                  patches = patches,
+                  patch_size = patch_size,
+                  init_cohort = init_cohort,
+                  batchsize = batchsize,
+                  device = device,
+                  debug = debug)
+}
+
+
+#' Simulate
+#'
+#' @details
+#' Simulate from a fitted FINN model. This is a thin, backwards-compatible
+#' alias for [FINN::predict.finn_class]; new code should call
+#' `predict(model, ...)` directly.
+#'
+#' @param model (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
+#' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
+#' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
+#' @param patches (`integer(1)`)\cr Number of patches.
+#' @param patch_size (`numeric(1)`)\cr Patch size.
+#' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
+#' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
+#' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
 #'
 #' @export
-simulateForest =
-  function(model,
-           env,
-           disturbance = NULL,
-           patches = 100L,
-           patch_size = 0.1,
-           init_cohort = NULL,
-           batchsize = NULL,
-           device = c("cpu", "gpu"),
-           debug = FALSE) {
-    args = as.list(match.call())[-(1:2)]
-    do.call(model$simulate, args)
+simulateForest = function(model,
+                          env,
+                          disturbance = NULL,
+                          patches = 100L,
+                          patch_size = 0.1,
+                          init_cohort = NULL,
+                          batchsize = NULL,
+                          device = c("cpu", "gpu"),
+                          debug = FALSE) {
+  predict(model,
+          env = env,
+          disturbance = disturbance,
+          patches = patches,
+          patch_size = patch_size,
+          init_cohort = init_cohort,
+          batchsize = batchsize,
+          device = device,
+          debug = debug)
 }
 
 #' finn class
@@ -895,8 +1052,8 @@ finn_class = nn_module(
 
     for(epoch in 1:epochs){
       counter = 1
+      batch_loss = matrix(NA, nrow = 10000, ncol = 7L)
       coro::loop(for (b in DataLoader) {
-        batch_loss = matrix(NA, nrow = 10000, ncol = 7L)
         x_mort =   b[[1]]$to(device = self$device, non_blocking=TRUE)
         x_growth = b[[2]]$to(device = self$device, non_blocking=TRUE)
         x_reg =    b[[3]]$to(device = self$device, non_blocking=TRUE)
@@ -973,12 +1130,10 @@ finn_class = nn_module(
         bad <- check_grads(self$parameters)
 
         if (length(bad) > 0) {
-          cat("\n>>> Non-finite gradients detected before clipping!\n")
-          print(bad)
-          browser()   # enter interactive debugger # TODO: rausloeschen oder?
-        } else {
-          .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
+          warning("Non-finite gradients detected before clipping in epoch ", epoch, ".", call. = FALSE)
         }
+
+        .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
 
         self$optimizer$step()
 

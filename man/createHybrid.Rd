@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes_utils.R
 \name{createHybrid}
 \alias{createHybrid}
-\title{Create a hybrid model Object}
+\title{Define a hybrid (deep-neural-network) demographic process for FINN}
 \usage{
 createHybrid(
   formula = NULL,
@@ -19,35 +19,102 @@ createHybrid(
 )
 }
 \arguments{
-\item{formula}{An optional formula specifying the structure of the model. Default is \code{NULL}, which results in the formula \code{~.} being used.}
+\item{formula}{(\code{formula})\cr Environmental predictors passed to the network,
+evaluated against the \code{env} data. Default \code{NULL} uses \code{~.} (all available
+environmental covariates).}
 
-\item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
+\item{optimize}{(\code{logical(1)})\cr Should the network's weights be estimated
+during \code{\link[=fit]{fit()}}? Default \code{TRUE}.}
 
-\item{dispersion_parameter}{init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).}
+\item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
+the negative binomial distribution used to sample recruits. Only used when
+this object is the regeneration process.}
 
-\item{NN}{pass custom NN to model}
+\item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the
+default network architecture entirely.}
 
-\item{dropout}{dropout rate of neural networks}
+\item{dropout}{(\code{numeric(1)})\cr Dropout rate of the network.}
 
-\item{encoder_layers}{number of encoder layers in the transformer}
+\item{encoder_layers}{(\code{integer(1)})\cr Number of transformer encoder layers.
+Only used when \code{transformer = TRUE}.}
 
-\item{hidden}{number of hidden layers in the MLP hybrid model}
+\item{hidden}{(\code{integer()})\cr Hidden-layer sizes of the feed-forward network.
+Only used when \code{transformer = FALSE}.}
 
-\item{sample_regeneration}{sample recruits or not}
+\item{sample_regeneration}{(\code{logical(1)})\cr Should recruits actually be sampled
+from the negative binomial regeneration distribution (\code{TRUE}), or only its
+expectation used (\code{FALSE})? Only used when this object is the regeneration
+process.}
 
-\item{transformer}{use transformer architecture or MLP structure}
+\item{transformer}{(\code{logical(1)})\cr Use a transformer encoder architecture
+(\code{TRUE}, default) or a feed-forward network (\code{FALSE}).}
 
-\item{emb_dim}{embedding dim}
+\item{emb_dim}{(\code{integer(1)})\cr Embedding dimension for the species/cohort/
+environment features.}
 
-\item{dim_feedforward}{dimension of MLP head in transformer}
+\item{dim_feedforward}{(\code{integer(1)})\cr Dimension of the feed-forward
+sublayer within each transformer encoder layer. Only used when
+\code{transformer = TRUE}.}
 }
 \value{
-A list of class "process" containing the process definition and associated parameters.
+A list of class \code{"hybrid"} containing the process definition and
+associated parameters, to be passed as \code{growth_process}, \code{mortality_process},
+or \code{regeneration_process} to \code{\link[=finn]{finn()}}.
 }
 \description{
-This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
+Configures a process (growth, mortality, or regeneration) in which the entire
+process equation -- not just its environmental-response function -- is
+replaced by a deep neural network (DNN), for use as \code{growth_process},
+\code{mortality_process}, or \code{regeneration_process} in \code{\link[=finn]{finn()}}. This is the
+second ("Level 2") level of hybridization described by Pichler & Käber (2026);
+to replace only the environmental-response function while keeping the rest of
+the process mechanistic ("Level 1"), use \code{\link[=createProcess]{createProcess()}} instead.
+\code{competition_process} must always be created with \code{\link[=createProcess]{createProcess()}}, as
+the competition (light availability) process does not support full
+replacement by a DNN.
+}
+\details{
+The network receives the same cohort- and site-level information that the
+corresponding mechanistic process equation would use -- diameter at breast
+height, number of trees, available light, species identity and the site's
+environmental predictors (plus the growth rate, for the mortality process) --
+and predicts the process output directly. Species identity is passed through a
+learned embedding layer rather than treated as a categorical covariate with
+per-species coefficients, so the network can learn low-dimensional "contrasts"
+between species or plant functional types (PFTs). An inverse-link function
+appropriate to each process is applied to the network's output: a sigmoid for
+mortality (a per-tree death probability, as for \link{mortality}), and an
+exponential for growth and regeneration (always-positive rates; for
+regeneration this is the mean of the negative binomial distribution from which
+recruits are drawn, as for \link{regeneration}).
+
+Two network architectures are available, selected with \code{transformer}. The
+default (\code{transformer = TRUE}) is a small transformer encoder (\code{encoder_layers}
+layers, embedding dimension \code{emb_dim}, feed-forward dimension
+\code{dim_feedforward}) that embeds each cohort, its species and the site's
+environment and attends across the cohorts of a patch. Setting
+\code{transformer = FALSE} instead uses a feed-forward network with hidden layers
+\code{hidden} (default two layers of 50 units each) and \code{dropout}, matching the
+architecture used by Pichler & Käber (2026) for the Barro Colorado Island case
+study (where dropout was set to 10\%).
+
+As with \code{\link[=createProcess]{createProcess()}}, hybrid processes are calibrated jointly,
+end-to-end, with the remaining mechanistic or hybrid processes via
+\code{\link[=fit]{fit()}}, rather than pre-trained in isolation and plugged in afterwards.
+\code{optimize} controls whether the network's weights are estimated during fitting
+or kept fixed at their (random) initial values, and \code{dispersion_parameter}/
+\code{sample_regeneration} have the same meaning as in \code{\link[=createProcess]{createProcess()}} and
+are only used when this object is the regeneration process.
 }
 \examples{
-growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
+growth_process <- createHybrid(formula = ~temperature + precipitation)
 
+}
+\references{
+Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
+models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
+\doi{10.1111/2041-210x.70347}
+}
+\seealso{
+\code{\link[=createProcess]{createProcess()}}, \code{\link[=finn]{finn()}}
 }

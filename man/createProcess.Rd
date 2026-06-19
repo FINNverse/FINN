@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes_utils.R
 \name{createProcess}
 \alias{createProcess}
-\title{Create a Process Object}
+\title{Define a demographic process for FINN}
 \usage{
 createProcess(
   formula = NULL,
@@ -25,45 +25,128 @@ createProcess(
 )
 }
 \arguments{
-\item{formula}{An optional formula specifying the structure of the model. Default is \code{NULL}, which results in the formula \code{~.} being used.}
+\item{formula}{(\code{formula})\cr Environmental predictors for this process'
+environmental-response function, evaluated against the \code{env} data. Default
+\code{NULL} uses \code{~.} (all available environmental covariates).}
 
-\item{func}{A custom function to define the process. This is a required parameter.}
+\item{func}{(\code{function})\cr Mechanistic process equation, e.g. \link{growth},
+\link{mortality}, \link{regeneration}, or \link{competition}, or a custom
+function with the same arguments. Required.}
 
-\item{initSpecies}{Initial species parameters for the process. Default is \code{NULL}.}
+\item{initSpecies}{(\code{matrix})\cr Optional custom initial values for the
+species-specific process parameters. Default \code{NULL} draws random initial
+values.}
 
-\item{initEnv}{Initial environmental parameters for the process. Default is \code{NULL}.}
+\item{initEnv}{(\code{list})\cr Optional custom initial values for the parameters of
+the environmental-response network/regression. Default \code{NULL} draws random
+initial values.}
 
-\item{hidden}{A list specifying the hidden layers for neural network models. Default is an empty list.}
+\item{hidden}{(\code{integer()})\cr Hidden-layer sizes of the feed-forward neural
+network that replaces the environmental-response function (Level 1 hybrid).
+Default \code{NULL} keeps the environmental response mechanistic (linear/logistic).}
 
-\item{inputNN}{input dimension for NN, default is inferred from the formula. See details}
+\item{optimizeSpecies}{(\code{logical(1)})\cr Should the species-specific process
+parameters be estimated during \code{\link[=fit]{fit()}}? Default \code{FALSE}.}
 
-\item{outputNN}{output dimension for NN, default is the number of species. See details}
+\item{optimizeEnv}{(\code{logical(1)})\cr Should the parameters of the
+environmental-response function be estimated during \code{\link[=fit]{fit()}}? Default
+\code{TRUE}.}
 
-\item{dispersion_parameter}{init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).}
+\item{inputNN}{(\code{integer(1)})\cr Input dimension of the environmental-response
+network. Default \code{NULL} infers it from \code{formula}/\code{env}.}
 
-\item{NN}{pass custom NN to model}
+\item{outputNN}{(\code{integer(1)})\cr Output dimension of the environmental-response
+network. Default \code{NULL} uses the number of species.}
 
-\item{upper}{upper boundaries of species parameters}
+\item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
+the negative binomial distribution used to sample recruits. Only used when
+this process is the regeneration process.}
 
-\item{lower}{lower boundaries of species parameters}
+\item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the default
+environmental-response network architecture.}
 
-\item{dropout}{dropout rate of neural networks}
+\item{upper}{(\code{numeric()})\cr Upper boundaries (natural scale) for the
+species-specific process parameters.}
 
-\item{sample_regeneration}{sample recruits or not}
+\item{lower}{(\code{numeric()})\cr Lower boundaries (natural scale) for the
+species-specific process parameters.}
 
-\item{n_quantiles}{quantiles for height classes (competition)}
+\item{dropout}{(\code{numeric(1)})\cr Dropout rate of the environmental-response
+network. Ignored unless \code{hidden} is set.}
 
-\item{continuous}{continuous height classes or not (competition)}
+\item{sample_regeneration}{(\code{logical(1)})\cr Should recruits actually be sampled
+from the negative binomial regeneration distribution (\code{TRUE}), or only its
+expectation used (\code{FALSE})? Only used when this process is the regeneration
+process.}
 
-\item{optimize}{Logical indicating whether the process function should be optimized. Default is \code{FALSE}.}
+\item{n_quantiles}{(\code{integer(1)})\cr Number of height classes used to discretize
+cohorts when computing shading/light availability. Only used when this
+process is the competition process and \code{continuous = FALSE}.}
+
+\item{continuous}{(\code{logical(1)})\cr Compute shading continuously for every pair
+of cohorts (\code{TRUE}) instead of binning cohorts into \code{n_quantiles} height
+classes (\code{FALSE}, default). Only used when this process is the competition
+process.}
 }
 \value{
-A list of class "process" containing the process definition and associated parameters.
+A list of class \code{"process"} containing the process definition and
+associated parameters, to be passed as \code{mortality_process}, \code{growth_process},
+\code{regeneration_process}, or \code{competition_process} to \code{\link[=finn]{finn()}}.
 }
 \description{
-This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
+Configures one demographic process (growth, mortality, regeneration or
+competition) for use as \code{mortality_process}, \code{growth_process},
+\code{regeneration_process}, or \code{competition_process} in \code{\link[=finn]{finn()}}, either as a
+fully mechanistic process with an explicit, interpretable functional form, or
+-- if \code{hidden} is supplied -- as the first ("Level 1") level of hybridization
+described by Pichler & Käber (2026): only the process' environmental-response
+function is replaced by a small feed-forward neural network, while the rest of
+the process equation remains mechanistic. To replace the entire process
+equation with a neural network ("Level 2"), use \code{\link[=createHybrid]{createHybrid()}} instead.
+}
+\details{
+Each demographic process in FINN is the product of (i) a process equation
+\code{func} that operates on the cohort state (dbh, number of trees, available
+light, species) and species-specific process parameters, and (ii) a
+species- and process-specific environmental-response function that maps
+site-level environmental predictors to a scalar effect on the process (see
+\code{\link[=finn]{finn()}} for the underlying equations). \code{createProcess()} configures
+both parts:
+\itemize{
+\item \code{func} implements the mechanistic process equation itself. The package's
+default process functions (\link{growth}, \link{mortality},
+\link{regeneration}, \link{competition}) reproduce the equations described
+by Pichler & Käber (2026); a custom function with the same arguments can be
+passed instead to use a different functional form while keeping the process
+embedded in, and jointly calibrated with, the rest of the model.
+\item The environmental-response function is, by default (\code{hidden = NULL}), a
+linear/logistic niche function with one coefficient per environmental
+covariate (named in \code{formula}) and per species, comparable to a classic
+species distribution model. Setting \code{hidden} to a vector of hidden-layer
+sizes (e.g. \code{c(25L)}) instead replaces this function with a feed-forward
+neural network, while \code{func} and the species-specific process parameters
+remain mechanistic -- the "Level 1" hybridization described in the paper.
+}
+
+\code{formula} selects which columns of the \code{env} data (passed to \code{\link[=fit]{fit()}} or
+\code{\link[=predict.finn_class]{predict.finn_class()}}) enter the environmental-response function;
+\code{initSpecies}/\code{initEnv} allow supplying custom starting values for the process
+parameters/environmental-response model instead of the package's random
+initialization; \code{optimizeSpecies}/\code{optimizeEnv} control whether these
+parameters are estimated during \code{\link[=fit]{fit()}} or held fixed at their initial
+values; and \code{upper}/\code{lower} set box constraints (on the natural
+process-parameter scale) within which the species-specific process parameters
+are constrained during optimization.
 }
 \examples{
-growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
+growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 
+}
+\references{
+Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
+models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
+\doi{10.1111/2041-210x.70347}
+}
+\seealso{
+\code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}}
 }

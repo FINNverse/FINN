@@ -30,13 +30,12 @@ ALE_ce = function(X, ce) {
 ALE = function(model, env, init_cohort = NULL, ...) {
 
   env_dt = as.data.table(env)
-
   model$raw_g = NULL
   model$raw_m = NULL
   model$raw_r = NULL
 
   model$record_raws = TRUE
-  sim = model |> simulateForest(env = env_dt, init_cohort = init_cohort)
+  sim = model$simulate(env_dt, init_cohort = init_cohort)
   model$record_raws = FALSE
 
   out = list()

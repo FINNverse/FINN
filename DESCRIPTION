@@ -36,7 +36,8 @@ Imports:
     viridis,
     parallel,
     scales,
-    httpgd
+    httpgd,
+    glue
 Suggests:
     testthat (>= 3.0.0),
     knitr,

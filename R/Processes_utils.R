@@ -1,28 +1,109 @@
-#' Create a Process Object
+#' Define a demographic process for FINN
 #'
-#' This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
+#' @description
+#' Configures one demographic process (growth, mortality, regeneration or
+#' competition) for use as `mortality_process`, `growth_process`,
+#' `regeneration_process`, or `competition_process` in [FINN::finn()], either as a
+#' fully mechanistic process with an explicit, interpretable functional form, or
+#' -- if `hidden` is supplied -- as the first ("Level 1") level of hybridization
+#' described by Pichler & Käber (2026): only the process' environmental-response
+#' function is replaced by a small feed-forward neural network, while the rest of
+#' the process equation remains mechanistic. To replace the entire process
+#' equation with a neural network ("Level 2"), use [FINN::createHybrid()] instead.
 #'
-#' @param formula An optional formula specifying the structure of the model. Default is `NULL`, which results in the formula `~.` being used.
-#' @param func A custom function to define the process. This is a required parameter.
-#' @param optimize Logical indicating whether the process function should be optimized. Default is `FALSE`.
-#' @param initSpecies Initial species parameters for the process. Default is `NULL`.
-#' @param initEnv Initial environmental parameters for the process. Default is `NULL`.
-#' @param hidden A list specifying the hidden layers for neural network models. Default is an empty list.
-#' @param inputNN input dimension for NN, default is inferred from the formula. See details
-#' @param outputNN output dimension for NN, default is the number of species. See details
-#' @param dispersion_parameter init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).
-#' @param NN pass custom NN to model
-#' @param upper upper boundaries of species parameters
-#' @param lower lower boundaries of species parameters
-#' @param dropout dropout rate of neural networks
-#' @param sample_regeneration sample recruits or not
-#' @param n_quantiles quantiles for height classes (competition)
-#' @param continuous continuous height classes or not (competition)
+#' @details
+#' Each demographic process in FINN is the product of (i) a process equation
+#' `func` that operates on the cohort state (dbh, number of trees, available
+#' light, species) and species-specific process parameters, and (ii) a
+#' species- and process-specific environmental-response function that maps
+#' site-level environmental predictors to a scalar effect on the process (see
+#' [FINN::finn()] for the underlying equations). `createProcess()` configures
+#' both parts:
 #'
-#' @return A list of class "process" containing the process definition and associated parameters.
+#' * `func` implements the mechanistic process equation itself. The package's
+#'   default process functions ([FINN::growth], [FINN::mortality],
+#'   [FINN::regeneration], [FINN::competition]) reproduce the equations described
+#'   by Pichler & Käber (2026); a custom function with the same arguments can be
+#'   passed instead to use a different functional form while keeping the process
+#'   embedded in, and jointly calibrated with, the rest of the model.
+#' * The environmental-response function is, by default (`hidden = NULL`), a
+#'   linear/logistic niche function with one coefficient per environmental
+#'   covariate (named in `formula`) and per species, comparable to a classic
+#'   species distribution model. Setting `hidden` to a vector of hidden-layer
+#'   sizes (e.g. `c(25L)`) instead replaces this function with a feed-forward
+#'   neural network, while `func` and the species-specific process parameters
+#'   remain mechanistic -- the "Level 1" hybridization described in the paper.
+#'
+#' `formula` selects which columns of the `env` data (passed to [FINN::fit()] or
+#' [FINN::predict.finn_class()]) enter the environmental-response function;
+#' `initSpecies`/`initEnv` allow supplying custom starting values for the process
+#' parameters/environmental-response model instead of the package's random
+#' initialization; `optimizeSpecies`/`optimizeEnv` control whether these
+#' parameters are estimated during [FINN::fit()] or held fixed at their initial
+#' values; and `upper`/`lower` set box constraints (on the natural
+#' process-parameter scale) within which the species-specific process parameters
+#' are constrained during optimization.
+#'
+#' @param formula (`formula`)\cr Environmental predictors for this process'
+#'   environmental-response function, evaluated against the `env` data. Default
+#'   `NULL` uses `~.` (all available environmental covariates).
+#' @param func (`function`)\cr Mechanistic process equation, e.g. [FINN::growth],
+#'   [FINN::mortality], [FINN::regeneration], or [FINN::competition], or a custom
+#'   function with the same arguments. Required.
+#' @param initSpecies (`matrix`)\cr Optional custom initial values for the
+#'   species-specific process parameters. Default `NULL` draws random initial
+#'   values.
+#' @param initEnv (`list`)\cr Optional custom initial values for the parameters of
+#'   the environmental-response network/regression. Default `NULL` draws random
+#'   initial values.
+#' @param hidden (`integer()`)\cr Hidden-layer sizes of the feed-forward neural
+#'   network that replaces the environmental-response function (Level 1 hybrid).
+#'   Default `NULL` keeps the environmental response mechanistic (linear/logistic).
+#' @param optimizeSpecies (`logical(1)`)\cr Should the species-specific process
+#'   parameters be estimated during [FINN::fit()]? Default `FALSE`.
+#' @param optimizeEnv (`logical(1)`)\cr Should the parameters of the
+#'   environmental-response function be estimated during [FINN::fit()]? Default
+#'   `TRUE`.
+#' @param inputNN (`integer(1)`)\cr Input dimension of the environmental-response
+#'   network. Default `NULL` infers it from `formula`/`env`.
+#' @param outputNN (`integer(1)`)\cr Output dimension of the environmental-response
+#'   network. Default `NULL` uses the number of species.
+#' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
+#'   the negative binomial distribution used to sample recruits. Only used when
+#'   this process is the regeneration process.
+#' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the default
+#'   environmental-response network architecture.
+#' @param upper (`numeric()`)\cr Upper boundaries (natural scale) for the
+#'   species-specific process parameters.
+#' @param lower (`numeric()`)\cr Lower boundaries (natural scale) for the
+#'   species-specific process parameters.
+#' @param dropout (`numeric(1)`)\cr Dropout rate of the environmental-response
+#'   network. Ignored unless `hidden` is set.
+#' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
+#'   from the negative binomial regeneration distribution (`TRUE`), or only its
+#'   expectation used (`FALSE`)? Only used when this process is the regeneration
+#'   process.
+#' @param n_quantiles (`integer(1)`)\cr Number of height classes used to discretize
+#'   cohorts when computing shading/light availability. Only used when this
+#'   process is the competition process and `continuous = FALSE`.
+#' @param continuous (`logical(1)`)\cr Compute shading continuously for every pair
+#'   of cohorts (`TRUE`) instead of binning cohorts into `n_quantiles` height
+#'   classes (`FALSE`, default). Only used when this process is the competition
+#'   process.
+#'
+#' @return A list of class `"process"` containing the process definition and
+#'   associated parameters, to be passed as `mortality_process`, `growth_process`,
+#'   `regeneration_process`, or `competition_process` to [FINN::finn()].
+#'
+#' @references
+#' Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
+#' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
+#' \doi{10.1111/2041-210x.70347}
+#'
+#' @seealso [FINN::createHybrid()], [FINN::finn()]
 #'
 #' @examples
-#' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
+#' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE) {
@@ -30,7 +111,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[3]$formula, "name")) mf[3]$formula = eval(mf[3]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
@@ -68,27 +149,93 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 }
 
 
-#' Create a hybrid model Object
+#' Define a hybrid (deep-neural-network) demographic process for FINN
 #'
-#' This function creates a process object that is used to define a specific ecological process (e.g., growth, mortality, regeneration) within a forest simulation model. The process object can include custom functions, species parameters, environmental initialization, and hidden layers for neural networks.
+#' @description
+#' Configures a process (growth, mortality, or regeneration) in which the entire
+#' process equation -- not just its environmental-response function -- is
+#' replaced by a deep neural network (DNN), for use as `growth_process`,
+#' `mortality_process`, or `regeneration_process` in [FINN::finn()]. This is the
+#' second ("Level 2") level of hybridization described by Pichler & Käber (2026);
+#' to replace only the environmental-response function while keeping the rest of
+#' the process mechanistic ("Level 1"), use [FINN::createProcess()] instead.
+#' `competition_process` must always be created with [FINN::createProcess()], as
+#' the competition (light availability) process does not support full
+#' replacement by a DNN.
 #'
-#' @param formula An optional formula specifying the structure of the model. Default is `NULL`, which results in the formula `~.` being used.
-#' @param optimize Logical indicating whether the process function should be optimized. Default is `FALSE`.
-#' @param hidden A list specifying the hidden layers for neural network models. Default is an empty list.
-#' @param dispersion_parameter init dispersion parameter, if available (currently only supported for regeneration rate that is based on a negative binomial).
-#' @param NN pass custom NN to model
-#' @param dropout dropout rate of neural networks
-#' @param encoder_layers number of encoder layers in the transformer
-#' @param hidden number of hidden layers in the MLP hybrid model
-#' @param sample_regeneration sample recruits or not
-#' @param transformer use transformer architecture or MLP structure
-#' @param emb_dim embedding dim
-#' @param dim_feedforward dimension of MLP head in transformer
+#' @details
+#' The network receives the same cohort- and site-level information that the
+#' corresponding mechanistic process equation would use -- diameter at breast
+#' height, number of trees, available light, species identity and the site's
+#' environmental predictors (plus the growth rate, for the mortality process) --
+#' and predicts the process output directly. Species identity is passed through a
+#' learned embedding layer rather than treated as a categorical covariate with
+#' per-species coefficients, so the network can learn low-dimensional "contrasts"
+#' between species or plant functional types (PFTs). An inverse-link function
+#' appropriate to each process is applied to the network's output: a sigmoid for
+#' mortality (a per-tree death probability, as for [FINN::mortality]), and an
+#' exponential for growth and regeneration (always-positive rates; for
+#' regeneration this is the mean of the negative binomial distribution from which
+#' recruits are drawn, as for [FINN::regeneration]).
 #'
-#' @return A list of class "process" containing the process definition and associated parameters.
+#' Two network architectures are available, selected with `transformer`. The
+#' default (`transformer = TRUE`) is a small transformer encoder (`encoder_layers`
+#' layers, embedding dimension `emb_dim`, feed-forward dimension
+#' `dim_feedforward`) that embeds each cohort, its species and the site's
+#' environment and attends across the cohorts of a patch. Setting
+#' `transformer = FALSE` instead uses a feed-forward network with hidden layers
+#' `hidden` (default two layers of 50 units each) and `dropout`, matching the
+#' architecture used by Pichler & Käber (2026) for the Barro Colorado Island case
+#' study (where dropout was set to 10%).
+#'
+#' As with [FINN::createProcess()], hybrid processes are calibrated jointly,
+#' end-to-end, with the remaining mechanistic or hybrid processes via
+#' [FINN::fit()], rather than pre-trained in isolation and plugged in afterwards.
+#' `optimize` controls whether the network's weights are estimated during fitting
+#' or kept fixed at their (random) initial values, and `dispersion_parameter`/
+#' `sample_regeneration` have the same meaning as in [FINN::createProcess()] and
+#' are only used when this object is the regeneration process.
+#'
+#' @param formula (`formula`)\cr Environmental predictors passed to the network,
+#'   evaluated against the `env` data. Default `NULL` uses `~.` (all available
+#'   environmental covariates).
+#' @param optimize (`logical(1)`)\cr Should the network's weights be estimated
+#'   during [FINN::fit()]? Default `TRUE`.
+#' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
+#'   the negative binomial distribution used to sample recruits. Only used when
+#'   this object is the regeneration process.
+#' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the
+#'   default network architecture entirely.
+#' @param dropout (`numeric(1)`)\cr Dropout rate of the network.
+#' @param encoder_layers (`integer(1)`)\cr Number of transformer encoder layers.
+#'   Only used when `transformer = TRUE`.
+#' @param hidden (`integer()`)\cr Hidden-layer sizes of the feed-forward network.
+#'   Only used when `transformer = FALSE`.
+#' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
+#'   from the negative binomial regeneration distribution (`TRUE`), or only its
+#'   expectation used (`FALSE`)? Only used when this object is the regeneration
+#'   process.
+#' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
+#'   (`TRUE`, default) or a feed-forward network (`FALSE`).
+#' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/
+#'   environment features.
+#' @param dim_feedforward (`integer(1)`)\cr Dimension of the feed-forward
+#'   sublayer within each transformer encoder layer. Only used when
+#'   `transformer = TRUE`.
+#'
+#' @return A list of class `"hybrid"` containing the process definition and
+#'   associated parameters, to be passed as `growth_process`, `mortality_process`,
+#'   or `regeneration_process` to [FINN::finn()].
+#'
+#' @references
+#' Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
+#' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
+#' \doi{10.1111/2041-210x.70347}
+#'
+#' @seealso [FINN::createProcess()], [FINN::finn()]
 #'
 #' @examples
-#' growth_process <- createProcess(formula = ~temperature + precipitation, func = growthFunction)
+#' growth_process <- createHybrid(formula = ~temperature + precipitation)
 #'
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
@@ -96,7 +243,7 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[3]$formula, "name")) mf[3]$formula = eval(mf[3]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {

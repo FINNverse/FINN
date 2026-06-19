@@ -1,15 +1,11 @@
 ## Transformer modules
-library(torch)
-library(R6)
-library(glue)
-
 
 canonical_mask = function(mask = NULL, mask_name = NULL, other_type = NULL, other_name = NULL, target_type = NULL, check_other = TRUE) {
   if(!is.null(mask)) {
     mask_dtype = mask$dtype
-    mask_is_float = torch_is_floating_point(mask)
+    mask_is_float = torch::torch_is_floating_point(mask)
 
-    if (mask_dtype != torch_bool() && (!mask_is_float)) {
+    if (mask_dtype != torch::torch_bool() && (!mask_is_float)) {
       stop(glue::glue("only bool and floating types of {mask_name} are supported"))
     }
 
@@ -20,14 +16,14 @@ canonical_mask = function(mask = NULL, mask_name = NULL, other_type = NULL, othe
     }
 
     if(!mask_is_float) {
-      mask = torch_zeros_like(mask, dtype=target_type)$masked_fill_(mask, -Inf)
+      mask = torch::torch_zeros_like(mask, dtype=target_type)$masked_fill_(mask, -Inf)
     }
   }
   return(mask)
 }
 
 generate_square_subsequent_mask = function(sz, device = NULL, dtype = NULL) {
-  return( torch_triu(torch_full(c(sz, sz), -Inf, dtype=dtype, device=device), diagonal = 1L))
+  return( torch::torch_triu(torch::torch_full(c(sz, sz), -Inf, dtype=dtype, device=device), diagonal = 1L))
 }
 
 detect_is_causal_mask = function(mask, is_causal = NULL, size = NULL) {
@@ -54,7 +50,7 @@ detect_is_causal_mask = function(mask, is_causal = NULL, size = NULL) {
   return(make_causal)
 }
 
-TransformerEncoderLayer = nn_module(
+TransformerEncoderLayer = torch::nn_module(
   classname = "TransformerEncoderLayer",
   initialize = function(d_model,
                         nhead,
@@ -76,14 +72,14 @@ TransformerEncoderLayer = nn_module(
       batch_first = batch_first
     )
 
-    self$linear1 = nn_linear(d_model, dim_feedforward, bias=bias)
-    self$dropout = nn_dropout(dropout)
-    self$linear2 = nn_linear(dim_feedforward, d_model, bias=bias)
+    self$linear1 = torch::nn_linear(d_model, dim_feedforward, bias=bias)
+    self$dropout = torch::nn_dropout(dropout)
+    self$linear2 = torch::nn_linear(dim_feedforward, d_model, bias=bias)
     self$norm_first = norm_first
-    self$norm1 = nn_layer_norm(d_model, eps=layer_norm_eps)
-    self$norm2 = nn_layer_norm(d_model, eps=layer_norm_eps)
-    self$dropout1 = nn_dropout(dropout)
-    self$dropout2 = nn_dropout(dropout)
+    self$norm1 = torch::nn_layer_norm(d_model, eps=layer_norm_eps)
+    self$norm2 = torch::nn_layer_norm(d_model, eps=layer_norm_eps)
+    self$dropout1 = torch::nn_dropout(dropout)
+    self$dropout2 = torch::nn_dropout(dropout)
     self$activation = activation
     self$save_attn_weights = FALSE
     self$attn_weights = NA
@@ -156,7 +152,7 @@ get_seq_len = function(src, batch_first) {
   }
 }
 
-TransformerEncoder = nn_module(
+TransformerEncoder = torch::nn_module(
   classname = "Transformer",
   initialize = function(encoder_layer = TransformerEncoderLayer(d_model = 512, nhead = 4L),
                         num_layers,
@@ -228,18 +224,18 @@ nbinom_torch = function(pred, true, theta) {
 }
 
 
-PositionalEncoding = nn_module("PositionalEncoding",
+PositionalEncoding = torch::nn_module("PositionalEncoding",
                                initialize = function(emb_dim = 50L, dropout=0.1, max_len=50L) {
                                  super$initialize()
-                                 self$dropout = nn_dropout(p = dropout)
-                                 pe = torch_zeros(max_len, emb_dim)
-                                 position = torch_arange(1, max_len, dtype=torch_float32())$unsqueeze(2L)
-                                 div_term = torch_exp(torch_arange(1, emb_dim, 2)$float() * (-log(10000.0) / emb_dim))
+                                 self$dropout = torch::nn_dropout(p = dropout)
+                                 pe = torch::torch_zeros(max_len, emb_dim)
+                                 position = torch::torch_arange(1, max_len, dtype=torch::torch_float32())$unsqueeze(2L)
+                                 div_term = torch::torch_exp(torch::torch_arange(1, emb_dim, 2)$float() * (-log(10000.0) / emb_dim))
 
                                  ind = which((1:emb_dim) %% 2 == 0, arr.ind = TRUE)
-                                 pe[, ind] =  if(length(pe[, ind]$shape) == 1) torch_sin(position * div_term)[,1] else torch_sin(position * div_term)
+                                 pe[, ind] =  if(length(pe[, ind]$shape) == 1) torch::torch_sin(position * div_term)[,1] else torch::torch_sin(position * div_term)
                                  ind = which((1:emb_dim) %% 2 != 0, arr.ind = TRUE)
-                                 pe[, ind] = if(length(pe[, ind]$shape) == 1) torch_cos(position * div_term)[,1] else torch_cos(position * div_term)
+                                 pe[, ind] = if(length(pe[, ind]$shape) == 1) torch::torch_cos(position * div_term)[,1] else torch::torch_cos(position * div_term)
 
                                  pe = pe$unsqueeze(1L)
                                  self$register_buffer("pe", pe)

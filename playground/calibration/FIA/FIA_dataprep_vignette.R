@@ -97,12 +97,12 @@ env_dt <- copy(site_dt)   # keep siteID, year, x, y
 site_pts <- vect(env_dt, geom = c("x", "y"), crs = "EPSG:4326")
 
 # Example: WorldClim BIO1 (temp) & BIO12 (prec)
-temp <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_1.tif")
-tempmax <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_5.tif")
-tempmin <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_6.tif")
-prec <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_12.tif")
-precseas <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_15.tif")
-precwarmq <- terra::rast("../worldclim/wc2.1_30s_bio/wc2.1_30s_bio_18.tif")
+temp <- terra::rast("~/Downloads/wc2.1_30s_bio/wc2.1_30s_bio_1.tif")
+tempmax <- terra::rast("~/Downloads/wc2.1_30s_bio/wc2.1_30s_bio_5.tif")
+tempmin <- terra::rast("~/Downloads/wc2.1_30s_bio/wc2.1_30s_bio_6.tif")
+prec <- terra::rast("~/Downloads/wc2.1_30s_bio/wc2.1_30s_bio_12.tif")
+precseas <- terra::rast("~/Downloads/wc2.1_30s_bio/wc2.1_30s_bio_15.tif")
+precwarmq <- terra::rast("~/Downloads/wc2.1_30s_bio/wc2.1_30s_bio_18.tif")
 
 v_proj <- project(site_pts, crs(temp))
 # env_dt[, temp := extract(temp, v_proj, method = "near")[, 2] ]

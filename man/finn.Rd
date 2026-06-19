@@ -16,16 +16,67 @@ finn(
 \arguments{
 \item{N_species}{(\code{integer(1)})\cr Number of species.}
 
-\item{mortality_process}{(\code{function})\cr Mortality function.}
+\item{mortality_process}{(\code{function})\cr Mortality process, created by
+\link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
+\code{NULL} (default), the default mechanistic mortality process is used.}
 
-\item{growth_process}{(\code{function})\cr Growth function.}
+\item{growth_process}{(\code{function})\cr Growth process, created by
+\link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
+\code{NULL} (default), the default mechanistic growth process is used.}
 
-\item{regeneration_process}{(\code{function})\cr Regeneration function.}
+\item{regeneration_process}{(\code{function})\cr Regeneration process, created by
+\link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
+\code{NULL} (default), the default mechanistic regeneration process is used.}
 
-\item{competition_process}{(\code{function})\cr Competition function.}
+\item{competition_process}{(\code{function})\cr Competition (light availability)
+process, created by \link{createProcess}. If \code{NULL} (default), the default
+mechanistic competition process is used.}
 
 \item{recruits_dbh}{(\code{numeric(1)})\cr Starting dbh for recruits. Has value 1.0 as default.}
 }
 \description{
-Creates a Forest Informed Neural Network (FINN) object. Environmental components or the entire process can be replaced by deep neural networks.
+Creates a Forest Informed Neural Network (FINN), a differentiable, cohort-based
+dynamic forest (gap) model in the tradition of JABOWA/ForClim-style models, in
+which any of the four demographic processes (growth, mortality, regeneration,
+competition for light) can either be specified mechanistically or replaced by a
+deep neural network (DNN). Mechanistic and DNN-based processes are calibrated
+jointly, end-to-end, via gradient descent (see \link{fit}).
+}
+\details{
+FINN represents the forest as cohorts of trees, grouped by site, patch and
+cohort, each characterized by diameter at breast height (dbh), number of trees,
+and species identity. Starting from an initial state, FINN simulates the forest
+forward in discrete annual time steps by sequentially applying the four
+demographic processes: competition (light availability, based on basal area
+and species-specific shading), growth (diameter increment as a function of
+light, size and environment), mortality (binomial death of trees as a function
+of growth, light, size and environment) and regeneration (recruitment of new
+cohorts as a function of light and environment, drawn from a negative binomial
+distribution). Each process additionally depends on a species- and
+process-specific environmental-response function that maps site-level
+environmental predictors to a scalar effect on the process.
+
+Every process and its environmental-response function can be configured in one
+of two ways: (1) mechanistically, with an explicit functional form and
+interpretable parameters (e.g. light-response thresholds, allometric
+coefficients), created via \link{createProcess}; or (2) as a hybrid process, in
+which the environmental-response function or the entire process equation is
+replaced by a DNN, created via \link{createHybrid}. The remaining mechanistic
+processes constrain the DNN to ecologically plausible behaviour, while the DNN
+absorbs misalignments and structural simplifications that would otherwise bias
+the mechanistic processes; both are estimated jointly rather than calibrated in
+isolation and plugged in afterwards. If a process argument is left at its
+default \code{NULL}, the corresponding default mechanistic process (as described in
+Pichler & Käber, 2026, Methods in Ecology and Evolution) is used.
+
+\code{finn()} only assembles the model architecture (analogous to instantiating a
+\code{torch} \code{nn_module}); none of the process or environmental-response parameters
+are estimated yet. Use \link{fit} to calibrate the returned object against
+observed data, and \link{predict.finn_class}/\link{simulateForest} to
+simulate forest dynamics from a (fitted) model.
+}
+\references{
+Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
+models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
+\doi{10.1111/2041-210x.70347}
 }

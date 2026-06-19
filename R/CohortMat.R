@@ -1,5 +1,3 @@
-library(R6)
-
 #' @useDynLib FINN, .registration = TRUE
 #' @importFrom Rcpp evalCpp
 NULL

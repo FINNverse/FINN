@@ -17,7 +17,7 @@ fit(
   loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse",
     regeneration = "nbinom"),
   weights = rep(1, 6),
-  optimizer = torch::optim_ignite_adam,
+  optimizer = optim_ignite_adam,
   batchsize = NULL,
   device = c("cpu", "gpu"),
   update_step = 1L,
@@ -26,7 +26,8 @@ fit(
   folder = NULL,
   checkpoints = 100L,
   shuffle = TRUE,
-  record_gradients = FALSE
+  record_gradients = FALSE,
+  ...
 )
 }
 \arguments{
@@ -56,7 +57,7 @@ fit(
 
 \item{batchsize}{(\code{integer(1)})\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.}
 
-\item{device}{(\code{charachter(1)})\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.}
+\item{device}{(\code{character(1)})\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.}
 
 \item{update_step}{(\code{integer(1)})\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.}
 
@@ -71,7 +72,45 @@ fit(
 \item{shuffle}{(\code{logical(1)})\cr Shuffle data or not.}
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
+
+\item{...}{\cr Additional arguments passed to \code{optimizer}.}
 }
 \description{
-Fit (calibrate) the FINN model.
+Fit (calibrate) a FINN model end-to-end by gradient-descent optimization. All
+mechanistic process parameters, environmental-response coefficients and, if
+present, the weights of any hybrid (DNN-based) processes are estimated jointly
+in a single optimization, rather than calibrating each process in isolation.
+}
+\details{
+Calibration relies on the fact that FINN is implemented in \code{torch} for R and is
+therefore fully differentiable: at each simulated time step the predicted stand
+variables and demographic rates are compared to the observed data through a
+joint loss function, and gradients of this loss with respect to every model
+parameter are obtained via automatic differentiation (backpropagation) and used
+to update the parameters with a \code{torch} optimizer (Adam, \link[torch:optim_ignite_adam]{torch::optim_ignite_adam},
+by default).
+
+The joint loss is the sum of per-variable losses (akin to negative
+log-likelihoods), one for each of \code{dbh}, \code{ba} (basal area), \code{trees} (number of
+trees), \code{growth}, \code{mortality} and \code{regeneration}. Following Pichler & Käber
+(2026), reasonable choices are mean squared error (\code{"mse"}, equivalent to a
+Gaussian likelihood) for \code{dbh} and \code{ba}, Poisson likelihood for \code{trees},
+negative binomial (\code{"nbinom"}) for \code{regeneration}, and \code{"mse"} for \code{mortality}
+and \code{growth} as continuous rates (the model also supports \code{"gaussian"} and
+\code{"poisson"} as alternatives via the \code{loss} argument; see Appendix B of the
+paper for details). Each loss can be weighted individually via \code{weights}, and
+missing values in the observed data are masked out of the corresponding loss
+term. The model is trained for \code{epochs} iterations over the (optionally
+batched and shuffled) data using \code{optimizer} with learning rate \code{lr}.
+
+Backpropagating gradients through a long simulated time series is prone to
+vanishing gradients and is computationally expensive. FINN therefore uses
+truncated backpropagation through time: the computational graph is detached
+every \code{update_step} simulated years, gradients are accumulated and the
+parameters are updated, before the simulation continues. Smaller \code{update_step}
+values are faster and avoid vanishing gradients but provide a more short-sighted
+learning signal; larger values let the loss integrate over a longer trajectory
+at increased computational cost. \code{start_time} allows discarding an initial
+burn-in period of the simulation from the loss, and \code{checkpoints}/\code{folder}
+allow periodically saving the model state during training.
 }
