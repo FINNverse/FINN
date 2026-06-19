@@ -5,3 +5,9 @@
 ^playground
 ^gfoe2024
 ^\.github$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^vignettes/articles$
+^dev$
+^CLAUDE\.md$

@@ -1,0 +1,247 @@
+---
+title: "Fitting FINN to forest inventory data (Oregon, US FIA)"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    html-math-method: mathjax
+vignette: >
+  %\VignetteIndexEntry{Fitting FINN to forest inventory data (Oregon, US FIA)}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+Dynamic forest models are usually hand-calibrated. Here we calibrate FINN
+directly from data: a subset of the US Forest Inventory & Analysis (FIA) program
+for Oregon, prepared exactly as in the **Preparing your data for FINN** vignette.
+Training is expensive, so it is *not* run when this page is knit — we show the fit
+call, then load a pre-fitted model shipped with the package.
+
+```{r}
+#| label: libraries
+library(FINN)
+library(torch)
+library(data.table)
+library(ggplot2)
+```
+
+## The data
+
+```{r}
+#| label: load-data
+ext <- function(f) system.file("extdata", f, package = "FINN")
+obs_dt        <- fread(ext("fia_obs_dt.csv"))
+env_dt        <- fread(ext("fia_env_dt.csv"))
+env_scales_dt <- fread(ext("fia_env_scales_dt.csv"))
+init_trees    <- fread(ext("fia_init_trees.csv"))
+species_dt    <- fread(ext("fia_species_dt.csv"))
+
+cat(sprintf("%d sites, %d species, observation years %s\n",
+            uniqueN(obs_dt$siteID), uniqueN(obs_dt$species),
+            paste(sort(unique(obs_dt$year)), collapse = " & ")))
+species_dt
+```
+
+The environment is z-scaled; `env_scales_dt` holds the mean/sd so we can read it
+back in natural units (°C, mm):
+
+```{r}
+#| label: plot-env
+#| fig-width: 8
+#| fig-height: 3
+env_vars <- env_scales_dt$variable
+env_nat  <- copy(env_dt)
+for (v in env_vars) {
+  s <- env_scales_dt[variable == v]
+  env_nat[[v]] <- env_dt[[v]] * s$sd + s$mean
+}
+ggplot(melt(env_nat[, c("temp", "prec")], measure.vars = c("temp", "prec")),
+       aes(value)) +
+  geom_histogram(bins = 20, fill = "grey40") +
+  facet_wrap(~variable, scales = "free", labeller = as_labeller(
+    c(temp = "Mean~annual~temp~(degree*C)", prec = "Annual~precip~(mm)"), label_parsed)) +
+  labs(x = NULL, y = "site x year") + theme_minimal()
+```
+
+A few observed series — basal area and tree numbers by year for the most
+abundant species:
+
+```{r}
+#| label: plot-observations
+#| fig-width: 8
+#| fig-height: 3.5
+top_sp <- obs_dt[, .(tot = sum(ba, na.rm = TRUE)), by = species][order(-tot)][1:4, species]
+obs_long <- melt(obs_dt[species %in% top_sp],
+                 id.vars = c("siteID", "year", "species", "species_name"),
+                 measure.vars = c("ba", "trees"))
+ggplot(obs_long, aes(factor(year), value, fill = factor(species))) +
+  geom_boxplot(outlier.size = 0.4) +
+  facet_wrap(~variable, scales = "free_y") +
+  scale_fill_viridis_d(name = "species") +
+  labs(x = "observation year", y = NULL) + theme_minimal()
+```
+
+## Initial cohorts
+
+```{r}
+#| label: init-cohorts
+init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(obs_dt$species))
+```
+
+## Build a Process-FINN
+
+Every process is set `optimize* = TRUE`, so its species and environmental
+parameters are learned from data. The `~.` formula lets every environmental
+predictor enter the growth, regeneration and mortality responses.
+
+```{r}
+#| label: build-model
+m <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+```
+
+## Fit
+
+Fitting runs gradient descent through the whole simulation. It is too slow for a
+package build, so the chunk below is shown but not executed — it is the exact
+call used to produce the shipped model (`dev/train_fia_model.R`):
+
+```{r}
+#| label: fit
+#| eval: false
+m$fit(
+  env         = env_dt,
+  data        = obs_dt,
+  init_cohort = init_cohorts,
+  device      = "cpu",
+  epochs      = 3000L,
+  batchsize   = 40L,
+  patches     = 4,
+  patch_size  = 0.06,
+  weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
+  lr          = 0.01
+)
+torch::torch_save(m, "inst/extdata/fia_process_finn.pt")
+```
+
+```{r}
+#| label: load-fitted
+# Load the pre-fitted model shipped with the package and use it from here on.
+m <- torch::torch_load(ext("fia_process_finn.pt"))
+```
+
+## Convergence
+
+```{r}
+#| label: convergence
+#| fig-width: 6
+#| fig-height: 3
+loss <- data.table(epoch = seq_along(m$history),
+                   loss = sapply(m$history, sum))
+ggplot(loss, aes(epoch, loss)) +
+  geom_line(colour = "steelblue") +
+  scale_y_log10() +
+  labs(x = "epoch", y = "total training loss (log scale)") + theme_minimal()
+```
+
+## Assess the fit
+
+We simulate from the fitted model and compare predictions to observations,
+per response variable (Spearman correlation, matched on site × year × species):
+
+```{r}
+#| label: assess
+sim  <- m$simulate(env = env_dt, init_cohort = init_cohorts,
+                   patches = 4, patch_size = 0.06, device = "cpu")
+pred <- sim$long$site[, .(pred = mean(value)), by = .(siteID, year, species, variable)]
+pred[, variable := as.character(variable)]
+
+obs_m <- melt(obs_dt, id.vars = c("siteID", "year", "species", "species_name"),
+              variable.name = "variable", value.name = "obs")
+obs_m[, variable := as.character(variable)]
+
+cmp <- merge(obs_m, pred, by = c("siteID", "year", "species", "variable"))
+fit_metrics <- cmp[!is.na(obs) & !is.na(pred),
+                   .(n = .N, spearman = round(cor(obs, pred, method = "spearman"), 2)),
+                   by = variable][order(-spearman)]
+fit_metrics
+```
+
+The structural variables — basal area, tree numbers and diameter — are
+reconstructed well; the noisier per-tree rates (growth, mortality, regeneration)
+are harder to constrain from two inventories.
+
+```{r}
+#| label: assess-plot
+#| fig-width: 7
+#| fig-height: 3
+ggplot(cmp[variable %in% c("ba", "trees", "dbh") & !is.na(obs)],
+       aes(obs, pred)) +
+  geom_point(alpha = 0.25, size = 0.6) +
+  geom_abline(slope = 1, intercept = 0, colour = "red", linewidth = 0.3) +
+  facet_wrap(~variable, scales = "free") +
+  labs(x = "observed", y = "predicted") + theme_minimal()
+```
+
+## Inspect the niches
+
+Because the environmental responses are learned, we can read off each species'
+**niche** — how its growth responds to climate. We evaluate the fitted growth
+environmental response over each climate gradient (varying one variable across
+its observed range, holding the others at their mean) and back-transform to
+natural units. (FINN also ships `ALE()` for accumulated-local-effect curves; the
+direct response below is clearer on this small sample.)
+
+```{r}
+#| label: niches
+#| fig-width: 8.5
+#| fig-height: 3.6
+env_vars <- env_scales_dt$variable
+
+niche <- rbindlist(lapply(c("temp", "prec"), function(target) {
+  rng  <- range(env_dt[[target]])                 # observed z-range, no extrapolation
+  grid <- seq(rng[1], rng[2], length.out = 60)
+  X <- matrix(0, length(grid), length(env_vars) + 1); X[, 1] <- 1   # intercept
+  X[, which(env_vars == target) + 1] <- grid
+  eff <- as.matrix(m$nn_growth(torch_tensor(X, dtype = torch_float32())))
+  s <- env_scales_dt[variable == target]
+  rbindlist(lapply(seq_len(ncol(eff)), function(j)
+    data.table(var = target, species = j,
+               x = grid * s$sd + s$mean, growth_mult = exp(eff[, j]))))
+}))
+niche <- merge(niche, species_dt, by = "species")
+
+ggplot(niche, aes(x, growth_mult, colour = species_name)) +
+  geom_line(linewidth = 0.7) +
+  facet_wrap(~var, scales = "free", labeller = as_labeller(
+    c(temp = "temperature~(degree*C)", prec = "precipitation~(mm)"), label_parsed)) +
+  scale_colour_viridis_d(name = "species") +
+  labs(x = NULL, y = "growth response (env. multiplier)") + theme_minimal()
+```
+
+Each curve is an inferred environmental response: how a species' growth scales
+along the temperature and precipitation gradients, learned purely from the
+inventory data. Ecologically familiar contrasts emerge — e.g. *Pinus ponderosa*
+grows best on the driest sites while wetter-climate species ramp up with
+precipitation. This is the bridge to using FINN for niche inference and
+projection.
+
+```{r}
+#| label: session
+sessionInfo()
+```

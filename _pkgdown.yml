@@ -1,0 +1,58 @@
+url: https://finnverse.github.io/FINN
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Introduction to FINN
+        href: articles/Introduction-to-FINN.html
+      - text: Succession from a handful of species
+        href: articles/succession-demo.html
+      - text: Preparing your data for FINN
+        href: articles/data-preparation.html
+      - text: Fitting FINN to FIA data
+        href: articles/fit-to-fia.html
+
+articles:
+- title: Get started
+  navbar: ~
+  contents:
+  - Introduction-to-FINN
+  - succession-demo
+  - data-preparation
+  - fit-to-fia
+
+reference:
+- title: Model setup
+  contents:
+  - finn
+  - createProcess
+  - createHybrid
+  - simulateForest
+- title: Fitting
+  contents:
+  - fit
+- title: Processes
+  contents:
+  - growth
+  - mortality
+  - regeneration
+  - competition
+  - height
+- title: Data conversion
+  contents:
+  - climateDF2array
+  - obsDF2arrays
+  - makeObsData
+  - makeInitCohorts
+  - pred2DF
+- title: Interpretation
+  contents:
+  - ALE
