@@ -245,6 +245,213 @@ grows best on the driest sites while wetter-climate species ramp up with
 precipitation. This is the bridge to using FINN for niche inference and
 projection.
 
+## Replacing a process with a neural network (Hybrid-FINN)
+
+FINN's defining feature is that **any single demographic process can be swapped
+from a mechanistic function to a neural network**, while the others stay
+mechanistic — a *hybrid* model. The mechanistic processes keep the system
+ecologically constrained; the network absorbs structure the fixed functional form
+cannot express. Here we replace **growth** with a small neural network via
+`createHybrid()`, leaving competition, regeneration and mortality mechanistic, and
+refit on the same data.
+
+```{r}
+#| label: hybrid-build
+m_hybrid <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createHybrid(~., hidden = c(20L, 20L), transformer = FALSE),  # NN replaces growth
+  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+```
+
+Fitting is identical — the same `fit()` call (and `env_autoscale = TRUE`) — and is
+again run by `dev/train_fia_model.R`, so the chunk below is shown but not executed:
+
+```{r}
+#| label: hybrid-fit
+#| eval: false
+m_hybrid$fit(
+  env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+  epochs = 3000L, batchsize = 40L, patches = 4, patch_size = 0.06,
+  weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
+)
+torch::torch_save(m_hybrid, "inst/extdata/fia_hybrid_finn.pt")
+```
+
+```{r}
+#| label: hybrid-load
+m_hybrid <- torch::torch_load(ext("fia_hybrid_finn.pt"))
+```
+
+How does the learned-growth hybrid compare to the fully mechanistic model? We
+score both the same way — predicted-vs-observed **Spearman correlation** (rank
+agreement) and **RMSE** (in each response's own units) per variable:
+
+```{r}
+#| label: hybrid-compare
+metrics_of <- function(model) {
+  model$eval()                                   # deterministic: dropout off
+  sim <- model$simulate(env = env_dt, init_cohort = init_cohorts,
+                        patches = 4, patch_size = 0.06, device = "cpu")
+  p <- sim$long$site[, .(pred = mean(value)), by = .(siteID, year, species, variable)]
+  p[, variable := as.character(variable)]
+  cc <- merge(obs_m, p, by = c("siteID", "year", "species", "variable"))
+  cc[!is.na(obs) & !is.na(pred),
+     .(spearman = round(cor(obs, pred, method = "spearman"), 2),
+       rmse     = round(sqrt(mean((obs - pred)^2)), 2)), by = variable]
+}
+comparison <- merge(
+  metrics_of(m)[,        .(variable, spearman_proc = spearman, rmse_proc = rmse)],
+  metrics_of(m_hybrid)[, .(variable, spearman_hyb  = spearman, rmse_hyb  = rmse)],
+  by = "variable")[order(-spearman_proc)]
+comparison
+```
+
+The hybrid reproduces the structural variables about as well as the mechanistic
+model — with no growth equation specified. Hybrids are the tool of choice when a
+process's mechanistic form is uncertain or you suspect the data carry structure
+the equation misses; the surrounding mechanistic processes still anchor the model
+ecologically.
+
+### Did the network recover the mechanistic niche?
+
+The central comparison in the FINN paper is whether the neural network learned the
+*same* environmental response as the mechanistic growth function. We compare them
+with **accumulated local effects (ALE)** — the effect measure of choice here
+because the bioclimatic predictors are correlated, where partial-dependence curves
+would extrapolate to unrealistic climate combinations. ALE instead accumulates
+*local* changes in predicted growth within the observed climate distribution.
+
+For the hybrid we also draw a **confidence band**, exactly as in the FINNetAl
+study: the growth network is run with **dropout left on** (Monte-Carlo dropout)
+over bootstrap resamples, and we summarise the resulting ensemble of ALE curves as
+mean ± 1 SD. The mechanistic model is deterministic, so it is a single line.
+
+ALE is centred at zero by construction; to keep the y-axis interpretable we add
+each species' **mean predicted growth** back, so the curves are on the absolute
+growth scale (cm yr⁻¹, ≥ 0). We compare the two models across **four drivers of
+growth** — diameter and available light (stand state), and temperature and
+precipitation (climate) — for four representative species. The driver values are
+the ones the cohorts actually experience in a simulation (recovered through the
+model's `record_raws` mechanism), and the bins are taken from **each species' own**
+realized range, so every curve stays strictly within the data that species
+occupies — **no extrapolation**, as in FINNetAl.
+
+```{r}
+#| label: niche-compare
+#| fig-width: 9.5
+#| fig-height: 9
+env_vars <- as.data.table(m$env_scaling)$variable
+VARS <- c("dbh", "light", "temp", "prec"); SPP <- 1:4
+
+# realized cohort states (dbh, light, trees + climate) from a simulation
+get_states <- function(model) {
+  model$eval(); model$record_raws <- TRUE
+  invisible(model$simulate(env = env_dt, init_cohort = init_cohorts,
+                           patches = 4, patch_size = 0.06, device = "cpu"))
+  rg <- model$raw_g; model$record_raws <- FALSE; model$raw_g <- NULL
+  env_cols <- c("siteID", env_vars)
+  env_site <- unique(env_dt, by = "siteID")[, ..env_cols]          # one climate row per site
+  st <- rbindlist(lapply(seq_along(rg), function(t) {
+    a <- rg[[t]]; d <- dim(a)
+    g <- as.data.table(expand.grid(site = 1:d[1], patch = 1:d[2], cohort = 1:d[3]))
+    g[, `:=`(dbh = as.vector(a[,,,1]), light = as.vector(a[,,,2]),
+             trees = as.vector(a[,,,3]), species = as.vector(a[,,,4]))]
+    merge(g, env_site, by.x = "site", by.y = "siteID")
+  }))
+  st[trees > 0.5 & dbh > 0.5]
+}
+
+# predict growth for a table of states (climate standardized internally)
+make_predf <- function(model) {
+  scaling <- as.data.table(model$env_scaling); is_h <- inherits(model$process_growth, "hybrid")
+  function(st, sp) {
+    n <- nrow(st)
+    Z <- do.call(cbind, lapply(env_vars, function(v){ s<-scaling[variable==v]; (st[[v]]-s$center)/s$scale }))
+    mk <- function(v, ty) torch_tensor(array(v, c(n,1,1)), dtype = ty)
+    pred <- torch_tensor(cbind(1, Z), dtype = torch_float32()); species <- mk(sp, torch_long())
+    if (!is_h) { pred <- model$nn_growth(pred); pred <- FINN::index_species(pred, species) }
+    as.numeric(as_array(model$growth_func(dbh = mk(st$dbh, torch_float32()),
+      trees = mk(st$trees, torch_float32()), light = mk(st$light, torch_float32()),
+      species = species, pred = pred, parGrowth = model$par_growth)))
+  }
+}
+
+# ALE of one driver for one species (raw units; anchored + floored at 0)
+ale_feature <- function(predf, st_sp, sp, target, breaks) {
+  K <- length(breaks) - 1L
+  bin <- cut(st_sp[[target]], breaks, include.lowest = TRUE, labels = FALSE)
+  local <- numeric(K)
+  for (k in seq_len(K)) {
+    idx <- which(bin == k); if (!length(idx)) next
+    lo <- copy(st_sp[idx]); hi <- copy(st_sp[idx])
+    set(lo, j = target, value = breaks[k]); set(hi, j = target, value = breaks[k+1])
+    local[k] <- mean(predf(hi, sp) - predf(lo, sp))
+  }
+  ale <- cumsum(local) - mean(cumsum(local)) + mean(predf(st_sp, sp))
+  data.table(x = (breaks[-1] + breaks[-(K+1)]) / 2, growth = pmax(ale, 0))
+}
+
+set.seed(1); FINN.seed(1)          # reproducible simulation states + MC-dropout
+st_p <- get_states(m); st_h <- get_states(m_hybrid)
+
+one_model <- function(model, st, mc, reps) {
+  predf <- make_predf(model)
+  rbindlist(lapply(VARS, function(v) rbindlist(lapply(SPP, function(sp) {
+    st_sp <- st[species == sp]
+    if (nrow(st_sp) < 30) return(NULL)
+    # trim the sparse top 5% of this driver, then bin from the species' own
+    # range -> the ALE stays within well-sampled data (no extrapolation)
+    st_sp  <- st_sp[get(v) <= quantile(st_sp[[v]], 0.95)]
+    breaks <- unique(quantile(st_sp[[v]], probs = seq(0, 1, length.out = 9)))
+    if (length(breaks) < 3) return(NULL)
+    curves <- rbindlist(lapply(seq_len(reps), function(j) {
+      if (mc) model$train() else model$eval()                     # MC-dropout on / off
+      d <- if (mc) st_sp[sample(.N, replace = TRUE)] else st_sp    # bootstrap
+      ale_feature(predf, d, sp, v, breaks)
+    }))
+    curves[, .(growth = mean(growth), lo = pmax(mean(growth)-sd(growth),0),
+               hi = mean(growth)+sd(growth)), by = x][, `:=`(variable = v, species = sp)]
+  }))))
+}
+
+grid <- rbind(
+  one_model(m_hybrid, st_h, mc = TRUE,  reps = 15)[, model := "Hybrid (growth = NN)"],
+  one_model(m,        st_p, mc = FALSE, reps = 1 )[, model := "Process (mechanistic)"])
+grid <- merge(grid, species_dt, by = "species")
+
+library(patchwork)
+cols <- c("Process (mechanistic)" = "#1b9e77", "Hybrid (growth = NN)" = "#d95f02")
+# one row per driver; facet_wrap over species shares the x-axis across species
+# (scales = "free_y"), and the driver name becomes the x-axis title below the row.
+make_row <- function(v, xlab, top) {
+  g <- ggplot(grid[variable == v], aes(x, growth, colour = model, fill = model)) +
+    geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.18, colour = NA) +
+    geom_line(linewidth = 0.6) +
+    facet_wrap(~species_name, nrow = 1, scales = "free_y") +
+    scale_colour_manual(values = cols) + scale_fill_manual(values = cols) +
+    labs(x = xlab, y = "growth (cm/yr)", colour = NULL, fill = NULL) +
+    theme_minimal() + theme(legend.position = "none")
+  if (!top) g <- g + theme(strip.text = element_blank())
+  g
+}
+(make_row("dbh",  "dbh (cm)", TRUE) /
+ make_row("light","available light", FALSE) /
+ make_row("temp", expression(temperature ~ (degree * C)), FALSE) /
+ make_row("prec", "precipitation (mm)", FALSE)) +
+  plot_layout(guides = "collect") & theme(legend.position = "top")
+```
+
+Each panel asks whether the network reproduced the mechanistic response to one
+driver. Where the green line stays inside the hybrid's band, the network recovered
+the mechanistic relationship from data alone; where they part — often at the
+climate extremes or for the more sparsely observed species — the network settled
+on a different, data-driven shape. The companion article *Recovering a forest
+process with Hybrid-FINN* makes the same comparison against known simulated truth.
+
 ```{r}
 #| label: session
 sessionInfo()
