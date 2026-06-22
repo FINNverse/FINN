@@ -300,8 +300,11 @@ extract_env = function(formula, env) {
 #' @param env A \code{data.frame}/\code{data.table} with \code{siteID}, \code{year}
 #'   and the environmental predictor columns.
 #' @return A \code{data.frame} with columns \code{variable}, \code{center},
-#'   \code{scale}; or \code{NULL} if there are no numeric predictors.
-#' @keywords internal
+#'   \code{scale}; or \code{NULL} if there are no numeric predictors. This is the
+#'   object stored on a fitted model as \code{model$env_scaling} when it is fit
+#'   with \code{env_autoscale = TRUE}.
+#' @seealso \code{\link{apply_env_scaling}}
+#' @export
 compute_env_scaling = function(env) {
   cols = setdiff(colnames(env), c("siteID", "year"))
   cols = cols[vapply(cols, function(cc) is.numeric(env[[cc]]), logical(1))]
@@ -322,9 +325,17 @@ compute_env_scaling = function(env) {
 #'
 #' @param env A \code{data.frame}/\code{data.table} of raw environmental data.
 #' @param scaling The \code{data.frame} returned by \code{compute_env_scaling()},
-#'   or \code{NULL} (in which case \code{env} is returned unchanged).
+#'   or \code{NULL} (in which case \code{env} is returned unchanged). For a model
+#'   fit with \code{env_autoscale = TRUE} this is \code{model$env_scaling}.
 #' @return \code{env} with the scaled predictor columns, as a \code{data.table}.
-#' @keywords internal
+#' @seealso \code{\link{compute_env_scaling}}, \code{\link{fit}}
+#' @examples
+#' \dontrun{
+#' # reproduce the standardization a fitted model used (e.g. before a manual /
+#' # DALEX ALE on a model fit with env_autoscale = TRUE):
+#' env_scaled <- apply_env_scaling(env_dt, model$env_scaling)
+#' }
+#' @export
 apply_env_scaling = function(env, scaling) {
   if (is.null(scaling)) return(env)
   env = data.table::copy(data.table::as.data.table(env))

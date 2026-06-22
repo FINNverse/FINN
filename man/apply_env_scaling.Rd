@@ -10,7 +10,8 @@ apply_env_scaling(env, scaling)
 \item{env}{A \code{data.frame}/\code{data.table} of raw environmental data.}
 
 \item{scaling}{The \code{data.frame} returned by \code{compute_env_scaling()},
-or \code{NULL} (in which case \code{env} is returned unchanged).}
+or \code{NULL} (in which case \code{env} is returned unchanged). For a model
+fit with \code{env_autoscale = TRUE} this is \code{model$env_scaling}.}
 }
 \value{
 \code{env} with the scaled predictor columns, as a \code{data.table}.
@@ -21,4 +22,13 @@ The transformation uses the \emph{stored} mean/sd only and never recomputes them
 from \code{env}, so calibration and prediction use an identical transformation
 (the usual pitfall of \code{scale()} inside a model formula is avoided).
 }
-\keyword{internal}
+\examples{
+\dontrun{
+# reproduce the standardization a fitted model used (e.g. before a manual /
+# DALEX ALE on a model fit with env_autoscale = TRUE):
+env_scaled <- apply_env_scaling(env_dt, model$env_scaling)
+}
+}
+\seealso{
+\code{\link{compute_env_scaling}}, \code{\link{fit}}
+}
