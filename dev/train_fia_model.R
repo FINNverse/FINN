@@ -28,7 +28,7 @@ cat(sprintf("Training %d epochs on %d sites, %d species ...\n",
             epochs, uniqueN(obs_dt$siteID), uniqueN(obs_dt$species)))
 t0 <- Sys.time()
 m$fit(
-  env         = env_dt,
+  env         = env_dt,      # RAW (untransformed) environment
   data        = obs_dt,
   init_cohort = init_cohorts,
   device      = "cpu",
@@ -37,7 +37,8 @@ m$fit(
   patches     = 4,
   patch_size  = 0.06,
   weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
-  lr          = 0.01
+  lr          = 0.01,
+  scale_env   = TRUE         # FINN learns + stores the standardization (default)
 )
 cat(sprintf("done in %.1f min\n", as.numeric(difftime(Sys.time(), t0, units = "mins"))))
 

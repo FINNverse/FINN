@@ -39,11 +39,10 @@ library(ggplot2)
 ```{r}
 #| label: load-data
 ext <- function(f) system.file("extdata", f, package = "FINN")
-obs_dt        <- fread(ext("fia_obs_dt.csv"))
-env_dt        <- fread(ext("fia_env_dt.csv"))
-env_scales_dt <- fread(ext("fia_env_scales_dt.csv"))
-init_trees    <- fread(ext("fia_init_trees.csv"))
-species_dt    <- fread(ext("fia_species_dt.csv"))
+obs_dt     <- fread(ext("fia_obs_dt.csv"))
+env_dt     <- fread(ext("fia_env_dt.csv"))     # RAW, untransformed climate
+init_trees <- fread(ext("fia_init_trees.csv"))
+species_dt <- fread(ext("fia_species_dt.csv"))
 
 cat(sprintf("%d sites, %d species, observation years %s\n",
             uniqueN(obs_dt$siteID), uniqueN(obs_dt$species),
@@ -51,20 +50,15 @@ cat(sprintf("%d sites, %d species, observation years %s\n",
 species_dt
 ```
 
-The environment is z-scaled; `env_scales_dt` holds the mean/sd so we can read it
-back in natural units (°C, mm):
+The environment is supplied in **natural units** — FINN z-standardizes the
+predictors internally during fitting (`scale_env = TRUE`, the default) and reuses
+the same constants at prediction time, so we never have to scale by hand:
 
 ```{r}
 #| label: plot-env
 #| fig-width: 8
 #| fig-height: 3
-env_vars <- env_scales_dt$variable
-env_nat  <- copy(env_dt)
-for (v in env_vars) {
-  s <- env_scales_dt[variable == v]
-  env_nat[[v]] <- env_dt[[v]] * s$sd + s$mean
-}
-ggplot(melt(env_nat[, c("temp", "prec")], measure.vars = c("temp", "prec")),
+ggplot(melt(env_dt[, c("temp", "prec")], measure.vars = c("temp", "prec")),
        aes(value)) +
   geom_histogram(bins = 20, fill = "grey40") +
   facet_wrap(~variable, scales = "free", labeller = as_labeller(
@@ -125,7 +119,7 @@ call used to produce the shipped model (`dev/train_fia_model.R`):
 #| label: fit
 #| eval: false
 m$fit(
-  env         = env_dt,
+  env         = env_dt,      # raw climate — FINN standardizes it internally
   data        = obs_dt,
   init_cohort = init_cohorts,
   device      = "cpu",
@@ -134,7 +128,8 @@ m$fit(
   patches     = 4,
   patch_size  = 0.06,
   weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
-  lr          = 0.01
+  lr          = 0.01,
+  scale_env   = TRUE         # default; learns & stores the predictor scaling
 )
 torch::torch_save(m, "inst/extdata/fia_process_finn.pt")
 ```
@@ -143,6 +138,15 @@ torch::torch_save(m, "inst/extdata/fia_process_finn.pt")
 #| label: load-fitted
 # Load the pre-fitted model shipped with the package and use it from here on.
 m <- torch::torch_load(ext("fia_process_finn.pt"))
+```
+
+With `scale_env = TRUE`, the per-predictor mean and standard deviation learned
+from the training climate are stored on the model and re-applied automatically
+whenever we predict — so raw `env_dt` is all we ever pass:
+
+```{r}
+#| label: env-scaling
+m$env_scaling
 ```
 
 ## Convergence
@@ -201,28 +205,28 @@ ggplot(cmp[variable %in% c("ba", "trees", "dbh") & !is.na(obs)],
 ## Inspect the niches
 
 Because the environmental responses are learned, we can read off each species'
-**niche** — how its growth responds to climate. We evaluate the fitted growth
-environmental response over each climate gradient (varying one variable across
-its observed range, holding the others at their mean) and back-transform to
-natural units. (FINN also ships `ALE()` for accumulated-local-effect curves; the
-direct response below is clearer on this small sample.)
+**niche** — how its growth responds to climate. We vary one climate variable
+across its observed (natural-unit) range, hold the others at their mean, and
+evaluate the fitted growth response. Following the convention of interpretable-ML
+tools (e.g. cito's effect plots), we plot the response on the **natural predictor
+axis** — using the model's own stored standardization (`m$env_scaling`) to map the
+natural grid onto the scale the network was trained on.
 
 ```{r}
 #| label: niches
 #| fig-width: 8.5
 #| fig-height: 3.6
-env_vars <- env_scales_dt$variable
+scaling  <- as.data.table(m$env_scaling)
+env_vars <- scaling$variable
 
 niche <- rbindlist(lapply(c("temp", "prec"), function(target) {
-  rng  <- range(env_dt[[target]])                 # observed z-range, no extrapolation
-  grid <- seq(rng[1], rng[2], length.out = 60)
-  X <- matrix(0, length(grid), length(env_vars) + 1); X[, 1] <- 1   # intercept
-  X[, which(env_vars == target) + 1] <- grid
+  s    <- scaling[variable == target]
+  grid <- seq(min(env_dt[[target]]), max(env_dt[[target]]), length.out = 60)  # natural units
+  X <- matrix(0, length(grid), length(env_vars) + 1); X[, 1] <- 1   # intercept; others at mean (=0 scaled)
+  X[, which(env_vars == target) + 1] <- (grid - s$center) / s$scale # standardize the varied predictor
   eff <- as.matrix(m$nn_growth(torch_tensor(X, dtype = torch_float32())))
-  s <- env_scales_dt[variable == target]
   rbindlist(lapply(seq_len(ncol(eff)), function(j)
-    data.table(var = target, species = j,
-               x = grid * s$sd + s$mean, growth_mult = exp(eff[, j]))))
+    data.table(var = target, species = j, x = grid, growth_mult = exp(eff[, j]))))
 }))
 niche <- merge(niche, species_dt, by = "species")
 

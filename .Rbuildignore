@@ -11,3 +11,5 @@
 ^vignettes/articles$
 ^dev$
 ^CLAUDE\.md$
+^\.positai$
+^\.claude$

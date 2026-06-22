@@ -50,7 +50,8 @@ reindex_sites <- function(dt) {
 }
 
 obs_f  <- reindex_sites(obs[siteID %in% fit_sites])
-env_f  <- reindex_sites(env[siteID %in% fit_sites])
+# ship RAW (untransformed) env: FINN standardizes internally via scale_env = TRUE
+env_f  <- reindex_sites(env_raw[siteID %in% fit_sites])
 init_f <- reindex_sites(init[siteID %in% fit_sites])
 
 ## --- lump to the K most abundant species; rest -> "other" -------------------
@@ -90,10 +91,11 @@ setorder(init_f, siteID, patchID, species)
 
 env_out_cols <- c("siteID", "year", env_vars)
 fwrite(obs_f,            file.path(out, "fia_obs_dt.csv"))
-fwrite(env_f[, ..env_out_cols], file.path(out, "fia_env_dt.csv"))
-fwrite(env_scl,          file.path(out, "fia_env_scales_dt.csv"))
+fwrite(env_f[, ..env_out_cols], file.path(out, "fia_env_dt.csv"))  # RAW units
 fwrite(init_f,           file.path(out, "fia_init_trees.csv"))
 fwrite(species_f,        file.path(out, "fia_species_dt.csv"))
+# note: no fia_env_scales_dt.csv — the model now stores the standardization
+# constants itself (m$env_scaling) when fit with scale_env = TRUE.
 
 ## ---------------------------------------------------------------------------
 ## Vignette 2 sample: RAW tree list + env for a few sites, keyed by siteName.

@@ -27,6 +27,7 @@ fit(
   checkpoints = 100L,
   shuffle = TRUE,
   record_gradients = FALSE,
+  scale_env = TRUE,
   ...
 )
 }
@@ -72,6 +73,17 @@ fit(
 \item{shuffle}{(\code{logical(1)})\cr Shuffle data or not.}
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
+
+\item{scale_env}{(\code{logical(1)})\cr If \code{TRUE}, FINN z-standardizes the
+environmental predictors in \code{env} internally: the per-variable mean and
+standard deviation are learned from the training \code{env} and stored on the
+model, then re-applied automatically at every \code{predict()}/\code{simulate()} call.
+This lets you pass raw (untransformed) \code{env} for both calibration and
+prediction; FINN guarantees an identical transformation at both stages.
+Recommended (and the default) for numerical stability when predictors are on
+different scales. Set \code{FALSE} to use \code{env} exactly as supplied (e.g. if you
+have already standardized it yourself). The learned constants are available
+as \code{model$env_scaling}.}
 
 \item{...}{\cr Additional arguments passed to \code{optimizer}.}
 }

@@ -288,6 +288,56 @@ extract_env = function(formula, env) {
   return(env_array)
 }
 
+#' Learn z-standardization for environmental predictors
+#'
+#' Computes the centering and scaling constants (mean and standard deviation) of
+#' every numeric environmental predictor in \code{env} (all columns except the
+#' keys \code{siteID} and \code{year}), so they can be re-applied unchanged to new
+#' data at prediction time. A predictor with (near-)zero standard deviation is
+#' given \code{scale = 1} (centred only) to avoid division by zero, mirroring
+#' \code{recipes::step_normalize}.
+#'
+#' @param env A \code{data.frame}/\code{data.table} with \code{siteID}, \code{year}
+#'   and the environmental predictor columns.
+#' @return A \code{data.frame} with columns \code{variable}, \code{center},
+#'   \code{scale}; or \code{NULL} if there are no numeric predictors.
+#' @keywords internal
+compute_env_scaling = function(env) {
+  cols = setdiff(colnames(env), c("siteID", "year"))
+  cols = cols[vapply(cols, function(cc) is.numeric(env[[cc]]), logical(1))]
+  if (!length(cols)) return(NULL)
+  center = vapply(cols, function(cc) mean(env[[cc]], na.rm = TRUE), numeric(1))
+  scale  = vapply(cols, function(cc) stats::sd(env[[cc]], na.rm = TRUE), numeric(1))
+  scale[!is.finite(scale) | scale < .Machine$double.eps] = 1   # constant predictor -> centre only
+  data.frame(variable = cols, center = as.numeric(center), scale = as.numeric(scale),
+             stringsAsFactors = FALSE)
+}
+
+#' Apply stored z-standardization to environmental predictors
+#'
+#' Re-applies the constants learned by \code{compute_env_scaling()} to \code{env}.
+#' The transformation uses the \emph{stored} mean/sd only and never recomputes them
+#' from \code{env}, so calibration and prediction use an identical transformation
+#' (the usual pitfall of \code{scale()} inside a model formula is avoided).
+#'
+#' @param env A \code{data.frame}/\code{data.table} of raw environmental data.
+#' @param scaling The \code{data.frame} returned by \code{compute_env_scaling()},
+#'   or \code{NULL} (in which case \code{env} is returned unchanged).
+#' @return \code{env} with the scaled predictor columns, as a \code{data.table}.
+#' @keywords internal
+apply_env_scaling = function(env, scaling) {
+  if (is.null(scaling)) return(env)
+  env = data.table::copy(data.table::as.data.table(env))
+  missing_vars = setdiff(scaling$variable, colnames(env))
+  if (length(missing_vars))
+    stop("env is missing environmental variable(s) the model was scaled on: ",
+         paste(missing_vars, collapse = ", "))
+  for (i in seq_len(nrow(scaling)))
+    set(env, j = scaling$variable[i],
+        value = (env[[scaling$variable[i]]] - scaling$center[i]) / scaling$scale[i])
+  env
+}
+
 backward = function(value, upper, lower) stats::qlogis( t((t(value) - as.numeric(lower)) / (as.numeric(upper) - as.numeric(lower)) ))
 forward =  function(value, upper, lower) torch::torch_sigmoid(value) * (upper - lower) + lower
 
