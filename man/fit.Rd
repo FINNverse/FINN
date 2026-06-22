@@ -27,7 +27,7 @@ fit(
   checkpoints = 100L,
   shuffle = TRUE,
   record_gradients = FALSE,
-  scale_env = TRUE,
+  env_autoscale = TRUE,
   ...
 )
 }
@@ -74,7 +74,7 @@ fit(
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
 
-\item{scale_env}{(\code{logical(1)})\cr If \code{TRUE}, FINN z-standardizes the
+\item{env_autoscale}{(\code{logical(1)})\cr If \code{TRUE}, FINN z-standardizes the
 environmental predictors in \code{env} internally: the per-variable mean and
 standard deviation are learned from the training \code{env} and stored on the
 model, then re-applied automatically at every \code{predict()}/\code{simulate()} call.

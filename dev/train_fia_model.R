@@ -38,7 +38,7 @@ m$fit(
   patch_size  = 0.06,
   weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr          = 0.01,
-  scale_env   = TRUE         # FINN learns + stores the standardization (default)
+  env_autoscale   = TRUE         # FINN learns + stores the standardization (default)
 )
 cat(sprintf("done in %.1f min\n", as.numeric(difftime(Sys.time(), t0, units = "mins"))))
 

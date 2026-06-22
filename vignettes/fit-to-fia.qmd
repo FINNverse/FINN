@@ -51,7 +51,7 @@ species_dt
 ```
 
 The environment is supplied in **natural units** — FINN z-standardizes the
-predictors internally during fitting (`scale_env = TRUE`, the default) and reuses
+predictors internally during fitting (`env_autoscale = TRUE`, the default) and reuses
 the same constants at prediction time, so we never have to scale by hand:
 
 ```{r}
@@ -129,7 +129,7 @@ m$fit(
   patch_size  = 0.06,
   weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr          = 0.01,
-  scale_env   = TRUE         # default; learns & stores the predictor scaling
+  env_autoscale   = TRUE         # default; learns & stores the predictor scaling
 )
 torch::torch_save(m, "inst/extdata/fia_process_finn.pt")
 ```
@@ -140,7 +140,7 @@ torch::torch_save(m, "inst/extdata/fia_process_finn.pt")
 m <- torch::torch_load(ext("fia_process_finn.pt"))
 ```
 
-With `scale_env = TRUE`, the per-predictor mean and standard deviation learned
+With `env_autoscale = TRUE`, the per-predictor mean and standard deviation learned
 from the training climate are stored on the model and re-applied automatically
 whenever we predict — so raw `env_dt` is all we ever pass:
 

@@ -41,7 +41,7 @@ FINN is calibrated against a few tidy tables:
   growth rate, `mort` rate, `reg` trees ha⁻¹.
 - **`env_dt`** — `siteID, year, <env vars…>` in **natural units**; must cover
   every site × year in `obs_dt`. No manual scaling is needed: FINN
-  z-standardizes the predictors internally when fitting (`scale_env = TRUE`,
+  z-standardizes the predictors internally when fitting (`env_autoscale = TRUE`,
   the default) and reuses the same constants at prediction time.
 - **`init_trees`** — the initial state used to build the starting cohorts:
   `siteID, patchID, year, species, dbh, trees, living`.
@@ -143,7 +143,7 @@ head(env_dt)
 ```
 
 There is **no manual standardization step**. FINN z-scales the predictors
-internally when you fit (`scale_env = TRUE`, the default), stores the per-variable
+internally when you fit (`env_autoscale = TRUE`, the default), stores the per-variable
 mean/sd on the model, and re-applies them at prediction time — so you supply (and
 keep) `env_dt` in natural units throughout. `env_dt` must cover every
 `siteName × year` present in `obs_dt`.

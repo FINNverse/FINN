@@ -139,7 +139,7 @@ finn = function(N_species,
 #' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
 #' @param shuffle (`logical(1)`)\cr Shuffle data or not.
 #' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
-#' @param scale_env (`logical(1)`)\cr If `TRUE`, FINN z-standardizes the
+#' @param env_autoscale (`logical(1)`)\cr If `TRUE`, FINN z-standardizes the
 #'   environmental predictors in `env` internally: the per-variable mean and
 #'   standard deviation are learned from the training `env` and stored on the
 #'   model, then re-applied automatically at every `predict()`/`simulate()` call.
@@ -173,7 +173,7 @@ fit = function(model,
                checkpoints = 100L,
                shuffle = TRUE,
                record_gradients = FALSE,
-               scale_env = TRUE,
+               env_autoscale = TRUE,
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -195,7 +195,7 @@ fit = function(model,
                       checkpoints = checkpoints,
                       shuffle = shuffle,
                       record_gradients = record_gradients,
-                      scale_env = scale_env,
+                      env_autoscale = env_autoscale,
                       ...))
 }
 
@@ -295,7 +295,7 @@ finn_class = nn_module(
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
     self$record_raws = FALSE
-    self$env_scaling = NULL   # set by fit(scale_env = TRUE); reused at predict time
+    self$env_scaling = NULL   # set by fit(env_autoscale = TRUE); reused at predict time
     private$add_process(mortality_process, "mortality")
     private$add_process(growth_process, "growth")
     private$add_process(regeneration_process, "regeneration")
@@ -962,7 +962,7 @@ finn_class = nn_module(
                  checkpoints = 100L,
                  shuffle = TRUE,
                  record_gradients = FALSE,
-                 scale_env = TRUE,
+                 env_autoscale = TRUE,
                  ...) {
 
     old_par = par(no.readonly = TRUE)
@@ -972,7 +972,7 @@ finn_class = nn_module(
     # centre/scale from the (raw) training env now and store them on the model;
     # extract_env_method() re-applies them here and at every predict/simulate
     # call, so raw env can be supplied throughout. See compute_env_scaling().
-    if (isTRUE(scale_env)) self$env_scaling = compute_env_scaling(env)
+    if (isTRUE(env_autoscale)) self$env_scaling = compute_env_scaling(env)
 
     if(is.null(data)) {
       print("No data. Switching into simulation modus...")
@@ -1395,7 +1395,7 @@ finn_class = nn_module(
     },
 
     extract_env_method = function(env) {
-      # if the model was fitted with scale_env = TRUE, re-apply the SAME stored
+      # if the model was fitted with env_autoscale = TRUE, re-apply the SAME stored
       # standardization to the (raw) env before building the design matrices.
       if (!is.null(self$env_scaling)) env = apply_env_scaling(env, self$env_scaling)
       mortality_env = extract_env(self$mortality_formula, env)
