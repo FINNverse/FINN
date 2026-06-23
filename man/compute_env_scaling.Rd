@@ -12,7 +12,9 @@ and the environmental predictor columns.}
 }
 \value{
 A \code{data.frame} with columns \code{variable}, \code{center},
-\code{scale}; or \code{NULL} if there are no numeric predictors.
+\code{scale}; or \code{NULL} if there are no numeric predictors. This is the
+object stored on a fitted model as \code{model$env_scaling} when it is fit
+with \code{env_autoscale = TRUE}.
 }
 \description{
 Computes the centering and scaling constants (mean and standard deviation) of
@@ -22,4 +24,6 @@ data at prediction time. A predictor with (near-)zero standard deviation is
 given \code{scale = 1} (centred only) to avoid division by zero, mirroring
 \code{recipes::step_normalize}.
 }
-\keyword{internal}
+\seealso{
+\code{\link{apply_env_scaling}}
+}
