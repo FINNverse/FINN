@@ -572,7 +572,12 @@ rnbinom_torch = function(pred, theta) {
   # print(theta$min())
   #pred = pred$abs()
   #theta = theta$abs()
-  probs = 1.0 - theta/(theta + pred)
+  # clamp away from exact 0/1, mirroring dnbinom_torch: pred -> 0 (e.g. a
+  # near-zero predicted regeneration rate) otherwise sends probs -> 0 exactly,
+  # so log(probs) -> -Inf and the resulting 0*Inf term in the backward pass
+  # through distr_gamma()$rsample() shows up as NaN gradients.
+  eps = 0.0001
+  probs = torch::torch_clamp(1.0 - theta/(theta + pred) + eps, 0.0, 1.0 - eps)
   total_count = theta
   logits = torch::torch_log(probs) - torch::torch_log1p(-probs)
   return(sample_poisson_gaussian((torch::distr_gamma(total_count, (-logits)$exp() )$rsample() +0.001)$abs() ))

@@ -152,7 +152,7 @@ ALE = function(model, env, init_cohort = NULL, ...) {
         pred = torch_tensor(as.matrix(df_tmp[,..cols_env]), device = model$device, requires_grad = TRUE)
         pred2 = pred
         if(process == "regeneration") {
-          if(!inherits(model$process_mortality, "hybrid")) {
+          if(!inherits(model$process_regeneration, "hybrid")) {
             pred2 = model$nn_regeneration(pred2)
           }
         }

@@ -14,6 +14,8 @@ fit(
   init_cohort = NULL,
   epochs = 20L,
   lr = 0.01,
+  lr_scheduler = "none",
+  lr_scheduler_params = list(),
   loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse",
     regeneration = "nbinom"),
   weights = rep(1, 6),
@@ -28,6 +30,7 @@ fit(
   shuffle = TRUE,
   record_gradients = FALSE,
   env_autoscale = TRUE,
+  clip_norm = 2,
   ...
 )
 }
@@ -49,6 +52,20 @@ fit(
 \item{epochs}{(\code{integer(1)})\cr Number of iteration steps.}
 
 \item{lr}{(\code{numeric(1)})\cr Learning rate of the optimizer.}
+
+\item{lr_scheduler}{(\verb{character(1)|function})\cr Learning-rate schedule applied
+on top of the constant \code{lr} above. \code{"none"} (default) keeps \code{lr} constant,
+reproducing the previous behavior exactly. Built-ins: \code{"step"} (decay by
+\code{gamma} every \code{step_size} epochs), \code{"exponential"} (multiply by \code{gamma} every
+epoch), \code{"cosine"} (cosine-anneal to \code{eta_min} over \code{T_max} epochs),
+\code{"plateau"} (reduce by \code{factor} after \code{patience} epochs without improvement
+in the total loss). Advanced: pass a \verb{function(optimizer)} returning a
+\code{torch} lr scheduler object (must implement \verb{$step()}).}
+
+\item{lr_scheduler_params}{(\code{list()})\cr Tuning overrides for the scheduler
+chosen via \code{lr_scheduler}, e.g. \code{list(step_size = 50, gamma = 0.5)} for
+\code{"step"}, \code{list(T_max = 200)} for \code{"cosine"}, \code{list(factor = 0.5, patience = 20)} for \code{"plateau"}. Unset entries fall back to defaults scaled off
+\code{epochs}/\code{lr}.}
 
 \item{loss}{(\code{character(6)})\cr Named vector of the different losses. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, and \code{regeneration}. Supported losses are \code{mse}, \code{poisson}, \code{nbinom}, and \code{gaussian}.}
 
@@ -84,6 +101,14 @@ Recommended (and the default) for numerical stability when predictors are on
 different scales. Set \code{FALSE} to use \code{env} exactly as supplied (e.g. if you
 have already standardized it yourself). The learned constants are available
 as \code{model$env_scaling}.}
+
+\item{clip_norm}{(\code{numeric(1)|list()})\cr Gradient-norm budget passed to
+\code{torch::nn_utils_clip_grad_norm_()}, applied separately to each of three
+parameter groups (mechanistic per-species rates, env-effect networks,
+loss-distribution nuisance parameters) rather than once globally across all
+parameters. A single number (default \code{2.0}) applies the same budget to
+every group; a named list/vector keyed by \code{"mechanistic"}/\code{"nn"}/\code{"loss"}
+overrides individual groups, e.g. \code{clip_norm = list(loss = 5, nn = 1)}.}
 
 \item{...}{\cr Additional arguments passed to \code{optimizer}.}
 }

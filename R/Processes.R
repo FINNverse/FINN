@@ -155,7 +155,7 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
       quants = torch::torch_linspace(0, 1, steps = n_quantiles+1, dtype = dbh$dtype, device = device)
       # Quantiles and their indices
       cohortHeights_quant = torch::torch_quantile(cohortHeights, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
-      indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L), cohortHeights$squeeze(4), right = TRUE) + 1L
+      indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L)$contiguous(), cohortHeights$squeeze(4), right = TRUE) + 1L
       # Calculation of comp
       cohortHeights_quant = cohortHeights_quant$unsqueeze(4)
       h_quant = cohortHeights_quant
@@ -344,7 +344,10 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = F) {
     self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))
   }
 
- r = self$nn_regeneration(light = light, species = species, env = pred)$exp()
+  # clamp the pre-exp logit to avoid float overflow (-> Inf -> NaN gradients)
+  # if the net's raw output drifts up during training; exp(10) ~ 22000/ha is
+  # already far beyond any plausible recruitment rate
+  r = self$nn_regeneration(light = light, species = species, env = pred)$clamp(max = 10)$exp()
 }
 
 

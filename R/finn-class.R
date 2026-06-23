@@ -127,6 +127,19 @@ finn = function(N_species,
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat]
 #' @param epochs (`integer(1)`)\cr Number of iteration steps.
 #' @param lr (`numeric(1)`)\cr Learning rate of the optimizer.
+#' @param lr_scheduler (`character(1)|function`)\cr Learning-rate schedule applied
+#'   on top of the constant `lr` above. `"none"` (default) keeps `lr` constant,
+#'   reproducing the previous behavior exactly. Built-ins: `"step"` (decay by
+#'   `gamma` every `step_size` epochs), `"exponential"` (multiply by `gamma` every
+#'   epoch), `"cosine"` (cosine-anneal to `eta_min` over `T_max` epochs),
+#'   `"plateau"` (reduce by `factor` after `patience` epochs without improvement
+#'   in the total loss). Advanced: pass a `function(optimizer)` returning a
+#'   `torch` lr scheduler object (must implement `$step()`).
+#' @param lr_scheduler_params (`list()`)\cr Tuning overrides for the scheduler
+#'   chosen via `lr_scheduler`, e.g. `list(step_size = 50, gamma = 0.5)` for
+#'   `"step"`, `list(T_max = 200)` for `"cosine"`, `list(factor = 0.5, patience =
+#'   20)` for `"plateau"`. Unset entries fall back to defaults scaled off
+#'   `epochs`/`lr`.
 #' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, and `gaussian`.
 #' @param weights (`numeric(6)`)\cr Weights of the different losses.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
@@ -149,6 +162,13 @@ finn = function(N_species,
 #'   different scales. Set `FALSE` to use `env` exactly as supplied (e.g. if you
 #'   have already standardized it yourself). The learned constants are available
 #'   as `model$env_scaling`.
+#' @param clip_norm (`numeric(1)|list()`)\cr Gradient-norm budget passed to
+#'   `torch::nn_utils_clip_grad_norm_()`, applied separately to each of three
+#'   parameter groups (mechanistic per-species rates, env-effect networks,
+#'   loss-distribution nuisance parameters) rather than once globally across all
+#'   parameters. A single number (default `2.0`) applies the same budget to
+#'   every group; a named list/vector keyed by `"mechanistic"`/`"nn"`/`"loss"`
+#'   overrides individual groups, e.g. `clip_norm = list(loss = 5, nn = 1)`.
 #' @param ... \cr Additional arguments passed to `optimizer`.
 #'
 #' @export
@@ -161,6 +181,8 @@ fit = function(model,
                init_cohort = NULL,
                epochs = 20L,
                lr = 0.01,
+               lr_scheduler = "none",
+               lr_scheduler_params = list(),
                loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom"), #
                weights = rep(1, 6),
                optimizer = optim_ignite_adam,
@@ -174,6 +196,7 @@ fit = function(model,
                shuffle = TRUE,
                record_gradients = FALSE,
                env_autoscale = TRUE,
+               clip_norm = 2.0,
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -183,6 +206,8 @@ fit = function(model,
                       init_cohort = init_cohort,
                       epochs = epochs,
                       lr = lr,
+                      lr_scheduler = lr_scheduler,
+                      lr_scheduler_params = lr_scheduler_params,
                       loss = loss,
                       weights = weights,
                       optimizer = optimizer,
@@ -196,6 +221,7 @@ fit = function(model,
                       shuffle = shuffle,
                       record_gradients = record_gradients,
                       env_autoscale = env_autoscale,
+                      clip_norm = clip_norm,
                       ...))
 }
 
@@ -375,6 +401,11 @@ finn_class = nn_module(
     # if y (response) is null -> simulation mode, gradients are not required (not neccessary to set them to zero but it is cleaner)
     if(is.null(y)) {
       lapply(self$parameters, function(p) p$requires_grad_(FALSE) )
+      # make sure parameters are always re-enabled for gradient tracking, even if
+      # an error is thrown later in this function (e.g. the "Light values > 1" guard
+      # below) - otherwise the model is left permanently frozen and a later fit()
+      # call will silently fail to learn.
+      on.exit(lapply(self$parameters, function(p) p$requires_grad_(TRUE)), add = TRUE)
     }
 
     # send data to correct devices (and dtypes) TODO: unncessary?
@@ -391,6 +422,12 @@ finn_class = nn_module(
     # init Result tensors
     Result = lapply(1:7,function(tmp) torch::torch_zeros(list(sites, time, self$N_species), device=self$device))
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
+
+    # running aggregate of the per-update_step loss, used so that the loss reported
+    # back to fit() reflects all observation points hit during this forward() call,
+    # not just whichever one happened to be evaluated last in the time loop.
+    loss_total = torch::torch_zeros(7L, device = self$device)
+    loss_count = 0L
 
     # if debug modus, create empty lists
     if(debug) {
@@ -725,7 +762,10 @@ finn_class = nn_module(
       loss = torch_zeros(7L, device = self$device)
 
       ##### Rework #######
-      if(i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)) {
+      # NOTE: truncation of the recurrent cohort state (below) is intentionally
+      # decoupled from `i %in% year_sequence` - see comment further down.
+      update_boundary = i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)
+      if(update_boundary) {
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
           # browser()
@@ -757,8 +797,22 @@ finn_class = nn_module(
             self$obs_rec = y[,tmp_index,,6] |> as.matrix()
             self$pred_rec = Result[[7]][,(i-period+1):(i),]$sum(2) |> as.matrix()
             self$loss_raw = as.numeric(loss)
-            loss$sum()$backward()
-            for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+            # ---- Check loss before backward ----
+            # (this branch used to backward() unconditionally, unlike the per-step
+            # branch below; a non-finite period-averaged loss would otherwise inject
+            # NaN gradients into every parameter with no diagnostic at all)
+            if (!as.logical(loss$isfinite()$all()$item())) {
+              cat("\n>>> Non-finite (period-averaged) loss detected at time step", i, "\n")
+              for (k in 1:length(loss)) {
+                cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
+                    " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
+              }
+            } else {
+              loss$sum()$backward()
+              for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+              loss_total = loss_total + loss$detach()
+              loss_count = loss_count + 1L
+            }
           } else {
 
             # loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
@@ -790,19 +844,29 @@ finn_class = nn_module(
             } else {
               loss$sum()$backward()
               for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+              loss_total = loss_total + loss$detach()
+              loss_count = loss_count + 1L
             }
           }
           # Also check each component tensor you pass into distribution losses
 
-
-
-          dbh=dbh$detach()
-          trees=trees$detach()
-          species=species$detach()
-          cohort_ids=cohort_ids$detach()
-
         }
-        # for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+
+        # Truncate the recurrent cohort state every `update_step` years, independent of
+        # whether this particular year has an observation to score a loss against. This
+        # detach used to live inside the `i %in% year_sequence` block above, which meant
+        # that for irregularly/sparsely observed data (e.g. multi-year FIA remeasurement
+        # intervals that rarely line up with update_step) the state was effectively never
+        # detached - i.e. full, un-truncated BPTT over the whole simulated horizon instead
+        # of the truncated window `update_step` is supposed to bound. Detaching here does
+        # not affect the gradient of losses already computed above: `Result` has already
+        # recorded its dependency on the (still-attached) state at step i by this point;
+        # this detach only prevents *future* steps from continuing to backprop through the
+        # state as it existed at/before step i.
+        dbh=dbh$detach()
+        trees=trees$detach()
+        species=species$detach()
+        cohort_ids=cohort_ids$detach()
       }
 
       if(!is.null(y)) {
@@ -819,6 +883,12 @@ finn_class = nn_module(
 
     # browser()
 
+    # report the mean loss over every update_step boundary that was actually scored
+    # during this forward() call, rather than whichever timestep happened to be last
+    # in the loop - the latter is an arbitrary, often misleading slice of one call's
+    # worth of observations and made training-progress plots hard to interpret.
+    loss_out = if (loss_count > 0L) loss_total / loss_count else loss_total
+
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
     if(debug){
       Result_out = list(
@@ -831,18 +901,16 @@ finn_class = nn_module(
             # cohortID = lapply(Raw_cohort_ids, function(x) torch::as_array(x))
           )
         ),
-        loss = loss)
+        loss = loss_out)
     }else if(!debug){
       Result_out = list(
         Predictions = list(
           Site = lapply(Result, function(x) torch::as_array(x))),
-        loss = loss)
+        loss = loss_out)
     }
 
-
-    if(is.null(y)) {
-      lapply(self$parameters, function(p) p$requires_grad_(TRUE) )
-    }
+    # (parameters' requires_grad is restored via on.exit() above, even if this
+    # function exits early due to an error)
 
     return(Result_out)
   },
@@ -949,6 +1017,18 @@ finn_class = nn_module(
                  init_cohort = NULL,
                  epochs = 20L,
                  lr = 0.01,
+                 # learning-rate schedule applied on top of the constant `lr` above.
+                 # "none" (default) reproduces the previous constant-lr behavior exactly.
+                 # Built-ins: "step" (lr_step), "exponential" (lr_multiplicative),
+                 # "cosine" (lr_cosine_annealing), "plateau" (lr_reduce_on_plateau, driven
+                 # by the epoch's total loss). Advanced: pass a function(optimizer) that
+                 # returns a torch lr_scheduler object (must implement $step()).
+                 lr_scheduler = "none",
+                 # tuning overrides for the scheduler chosen above, e.g.
+                 # list(step_size = 50, gamma = 0.5) for "step", list(T_max = 200) for
+                 # "cosine", list(factor = 0.5, patience = 20) for "plateau". Unset
+                 # entries fall back to defaults scaled off `epochs`/`lr`.
+                 lr_scheduler_params = list(),
                  # # 1 -> dbh, 2 -> ba, 3 -> trees, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
                  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom"), #
                  weights = rep(1, 6),
@@ -963,6 +1043,12 @@ finn_class = nn_module(
                  shuffle = TRUE,
                  record_gradients = FALSE,
                  env_autoscale = TRUE,
+                 # gradient-norm budget passed to nn_utils_clip_grad_norm_(), applied
+                 # separately per parameter group (see grouping below) rather than once
+                 # globally. A single number applies the same budget to every group;
+                 # a named list/vector (any of "mechanistic", "nn", "loss") overrides
+                 # individual groups, e.g. clip_norm = list(loss = 5, nn = 1).
+                 clip_norm = 2.0,
                  ...) {
 
     old_par = par(no.readonly = TRUE)
@@ -1063,7 +1149,27 @@ finn_class = nn_module(
     self$history = list()
     self$gradients = list()
 
-    if(is.null(self$optimizer)) self$optimizer = optimizer(self$parameters, lr = lr, ...)
+    # Rebuild the optimizer if this is the first fit() call, or if `lr` changed since
+    # the optimizer was last (re)built. Previously the optimizer (and its lr) was only
+    # ever constructed once per model object, so a second fit() call with a different
+    # `lr` silently kept training at the old rate. Calling fit() again with the *same*
+    # lr still reuses the existing optimizer instance (preserving e.g. Adam's momentum
+    # state) so that resuming training for more epochs behaves as before.
+    if(is.null(self$optimizer) || !isTRUE(all.equal(self$optimizer_lr, lr))) {
+      self$optimizer = optimizer(self$parameters, lr = lr, ...)
+      self$optimizer_lr = lr
+    }
+
+    # ---- Learning-rate scheduler (built fresh for this fit() call) ----
+    # The scheduler tracks its own internal epoch counter starting at 0, so a
+    # second fit() call restarts the chosen schedule rather than continuing a
+    # previous one (consistent with epochs/checkpoints also being per-call).
+    # lr_scheduler = "none" (the default) skips this entirely and reproduces
+    # the constant-lr behavior of every previous version of fit().
+    lr_scheduler_obj = NULL
+    if (!(is.character(lr_scheduler) && length(lr_scheduler) == 1 && identical(lr_scheduler, "none"))) {
+      lr_scheduler_obj = private$build_lr_scheduler(self$optimizer, lr_scheduler, lr, epochs, lr_scheduler_params)
+    }
 
     cli::cli_progress_bar(format = "Epoch: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} DBH: {dbh_l} BA: {ba_l} Trees: {trees_l} g: {g_l} m: {m_l} r: {r_l}", total = epochs, clear = FALSE)
     if(is.null(year_sequence)) year_sequence = 1:envs[[1]]$shape[2]
@@ -1150,12 +1256,30 @@ finn_class = nn_module(
         bad <- check_grads(self$parameters)
 
         if (length(bad) > 0) {
-          warning("Non-finite gradients detected before clipping in epoch ", epoch, ".", call. = FALSE)
+          # Previously we only warned here and then fell through into clip_grad_norm_()
+          # and optimizer$step() regardless. A NaN gradient makes the total grad norm
+          # (and hence clip_coef) NaN too, which is exactly what produced the follow-on
+          # crash "Error in if (clip_coef$item() < 1) : missing value where TRUE/FALSE
+          # needed". Skip this batch's update entirely instead: zero the corrupted
+          # gradients and move on, rather than applying (or crashing on) a bad step.
+          warning("Non-finite gradients detected in epoch ", epoch,
+                  " - skipping optimizer step for this batch. Affected parameters: ",
+                  paste(names(bad), collapse = ", "), call. = FALSE)
+          self$optimizer$zero_grad()
+        } else {
+          # ---- Per-parameter-group gradient clipping ----
+          # A single global clip_grad_norm_() over ALL parameters mixes three
+          # groups with very different natural gradient scales: the mechanistic
+          # per-species/per-process rate parameters, the env-effect networks
+          # (nn_growth/nn_mortality/nn_regeneration - a small NN even when not
+          # "hybrid"), and the loss-distribution nuisance parameters
+          # (par_loss_*_scale / par_loss_*_theta). Clipping them together means
+          # whichever group happens to have the largest norm dominates the shared
+          # budget and can over-clip the others. Clip each group against its own
+          # budget (private$clip_grad_norm_grouped()) instead.
+          private$clip_grad_norm_grouped(self$parameters, clip_norm)
+          self$optimizer$step()
         }
-
-        .null = torch::nn_utils_clip_grad_norm_(self$parameters, 2.0)
-
-        self$optimizer$step()
 
         batch_loss[counter, ] =  as.numeric(loss$data()$cpu())
         counter <<- counter + 1
@@ -1183,7 +1307,20 @@ finn_class = nn_module(
       #cat("Epoch: ", epoch, "Loss: ", bl, "\n")
       self$history[[epoch]] = colMeans(batch_loss, na.rm = TRUE)
 
-
+      if (!is.null(lr_scheduler_obj)) {
+        # "plateau" (torch::lr_reduce_on_plateau) is the one built-in that needs
+        # a monitored metric instead of just an epoch count; drive it off this
+        # epoch's total (summed) loss across all six response channels. Checked
+        # via class rather than the raw `lr_scheduler` argument so that partial
+        # string matches (match.arg() above) still resolve correctly. Every
+        # other scheduler - including a user-supplied custom one - is stepped
+        # with no argument.
+        if (inherits(lr_scheduler_obj, "lr_reduce_on_plateau")) {
+          lr_scheduler_obj$step(sum(bl, na.rm = TRUE))
+        } else {
+          lr_scheduler_obj$step()
+        }
+      }
 
       if(plot_progress) {
         if(epoch == 1) max_losses = self$history[[1]]*1.1
@@ -1238,6 +1375,91 @@ finn_class = nn_module(
   },
 
   private = list(
+    # Splits a (named) list of parameters into three groups by name prefix:
+    #   - "loss":        par_loss_*_scale / par_loss_*_theta (loss-distribution
+    #                    nuisance parameters; never touched by the forward
+    #                    simulation itself)
+    #   - "nn":          nn_growth / nn_mortality / nn_regeneration (the
+    #                    env-effect network for each process - a small NN even
+    #                    when the process is not a "hybrid" one)
+    #   - "mechanistic": everything else (par_growth*, par_mortality*,
+    #                    par_regeneration*, par_competition*, par_theta_recruits*,
+    #                    ...) - the per-species/per-process mechanistic rates.
+    # Name-based so this degrades gracefully for models that don't have all
+    # three kinds of parameters (e.g. a purely mechanistic, non-hybrid model
+    # ends up with everything in "mechanistic" and behaves like the old single
+    # global clip).
+    split_parameter_groups = function(params) {
+      nm = names(params)
+      is_loss = grepl("^par_loss_", nm)
+      is_nn   = grepl("^nn_", nm)
+      list(
+        mechanistic = params[!is_loss & !is_nn],
+        nn          = params[is_nn],
+        loss        = params[is_loss]
+      )
+    },
+    # Clips each parameter group (see split_parameter_groups()) to its own
+    # gradient-norm budget instead of clipping the global norm across every
+    # parameter at once - see the call site in fit() for why this matters.
+    # `clip_norm` is either a single number (applied to every group) or a
+    # named list/vector keyed by "mechanistic"/"nn"/"loss" (any group not
+    # named falls back to 2.0).
+    clip_grad_norm_grouped = function(params, clip_norm) {
+      groups = private$split_parameter_groups(params)
+      get_budget = function(group_name) {
+        if (is.list(clip_norm) || !is.null(names(clip_norm))) {
+          # coerce a named numeric vector to a list first: `[[` on an atomic
+          # vector errors for a missing name, whereas on a list it returns
+          # NULL, which is what the fallback below expects.
+          cn = if (is.list(clip_norm)) clip_norm else as.list(clip_norm)
+          val = cn[[group_name]]
+          if (!is.null(val) && !is.na(val)) return(val)
+          return(2.0)
+        }
+        return(clip_norm[1])
+      }
+      for (group_name in names(groups)) {
+        g = groups[[group_name]]
+        if (length(g) > 0) torch::nn_utils_clip_grad_norm_(g, get_budget(group_name))
+      }
+      invisible(NULL)
+    },
+    # Builds the lr_scheduler object requested via fit(lr_scheduler = ...).
+    # `type` is either one of the built-in names below, or a
+    # function(optimizer) returning a custom torch lr_scheduler (must
+    # implement $step()). `params` overrides individual defaults, which are
+    # otherwise scaled off `epochs`/`lr` so they're reasonable without tuning.
+    build_lr_scheduler = function(optimizer, type, lr, epochs, params) {
+      if (is.function(type)) return(type(optimizer))
+
+      type = match.arg(type, c("step", "exponential", "cosine", "plateau"))
+
+      if (type == "step") {
+        defaults = list(step_size = max(1L, floor(epochs / 4)), gamma = 0.5)
+        a = utils::modifyList(defaults, params)
+        return(torch::lr_step(optimizer, step_size = a$step_size, gamma = a$gamma))
+
+      } else if (type == "exponential") {
+        # lr_multiplicative() multiplies the *current* lr by the factor on every
+        # step(), so a constant factor < 1 gives the usual lr_t = lr_0 * gamma^t
+        # exponential decay.
+        defaults = list(gamma = 0.97)
+        a = utils::modifyList(defaults, params)
+        local_gamma = a$gamma
+        return(torch::lr_multiplicative(optimizer, lr_lambda = function(epoch) local_gamma))
+
+      } else if (type == "cosine") {
+        defaults = list(T_max = epochs, eta_min = lr * 0.01)
+        a = utils::modifyList(defaults, params)
+        return(torch::lr_cosine_annealing(optimizer, T_max = a$T_max, eta_min = a$eta_min))
+
+      } else if (type == "plateau") {
+        defaults = list(factor = 0.5, patience = max(5L, floor(epochs / 20)), mode = "min")
+        a = utils::modifyList(defaults, params)
+        return(torch::lr_reduce_on_plateau(optimizer, mode = a$mode, factor = a$factor, patience = a$patience))
+      }
+    },
     create_loss_functions = function(loss, weights) {
       for(l in 1:6) {
           tmp_loss = loss[l]
@@ -1347,7 +1569,7 @@ finn_class = nn_module(
                nn = hybrid_DNN(num_species = self$N_species,
                                num_env_vars = inputs+2,
                                emb_dim=obj$emb_dim,
-                               dropout=0.1,
+                               dropout=obj$dropout,
                                hidden = obj$hidden)
             }
           }
@@ -1367,7 +1589,7 @@ finn_class = nn_module(
               nn = hybrid_DNN(num_species = self$N_species,
                               num_env_vars = inputs,
                               emb_dim=obj$emb_dim,
-                              dropout=0.1,
+                              dropout=obj$dropout,
                               hidden = obj$hidden)
             }
 
@@ -1379,7 +1601,7 @@ finn_class = nn_module(
               nn = hybrid_DNN(num_species = self$N_species,
                               num_env_vars = inputs,
                               emb_dim=obj$emb_dim,
-                              dropout=0.1,
+                              dropout=obj$dropout,
                               hidden = obj$hidden,
                               regeneration = TRUE)
 
