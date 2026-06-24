@@ -5,7 +5,7 @@ template:
 
 navbar:
   structure:
-    left:  [intro, reference, articles, news]
+    left:  [articles, reference, news]
     right: [search, github]
   components:
     articles:
@@ -19,6 +19,9 @@ navbar:
         href: articles/data-preparation.html
       - text: Fitting FINN to FIA data
         href: articles/fit-to-fia.html
+      - text: '---'
+      - text: 'Recovering a forest process with Hybrid-FINN'
+        href: articles/hybrid-recovery.html
 
 articles:
 - title: Get started
@@ -28,6 +31,9 @@ articles:
   - succession-demo
   - data-preparation
   - fit-to-fia
+- title: Advanced
+  contents:
+  - hybrid-recovery
 
 reference:
 - title: Model setup

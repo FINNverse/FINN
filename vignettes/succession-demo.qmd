@@ -144,8 +144,13 @@ env_dt$env1 <- 0          # constant -> succession is driven by the traits
 
 ## Simulate succession
 
+Building and simulating the model needs a torch backend, so the call below
+is shown but not run when the page is knit; its result is precomputed
+(`dev/precompute_vignettes.R`) and loaded from a small cache.
+
 ```{r}
 #| label: simulate
+#| eval: false
 m <- finn(
   N_species            = Nsp,
   competition_process  = createProcess(~0,      FINN::competition),
@@ -162,6 +167,14 @@ p_dat <- sim$long$site[, .(value = mean(value)), by = .(year, species, variable)
 p_dat[variable %in% c("ba", "trees"), value := value / patch_size]
 
 sp_labs <- c("1 pioneer", "2 early-mid", "3 mid-late", "4 climax")
+```
+
+```{r}
+#| label: simulate-cache
+#| include: false
+.vig    <- readRDS(system.file("extdata", "vig_succession.rds", package = "FINN"))
+p_dat   <- .vig$p_dat
+sp_labs <- .vig$sp_labs
 ```
 
 ## The successional pattern

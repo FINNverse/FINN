@@ -24,24 +24,40 @@ ALE_ce = function(X, ce) {
 #' @param model (`finn_class`)\cr Model object of class `finn_class`.
 #' @param env (`data.table|data.frame`)\cr Environmental covariates for which the ALE should be calculated.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort of class `CohortMat`, if `NULL` then simulated from bare ground.
+#' @param env_autoscale (`logical(1)`)\cr If `TRUE` (default) `env` is assumed to be on the
+#'   raw (unscaled) scale and the model's stored `env_scaling` is applied internally before the
+#'   effects are computed, mirroring how the model was fitted (see [fit()]'s `env_autoscale`).
+#'   Set `FALSE` if `env` is already on the model scale, or for a model fitted without autoscaling.
 #' @param ... \cr Not supported yet.
 #'
 #' @export
-ALE = function(model, env, init_cohort = NULL, ...) {
+ALE = function(model, env, init_cohort = NULL, env_autoscale = TRUE, ...) {
 
   env_dt = as.data.table(env)
+  # The internal simulation applies the model's own `env_scaling` (via its
+  # extract-env chokepoint), so it needs env on the *raw* scale; the prediction /
+  # gradient path below feeds env straight into the networks, so it needs env on
+  # the *model* scale. With `env_autoscale = TRUE` we therefore keep `env_dt` raw
+  # for the simulation and build a scaled `env_pred` for the predictions. With
+  # `env_autoscale = FALSE` env is already on the model scale, so we use it as-is
+  # everywhere and neutralise the model's internal re-scaling during simulation.
+  scaling  = model$env_scaling
+  env_pred = if (isTRUE(env_autoscale) && !is.null(scaling)) apply_env_scaling(env_dt, scaling) else env_dt
+
   model$raw_g = NULL
   model$raw_m = NULL
   model$raw_r = NULL
 
   model$record_raws = TRUE
+  if (!isTRUE(env_autoscale)) model$env_scaling = NULL
   sim = model$simulate(env_dt, init_cohort = init_cohort)
+  model$env_scaling = scaling
   model$record_raws = FALSE
 
   out = list()
 
   years = env_dt$year |> unique() |> length()
-  sitesTotal = env_dt$year |> unique() |> length()
+  sitesTotal = env_dt$siteID |> unique() |> length()
   patches = dim(model$raw_g[[1]])[2]
   patch = 1
   time = 1
@@ -57,7 +73,7 @@ ALE = function(model, env, init_cohort = NULL, ...) {
         for(patch in 1:patches) {
 
           #### env
-          env_tmp = as.matrix(model.matrix(model$process_growth$formula, data = env_dt[siteID==site & year == time][1,-(1:2),drop=F]))
+          env_tmp = as.matrix(model.matrix(model$process_growth$formula, data = env_pred[siteID==site & year == time][1,-(1:2),drop=F]))
           cols_env = colnames(env_tmp)
           tmp =
             if(process == "growth") {

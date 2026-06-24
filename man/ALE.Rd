@@ -4,7 +4,7 @@
 \alias{ALE}
 \title{Accumulated local effect plots}
 \usage{
-ALE(model, env, init_cohort = NULL, ...)
+ALE(model, env, init_cohort = NULL, env_autoscale = TRUE, ...)
 }
 \arguments{
 \item{model}{(\code{finn_class})\cr Model object of class \code{finn_class}.}
@@ -12,6 +12,11 @@ ALE(model, env, init_cohort = NULL, ...)
 \item{env}{(\code{data.table|data.frame})\cr Environmental covariates for which the ALE should be calculated.}
 
 \item{init_cohort}{(\code{CohortMat})\cr Initial cohort of class \code{CohortMat}, if \code{NULL} then simulated from bare ground.}
+
+\item{env_autoscale}{(\code{logical(1)})\cr If \code{TRUE} (default) \code{env} is assumed to be on the
+raw (unscaled) scale and the model's stored \code{env_scaling} is applied internally before the
+effects are computed, mirroring how the model was fitted (see \code{\link[=fit]{fit()}}'s \code{env_autoscale}).
+Set \code{FALSE} if \code{env} is already on the model scale, or for a model fitted without autoscaling.}
 
 \item{...}{\cr Not supported yet.}
 }

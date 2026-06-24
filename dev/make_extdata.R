@@ -1,33 +1,39 @@
-# dev/make_extdata.R  (NOT shipped; dev/ is .Rbuildignore'd)
-# Regenerates the tiny bundled datasets in inst/extdata/ from the full Oregon
-# FIA subset in vignettes/fit-fia-data/. Two products:
+# dev/make_extdata.R  (STEP 1 of the data pipeline; NOT shipped — dev/ is .Rbuildignore'd)
 #
-#   Vignette 2 (data-preparation): a RAW tree list + matching env, with
-#   siteName/patchName/OrigYear keys so makeObsData -> resolveSiteIDs ->
+# Provenance of the bundled FIA data
+# ----------------------------------
+# Upstream (the FINN-fia analysis repo, not part of this package):
+#   scripts/03_attach_environment.R   attaches bioclim climate to the FIA plots
+#   scripts/07_prepare_finn_inputs.R  exports the source CSVs into data-raw/
+# This script (make_extdata.R) then subsamples those into the tiny datasets in
+# inst/extdata/. Downstream: dev/train_fia_model.R turns them into the .pt
+# pre-fits, and dev/precompute_vignettes.R into the vig_*.rds vignette caches.
+#
+# Source (data-raw/, ~18 MB, build-ignored) -> inst/extdata/ products:
+#   Vignette "data-preparation": a RAW tree list + matching env with
+#   siteName/patchName/OrigYear keys, so makeObsData -> resolveSiteIDs ->
 #   makeInitCohorts run live on the sample.
-#     - example_tree_dt.csv
-#     - example_env_dt.csv
-#
-#   Vignette 3 (fit-to-fia): the already ID-resolved tables, subsampled to a
-#   few dozen sites and re-indexed (siteID 1..N, species 1..K) so they fit/
-#   simulate as-is.
-#     - fia_obs_dt.csv, fia_env_dt.csv, fia_env_scales_dt.csv,
-#       fia_init_trees.csv, fia_species_dt.csv
+#     - example_tree_dt.csv, example_env_dt.csv
+#   Vignette "fit-to-fia": ID-resolved tables, subsampled to ~40 sites and
+#   re-indexed (siteID 1..N, species 1..K) so they fit/simulate as-is.
+#     - fia_obs_dt.csv, fia_env_dt.csv (RAW climate), fia_init_trees.csv,
+#       fia_species_dt.csv
 #
 # Run from the package root:  Rscript dev/make_extdata.R
 suppressMessages({library(data.table); library(FINN)})
 set.seed(42)
 
-src <- "vignettes/fit-fia-data"
+src <- "data-raw"          # source CSVs from FINN-fia scripts/07_prepare_finn_inputs.R
 out <- "inst/extdata"
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 
+# Only the five source files actually used are read here. (data-raw/ also holds
+# env_dt.csv (z-scaled) + env_scales_dt.csv — now unused because the model stores
+# its own standardization via env_autoscale = TRUE — and full_obs_dt.csv, unused.)
 full_tree <- fread(file.path(src, "full_tree_dt.csv"))
-obs       <- fread(file.path(src, "obs_dt.csv"))         # site-level, years 1..2
-env       <- fread(file.path(src, "env_dt.csv"))         # z-scaled, years 0..2
-env_scl   <- fread(file.path(src, "env_scales_dt.csv"))
-env_raw   <- fread(file.path(src, "env_unscaled_dt.csv"))
-init      <- fread(file.path(src, "init_trees.csv"))     # year 0
+obs       <- fread(file.path(src, "obs_dt.csv"))             # site-level, years 1..2
+env_raw   <- fread(file.path(src, "env_unscaled_dt.csv"))    # RAW climate, years 0..2
+init      <- fread(file.path(src, "init_trees.csv"))         # year 0
 species_lkp <- fread(file.path(src, "species_dt.csv"))
 
 env_vars <- c("temp", "tempmax", "tempmin", "prec", "precseas", "precwarmq")

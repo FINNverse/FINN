@@ -1,9 +1,11 @@
-# dev/train_fia_model.R  (NOT shipped; dev/ is .Rbuildignore'd)
-# Trains the two pre-fits shipped with the fit-to-fia vignette and saves them to
-# inst/extdata/:
+# dev/train_fia_model.R  (STEP 2 of the data pipeline; NOT shipped — dev/ is .Rbuildignore'd)
+# Reads the bundled CSVs made by dev/make_extdata.R (STEP 1) and trains the two
+# pre-fits shipped with the fit-to-fia vignette, saving them to inst/extdata/:
 #   - fia_process_finn.pt : Process-FINN (mechanistic growth)
 #   - fia_hybrid_finn.pt  : Hybrid-FINN  (growth replaced by a neural network)
-# Run once from the package root:  Rscript dev/train_fia_model.R [epochs]
+# Downstream: dev/precompute_vignettes.R (STEP 3) caches the vignette results.
+# See data-raw/README.md for the full chain. Run from the package root (needs
+# a torch backend):  Rscript dev/train_fia_model.R [epochs]
 suppressMessages({library(FINN); library(torch); library(data.table)})
 
 epochs <- as.integer(commandArgs(trailingOnly = TRUE)[1])

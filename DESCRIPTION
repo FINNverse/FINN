@@ -41,8 +41,7 @@ Imports:
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown,
-    patchwork
+    rmarkdown
 RoxygenNote: 7.3.3
 Roxygen: list(old_usage = FALSE, markdown = TRUE)
 VignetteBuilder: quarto

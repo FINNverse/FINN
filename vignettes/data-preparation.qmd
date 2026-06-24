@@ -57,6 +57,8 @@ FINN tables from those two.
 ```{r}
 #| label: load-example
 # A tiny bundled raw example: a few Oregon FIA sites, 4 patches each, 3 inventories.
+# example_tree_dt.csv and example_env_dt.csv (the climate, loaded later) are both
+# built by dev/make_extdata.R from the data-raw/ source; see data-raw/README.md.
 tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
 str(tree_dt)
 ```
