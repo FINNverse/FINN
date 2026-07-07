@@ -16,8 +16,10 @@ torch.Tensor The BA_stemsal area of the tree.
 This function calculates the BA_stemsal area of a tree given the diameter at breast height (dbh).
 }
 \examples{
+\dontrun{
 dbh = torch::torch_tensor(50)
 BA_stemsal_area = BA_stem(dbh)
 print(BA_stemsal_area)
+}
 
 }

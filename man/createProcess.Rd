@@ -139,7 +139,9 @@ process-parameter scale) within which the species-specific process parameters
 are constrained during optimization.
 }
 \examples{
+\dontrun{
 growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
+}
 
 }
 \references{

@@ -28,6 +28,12 @@ mortality(
 \item{pred}{predictions}
 
 \item{light}{available light}
+
+\item{base_steepness}{numeric Steepness of the shade-response sigmoid. Defaults to 5.}
+
+\item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
+
+\item{growth}{torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.}
 }
 \description{
 Mortality

@@ -103,7 +103,9 @@
 #' @seealso [FINN::createHybrid()], [FINN::finn()]
 #'
 #' @examples
+#' \dontrun{
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
+#' }
 #'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE) {
@@ -235,7 +237,9 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @seealso [FINN::createProcess()], [FINN::finn()]
 #'
 #' @examples
+#' \dontrun{
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
+#' }
 #'
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
@@ -279,9 +283,10 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
 #'
 #' @import data.table
 #' @examples
+#' \dontrun{
 #' env_array <- extract_env(growth_process, env_data)
+#' }
 extract_env = function(formula, env) {
-  require(data.table)
   process_env = stats::model.matrix(formula, env[,-c("siteID", "year")])
   env_names = colnames(process_env)
   env_array = climateDF2array(climate_dt =  cbind(env[,c("siteID", "year")],process_env), env_vars = env_names)

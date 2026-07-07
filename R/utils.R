@@ -127,6 +127,8 @@ index_species = function(pred, species) {
 #' @param labels labels
 #' @param samples samples
 #' @param Results Results
+#' @param drop_rows logical Drop empty rows from the aggregated output. Defaults to TRUE.
+#' @param sp_max integer (Optional) Maximum species index to aggregate over. Defaults to NULL.
 #'
 #' @export
 aggregate_results_old = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
@@ -225,8 +227,8 @@ groupby_mean = function(values, labels) {
 }
 
 
-#' Padding tensors to remove dead cohorts
-
+#' Padding tensors to remove dead cohorts (internal)
+#' @noRd
 pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
   # KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), split_size = org_dim[1]*org_dim[2], dim = 1) TODO does not work...bug?!
   KK = value$flatten(start_dim = 1, end_dim = 2)$split(1, 1)
@@ -383,6 +385,11 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 }
 
 
+#' Draw binomial counts from per-trial Bernoulli probabilities
+#'
+#' @param n torch.Tensor Number of Bernoulli trials per element.
+#' @param p torch.Tensor Success probability per element.
+#' @return torch.Tensor The number of successes per element.
 #' @export
 binomial_from_bernoulli = function(n, p) {
 

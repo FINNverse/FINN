@@ -3,6 +3,8 @@ library(testthat)
 library(FINN)
 library(torch)
 
+skip_if_not(torch::torch_is_installed())  # torch backend needed; skips on CRAN
+
 test_that("BA_stem calculates basal area correctly", {
   dbh <- torch_tensor(50)
   expected_result <- pi * (50 / 100 / 2)^2

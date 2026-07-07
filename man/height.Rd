@@ -26,10 +26,9 @@ where dbh is the diameter at breast height of the tree in cm and parHeight is an
 
 All parameters of parHeight from 0 to 1 result in physiologicaly plausible heights.
 The range from 0.3 to 0.9 results in realistic tree heights.
-Values of parHeight close to 1 are physiologically almost impossible, below 0.3 is suitable for small tree species and shrubs.\if{html}{\out{
-<br>
-<img src="figures/height_plot1.png" alt="Parameter range" style="max-width:70%;"/>
-}}
+Values of parHeight close to 1 are physiologically almost impossible, below 0.3 is suitable for small tree species and shrubs.
+
+\figure{height_plot1.png}{Parameter range}
 }
 \examples{
 height(30, 0.5)

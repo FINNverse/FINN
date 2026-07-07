@@ -1,5 +1,13 @@
+#' Convert a climate data frame to a FINN environment array
+#'
+#' Reshapes a long-format climate table into the site x year x variable array
+#' FINN uses internally, auto-detecting the time resolution from the columns.
+#'
+#' @param climate_dt A data.frame/data.table of climate values in long format,
+#'   with `siteID`, a time column (e.g. `year`), and one column per variable.
+#' @param env_vars character Names of the environmental variable columns to extract.
+#' @return A numeric array of environmental values indexed by site, time and variable.
 #' @export
-# Define the climateDF2array function with automatic detection and error handling
 climateDF2array <- function(climate_dt, env_vars) {
   # Ensure data.table is used
   if (!data.table::is.data.table(climate_dt)) {

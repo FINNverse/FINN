@@ -1,3 +1,6 @@
+#' Generate the documentation figures shipped in man/figures (internal dev helper).
+#' @import ggplot2
+#' @noRd
 create_help_plots <- function(){
   dir.create("man/figures", showWarnings = FALSE, recursive = TRUE)
   #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=

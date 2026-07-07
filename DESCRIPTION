@@ -1,7 +1,7 @@
 Package: FINN
 Type: Package
 Title: Forest Informed Neural Networks
-Version: 0.1.000
+Version: 0.1.0
 Authors@R: 
     c(person(given = "Maximilian",
              family = "Pichler",
@@ -14,34 +14,32 @@ Authors@R:
              email = "y.kaeber@posteo.de",
              comment = c(ORCID = "0000-0002-7041-9849")))
 Maintainer: Maximilian Pichler <maximilian.pichler@biologie.uni-regensburg.de>
-Description: FINN is an R package for modular dynamic vegetation (forest) models. Modularity is achieved by implementing all components and the platform in R, and by allowing users to pass their own processes to FINN as R functions. Nevertheless, FINN has a high performance (low runtime) because FINN is implemented in torch for R. torch allows access to highly optimized routines and also allows FINN to run on the GPU, hence FINN scales extremely well with the number of sites. Furthermore, FINN can seamlessly integrate neural networks into the processes or even replace them (hybrid modeling). In addition, the parameters in FINN can be directly optimized using stochastic gradient descent. 
+Description: Implements modular dynamic vegetation (forest) models. Modularity is achieved by implementing all components and the platform in R, and by allowing users to pass their own processes to FINN as R functions. Nevertheless, FINN has a high performance (low runtime) because FINN is implemented in torch for R. torch allows access to highly optimized routines and also allows FINN to run on the GPU, hence FINN scales extremely well with the number of sites. Furthermore, FINN can seamlessly integrate neural networks into the processes or even replace them (hybrid modeling). In addition, the parameters in FINN can be directly optimized using stochastic gradient descent. 
 License: GPL (>= 3)
 Encoding: UTF-8
-LazyData: true
+URL: https://github.com/FINNverse/FINN
+BugReports: https://github.com/FINNverse/FINN/issues
+Depends:
+    R (>= 4.1.0)
 LinkingTo: Rcpp
-Imports: 
+Imports:
     abind,
     cli,
-    crayon,
-    dplyr,
     stats,
     utils,
     data.table,
     coro,
-    R6,
     Rcpp,
     mathjaxr,
     torch,
     ggplot2,
-    viridis,
-    parallel,
     scales,
-    httpgd,
     glue
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    quarto
 RoxygenNote: 7.3.3
 Roxygen: list(old_usage = FALSE, markdown = TRUE)
 VignetteBuilder: quarto

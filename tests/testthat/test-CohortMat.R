@@ -1,7 +1,8 @@
 # tests/testthat/test-CohortMat.R
 library(testthat)
-library(R6)
 library(torch)
+
+skip_if_not(torch::torch_is_installed())  # torch backend needed; skips on CRAN
 
 # Define the CohortMat class as shown above if not sourced
 # source("path/to/CohortMat.R")  # Make sure to source the class if defined elsewhere

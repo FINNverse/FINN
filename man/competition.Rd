@@ -22,13 +22,21 @@ competition(
 
 \item{species}{torch.Tensor species index for each cohort.}
 
-\item{trees}{Number of trees.}
+\item{trees}{torch.Tensor Number of trees in each cohort.}
+
+\item{parComp}{torch.Tensor Competition / height-allometry parameters per species.}
 
 \item{h}{torch.Tensor (Optional) Height of each cohort. Defaults to NULL.}
 
-\item{parHeight}{torch.Tensor global parameters for all species.}
+\item{patch_size_ha}{numeric Patch size in hectares.}
 
-\item{minLight}{float (Optional) Minimum light requirement. Defaults to 50.}
+\item{ba}{torch.Tensor (Optional) Pre-computed basal area. Defaults to NULL.}
+
+\item{cohortHeights}{torch.Tensor (Optional) Pre-computed cohort heights. Defaults to NULL.}
+
+\item{n_quantiles}{integer Number of height quantiles used when \code{continuous = FALSE}. Defaults to 10.}
+
+\item{continuous}{logical Use the continuous competition formulation. Defaults to FALSE.}
 }
 \value{
 torch.Tensor Fraction of available light (light) for each cohort.
@@ -37,6 +45,8 @@ torch.Tensor Fraction of available light (light) for each cohort.
 This function calculates the fraction of available light for each cohort of trees BA_stemsed on their diameter at breast height (dbh), species, number of trees, and global parameters.
 }
 \examples{
+\dontrun{
 competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
-        trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
+        trees = 100, parComp = torch::torch_tensor(c(0.3, 0.5)), patch_size_ha = 0.1)
+}
 }

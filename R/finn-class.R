@@ -304,10 +304,8 @@ simulateForest = function(model,
           debug = debug)
 }
 
-#' finn class
-#'
-#' @description
-#' internal class representation of FINN
+#' finn class (internal representation of FINN); use [finn()] to construct.
+#' @noRd
 finn_class = nn_module(
   "finn_class",
   initialize = function(

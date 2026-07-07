@@ -18,5 +18,7 @@ An array of environmental data formatted according to the process object.
 This function extracts and transforms environmental data according to a specified process object. The environmental data is formatted into an array suitable for input into the simulation model.
 }
 \examples{
+\dontrun{
 env_array <- extract_env(growth_process, env_data)
+}
 }

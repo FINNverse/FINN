@@ -7,9 +7,11 @@
 #' @return torch.Tensor The BA_stemsal area of the tree.
 #'
 #' @examples
+#' \dontrun{
 #' dbh = torch::torch_tensor(50)
 #' BA_stemsal_area = BA_stem(dbh)
 #' print(BA_stemsal_area)
+#' }
 #'
 #' @import torch
 #' @export
@@ -34,11 +36,11 @@ BA_stem = function(dbh) {
 #'
 #' This plot illustrates the basal area for different combinations of dbh and number of trees.
 #'
-#' <img src="figures/BA_stand_plot2.png" alt="dbh, trees, basal area" style="max-width:70%;"/>
+#' \figure{BA_stand_plot2.png}{dbh, trees, basal area}
 #'
 #' Sensitivity of basal area for different combinations of dbh, number of trees to patch size.
 #'
-#' <img src="figures/BA_stand_plot1.png" alt="Patch size, dbh, trees, basal area" style="max-width:70%;"/>
+#' \figure{BA_stand_plot1.png}{Patch size, dbh, trees, basal area}
 #'
 #' @return A numeric value representing the basal area of the stand in square meters per hectare.
 #' @examples
@@ -107,8 +109,7 @@ BA_stand <- function(dbh, trees, patch_size_ha) {
 #' The range from 0.3 to 0.9 results in realistic tree heights.
 #' Values of parHeight close to 1 are physiologically almost impossible, below 0.3 is suitable for small tree species and shrubs.
 #'
-#' <br>
-#' <img src="figures/height_plot1.png" alt="Parameter range" style="max-width:70%;"/>
+#' \figure{height_plot1.png}{Parameter range}
 #'
 #' @return A numeric value representing the calculated height of the tree.
 #' @examples
@@ -129,16 +130,22 @@ height = function(dbh, parHeight) {
 #'
 #' @param dbh torch.Tensor Diameter at breast height for each cohort.
 #' @param species torch.Tensor species index for each cohort.
-#' @param trees Number of trees.
-#' @param parHeight torch.Tensor global parameters for all species.
+#' @param trees torch.Tensor Number of trees in each cohort.
+#' @param parComp torch.Tensor Competition / height-allometry parameters per species.
 #' @param h torch.Tensor (Optional) Height of each cohort. Defaults to NULL.
-#' @param minLight float (Optional) Minimum light requirement. Defaults to 50.
+#' @param patch_size_ha numeric Patch size in hectares.
+#' @param ba torch.Tensor (Optional) Pre-computed basal area. Defaults to NULL.
+#' @param cohortHeights torch.Tensor (Optional) Pre-computed cohort heights. Defaults to NULL.
+#' @param n_quantiles integer Number of height quantiles used when `continuous = FALSE`. Defaults to 10.
+#' @param continuous logical Use the continuous competition formulation. Defaults to FALSE.
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
 #' @examples
+#' \dontrun{
 #' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
-#'         trees = 100, parHeight = torch::torch_tensor(c(0.3, 0.5)), h = torch::torch_tensor(c(5, 7, 6)), minLight = 40)
+#'         trees = 100, parComp = torch::torch_tensor(c(0.3, 0.5)), patch_size_ha = 0.1)
+#' }
 #' @export
 competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE){
   parHeight = parComp[,1]
@@ -179,14 +186,8 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 # Rework the height comparison, the sigmoid function preserves the gradients but they are not great (either -1 or 1)
 
 
-#' mortality_wo_growth
-#'
-#' @param dbh dbh
-#' @param species species
-#' @param trees trees
-#' @param parMort parMort
-#' @param pred predictions
-#' @param light available light
+#' mortality_wo_growth (internal)
+#' @noRd
 mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F) {
   # TODO remove constant part
   # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
@@ -221,6 +222,9 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #' @param parMort parMort
 #' @param pred predictions
 #' @param light available light
+#' @param base_steepness numeric Steepness of the shade-response sigmoid. Defaults to 5.
+#' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
+#' @param growth torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.
 #'
 #' @export
 mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F, growth = NULL) {
@@ -264,9 +268,11 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 #' @param dbh torch.Tensor Diameter at breast height.
 #' @param species torch.Tensor species of tree.
 #' @param parGrowth torch.Tensor Growth parameters.
-#' @param parMort torch.Tensor Mortality parameters.
 #' @param pred torch.Tensor Predicted values.
 #' @param light torch.Tensor Accumulated Light.
+#' @param light_steepness numeric Steepness of the light-response sigmoid. Defaults to 10.
+#' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
+#' @param trees torch.Tensor (Optional) Number of trees per cohort. Defaults to NULL.
 #'
 #' @return torch.Tensor A tensor representing the forest plot growth.
 #'
@@ -317,6 +323,7 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #' In general low values for high regeneration and high values for low regeneration.
 #' @param pred torch.Tensor Prediction values.
 #' @param light torch.Tensor Available light variable for calculation.
+#' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #'
 #' @return torch.Tensor Regeneration values for forest patches.
 #'

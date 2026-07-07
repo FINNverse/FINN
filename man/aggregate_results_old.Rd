@@ -18,6 +18,10 @@ aggregate_results_old(
 \item{samples}{samples}
 
 \item{Results}{Results}
+
+\item{drop_rows}{logical Drop empty rows from the aggregated output. Defaults to TRUE.}
+
+\item{sp_max}{integer (Optional) Maximum species index to aggregate over. Defaults to NULL.}
 }
 \description{
 Aggregate function

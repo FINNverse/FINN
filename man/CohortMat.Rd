@@ -31,8 +31,6 @@ CohortMat(
 @description
 
 Convert the tensors to a data frame format}
-
-\item{device_r}{Device as R character, internal useage}
 }
 \value{
 data.table object

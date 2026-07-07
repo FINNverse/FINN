@@ -16,6 +16,8 @@ In general low values for high regeneration and high values for low regeneration
 \item{pred}{torch.Tensor Prediction values.}
 
 \item{light}{torch.Tensor Available light variable for calculation.}
+
+\item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
 }
 \value{
 torch.Tensor Regeneration values for forest patches.

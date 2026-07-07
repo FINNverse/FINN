@@ -25,14 +25,13 @@ The basal area of a stand is the cross-sectional area of all trees in a stand pe
 
 The formula takes into account the diameter at breast height (dbh) in centimeters, the number of trees, and the size of the patch in hectares to calculate the basal area in square meters per hectare.
 
-This plot illustrates the basal area for different combinations of dbh and number of trees.\if{html}{\out{
-<img src="figures/BA_stand_plot2.png" alt="dbh, trees, basal area" style="max-width:70%;"/>
-}}
+This plot illustrates the basal area for different combinations of dbh and number of trees.
 
+\figure{BA_stand_plot2.png}{dbh, trees, basal area}
 
-Sensitivity of basal area for different combinations of dbh, number of trees to patch size.\if{html}{\out{
-<img src="figures/BA_stand_plot1.png" alt="Patch size, dbh, trees, basal area" style="max-width:70%;"/>
-}}
+Sensitivity of basal area for different combinations of dbh, number of trees to patch size.
+
+\figure{BA_stand_plot1.png}{Patch size, dbh, trees, basal area}
 }
 \examples{
 # Example usage

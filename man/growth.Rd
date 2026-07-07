@@ -26,7 +26,11 @@ growth(
 
 \item{light}{torch.Tensor Accumulated Light.}
 
-\item{parMort}{torch.Tensor Mortality parameters.}
+\item{light_steepness}{numeric Steepness of the light-response sigmoid. Defaults to 10.}
+
+\item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
+
+\item{trees}{torch.Tensor (Optional) Number of trees per cohort. Defaults to NULL.}
 }
 \value{
 torch.Tensor A tensor representing the forest plot growth.
