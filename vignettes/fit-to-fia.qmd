@@ -145,7 +145,7 @@ it is the exact call used to produce the shipped model
 ```{r}
 #| label: fit
 #| eval: false
-m$fit(
+fit(m,
   env         = env_dt,      # raw climate
   data        = obs_dt,
   init_cohort = init_cohorts,
@@ -197,8 +197,8 @@ site × year × species):
 ```{r}
 #| label: assess
 #| eval: false
-sim  <- m$simulate(env = env_dt, init_cohort = init_cohorts,
-                   patches = 4, patch_size = 0.06, device = "cpu")
+sim  <- predict(m, env = env_dt, init_cohort = init_cohorts,
+                patches = 4, patch_size = 0.06, device = "cpu")
 pred <- sim$long$site[, .(pred = mean(value)), by = .(siteID, year, species, variable)]
 pred[, variable := as.character(variable)]
 
@@ -309,7 +309,7 @@ Fitting is identical — the same `fit()` call — and is again run by
 ```{r}
 #| label: hybrid-fit
 #| eval: false
-m_hybrid$fit(
+fit(m_hybrid,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = 3000L, batchsize = 40L, patches = 4, patch_size = 0.06,
   weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
@@ -333,8 +333,8 @@ units) per variable:
 #| eval: false
 metrics_of <- function(model) {
   model$eval()                                   # deterministic: dropout off
-  sim <- model$simulate(env = env_dt, init_cohort = init_cohorts,
-                        patches = 4, patch_size = 0.06, device = "cpu")
+  sim <- predict(model, env = env_dt, init_cohort = init_cohorts,
+                 patches = 4, patch_size = 0.06, device = "cpu")
   p <- sim$long$site[, .(pred = mean(value)), by = .(siteID, year, species, variable)]
   p[, variable := as.character(variable)]
   cc <- merge(obs_m, p, by = c("siteID", "year", "species", "variable"))
