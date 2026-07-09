@@ -319,7 +319,13 @@ finn_class = nn_module(
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
     self$record_raws = FALSE
-    self$env_scaling = NULL   # set by fit(env_autoscale = TRUE); reused at predict time
+    self$env_scaling = NULL
+    self$train_env           = NULL
+    self$train_init_cohort   = NULL
+    self$fit_id              = NULL
+    self$conditional_effects = NULL
+    self$ale                 = NULL
+    self$perm_importance     = NULL
     private$add_process(mortality_process, "mortality")
     private$add_process(growth_process, "growth")
     private$add_process(regeneration_process, "regeneration")
@@ -1062,6 +1068,13 @@ finn_class = nn_module(
       print("No data. Switching into simulation modus...")
       return(self$predict(env = env, patches = patches, patch_size = patch_size, batchsize=batchsize, device=device))
     }
+
+    self$train_env         = data.table::copy(data.table::as.data.table(env))
+    self$train_init_cohort = if(is.null(init_cohort)) NULL else list(cohort = init_cohort)
+    self$fit_id            = as.numeric(Sys.time())
+    self$conditional_effects = NULL
+    self$ale                 = NULL
+    self$perm_importance     = NULL
 
     # setup loss functions
     private$create_loss_functions(loss, weights)

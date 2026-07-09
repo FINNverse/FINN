@@ -4,19 +4,45 @@
 \alias{ALE}
 \title{Accumulated local effect plots}
 \usage{
-ALE(model, env, init_cohort = NULL, env_autoscale = TRUE, ...)
+ALE(
+  model,
+  env = NULL,
+  init_cohort = NULL,
+  env_autoscale = TRUE,
+  sim_seed = 42L,
+  plot = TRUE,
+  process = NULL,
+  scale = FALSE,
+  ...
+)
 }
 \arguments{
 \item{model}{(\code{finn_class})\cr Model object of class \code{finn_class}.}
 
-\item{env}{(\code{data.table|data.frame})\cr Environmental covariates for which the ALE should be calculated.}
+\item{env}{(\code{data.table|data.frame})\cr Environmental covariates for which the ALE should be
+calculated. If \code{NULL} (default) the training \code{env} cached by \code{\link[=fit]{fit()}} is used.}
 
-\item{init_cohort}{(\code{CohortMat})\cr Initial cohort of class \code{CohortMat}, if \code{NULL} then simulated from bare ground.}
+\item{init_cohort}{(\code{CohortMat})\cr Initial cohort of class \code{CohortMat}. If \code{NULL} (default)
+the training init_cohort cached by \code{\link[=fit]{fit()}} is used (or bare ground if none was cached).}
 
 \item{env_autoscale}{(\code{logical(1)})\cr If \code{TRUE} (default) \code{env} is assumed to be on the
 raw (unscaled) scale and the model's stored \code{env_scaling} is applied internally before the
 effects are computed, mirroring how the model was fitted (see \code{\link[=fit]{fit()}}'s \code{env_autoscale}).
 Set \code{FALSE} if \code{env} is already on the model scale, or for a model fitted without autoscaling.}
+
+\item{sim_seed}{(\code{integer(1)})\cr Seed applied via \code{\link[=FINN.seed]{FINN.seed()}} before the state-harvesting
+simulation, so the (stochastic) conditional effects / ALE are reproducible and cacheable.
+\code{NULL} disables seeding.}
+
+\item{plot}{(\code{logical(1)})\cr If \code{TRUE} (default) an ALE plot is drawn via \code{\link[=plot.FINNale]{plot.FINNale()}}
+(rows = processes, columns = environmental predictors, one coloured line per species).}
+
+\item{process}{(\code{character}|\code{NULL})\cr If given (one of \code{"growth"}, \code{"mortality"},
+\code{"regeneration"}) only that process is plotted. \code{NULL} (default) plots all three.}
+
+\item{scale}{(\code{logical(1)})\cr If \code{TRUE} each curve is divided by the SD of its
+process x species rate, yielding dimensionless, comparable effects (the curve's
+variance then equals the Sobol-style normalised importance). Default \code{FALSE}.}
 
 \item{...}{\cr Not supported yet.}
 }
