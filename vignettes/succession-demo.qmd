@@ -159,8 +159,8 @@ m <- finn(
   mortality_process    = createProcess(~1+env1, FINN::mortality,    initSpecies = parMort,   initEnv = parMortEnv)
 )
 
-sim <- m$simulate(init_cohort = NULL, env = env_dt, disturbance = NULL,
-                  patches = 100, device = "cpu")
+sim <- predict(m, init_cohort = NULL, env = env_dt, disturbance = NULL,
+               patches = 100, device = "cpu")
 
 # average over patches; convert per-patch ba/trees to per-hectare
 p_dat <- sim$long$site[, .(value = mean(value)), by = .(year, species, variable)]

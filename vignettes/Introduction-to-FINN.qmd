@@ -174,7 +174,7 @@ simulationModel = finn(N_species = Nsp,
 )
 
 predictions[["patches_1"]] = 
-  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance= dist_dt, device = "cpu", patches = 1)
+  simulateForest(simulationModel, init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 1)
 
 simulationModel = finn(N_species = Nsp, 
   competition_process = createProcess(~0, func = FINN::competition),
@@ -184,7 +184,7 @@ simulationModel = finn(N_species = Nsp,
 )
 
 predictions[["patches_100"]] = 
-  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 100)
+  simulateForest(simulationModel, init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 100)
 
 ```
 

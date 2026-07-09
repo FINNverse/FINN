@@ -33,8 +33,8 @@ local({
   loss <- data.table(epoch = seq_along(m$history), loss = sapply(m$history, sum))
 
   # assess (process)
-  sim  <- m$simulate(env = env_dt, init_cohort = init_cohorts,
-                     patches = 4, patch_size = 0.06, device = "cpu")
+  sim  <- predict(m, env = env_dt, init_cohort = init_cohorts,
+                  patches = 4, patch_size = 0.06, device = "cpu")
   pred <- sim$long$site[, .(pred = mean(value)), by = .(siteID, year, species, variable)]
   pred[, variable := as.character(variable)]
   obs_m <- melt(obs_dt, id.vars = c("siteID", "year", "species", "species_name"),
@@ -61,8 +61,8 @@ local({
   # process vs hybrid performance
   metrics_of <- function(model) {
     model$eval()
-    sim <- model$simulate(env = env_dt, init_cohort = init_cohorts,
-                          patches = 4, patch_size = 0.06, device = "cpu")
+    sim <- predict(model, env = env_dt, init_cohort = init_cohorts,
+                   patches = 4, patch_size = 0.06, device = "cpu")
     p <- sim$long$site[, .(pred = mean(value)), by = .(siteID, year, species, variable)]
     p[, variable := as.character(variable)]
     cc <- merge(obs_m, p, by = c("siteID", "year", "species", "variable"))
@@ -113,8 +113,8 @@ local({
     regeneration_process = createProcess(~1+env1, FINN::regeneration, initSpecies = parReg,    initEnv = parRegEnv),
     mortality_process    = createProcess(~1+env1, FINN::mortality,    initSpecies = parMort,   initEnv = parMortEnv)
   )
-  sim <- m$simulate(init_cohort = NULL, env = env_dt, disturbance = NULL,
-                    patches = 100, device = "cpu")
+  sim <- predict(m, init_cohort = NULL, env = env_dt, disturbance = NULL,
+                 patches = 100, device = "cpu")
   p_dat <- sim$long$site[, .(value = mean(value)), by = .(year, species, variable)]
   p_dat[variable %in% c("ba", "trees"), value := value / patch_size]
   sp_labs <- c("1 pioneer", "2 early-mid", "3 mid-late", "4 climax")
@@ -151,8 +151,8 @@ local({
     growth_process       = createProcess(~1+env1, initEnv = parGrowthEnv, initSpecies = parGrowth, func = FINN::growth),
     regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,    initSpecies = parReg,    func = FINN::regeneration),
     mortality_process    = createProcess(~1+env1, initEnv = parMortEnv,   initSpecies = parMort,   func = FINN::mortality))
-  s1   <- mk()$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 1)
-  s100 <- mk()$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 100)
+  s1   <- simulateForest(mk(), init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 1)
+  s100 <- simulateForest(mk(), init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 100)
 
   saveRDS(list(patches_1 = s1$long$site, patches_100 = s100$long$site),
           file.path(outdir, "vig_intro.rds"), version = 2)
