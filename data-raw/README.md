@@ -17,7 +17,7 @@ not this package):
 So the **climate data** ultimately originates from `03_attach_environment.R`; the
 raw (untransformed) values live in `env_unscaled_dt.csv`.
 
-## The pipeline (each step is a script)
+## The pipeline
 
 ```
 data-raw/*.csv
@@ -27,15 +27,53 @@ inst/extdata/  fia_obs_dt.csv, fia_env_dt.csv (RAW climate),
                fia_init_trees.csv, fia_species_dt.csv,
                example_tree_dt.csv, example_env_dt.csv
    │
-   ├─ dev/train_fia_model.R      ← STEP 2: fit → fia_process_finn.pt, fia_hybrid_finn.pt
-   │
-   └─ dev/precompute_vignettes.R ← STEP 3: cache vignette results →
-                                    vig_fit_to_fia.rds, vig_succession.rds, vig_intro.rds
+   └─ vignettes/build.R         ← STEP 2: knit *.Rmd.orig -> *.Rmd
+                                   (trains the models, bakes in results + figures)
 ```
 
-Run them in order from the package root; steps 2 and 3 need a torch backend.
-`make_extdata.R` is seeded (`set.seed(42)`), so re-running reproduces the same
-sample as long as these source files are unchanged.
+Run from the package root; STEP 2 needs a torch backend. `make_extdata.R` is
+seeded (`set.seed(42)`), so re-running reproduces the same sample as long as
+these source files are unchanged.
+
+## How the vignettes are built (precompiled)
+
+The vignettes train torch models, which CRAN can neither run (no libtorch
+backend) nor afford (time). So we use the **precompile** pattern:
+
+| file | role |
+|---|---|
+| `vignettes/<name>.Rmd.orig` | the **source** — real, live code |
+| `vignettes/build.R` | knits `.Rmd.orig` → `.Rmd`, running everything once |
+| `vignettes/<name>.Rmd` | **generated & committed** — static, results baked in |
+| `vignettes/<name>/` | **generated & committed** — the figure PNGs |
+
+`R CMD build` then only runs pandoc over static markdown, so the package builds
+anywhere in seconds without torch.
+
+```sh
+# from the package root, with a torch backend available
+Rscript vignettes/build.R                 # knit all (fit-to-fia trains 2 models, ~10 min)
+Rscript vignettes/build.R succession-demo # knit just one
+```
+
+Then **commit the regenerated `.Rmd` and its figure folder** — those are what
+ship.
+
+Why this matters:
+
+* **Nothing heavy ships.** The models are trained inside the vignette at knit
+  time and never leave the developer machine. There are no `.pt` files and no
+  result caches in the package, so vignette size no longer limits what we can
+  demonstrate.
+* **No drift.** The code shown in a vignette is exactly the code that produced
+  the output next to it, because one source generated both. (The previous scheme
+  — `eval: false` code plus a separate `.rds` cache — could silently disagree,
+  and did.)
+* **No quarto dependency.** The vignettes are `knitr::rmarkdown`
+  (`VignetteBuilder: knitr`), so no quarto binary is needed to build the package.
+
+Never edit a `.Rmd` by hand — it is overwritten on the next `build.R` run. Edit
+the `.Rmd.orig`.
 
 ## Files here
 

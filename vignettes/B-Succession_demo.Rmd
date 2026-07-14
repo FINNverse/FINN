@@ -1,24 +1,16 @@
 ---
 title: "Plausible succession from a handful of species"
-format:
-  html:
+output:
+  rmarkdown::html_vignette:
     toc: true
-    toc-depth: 3
-    html-math-method: mathjax
+    toc_depth: 3
 vignette: >
   %\VignetteIndexEntry{Plausible succession from a handful of species}
-  %\VignetteEngine{quarto::html}
   %\VignetteEncoding{UTF-8}
-execute:
-  warning: false
-  message: false
+  %\VignetteEngine{knitr::rmarkdown}
 ---
 
-```{r}
-#| label: setup
-#| include: false
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-```
+
 
 FINN encodes regeneration, growth, mortality and competition as ecological
 processes. Here we give it nothing but four species with contrasting
@@ -26,8 +18,8 @@ life-history strategies and let it simulate succession on bare ground — to sho
 that ecologically sensible dynamics emerge from the demographic trade-offs
 alone. No data, no fitting.
 
-```{r}
-#| label: libraries
+
+``` r
 library(FINN)
 library(data.table)
 library(ggplot2)
@@ -52,8 +44,8 @@ only performs where `light > shade`. A **high** value therefore means
 *light-demanding* (a pioneer that needs open ground); a **low** value means
 *shade-tolerant* (a climax species that establishes under a closed canopy).
 
-```{r}
-#| label: species-parameters
+
+``` r
 # shade = light fraction a species needs to grow / regenerate
 #   high -> light-demanding (pioneer); low -> shade-tolerant (climax)
 shadeSP <- c(0.60, 0.42, 0.25, 0.08)   # sp1 pioneer ... sp4 climax
@@ -109,8 +101,8 @@ parComp <- matrix(c(
 
 Collected into one table, the trade-offs read across the life-history axis:
 
-```{r}
-#| label: pars-table
+
+``` r
 pars_dt <- data.table(
   species       = c("1 pioneer", "2 early-mid", "3 mid-late", "4 climax"),
   shade         = shadeSP,
@@ -121,6 +113,12 @@ pars_dt <- data.table(
   height_allom  = parComp[, 1]
 )
 pars_dt
+#>        species shade growth_rate mort_shaded shade_intol seed_rain height_allom
+#>         <char> <num>       <num>       <num>       <num>     <num>        <num>
+#> 1:   1 pioneer  0.60        2.72       0.334         1.0      24.5         0.50
+#> 2: 2 early-mid  0.42        1.92       0.198         0.8      13.5         0.55
+#> 3:  3 mid-late  0.25        1.35       0.091         0.5       7.4         0.62
+#> 4:    4 climax  0.08        0.82       0.036         0.3       3.3         0.70
 ```
 
 Reading the rows: the pioneer needs the most light (`shade` 0.60), grows fastest
@@ -136,21 +134,16 @@ To isolate the trade-offs we hold the environment constant (`env1 = 0`) and run
 primary succession from bare ground with no disturbance — so any dynamics come
 from the species themselves, not from the environment.
 
-```{r}
-#| label: environment
+
+``` r
 env_dt <- data.table(expand.grid(siteID = 1:Nsites, year = 1:Ntimesteps))
 env_dt$env1 <- 0          # constant -> succession is driven by the traits
 ```
 
 ## Simulate succession
 
-Building and simulating the model needs a torch backend, so the call below
-is shown but not run when the page is knit; its result is precomputed
-(`dev/precompute_vignettes.R`) and loaded from a small cache.
 
-```{r}
-#| label: simulate
-#| eval: false
+``` r
 m <- finn(
   N_species            = Nsp,
   competition_process  = createProcess(~0,      FINN::competition),
@@ -169,21 +162,10 @@ p_dat[variable %in% c("ba", "trees"), value := value / patch_size]
 sp_labs <- c("1 pioneer", "2 early-mid", "3 mid-late", "4 climax")
 ```
 
-```{r}
-#| label: simulate-cache
-#| include: false
-.vig    <- readRDS(system.file("extdata", "vig_succession.rds", package = "FINN"))
-p_dat   <- .vig$p_dat
-sp_labs <- .vig$sp_labs
-```
-
 ## The successional pattern
 
-```{r}
-#| label: plot-succession
-#| fig-cap: "Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."
-#| fig-width: 7
-#| fig-height: 4.5
+
+``` r
 ba <- p_dat[variable == "ba"]
 ggplot(ba, aes(year, value, colour = factor(species))) +
   geom_line(linewidth = 0.9) +
@@ -192,14 +174,16 @@ ggplot(ba, aes(year, value, colour = factor(species))) +
   theme_minimal()
 ```
 
+<div class="figure" style="text-align: center">
+<img src="B/B-plot-succession-1.png" alt="Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."  />
+<p class="caption">Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand.</p>
+</div>
+
 The same run, across every state variable FINN tracks — diameter, basal area,
 tree numbers, growth, mortality and regeneration:
 
-```{r}
-#| label: plot-all-variables
-#| fig-cap: "Succession across all FINN state variables for the four species."
-#| fig-width: 8
-#| fig-height: 9
+
+``` r
 panel <- copy(p_dat)
 # regeneration is shown as the mean per hectare (r_mean_ha); the per-patch
 # count (reg) is dropped.
@@ -220,6 +204,11 @@ ggplot(panel[!is.na(variable2)], aes(year, value, colour = factor(species))) +
         strip.text.y.left = element_text(angle = 90),
         axis.title.y = element_blank())
 ```
+
+<div class="figure" style="text-align: center">
+<img src="B/B-plot-all-variables-1.png" alt="Succession across all FINN state variables for the four species."  />
+<p class="caption">Succession across all FINN state variables for the four species.</p>
+</div>
 
 ## What just happened
 
@@ -248,7 +237,37 @@ parameter:
 None of this was prescribed: we set demographic trade-offs for four species and
 FINN produced the successional turnover.
 
-```{r}
-#| label: session
+
+``` r
 sessionInfo()
+#> R version 4.5.0 (2025-04-11)
+#> Platform: aarch64-apple-darwin20
+#> Running under: macOS 26.5.1
+#> 
+#> Matrix products: default
+#> BLAS:   /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRblas.0.dylib 
+#> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
+#> 
+#> locale:
+#> [1] C
+#> 
+#> time zone: Europe/Berlin
+#> tzcode source: internal
+#> 
+#> attached base packages:
+#> [1] stats     graphics  grDevices utils     datasets  methods   base     
+#> 
+#> other attached packages:
+#> [1] ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
+#> 
+#> loaded via a namespace (and not attached):
+#>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
+#>  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     torch_0.15.1      
+#>  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         
+#> [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         evaluate_1.0.5    
+#> [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       
+#> [21] RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3    farver_2.1.2      
+#> [25] viridisLite_0.4.2  R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
+#> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
+#> [33] bit64_4.6.0-1      gtable_0.3.6
 ```

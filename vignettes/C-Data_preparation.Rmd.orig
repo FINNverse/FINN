@@ -1,0 +1,203 @@
+---
+title: "Preparing your data for FINN"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Preparing your data for FINN}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  warning   = FALSE,
+  message   = FALSE,
+  fig.align = "center",
+  fig.path  = "C/C-",
+  fig.cap   = ""
+)
+```
+
+This vignette is a standalone reference for getting your own forest-inventory
+data into FINN. It documents the tables FINN needs, their columns and units, and
+the builder pipeline `makeObsData()` → `resolveSiteIDs()` → `makeInitCohorts()`.
+Every step runs on a tiny bundled raw example, so you see real output.
+
+```{r libraries}
+library(FINN)
+library(data.table)
+```
+
+## What FINN needs
+
+FINN is calibrated against a few tidy tables:
+
+- **`obs_dt`** — demographic responses per site × year × species:
+  `siteID, year, ba, dbh, trees, growth, mort, reg, species, species_name`.
+  Year starts at 1; the initial state (year 0) is *not* included. NAs are allowed
+  in any response. Units: `ba` m², `dbh` cm, `trees` count, `growth` relative
+  growth rate, `mort` rate, `reg` trees ha⁻¹.
+- **`env_dt`** — `siteID, year, <env vars…>` in **natural units**; must cover
+  every site × year in `obs_dt`. No manual scaling is needed: FINN
+  z-standardizes the predictors internally when fitting (`env_autoscale = TRUE`,
+  the default) and reuses the same constants at prediction time.
+- **`init_trees`** — the initial state used to build the starting cohorts:
+  `siteID, patchID, year, species, dbh, trees, living`.
+- **`dist_dt`** (optional) — `siteID, year, intensity` (fraction of patches
+  disturbed that year).
+
+You assemble these from two raw ingredients: a **tree list** (one row per tree ×
+inventory) and a **site environment table**. The rest of this vignette builds the
+FINN tables from those two.
+
+## Start from a raw tree list
+
+```{r load-example}
+# A tiny bundled raw example: a few Oregon FIA sites, 4 patches each, 3 inventories.
+# example_tree_dt.csv and example_env_dt.csv (the climate, loaded later) are both
+# built by dev/make_extdata.R from the data-raw/ source; see data-raw/README.md.
+tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+str(tree_dt)
+```
+
+A raw tree record carries, at minimum: `siteName, patchName, treeName, year`
+(calendar year of the inventory), `species_name`, `dbh` (cm), and a `status` of
+`new` / `alive` / `dead`. Our example also carries `status_before` (the tree's
+status at the previous inventory) and a `complete` flag marking trees from fully
+re-measured plots.
+
+## Acquiring raw data (example: US FIA)
+
+Turning a public inventory into the raw tree list above needs external downloads,
+so it is shown but not run. For the US FIA program:
+
+```{r acquire-fia, eval = FALSE}
+library(rFIA)
+fia <- readFIA(dir = "data/FIA", common = TRUE, states = "OR")
+# build tree_dt: dbh = DIA * 2.54 (inch -> cm); status from STATUSCD / PREV_STATUS_CD;
+# mort_cause from AGENTCD. See playground/calibration/FIA/FIA_dataprep_vignette.R
+```
+
+## Define status flags
+
+FINN's builders key off three logical flags derived from `status`:
+
+```{r status-flags}
+# reg    = newly recruited this inventory
+# mort   = died since the previous inventory
+# living = currently alive
+tree_dt[, reg    := status == "new"]
+tree_dt[, mort   := status == "dead" & status_before %chin% c("alive", "new")]
+tree_dt[, living := status %chin% c("alive", "new")]
+tree_dt[, .(n = .N), by = .(status, reg, mort, living)]
+```
+
+## Build `obs_dt` with `makeObsData()`
+
+`makeObsData()` aggregates the tree list to per-patch demographic responses and
+lumps rare species into a single `"other"` class. Each argument controls a
+data-quality filter:
+
+```{r make-obs}
+obs_list <- makeObsData(
+  tree_dt           = tree_dt[complete == TRUE],  # only fully re-measured plots
+  plotsize          = 0.06,            # ha per patch (scales recruitment to per-ha)
+  aggregate_by_site = FALSE,           # keep patch-level resolution
+  fix_period_length = 10,              # drop sites whose remeasure gap != 10 yr
+  dbh_growth_thresh = c(-10, 50),      # drop sites with implausible dbh change
+  NspeciesQuantile  = 0.98,            # keep species covering 98% of stems; rest -> "other"
+  minNyears         = 2                # need >= 2 inventories per patch
+)
+obs_dt <- obs_list$obs_dt
+head(obs_dt)
+```
+
+Use `Nspecies` (a hard cap) or `NspeciesQuantile` (smallest set covering a stem
+fraction) to control how many species you model — everything else becomes
+`"other"`, which FINN still tracks as a competitor.
+
+## Environmental data
+
+Acquisition from rasters (e.g. WorldClim) needs external files, so it is shown
+but not run. The result is a table of environmental predictors in **natural
+units**, one row per site × year:
+
+```{r env-extract, eval = FALSE}
+library(terra)
+pts  <- vect(site_dt, geom = c("x", "y"), crs = "EPSG:4326")
+bio1 <- rast("wc2.1_30s_bio_1.tif")
+env_dt[, temp := terra::extract(bio1, project(pts, crs(bio1)))[, 2]]
+```
+
+```{r env-load}
+env_dt <- fread(system.file("extdata", "example_env_dt.csv", package = "FINN"))
+head(env_dt)
+```
+
+There is **no manual standardization step**. FINN z-scales the predictors
+internally when you fit (`env_autoscale = TRUE`, the default), stores the per-variable
+mean/sd on the model, and re-applies them at prediction time — so you supply (and
+keep) `env_dt` in natural units throughout. `env_dt` must cover every
+`siteName × year` present in `obs_dt`.
+
+## Resolve IDs across tables
+
+Raw tables use names (`siteName`, `patchName`, `species_name`); FINN works with
+integer indices aligned across all tables. `resolveSiteIDs()` does that alignment
+and can build the initial cohorts in one pass. Pass the **processed** tree list
+`obs_list$tree_dt` (not the raw one): `makeObsData()` returns it with the same
+species lumping as `obs_dt`, so the two stay consistent.
+
+```{r resolve-ids}
+inputs <- resolveSiteIDs(
+  tree_dt = obs_list$tree_dt,   # processed tree list (species lumped like obs_dt)
+  obs_dt  = obs_dt,
+  env_dt  = env_dt,
+  createInitCohorts = TRUE
+)
+# obs_dt / env_dt now carry integer siteID/patchID/species, aligned across tables
+head(inputs$obs_dt)
+inputs$species_dt
+```
+
+## Initial cohorts
+
+With `createInitCohorts = TRUE`, `resolveSiteIDs()` returns a ready `CohortMat`
+describing the starting state — its `dims` are `c(sites, patches, cohorts)`:
+
+```{r init-cohorts}
+init_cohorts <- inputs$initCohorts
+init_cohorts
+```
+
+To build cohorts yourself from a year-0 tree slice, call `makeInitCohorts()`
+directly — it expects `siteID, patchID, species, dbh, treeName` (+ optional
+`trees`):
+
+```{r init-cohorts-manual, eval = FALSE}
+init_trees <- inputs$tree_dt[living == TRUE & year == 1]
+makeInitCohorts(init_trees, Nspecies = uniqueN(inputs$obs_dt$species))
+```
+
+## Checklist before fitting
+
+- **Period length** is consistent across inventories (`fix_period_length`); FINN
+  assumes a fixed remeasure interval.
+- **The initial state** (the first inventory) is used for `init_trees`, and the
+  responses in `obs_dt` start *after* it.
+- **`env_dt` covers every `siteID × year`** in `obs_dt` — missing rows break the fit.
+- **Units**: `dbh` in cm, `ba` in m², `reg` in trees ha⁻¹; env predictors in
+  natural units (FINN standardizes them internally).
+- **Species IDs** are contiguous integers `1..N`, aligned across tables — always
+  go through `resolveSiteIDs()` rather than hand-coding them.
+
+You now have `obs_dt`, `env_dt`, and `init_cohorts` — the inputs the
+**Fitting FINN to forest inventory data** vignette consumes.
+
+```{r session}
+sessionInfo()
+```

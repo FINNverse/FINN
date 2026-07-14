@@ -1,0 +1,371 @@
+---
+title: "Fitting FINN to forest inventory data (Oregon, US FIA)"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Fitting FINN to forest inventory data (Oregon, US FIA)}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  warning   = FALSE,
+  message   = FALSE,
+  fig.align = "center",
+  fig.path  = "D/D-",
+  fig.cap   = ""
+)
+```
+
+<style>
+pre.summary-out, .summary-out pre { max-height: 22em; overflow: auto; }
+</style>
+
+Dynamic forest models are usually hand-calibrated. Here we calibrate FINN
+directly from data: a subset of the US Forest Inventory & Analysis (FIA)
+program for Oregon, prepared exactly as in the **Preparing your data for FINN**
+vignette.
+
+Everything on this page really runs — the two models are trained, simulated and
+interpreted for real. Because that needs a torch backend and a few minutes, the
+vignette is **precompiled**: `vignettes/build.R` knits `fit-to-fia.Rmd.orig`
+once on a developer machine and commits the resulting static `.Rmd`. So the code
+you see is exactly the code that produced the output beside it, and the package
+builds anywhere without torch.
+
+```{r libraries}
+library(FINN)
+library(torch)
+library(data.table)
+library(ggplot2)
+```
+
+## The data
+
+These four bundled tables are built by **`dev/make_extdata.R`**, which subsamples
+the full Oregon FIA set in `data-raw/` down to ~40 sites. The **climate**
+(`fia_env_dt.csv`) traces upstream to the FINN-fia analysis repo
+(`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`); see
+`data-raw/README.md` for the full chain.
+
+```{r load-data}
+ext <- function(f) system.file("extdata", f, package = "FINN")
+obs_dt     <- fread(ext("fia_obs_dt.csv"))     # observations, wide (one column per variable)
+env_dt     <- fread(ext("fia_env_dt.csv"))     # RAW, untransformed climate
+init_trees <- fread(ext("fia_init_trees.csv"))
+species_dt <- fread(ext("fia_species_dt.csv"))
+
+# a long form of the observations, so later we can match FINN's long predictions
+# (sim$long$site) with a single merge()
+resp     <- c("dbh", "ba", "trees", "growth", "mort", "reg")
+obs_long <- melt(obs_dt, id.vars = c("siteID", "year", "species", "species_name"),
+                 measure.vars = resp, variable.name = "variable", value.name = "obs")
+
+cat(sprintf("%d sites, %d species, observation years %s\n",
+            uniqueN(obs_dt$siteID), uniqueN(obs_dt$species),
+            paste(sort(unique(obs_dt$year)), collapse = " & ")))
+species_dt
+```
+
+The environment is supplied in **natural units**: with `env_autoscale = TRUE`
+(the default) FINN z-standardizes the predictors internally and reuses the same
+constants at prediction time, so raw values are all we ever pass.
+
+```{r plot-env, fig.width = 8, fig.height = 3}
+ggplot(melt(env_dt[, c("temp", "prec")], measure.vars = c("temp", "prec")),
+       aes(value)) +
+  geom_histogram(bins = 20, fill = "grey40") +
+  facet_wrap(~variable, scales = "free", labeller = as_labeller(
+    c(temp = "Mean~annual~temp~(degree*C)", prec = "Annual~precip~(mm)"), label_parsed)) +
+  labs(x = NULL, y = "site x year") + theme_minimal()
+```
+
+A few observed series — basal area and tree numbers by year for the most
+abundant species:
+
+```{r plot-observations, fig.width = 8, fig.height = 3.5}
+top_sp <- obs_dt[species_name != "other", .(tot = sum(ba, na.rm = TRUE)), by = species][order(-tot)][1:4, species]
+ggplot(obs_long[species %in% top_sp & variable %in% c("ba", "trees")],
+       aes(factor(year), obs, fill = factor(species_name))) +
+  geom_boxplot(outlier.size = 0.4) +
+  facet_wrap(~variable, scales = "free_y") +
+  scale_fill_viridis_d(name = "species") +
+  labs(x = "observation year", y = NULL) + theme_minimal()
+```
+
+## Initial cohorts
+
+```{r init-cohorts}
+init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(obs_dt$species))
+```
+
+```{r model-colours, include = FALSE}
+# shared model colours: the assess scatter and the ALE panels use the same mapping
+model_cols <- c("Process (mechanistic)" = "#1b9e77", "Hybrid (growth = NN)" = "#d95f02")
+```
+
+## Fit a Process-FINN
+
+In the fully mechanistic configuration every process keeps its predefined form,
+while its species and environmental parameters are learned (`optimize* = TRUE`)
+and the `~.` formula lets every environmental predictor enter the growth,
+regeneration and mortality responses. The model is calibrated end-to-end by
+gradient descent through the entire simulation.
+
+```{r build-process}
+FINN.seed(42)
+m <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+```
+
+```{r fit-process, results = "hide"}
+fit(m,
+  env         = env_dt,      # raw climate
+  data        = obs_dt,
+  init_cohort = init_cohorts,
+  device      = "cpu",
+  epochs      = 3000L,
+  batchsize   = 40L,
+  patches     = 4,
+  patch_size  = 0.06,
+  weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
+  lr          = 0.01,
+  env_autoscale   = TRUE         # default
+)
+```
+
+## Replace growth with a neural network (Hybrid-FINN)
+
+FINN's defining feature is that **any single demographic process can be swapped
+from a mechanistic function to a neural network**, while the others stay
+mechanistic — a *hybrid* model. The mechanistic processes keep the system
+ecologically constrained; the network absorbs structure the fixed functional form
+cannot express. Here we replace **growth** with a small neural network via
+`createHybrid()`, leaving competition, regeneration and mortality mechanistic,
+and refit on the same data with the **identical `fit()` call**.
+
+```{r hybrid-build}
+FINN.seed(42)
+m_hybrid <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createHybrid(~., hidden = c(20L, 20L), transformer = FALSE),  # NN replaces growth
+  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+```
+
+```{r hybrid-fit, results = "hide"}
+fit(m_hybrid,
+  env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+  epochs = 3000L, batchsize = 40L, patches = 4, patch_size = 0.06,
+  weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
+)
+```
+
+With both variants fitted, the rest of the vignette inspects and compares them:
+training convergence, a `summary()` of the learned structure,
+predicted-vs-observed fit, the learned niches, and the accumulated local effects
+that reveal what the network learned.
+
+## Training convergence
+
+Both variants are trained the same way; the training loss of the process model is
+shown here.
+
+```{r convergence, fig.width = 6, fig.height = 3}
+loss <- data.table(epoch = seq_along(m$history), loss = sapply(m$history, sum))
+ggplot(loss, aes(epoch, loss)) +
+  geom_line(colour = "steelblue") +
+  scale_y_log10() +
+  labs(x = "epoch", y = "total training loss (log scale)") + theme_minimal()
+```
+
+## What the model learned — `summary()`
+
+`summary()` gives a compact overview of the *learned structure*: for each process
+and species it reports how important each environmental predictor is (ALE-variance
+importance, rate-normalised) and its average conditional effect. It reuses the
+cached conditional effects, so once `ALE()` (below) or a previous `summary()` has
+run it needs no further simulation.
+
+```{r model-summary, comment = "", class.output = "summary-out"}
+summary(m)
+```
+
+The niche and ALE sections below unpack this overview into per-driver response
+*curves*.
+
+## Assess the fit
+
+We simulate from each fitted model and compare predictions to observations per
+response variable — **Spearman correlation** (rank agreement) and **RMSE** (in
+each response's own units), matched on site × year × species:
+
+```{r assess-code}
+# predicted-vs-observed for each model variant, from one prediction pass each
+pred_of <- function(model, label) {
+  model$eval()                                   # deterministic: dropout off
+  sim <- predict(model, env = env_dt, init_cohort = init_cohorts,
+                 patches = 4, patch_size = 0.06, device = "cpu")
+  merge(obs_long, sim$long$site, by = c("siteID", "year", "species", "variable"))[, model := label]
+}
+FINN.seed(1)
+obs_pred <- rbind(pred_of(m,        "Process (mechanistic)"),
+                  pred_of(m_hybrid, "Hybrid (growth = NN)"))
+
+# Spearman + RMSE per response variable, one column set per model
+metrics <- obs_pred[is.finite(obs) & is.finite(value),
+                    .(spearman = round(cor(obs, value, method = "spearman"), 2),
+                      rmse     = round(sqrt(mean((obs - value)^2)), 2)), by = .(model, variable)]
+comparison <- merge(
+  metrics[model == "Process (mechanistic)", .(variable, spearman_proc = spearman, rmse_proc = rmse)],
+  metrics[model == "Hybrid (growth = NN)",  .(variable, spearman_hyb  = spearman, rmse_hyb  = rmse)],
+  by = "variable")[order(-spearman_proc)]
+comparison
+```
+
+The structural variables — basal area, tree numbers and diameter — are
+reconstructed well; the noisier per-tree rates (growth, mortality, regeneration)
+are harder to constrain from two inventories. The hybrid reproduces the
+structural variables about as well as the mechanistic model — with **no growth
+equation specified** — so hybrids are the tool of choice when a process's
+mechanistic form is uncertain or you suspect the data carry structure the
+equation misses; the surrounding mechanistic processes still anchor the model
+ecologically.
+
+```{r assess-plot, fig.width = 7.5, fig.height = 3.2}
+ggplot(obs_pred[variable %in% c("ba", "trees", "dbh") & is.finite(obs)],
+       aes(obs, value, colour = model)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
+  geom_point(alpha = 0.3, size = 0.6) +
+  facet_wrap(~variable, scales = "free") +
+  scale_colour_manual(values = model_cols) +
+  labs(x = "observed", y = "predicted", colour = NULL) +
+  theme_minimal() + theme(legend.position = "top")
+```
+
+## Interpreting the growth process with ALE
+
+`ALE()` returns the **accumulated local effect** of every driver on each process —
+the effect measure of choice when predictors are correlated, because it
+accumulates *local* changes within the observed data instead of extrapolating to
+unrealistic combinations. Running it on **both** fitted models lets us read what
+growth responds to *and* compare the mechanistic process with the neural-network
+hybrid, across growth's **structural** inputs (tree size, light) and its
+**environmental niche** (climate). It returns one table per process (`growth`,
+`mortality`, `regeneration`); we use the growth table of each model.
+
+```{r ale-code, results = "hide"}
+FINN.seed(1)
+ale_proc <- ALE(m,        env_dt, init_cohorts, plot = FALSE)   # mechanistic growth
+ale_hyb  <- ALE(m_hybrid, env_dt, init_cohorts, plot = FALSE)   # growth = NN
+
+# one tidy table with both variants. Environmental drivers come back on the
+# model's scaled axis, so back-transform temp/prec to natural units (deg C, mm);
+# the structural drivers (dbh, light) are already on their natural axes.
+to_natural <- function(a, model) {
+  sc <- as.data.table(model$env_scaling)[, .(var = variable, center, scale)]
+  merge(data.table(a), sc, by = "var", all.x = TRUE)[!is.na(center), x := x * scale + center]
+}
+growth <- rbind(
+  to_natural(ale_proc$growth, m)[,        model := "Process (mechanistic)"],
+  to_natural(ale_hyb$growth,  m_hybrid)[, model := "Hybrid (growth = NN)"])
+growth <- merge(growth, species_dt, by = "species")
+```
+
+One helper plots the growth ALE of both variants for any set of drivers — one
+panel per species × driver, with **independent axes** so responses of very
+different magnitude stay legible side by side:
+
+```{r ale-helper}
+plot_growth_ale <- function(vars, labs) {
+  d <- growth[var %in% vars & species %in% c(1, 2, 4, 5)]   # the four focal species
+  d[, var := factor(var, levels = names(labs))]
+  ggplot(d, aes(x, ale, colour = model)) +
+    geom_line(linewidth = 0.7) +
+    facet_grid(species_name ~ var, scales = "free",
+               labeller = labeller(var = as_labeller(labs, label_parsed),
+                                    species_name = label_value)) +
+    scale_colour_manual(values = model_cols) +
+    labs(x = NULL, y = "accumulated local effect on growth", colour = NULL) +
+    theme_minimal() + theme(legend.position = "top", strip.text.y = element_text(angle = 0))
+}
+```
+
+### Environmental niches
+
+Because the environmental responses are learned, each curve is an inferred
+**niche** — how a species' growth scales along a climate gradient. Ecologically
+familiar contrasts emerge without being prescribed: *Pinus ponderosa* grows best
+on the driest sites, while wetter-climate species ramp up with precipitation. The
+hybrid's learned climate response broadly tracks the mechanistic one.
+
+```{r ale-environmental, fig.width = 7, fig.height = 6.5}
+plot_growth_ale(c("temp", "prec"),
+                c(temp = "temperature~(degree*C)", prec = "precipitation~(mm)"))
+```
+
+### Which drivers matter — `feature_importance()`
+
+The niches show the *shape* of each response; `feature_importance()` gives its
+*magnitude*. It permutes each environmental predictor and re-simulates, measuring
+the resulting increase in prediction error — a re-simulation counterpart to the
+analytical importance in `summary()`. Below we read off the importances for the
+growth process of the four focal species:
+
+```{r featimp-code, results = "hide"}
+FINN.seed(1)
+fi <- feature_importance(m, env_dt, init_cohorts, nperm = 20L, seed = 1L,
+                         patches = 4, patch_size = 0.06, device = "cpu")
+fimp_growth <- merge(data.table(fi$growth)[species %in% c(1, 2, 4, 5)],
+                     species_dt, by = "species")
+```
+
+```{r featimp-plot, fig.width = 7.5, fig.height = 3}
+ggplot(fimp_growth, aes(reorder(variable, importance), importance, fill = importance)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~species_name, nrow = 1) +
+  scale_fill_viridis_c(guide = "none") +
+  labs(x = NULL, y = "permutation importance (delta error)") + theme_minimal()
+```
+
+Each species leans on a different climate driver — the importances are learned per
+species, not shared.
+
+### Response to size and light — did the network recover the mechanistic form?
+
+The point of a hybrid is to ask which functional form the neural network learned
+and how it *compares* to the mechanistic function it replaced. For the pines the
+network recovered the mechanistic decline of growth with size almost exactly; for
+*Abies grandis* and *Pseudotsuga* it settled on a different, data-driven shape —
+the freedom that makes hybrids useful when the mechanistic form is uncertain.
+
+```{r ale-structural, fig.width = 7, fig.height = 6.5}
+plot_growth_ale(c("dbh", "light"),
+                c(dbh = "diameter~(cm)", light = "light~availability"))
+```
+
+Each curve spans only the range its *own* model actually simulates (ALE never
+extrapolates), so where the process and hybrid cover different ranges — as for
+*Abies grandis* light — the two models simply place that species in different
+conditions; the mismatch is information, not an artefact. The same
+`ale_*$mortality` / `$regeneration` tables carry the other two processes — plot
+any of them the same way.
+
+```{r session}
+sessionInfo()
+```

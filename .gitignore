@@ -40,3 +40,6 @@ vignettes/annimated-plots/combined_iterations.gif
 
 /wc2.1_10m_bio
 .positai
+
+# pkgdown site build output (deployed to the gh-pages branch, not committed to main)
+docs/

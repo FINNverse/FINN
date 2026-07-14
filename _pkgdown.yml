@@ -12,53 +12,81 @@ navbar:
       text: Articles
       menu:
       - text: Introduction to FINN
-        href: articles/Introduction-to-FINN.html
+        href: articles/A-Introduction_to_FINN.html
       - text: Succession from a handful of species
-        href: articles/succession-demo.html
+        href: articles/B-Succession_demo.html
       - text: Preparing your data for FINN
-        href: articles/data-preparation.html
+        href: articles/C-Data_preparation.html
       - text: Fitting FINN to FIA data
-        href: articles/fit-to-fia.html
-      - text: '---'
-      - text: 'Recovering a forest process with Hybrid-FINN'
-        href: articles/hybrid-recovery.html
-
-articles:
-- title: Get started
-  navbar: ~
-  contents:
-  - Introduction-to-FINN
-  - succession-demo
-  - data-preparation
-  - fit-to-fia
-- title: Advanced
-  contents:
-  - hybrid-recovery
+        href: articles/D-Fit_to_FIA.html
 
 reference:
 - title: Model setup
+  desc: Define a FINN model and how each demographic process is represented.
   contents:
   - finn
   - createProcess
   - createHybrid
-  - simulateForest
-- title: Fitting
+  - CohortMat
+
+- title: Fitting and prediction
+  desc: Calibrate every component jointly, end-to-end, then simulate.
   contents:
   - fit
+  - predict.finn_class
+  - simulateForest
+  - FINN.seed
+
 - title: Processes
+  desc: The built-in mechanistic demographic functions and allometries.
   contents:
   - growth
   - mortality
   - regeneration
   - competition
   - height
-- title: Data conversion
+  - BA_stand
+  - BA_stem
+  - dbh2ba
+
+- title: Data preparation
+  desc: Turn a raw tree list and environment table into FINN's inputs.
   contents:
+  - makeObsData
+  - resolveSiteIDs
+  - makeInitCohorts
   - climateDF2array
   - obsDF2arrays
-  - makeObsData
-  - makeInitCohorts
+  - array2obsDF
   - pred2DF
-- title: Interpretation
+  - extract_env
+
+- title: Environmental scaling
+  desc: >
+    FINN standardises environmental predictors internally
+    (`env_autoscale = TRUE`); these expose the stored constants.
+  contents:
+  - apply_env_scaling
+  - compute_env_scaling
+
+- title: Interpretation (xAI)
+  desc: Read back what a fitted - or hybrid - model actually learned.
   contents:
   - ALE
+  - plot.FINNale
+  - summary.finn_class
+  - conditionalEffects
+  - averageConditionalEffects
+  - feature_importance
+
+- title: Low-level utilities
+  desc: Building blocks used internally and exported for advanced use.
+  contents:
+  - aggregate_results_old
+  - binomial_from_bernoulli
+  - binomial_from_gamma
+  - groupby_mean
+  - index_species
+  - np_runif
+  - rweibull_cohorts
+  - sample_poisson_relaxed
