@@ -99,10 +99,14 @@ finn = function(N_species,
 #' trees), `growth`, `mortality` and `regeneration`. Following Pichler & Käber
 #' (2026), reasonable choices are mean squared error (`"mse"`, equivalent to a
 #' Gaussian likelihood) for `dbh` and `ba`, Poisson likelihood for `trees`,
-#' negative binomial (`"nbinom"`) for `regeneration`, and `"mse"` for `mortality`
-#' and `growth` as continuous rates (the model also supports `"gaussian"` and
-#' `"poisson"` as alternatives via the `loss` argument; see Appendix B of the
-#' paper for details). Each loss can be weighted individually via `weights`, and
+#' negative binomial (`"nbinom"`) for `regeneration`, and `"mse"` for `growth` as
+#' a continuous rate. `mortality` is an observed *proportion* of trees that died
+#' and the model predicts it through a sigmoid, so it defaults to `"binomial"` —
+#' a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
+#' targets). This respects the \[0, 1\] support and the mean-variance link of a
+#' proportion, both of which `"mse"` ignores (the model also supports
+#' `"gaussian"` and `"poisson"` as alternatives via the `loss` argument; see
+#' Appendix B of the paper for details). Each loss can be weighted individually via `weights`, and
 #' missing values in the observed data are masked out of the corresponding loss
 #' term. The model is trained for `epochs` iterations over the (optionally
 #' batched and shuffled) data using `optimizer` with learning rate `lr`.
@@ -140,7 +144,7 @@ finn = function(N_species,
 #'   `"step"`, `list(T_max = 200)` for `"cosine"`, `list(factor = 0.5, patience =
 #'   20)` for `"plateau"`. Unset entries fall back to defaults scaled off
 #'   `epochs`/`lr`.
-#' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, and `gaussian`.
+#' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, `gaussian`, and `binomial`. `binomial` is a Bernoulli/binomial negative log-likelihood intended for `mortality`; it expects both the prediction and the observation to be proportions in \[0, 1\].
 #' @param weights (`numeric(6)`)\cr Weights of the different losses.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
@@ -183,7 +187,7 @@ fit = function(model,
                lr = 0.01,
                lr_scheduler = "none",
                lr_scheduler_params = list(),
-               loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom"), #
+               loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
                weights = rep(1, 6),
                optimizer = optim_ignite_adam,
                batchsize = NULL,
@@ -795,7 +799,7 @@ finn_class = nn_module(
             #browser()
             loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,(i-period+1):(i),]$mean(2) )
             # mort rates
-            loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2))
+            loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,8])
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,(i-period+1):(i),]$sum(2) )#(Result[[7]][,(i-period+1),] - Result[[7]][,i,])$clamp(min = 0.0)  )
             self$obs_rec = y[,tmp_index,,6] |> as.matrix()
@@ -827,7 +831,7 @@ finn_class = nn_module(
 
             loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,i,])
             # mort rates
-            loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,i,])
+            loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,i,], y[,tmp_index,,8])
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,i,])
             self$loss_raw = as.numeric(loss)
@@ -1034,7 +1038,7 @@ finn_class = nn_module(
                  # entries fall back to defaults scaled off `epochs`/`lr`.
                  lr_scheduler_params = list(),
                  # # 1 -> dbh, 2 -> ba, 3 -> trees, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
-                 loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom"), #
+                 loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
                  weights = rep(1, 6),
                  optimizer = optim_ignite_adam,
                  batchsize = NULL,
@@ -1088,6 +1092,11 @@ finn_class = nn_module(
     options(na.action='na.pass')
     sp = self$N_species
     if(!"period_length" %in% colnames(data)) data$period_length = NA_real_
+    # Number of trees at risk behind each observed mortality proportion. Weighting
+    # the binomial likelihood by it is what makes a 100-tree observation count for
+    # more than a 1-tree one. Data built before makeObsData emitted this column
+    # falls back to 1, which reduces the binomial exactly to an unweighted one.
+    if(!"n_at_risk" %in% colnames(data)) data$n_at_risk = 1.0
     response = list(
       dbh = abind::abind(lapply(1:self$N_species, function(i) extract_env(~0+dbh, data[data$species==i,])), along = 3L),
       ba = abind::abind(lapply(1:sp, function(i) extract_env(~0+ba, data[data$species==i,])), along = 3L),
@@ -1095,7 +1104,9 @@ finn_class = nn_module(
       growth = abind::abind(lapply(1:sp, function(i) extract_env(~0+growth, data[data$species==i,])), along = 3L),
       mort = abind::abind(lapply(1:sp, function(i) extract_env(~0+mort, data[data$species==i,])), along = 3L),
       reg = abind::abind(lapply(1:sp, function(i) extract_env(~0+reg, data[data$species==i,])), along = 3L),
-      period_length = abind::abind(lapply(1:sp, function(i) extract_env(~0+period_length, data[data$species==i,])), along = 3L)
+      period_length = abind::abind(lapply(1:sp, function(i) extract_env(~0+period_length, data[data$species==i,])), along = 3L),
+      # slice 8 - appended last so the existing y[,,,1:7] indices stay valid
+      n_at_risk = abind::abind(lapply(1:sp, function(i) extract_env(~0+n_at_risk, data[data$species==i,])), along = 3L)
     )
     options(na.action='na.omit')
 
@@ -1475,13 +1486,60 @@ finn_class = nn_module(
       for(l in 1:6) {
           tmp_loss = loss[l]
           tmp_loss_name = names(loss)[l]
+          # `func` is assigned inside the if/else chain below and only stored at
+          # the end of the iteration. An unrecognised name would leave `func`
+          # holding the PREVIOUS variable's closure and silently fit the wrong
+          # likelihood, so reject it here instead.
+          supported = c("mse", "gaussian", "poisson", "binomial", "nbinom")
+          if(!tmp_loss %in% supported) {
+            stop(sprintf("Unsupported loss '%s' for '%s'. Supported: %s.",
+                         tmp_loss, tmp_loss_name, paste(supported, collapse = ", ")))
+          }
+          # "nbinom" only has an implementation for these two responses.
+          if(tmp_loss == "nbinom" && !tmp_loss_name %in% c("trees", "regeneration")) {
+            stop(sprintf("loss 'nbinom' is only implemented for 'trees' and 'regeneration', not '%s'.",
+                         tmp_loss_name))
+          }
+          func = NULL
           if(tmp_loss == "mse") {
             func =local({
               local_l = l
               local_weights = weights
-              function(true, pred) {
+              function(true, pred, n = NULL) {
                 mask = true$isnan()$bitwise_not()
                 if(as.logical(mask$max()$data())) return(torch::nnf_mse_loss(pred[mask], true[mask])$mean()*local_weights[local_l])
+                else return(0.0)
+              }
+            })
+          } else if(tmp_loss == "binomial") {
+            # Bernoulli/binomial negative log-likelihood for a proportion.
+            # `pred` is a survival-probability complement in (0,1) (the processes
+            # return it through a sigmoid), and `true` is the observed fraction
+            # that died. nnf_binary_cross_entropy accepts fractional targets, so
+            # this is the binomial log-likelihood up to the constant binomial
+            # coefficient - the term that does not depend on the parameters.
+            func = local({
+              local_l = l
+              local_weights = weights
+              function(true, pred, n = NULL) {
+                mask = true$isnan()$bitwise_not()
+                if(as.logical(mask$max()$data())) {
+                  # clamp p away from {0,1}: log(0) is -Inf and would poison the
+                  # gradient of every parameter, not just this loss term.
+                  p = pred[mask]$clamp(1e-6, 1 - 1e-6)
+                  y = true[mask]$clamp(0, 1)
+                  if(is.null(n)) return(torch::nnf_binary_cross_entropy(p, y)*local_weights[local_l])
+                  # Weighting each observation by its trees-at-risk is what turns
+                  # the Bernoulli term into the binomial one: it is identical to
+                  # a cbind(died, survived) response, and to glm(prop ~ .,
+                  # family = binomial, weights = n). Normalising by sum(w) rather
+                  # than taking torch's mean(w * l) keeps the term O(1), so the
+                  # `weights` argument stays on the same scale as before.
+                  w = n[mask]$clamp(min = 0)
+                  nll = torch::nnf_binary_cross_entropy(p, y, weight = w, reduction = "sum")
+                  denom = w$sum()$clamp(min = 1e-8)
+                  return((nll/denom)*local_weights[local_l])
+                }
                 else return(0.0)
               }
             })
@@ -1495,7 +1553,7 @@ finn_class = nn_module(
               local_tmp_loss_name = tmp_loss_name
               local_l = l
               local_weights = weights
-              function(true, pred) {
+              function(true, pred, n = NULL) {
                 sigma_raw = self[[paste0("par_loss_",local_tmp_loss_name, "_scale")]]
                 sigma = torch_log(1.0+torch_exp(sigma_raw) )
                 mask = true$isnan()$bitwise_not()
@@ -1508,7 +1566,7 @@ finn_class = nn_module(
             func = local({
                 local_l = l
                 local_weights = weights
-                function(true, pred) {
+                function(true, pred, n = NULL) {
                   mask = true$isnan()$bitwise_not()
                   if(as.logical(mask$max()$data())) return(torch::distr_poisson(pred[mask] + 0.00001)$log_prob(true[mask])$negative()$mean()*local_weights[local_l])
                   else return(0.0)
@@ -1526,7 +1584,7 @@ finn_class = nn_module(
                   local_tmp_loss_name = tmp_loss_name
                   local_l = l
                   local_weights = weights
-                  function(true, pred) {
+                  function(true, pred, n = NULL) {
                     mask = true$isnan()$bitwise_not()
                     theta = 1.0/torch::nnf_softplus( self[[paste0("par_loss_",local_tmp_loss_name, "_theta")]] )
                     if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta)$mean()*local_weights[local_l])
@@ -1538,7 +1596,7 @@ finn_class = nn_module(
                 local({
                   local_l = l
                   local_weights = weights
-                  function(true, pred) {
+                  function(true, pred, n = NULL) {
                     mask = true$isnan()$bitwise_not()
                     theta = self$par_theta_recruits
                     theta = theta$squeeze(1)$`repeat`(c(pred$shape[1], 1))

@@ -1,12 +1,12 @@
 species,species_name
 1,Pseudotsuga menziesii
-2,Pinus contorta
-3,Abies concolor
-4,Pinus ponderosa
+2,Pinus ponderosa
+3,Pinus contorta
+4,Abies concolor
 5,Abies grandis
-6,Alnus rubra
+6,Tsuga heterophylla
 7,Tsuga mertensiana
-8,Arbutus menziesii
-9,Picea engelmannii
-10,Lithocarpus densiflorus
+8,Lithocarpus densiflorus
+9,Alnus rubra
+10,Abies amabilis
 11,other

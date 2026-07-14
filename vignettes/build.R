@@ -37,7 +37,7 @@ stopifnot(requireNamespace("knitr", quietly = TRUE))
 # READING ORDER — pkgdown auto-discovers articles and sorts them alphabetically
 # by filename, so without it succession lands last instead of second.
 vignettes <- c("A-Introduction_to_FINN", "B-Succession_demo",
-               "C-Data_preparation", "D-Fit_to_FIA")
+               "C-Data_preparation", "D-Fit_to_FIA", "E-Mortality")
 
 args     <- commandArgs(trailingOnly = TRUE)
 do_site  <- !("--no-site" %in% args)
@@ -47,6 +47,30 @@ if (length(args)) {
   if (length(unknown)) stop("unknown vignette(s): ", paste(unknown, collapse = ", "))
   vignettes <- args
 }
+
+# --- guard: the INSTALLED data must match inst/extdata -----------------------
+# The vignettes reach their data through system.file(), which resolves to the
+# INSTALLED package, not this source tree. Re-running dev/make_extdata.R without
+# reinstalling therefore knits the vignettes against stale data - silently, and
+# with results that look perfectly plausible. This has bitten twice; fail loudly
+# instead.
+local({
+  src_dir <- "inst/extdata"
+  if (!dir.exists(src_dir)) return(invisible(NULL))
+  inst_dir <- system.file("extdata", package = "FINN")
+  if (!nzchar(inst_dir)) stop("FINN is not installed - run R CMD INSTALL . first.")
+  files <- list.files(src_dir)
+  stale <- files[!vapply(files, function(f) {
+    a <- file.path(src_dir, f); b <- file.path(inst_dir, f)
+    file.exists(b) && identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
+  }, logical(1))]
+  if (length(stale)) {
+    stop("installed inst/extdata is STALE vs this source tree:\n  ",
+         paste(stale, collapse = "\n  "),
+         "\nRun `R CMD INSTALL . --no-docs` before knitting, or the vignettes ",
+         "will silently train on old data.")
+  }
+})
 
 owd <- setwd("vignettes")
 on.exit(setwd(owd), add = TRUE)

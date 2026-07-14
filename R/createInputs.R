@@ -9,7 +9,8 @@
 #'   species_name, dbh, status, living, and optional trees.
 #' @param env_dt data.table with environment data including siteName and year.
 #' @param obs_dt data.table with observations including siteName, patchName, year,
-#'   species_name, and stand metrics (ba, dbh, trees, growth, mort, reg).
+#'   species_name, and stand metrics (ba, dbh, trees, growth, mort, n_at_risk,
+#'   n_died, reg), as returned by \code{makeObsData}.
 #' @param createInitCohorts logical. If TRUE, build FINN initial cohorts from
 #'   trees with \code{living == TRUE} and \code{year == 1}. Default TRUE.
 #'
@@ -59,16 +60,20 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   obs_dt[, year := period-1,]
   obs_dt <- obs_dt[, -"period"]
   obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = T)
-  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
+  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
 
   obs_dt_aggr <- obs_dt[,.(ba = mean(ba, na.rm = T),
                         dbh = mean(dbh, na.rm = T),
                         trees = mean(trees, na.rm = T),
                         growth = mean(growth, na.rm = T),
-                        mort = mean(mort, na.rm = T),
+                        # mortality counts pool by summing; the rate is derived
+                        # from the pooled counts, never averaged from rates.
+                        n_at_risk = sum(n_at_risk, na.rm = T),
+                        n_died = sum(n_died, na.rm = T),
                         reg = mean(reg, na.rm = T)),
                     by = .(siteID, year, species, species_name)]
-  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "mort", "reg", "species", "species_name")
+  obs_dt_aggr[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
+  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
 
   siteID_dt[, OrigYear := year, by = .(siteID, patchID)]
   siteID_dt[, year := period, by = .(siteID, patchID)]
@@ -117,7 +122,9 @@ dbh2ba <- function(dbh){
 #' filters sites, harmonizes years, optionally aggregates by site.
 #'
 #' @param tree_dt data.table of tree records with siteName, patchName, year,
-#'   treeName, species_name, dbh, status, living, and optional \code{mort}.
+#'   treeName, species_name, dbh, \code{status} (one of "alive", "new", "dead")
+#'   and \code{living}. Mortality is derived from \code{status}; a \code{mort}
+#'   column, if present, is ignored.
 #' @param plotsize numeric plot area used to scale recruitment.
 #' @param aggregate_by_site logical. Aggregate patches to site level. Default TRUE.
 #' @param minNyears integer or NULL. Keep sites with at least this many years and
@@ -133,7 +140,12 @@ dbh2ba <- function(dbh){
 #'
 #' @return A list with:
 #' \itemize{
-#'   \item \code{obs_dt}: observations at site or patch level.
+#'   \item \code{obs_dt}: observations at site or patch level. Mortality comes
+#'     back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
+#'     the start of the interval) and \code{n_died} (how many of them were dead
+#'     at the end), plus the derived rate \code{mort = n_died / n_at_risk}
+#'     (\code{NA} where no cohort was at risk). The counts are the binomial
+#'     response; pass them to \code{fit} with \code{mortality = "binomial"}.
 #'   \item \code{tree_dt}: input trees with added growth fields and species recode.
 #' }
 #'
@@ -142,9 +154,15 @@ dbh2ba <- function(dbh){
 makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
   # browser()
   tree_dt <- copy(as.data.table(tree_dt))
+  data.table::setorder(tree_dt, treeName, year)
   tree_dt[, ":="(
     year_before = data.table::shift(year,1,type = "lag"),
-    dbh_before = data.table::shift(dbh,1,type = "lag")
+    dbh_before = data.table::shift(dbh,1,type = "lag"),
+    # state at the START of the interval ending at this record - the closed
+    # cohort below is defined entirely in terms of these.
+    status_before  = data.table::shift(status,1,type = "lag"),
+    living_before  = data.table::shift(living,1,type = "lag"),
+    species_before = data.table::shift(species_name,1,type = "lag")
     ), by = treeName]
   tree_dt[, period_length := year - year_before,]
   # exclude all plots without consistent period length
@@ -191,13 +209,39 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
     growth = mean(rel_growth[living == T], na.rm = T),
     dbh = mean(dbh[living == T], na.rm = T),
     trees = sum(living == T, na.rm = T),
-    n_mort = sum(mort == T, na.rm = T),
     reg = sum(status == "new", na.rm = T)/plotsize
   ),by= .(siteName,patchName, year, species_name)]
 
-  obs_dt[, trees_before := data.table::shift(trees, 1, type = "lag"), by = .(siteName, patchName, species_name)]
-  obs_dt[, mort := 1-((trees_before-n_mort)/trees_before)^(1/1),]
-  obs_dt[is.infinite(mort), mort := NA,]
+  ## --- mortality: a CLOSED COHORT of the trees alive at the interval start ----
+  ## Mortality is reported as two counts, `n_at_risk` and `n_died`, rather than
+  ## as a bare rate. That is the `cbind(died, survived)` response of a binomial
+  ## GLM, and it is what the "binomial" loss consumes: the counts carry the
+  ## sample size, so an observation is weighted by how many trees it actually
+  ## summarises, and they aggregate by SUMMING (below, and across species when
+  ## lumping) instead of by an unweighted mean of per-patch proportions.
+  ##
+  ## Both columns are pinned to the tree's state at the START of the interval
+  ## (`living_before` / `species_before`). This matters: FIA re-identifies a
+  ## tree's species between visits, so a rate built from a patch x species count
+  ## of survivors could book a death against the species the tree ENDED as while
+  ## the denominator counted the species it STARTED as - which is how the old
+  ## `n_mort / trees_before` produced mort > 1. Pinning both to the start makes
+  ## `n_died <= n_at_risk` true by construction.
+  ##
+  ## NOTE - this is a CLOSED cohort: trees that recruit during the interval
+  ## appear in neither column, so recruit mortality is not scored. The
+  ## alternative is an OPEN cohort (at_risk = alive at start + recruits during
+  ## the interval; died = every death incl. those recruits). That does score
+  ## recruit mortality, at the cost of biasing the rate downwards, because a
+  ## recruit is not exposed for the whole interval. To switch, admit the "new"
+  ## trees into both columns here and carry an exposure offset into the loss.
+  mort_cohort <- tree_dt[living_before == TRUE, .(
+    n_at_risk = .N,
+    n_died    = sum(status == "dead", na.rm = TRUE)
+  ), by = .(siteName, patchName, year, species_name = species_before)]
+
+  obs_dt <- merge(obs_dt, mort_cohort,
+                  by = c("siteName", "patchName", "year", "species_name"), all.x = TRUE)
 
   # 1) Build, per site, the full cartesian grid of patch × year × species
   grid <- obs_dt[, CJ(
@@ -218,8 +262,13 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   obs_dt[is.na(trees), trees := 0]
   obs_dt[is.na(reg), reg := 0]
   obs_dt[is.na(growth), growth := NA_real_]
-  obs_dt[is.na(mort), mort := NA_real_]
   obs_dt[is.na(dbh), dbh := NA_real_]
+  # No cohort at risk -> the rate is undefined, not zero. Keep the counts at 0 so
+  # they still sum correctly on aggregation, and let `mort` carry the NA so the
+  # loss masks the observation out.
+  obs_dt[is.na(n_at_risk), n_at_risk := 0L]
+  obs_dt[is.na(n_died),    n_died    := 0L]
+  obs_dt[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
   obs_dt = obs_dt[order(siteName, patchName, species_name, year)]
 
   if(!is.null(minNyears)){
@@ -244,13 +293,17 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
       trees = mean(trees, na.rm = T),
       dbh = mean(dbh, na.rm = T),
       growth = mean(growth, na.rm = T),
-      mort = mean(mort, na.rm = T),
+      # counts SUM across patches; the site rate is then the pooled rate. The
+      # old `mean(mort)` weighted a 1-tree patch the same as a 50-tree one.
+      n_at_risk = sum(n_at_risk, na.rm = T),
+      n_died = sum(n_died, na.rm = T),
       reg = mean(reg, na.rm = T),
       Npatches = uniqueN(patchName)
     ), by = .(siteName, year, species_name)]
+    obs_dt[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
     message("Aggregated obs_dt by siteName. For unaggregated data, set aggregate_by_site = FALSE")
   }else{
-    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, mort, reg)]
+    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg)]
     message("Kept obs_dt unaggregated by siteName. For aggregated data, set aggregate_by_site = TRUE")
   }
 

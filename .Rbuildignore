@@ -10,9 +10,9 @@
 ^pkgdown$
 ^vignettes/articles$
 ^dev$
-^CLAUDE\.md$
 ^\.positai$
 ^\.claude$
 ^data-raw$
 ^Rplots\.pdf$
 ^documentation$
+^vignettes/E-mortality-predictions\.csv$

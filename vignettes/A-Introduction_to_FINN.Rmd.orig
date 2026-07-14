@@ -14,6 +14,7 @@ vignette: >
 knitr::opts_chunk$set(
   collapse  = TRUE,
   comment   = "#>",
+  error     = FALSE,   # a failing chunk must ABORT the knit, never bake an "Error:" into the vignette
   warning   = FALSE,
   message   = FALSE,
   fig.align = "center",

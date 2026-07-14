@@ -15,3 +15,6 @@
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Prediction dump written by E-Mortality (regenerated on every knit).
+E-mortality-predictions.csv

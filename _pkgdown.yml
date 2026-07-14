@@ -19,6 +19,8 @@ navbar:
         href: articles/C-Data_preparation.html
       - text: Fitting FINN to FIA data
         href: articles/D-Fit_to_FIA.html
+      - text: Mortality - binomial response and NN process
+        href: articles/E-Mortality.html
 
 reference:
 - title: Model setup

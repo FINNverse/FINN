@@ -14,6 +14,7 @@ vignette: >
 knitr::opts_chunk$set(
   collapse  = TRUE,
   comment   = "#>",
+  error     = FALSE,   # a failing chunk must ABORT the knit, never bake an "Error:" into the vignette
   warning   = FALSE,
   message   = FALSE,
   fig.align = "center",
@@ -37,10 +38,16 @@ library(data.table)
 FINN is calibrated against a few tidy tables:
 
 - **`obs_dt`** — demographic responses per site × year × species:
-  `siteID, year, ba, dbh, trees, growth, mort, reg, species, species_name`.
-  Year starts at 1; the initial state (year 0) is *not* included. NAs are allowed
-  in any response. Units: `ba` m², `dbh` cm, `trees` count, `growth` relative
-  growth rate, `mort` rate, `reg` trees ha⁻¹.
+  `siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species,
+  species_name`. Year starts at 1; the initial state (year 0) is *not* included.
+  NAs are allowed in any response. Units: `ba` m², `dbh` cm, `trees` count,
+  `growth` relative growth rate, `reg` trees ha⁻¹.
+  Mortality comes back as a **pair of counts** — `n_at_risk` (trees alive at the
+  start of the interval) and `n_died` (how many of them were dead at the end) —
+  with the rate `mort = n_died / n_at_risk` derived for convenience. That pair is
+  the `cbind(died, survived)` response of a binomial GLM, and it is what the
+  default `mortality = "binomial"` loss consumes: the counts carry the sample
+  size, so a 60-tree observation outweighs a 1-tree one.
 - **`env_dt`** — `siteID, year, <env vars…>` in **natural units**; must cover
   every site × year in `obs_dt`. No manual scaling is needed: FINN
   z-standardizes the predictors internally when fitting (`env_autoscale = TRUE`,
@@ -66,8 +73,9 @@ str(tree_dt)
 
 A raw tree record carries, at minimum: `siteName, patchName, treeName, year`
 (calendar year of the inventory), `species_name`, `dbh` (cm), and a `status` of
-`new` / `alive` / `dead`. Our example also carries `status_before` (the tree's
-status at the previous inventory) and a `complete` flag marking trees from fully
+`new` / `alive` / `dead`. That is enough: `makeObsData()` reconstructs each tree's
+previous state itself, by sorting on `treeName` and `year`. Our example also
+carries a `status_before` column and a `complete` flag marking trees from fully
 re-measured plots.
 
 ## Acquiring raw data (example: US FIA)
@@ -84,17 +92,24 @@ fia <- readFIA(dir = "data/FIA", common = TRUE, states = "OR")
 
 ## Define status flags
 
-FINN's builders key off three logical flags derived from `status`:
+FINN's builders key off two logical flags derived from `status`:
 
 ```{r status-flags}
 # reg    = newly recruited this inventory
-# mort   = died since the previous inventory
 # living = currently alive
 tree_dt[, reg    := status == "new"]
-tree_dt[, mort   := status == "dead" & status_before %chin% c("alive", "new")]
 tree_dt[, living := status %chin% c("alive", "new")]
-tree_dt[, .(n = .N), by = .(status, reg, mort, living)]
+tree_dt[, .(n = .N), by = .(status, reg, living)]
 ```
+
+There is deliberately **no tree-level `mort` flag** here. `makeObsData()` derives
+mortality itself, from `status` and `living`, as a closed cohort: for each
+interval it takes the trees that were alive at the *start*, and counts how many
+of them were dead at the *end*. Both columns are pinned to the tree's state at
+the start of the interval, which matters because FIA re-identifies a tree's
+species between visits — a hand-rolled rate can otherwise book a death against
+the species a tree *ended* as while the denominator counted the species it
+*started* as, and report more deaths than trees.
 
 ## Build `obs_dt` with `makeObsData()`
 

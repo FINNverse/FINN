@@ -5,19 +5,21 @@
 # Upstream (the FINN-fia analysis repo, not part of this package):
 #   scripts/03_attach_environment.R   attaches bioclim climate to the FIA plots
 #   scripts/07_prepare_finn_inputs.R  exports the source CSVs into data-raw/
-# This script (make_extdata.R) then subsamples those into the tiny datasets in
-# inst/extdata/. Downstream: dev/train_fia_model.R turns them into the .pt
-# pre-fits, and dev/precompute_vignettes.R into the vig_*.rds vignette caches.
+# This script (make_extdata.R) then subsamples those into the datasets in
+# inst/extdata/. Downstream: vignettes/build.R knits the vignettes, which train
+# the models inline (there are no .pt pre-fits or .rds caches any more).
 #
 # Source (data-raw/, ~18 MB, build-ignored) -> inst/extdata/ products:
-#   Vignette "data-preparation": a RAW tree list + matching env with
+#   Vignette "C-Data_preparation": a RAW tree list + matching env with
 #   siteName/patchName/OrigYear keys, so makeObsData -> resolveSiteIDs ->
 #   makeInitCohorts run live on the sample.
 #     - example_tree_dt.csv, example_env_dt.csv
-#   Vignette "fit-to-fia": ID-resolved tables, subsampled to ~40 sites and
-#   re-indexed (siteID 1..N, species 1..K) so they fit/simulate as-is.
-#     - fia_obs_dt.csv, fia_env_dt.csv (RAW climate), fia_init_trees.csv,
-#       fia_species_dt.csv
+#   Vignette "D-Fit_to_FIA": ID-resolved tables, re-indexed (siteID 1..N,
+#   species 1..K) so they fit/simulate as-is, split into TRAIN and a disjoint
+#   HOLDOUT so the vignette can report out-of-sample performance.
+#     - train:   fia_obs_dt.csv, fia_env_dt.csv (RAW climate), fia_init_trees.csv
+#     - holdout: fia_obs_test.csv, fia_env_test.csv, fia_init_test.csv
+#     - shared:  fia_species_dt.csv  (species coding is derived from TRAIN)
 #
 # Run from the package root:  Rscript dev/make_extdata.R
 suppressMessages({library(data.table); library(FINN)})
@@ -39,67 +41,122 @@ species_lkp <- fread(file.path(src, "species_dt.csv"))
 env_vars <- c("temp", "tempmax", "tempmin", "prec", "precseas", "precwarmq")
 
 ## ---------------------------------------------------------------------------
-## Vignette 3 sample: pick N_FIT sites with >=2 patches and decent tree counts.
+## Mortality as a closed-cohort COUNT pair (n_at_risk / n_died).
+##
+## obs_dt.csv predates makeObsData() emitting these columns, and the upstream
+## FINN-fia script that wrote data-raw/ is not re-runnable as-is (it does not
+## produce full_tree_dt.csv). So rather than recompute every response - which
+## would risk changing which sites are in the sample - we derive ONLY the
+## mortality counts, from the same resolved tree table, using the package's own
+## makeObsData(), and merge them onto obs_dt. Filters are switched off so the
+## site set is untouched; we take just the two count columns.
+##
+## Once FINN-fia/scripts/07_prepare_finn_inputs.R is re-run against the current
+## FINN, obs_dt.csv will carry n_at_risk/n_died natively and this block can go.
+mort_src <- full_tree[, .(siteName, patchName, treeName, year, species_name,
+                          dbh, status, living)]
+mort_counts <- suppressMessages(
+  makeObsData(mort_src, plotsize = 0.06, aggregate_by_site = TRUE,
+              minNyears = NULL, dbh_growth_thresh = NULL)
+)$obs_dt[, .(siteName, year, species_name, n_at_risk, n_died)]
+
+# obs_dt is keyed by siteID; full_tree carries both keys, so map across.
+site_key <- unique(full_tree[, .(siteID, siteName)])
+mort_counts <- merge(mort_counts, site_key, by = "siteName")[, siteName := NULL][]
+
+obs[, mort := NULL]                                   # replaced by the derived rate
+obs <- merge(obs, mort_counts, by = c("siteID", "year", "species_name"), all.x = TRUE)
+obs[is.na(n_at_risk), n_at_risk := 0L][is.na(n_died), n_died := 0L]
+obs[, mort := fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
+stopifnot(all(obs$n_died <= obs$n_at_risk))           # the closed-cohort invariant
+
 ## ---------------------------------------------------------------------------
-N_FIT <- 40
+## Vignette "fit-to-fia": a TRAIN sample and a disjoint HOLDOUT sample.
+##
+## The vignette fits on the train sites and evaluates on sites the model has
+## never seen. That is only meaningful because FINN's parameters are per-species
+## x environment (not per-site), so a fitted model transfers to new sites.
+##
+## Sample size matters: growth/mort/reg are per-tree rates and are only weakly
+## constrained by two inventories. At 40 sites the rarest species had 2-3 finite
+## growth observations, which made the growth Spearman swing by ~0.13 across
+## seeds (sd ~0.05) - pure sampling noise. 200 sites gives ~1190 growth
+## observations with >=22 per species and no species under 10.
+## ---------------------------------------------------------------------------
+N_FIT  <- 200   # sites used for fitting
+N_TEST <- 200   # disjoint sites used ONLY for evaluation
 patches_per_site <- init[, .(np = uniqueN(patchID), nt = .N), by = siteID]
 good <- patches_per_site[np >= 2 & nt >= 10, siteID]
-fit_sites <- sort(sample(good, min(N_FIT, length(good))))
+stopifnot(length(good) >= N_FIT + N_TEST)
 
-# site re-index map (old siteID -> 1..N), applied to every fit table
-site_map <- data.table(siteID = fit_sites, new_siteID = seq_along(fit_sites))
+picked     <- sample(good, N_FIT + N_TEST)          # disjoint by construction
+fit_sites  <- sort(picked[seq_len(N_FIT)])
+test_sites <- sort(picked[N_FIT + seq_len(N_TEST)])
+stopifnot(length(intersect(fit_sites, test_sites)) == 0)
 
-reindex_sites <- function(dt) {
-  dt <- merge(dt, site_map, by = "siteID")
-  dt[, siteID := new_siteID][, new_siteID := NULL]
-  dt[]
-}
-
-obs_f  <- reindex_sites(obs[siteID %in% fit_sites])
-# ship RAW (untransformed) env: FINN standardizes internally via env_autoscale = TRUE
-env_f  <- reindex_sites(env_raw[siteID %in% fit_sites])
-init_f <- reindex_sites(init[siteID %in% fit_sites])
-
-## --- lump to the K most abundant species; rest -> "other" -------------------
-## 28 species over 40 sites is badly under-constrained for a demo fit, so keep
-## the dominant species and merge the long tail (mirrors makeObsData's "other").
+## --- species keep-set: decided on TRAIN, applied to BOTH --------------------
+## The holdout must use the identical species coding, so the keep-set and the
+## species integer map are derived from the training sites only.
 K_KEEP <- 10
-abund  <- obs_f[, .(trees = sum(trees, na.rm = TRUE)), by = species_name][order(-trees)]
-keep   <- head(abund$species_name[abund$species_name != "other"], K_KEEP)
-obs_f[!(species_name %in% keep),  species_name := "other"]
-init_f[!(species_name %in% keep), species_name := "other"]
+abund  <- obs[siteID %in% fit_sites][species_name != "other",
+              .(trees = sum(trees, na.rm = TRUE)), by = species_name][order(-trees)]
+keep   <- head(abund$species_name, K_KEEP)
+sp_map <- data.table(species_name = c(keep, "other"), species = seq_along(c(keep, "other")))
 
 # tree-weighted mean that ignores NA / zero-weight rows
 wmean <- function(x, w) { ok <- is.finite(x) & is.finite(w) & w > 0
   if (any(ok)) sum(x[ok] * w[ok]) / sum(w[ok]) else NA_real_ }
 
-# re-aggregate obs over the lumped species: extensive vars sum, rates tree-weighted
-obs_f <- obs_f[, .(
-  ba     = sum(ba,    na.rm = TRUE),
-  trees  = sum(trees, na.rm = TRUE),
-  reg    = sum(reg,   na.rm = TRUE),
-  dbh    = wmean(dbh,    trees),
-  growth = wmean(growth, trees),
-  mort   = wmean(mort,   trees)
-), by = .(siteID, year, species_name)]
+build_split <- function(sites) {
+  smap <- data.table(siteID = sites, new_siteID = seq_along(sites))
+  ri <- function(dt) { dt <- merge(dt, smap, by = "siteID")
+                       dt[, siteID := new_siteID][, new_siteID := NULL][] }
+  o <- ri(obs[siteID %in% sites])
+  # ship RAW (untransformed) env: FINN standardizes internally via env_autoscale = TRUE
+  e <- ri(env_raw[siteID %in% sites])
+  i <- ri(init[siteID %in% sites])
 
-# species re-index 1..K ordered by abundance, "other" last
-sp_order  <- c(keep, "other")
-sp_map    <- data.table(species_name = sp_order, species = seq_along(sp_order))
-init_f[, species := NULL]                       # drop stale code before remap
-obs_f  <- merge(obs_f,  sp_map, by = "species_name")
-init_f <- merge(init_f, sp_map, by = "species_name")
+  o[!(species_name %in% keep), species_name := "other"]
+  i[!(species_name %in% keep), species_name := "other"]
+
+  # re-aggregate over the lumped species: extensive vars sum, rates tree-weighted.
+  # Mortality is the exception: its counts sum exactly, and the rate is derived
+  # from the pooled counts afterwards - no weighting scheme to get wrong.
+  o <- o[, .(
+    ba        = sum(ba,    na.rm = TRUE),
+    trees     = sum(trees, na.rm = TRUE),
+    reg       = sum(reg,   na.rm = TRUE),
+    dbh       = wmean(dbh,    trees),
+    growth    = wmean(growth, trees),
+    n_at_risk = sum(n_at_risk, na.rm = TRUE),
+    n_died    = sum(n_died,    na.rm = TRUE)
+  ), by = .(siteID, year, species_name)]
+  o[, mort := fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
+
+  i[, species := NULL]                       # drop stale code before remap
+  o <- merge(o, sp_map, by = "species_name")
+  i <- merge(i, sp_map, by = "species_name")
+  setorder(o, siteID, year, species); setorder(e, siteID, year)
+  setorder(i, siteID, patchID, species)
+  list(obs = o, env = e, init = i)
+}
+
+tr <- build_split(fit_sites)
+te <- build_split(test_sites)
+obs_f <- tr$obs                                   # reused by the report below
 species_f <- copy(sp_map)[, .(species, species_name)][order(species)]
 
-setorder(obs_f, siteID, year, species)
-setorder(env_f, siteID, year)
-setorder(init_f, siteID, patchID, species)
-
 env_out_cols <- c("siteID", "year", env_vars)
-fwrite(obs_f,            file.path(out, "fia_obs_dt.csv"))
-fwrite(env_f[, ..env_out_cols], file.path(out, "fia_env_dt.csv"))  # RAW units
-fwrite(init_f,           file.path(out, "fia_init_trees.csv"))
-fwrite(species_f,        file.path(out, "fia_species_dt.csv"))
+# --- train ---
+fwrite(tr$obs,                     file.path(out, "fia_obs_dt.csv"))
+fwrite(tr$env[, ..env_out_cols],   file.path(out, "fia_env_dt.csv"))   # RAW units
+fwrite(tr$init,                    file.path(out, "fia_init_trees.csv"))
+# --- holdout (never seen during fitting) ---
+fwrite(te$obs,                     file.path(out, "fia_obs_test.csv"))
+fwrite(te$env[, ..env_out_cols],   file.path(out, "fia_env_test.csv"))
+fwrite(te$init,                    file.path(out, "fia_init_test.csv"))
+# --- shared species coding ---
+fwrite(species_f,                  file.path(out, "fia_species_dt.csv"))
 # note: no fia_env_scales_dt.csv — the model now stores the standardization
 # constants itself (m$env_scaling) when fit with env_autoscale = TRUE.
 
@@ -141,5 +198,10 @@ files <- list.files(out, full.names = TRUE)
 cat("\n=== inst/extdata written ===\n")
 info <- file.info(files)
 for (f in files) cat(sprintf("  %-26s %6.1f KB\n", basename(f), info[f, "size"]/1024))
-cat(sprintf("\nfit sample: %d sites, %d species | prep sample: %d sites\n",
-            uniqueN(obs_f$siteID), uniqueN(obs_f$species), N_PREP))
+cat(sprintf("\ntrain: %d sites, %d species | holdout: %d sites (disjoint) | prep sample: %d sites\n",
+            uniqueN(tr$obs$siteID), uniqueN(tr$obs$species), uniqueN(te$obs$siteID), N_PREP))
+gobs <- function(d) sum(is.finite(d$growth))
+cat(sprintf("finite growth obs -- train: %d, holdout: %d (was 226 at 40 sites)\n",
+            gobs(tr$obs), gobs(te$obs)))
+cat(sprintf("min growth obs per species (train): %d\n",
+            min(tr$obs[, .(n = sum(is.finite(growth))), by = species]$n)))
