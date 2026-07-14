@@ -27,6 +27,7 @@ from env, so calibration and prediction use an identical transformation
     <li><a class="dropdown-item" href="../articles/B-Succession_demo.html">Succession from a handful of species</a></li>
     <li><a class="dropdown-item" href="../articles/C-Data_preparation.html">Preparing your data for FINN</a></li>
     <li><a class="dropdown-item" href="../articles/D-Fit_to_FIA.html">Fitting FINN to FIA data</a></li>
+    <li><a class="dropdown-item" href="../articles/E-Mortality.html">Mortality - binomial response and NN process</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -49,7 +50,7 @@ from env, so calibration and prediction use an identical transformation
     <p>Re-applies the constants learned by <code><a href="compute_env_scaling.html">compute_env_scaling()</a></code> to <code>env</code>.
 The transformation uses the <em>stored</em> mean/sd only and never recomputes them
 from <code>env</code>, so calibration and prediction use an identical transformation
-(the usual pitfall of <code><a href="https://rdrr.io/r/base/scale.html" class="external-link">scale()</a></code> inside a model formula is avoided).</p>
+(the usual pitfall of <code><a href="https://rspatial.github.io/terra/reference/scale.html" class="external-link">scale()</a></code> inside a model formula is avoided).</p>
     </div>
 
     <div class="section level2">

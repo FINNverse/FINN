@@ -66,13 +66,15 @@ feature_importance(
   (`logical(1)`)  
   see [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md).
   `TRUE` (default) leaves
-  [`predict()`](https://rdrr.io/r/stats/predict.html) to rescale raw
-  `env` internally; `FALSE` treats `env` as already on the model scale.
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)
+  to rescale raw `env` internally; `FALSE` treats `env` as already on
+  the model scale.
 
 - ...:
 
-  passed to [`predict()`](https://rdrr.io/r/stats/predict.html) (e.g.
-  `patches`, `patch_size`).
+  passed to
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)
+  (e.g. `patches`, `patch_size`).
 
 ## Value
 

@@ -5,10 +5,13 @@ FINN directly from data: a subset of the US Forest Inventory & Analysis
 (FIA) program for Oregon, prepared exactly as in the **Preparing your
 data for FINN** vignette.
 
-Everything on this page really runs — the two models are trained,
-simulated and interpreted for real. Because that needs a torch backend
-and a few minutes, the vignette is **precompiled**: `vignettes/build.R`
-knits `fit-to-fia.Rmd.orig` once on a developer machine and commits the
+We fit on 200 sites and evaluate on 200 **held-out** sites, so every
+number below is reported both in-sample and out-of-sample.
+
+Everything on this page really runs — both models are trained, simulated
+and interpreted for real. Because that needs a torch backend and several
+minutes, the vignette is **precompiled**: `vignettes/build.R` knits
+`D-Fit_to_FIA.Rmd.orig` once on a developer machine and commits the
 resulting static `.Rmd`. So the code you see is exactly the code that
 produced the output beside it, and the package builds anywhere without
 torch.
@@ -19,47 +22,66 @@ library(FINN)
 library(torch)
 library(data.table)
 library(ggplot2)
+
+# Training length. Lower this (e.g. 500L) for a quick knit while developing.
+EPOCHS <- 2000L
 ```
 
 ## The data
 
-These four bundled tables are built by **`dev/make_extdata.R`**, which
-subsamples the full Oregon FIA set in `data-raw/` down to ~40 sites. The
-**climate** (`fia_env_dt.csv`) traces upstream to the FINN-fia analysis
-repo (`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`);
-see `data-raw/README.md` for the full chain.
+The bundled tables are built by **`dev/make_extdata.R`**, which draws
+400 sites from the full Oregon FIA set in `data-raw/` and splits them
+into two disjoint samples. The **climate** (`fia_env_dt.csv`) traces
+upstream to the FINN-fia analysis repo
+(`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`); see
+`data-raw/README.md` for the full chain.
+
+The data come in two **disjoint** samples: 200 sites to fit on, and 200
+completely separate sites held out for evaluation. Because FINN’s
+parameters are per-species × environment rather than per-site, a fitted
+model transfers to sites it has never seen — so the holdout is a genuine
+out-of-sample test.
 
 ``` r
 
 ext <- function(f) system.file("extdata", f, package = "FINN")
+
+# --- training sites --------------------------------------------------------
 obs_dt     <- fread(ext("fia_obs_dt.csv"))     # observations, wide (one column per variable)
 env_dt     <- fread(ext("fia_env_dt.csv"))     # RAW, untransformed climate
 init_trees <- fread(ext("fia_init_trees.csv"))
 species_dt <- fread(ext("fia_species_dt.csv"))
 
-# a long form of the observations, so later we can match FINN's long predictions
-# (sim$long$site) with a single merge()
-resp     <- c("dbh", "ba", "trees", "growth", "mort", "reg")
-obs_long <- melt(obs_dt, id.vars = c("siteID", "year", "species", "species_name"),
-                 measure.vars = resp, variable.name = "variable", value.name = "obs")
+# --- holdout sites: never seen during fitting ------------------------------
+obs_test   <- fread(ext("fia_obs_test.csv"))
+env_test   <- fread(ext("fia_env_test.csv"))
+init_test  <- fread(ext("fia_init_test.csv"))
 
-cat(sprintf("%d sites, %d species, observation years %s\n",
-            uniqueN(obs_dt$siteID), uniqueN(obs_dt$species),
+# long form of the observations, so later we can match FINN's long predictions
+# (sim$long$site) with a single merge()
+resp  <- c("dbh", "ba", "trees", "growth", "mort", "reg")
+to_long <- function(d) melt(d, id.vars = c("siteID", "year", "species", "species_name"),
+                            measure.vars = resp, variable.name = "variable", value.name = "obs")
+obs_long  <- to_long(obs_dt)
+test_long <- to_long(obs_test)
+
+cat(sprintf("train: %d sites | holdout: %d sites | %d species | years %s\n",
+            uniqueN(obs_dt$siteID), uniqueN(obs_test$siteID), uniqueN(obs_dt$species),
             paste(sort(unique(obs_dt$year)), collapse = " & ")))
-#> 40 sites, 11 species, observation years 1 & 2
+#> train: 200 sites | holdout: 200 sites | 11 species | years 1 & 2
 species_dt
 #>     species            species_name
 #>       <int>                  <char>
 #>  1:       1   Pseudotsuga menziesii
-#>  2:       2          Pinus contorta
-#>  3:       3          Abies concolor
-#>  4:       4         Pinus ponderosa
+#>  2:       2         Pinus ponderosa
+#>  3:       3          Pinus contorta
+#>  4:       4          Abies concolor
 #>  5:       5           Abies grandis
-#>  6:       6             Alnus rubra
+#>  6:       6      Tsuga heterophylla
 #>  7:       7       Tsuga mertensiana
-#>  8:       8       Arbutus menziesii
-#>  9:       9       Picea engelmannii
-#> 10:      10 Lithocarpus densiflorus
+#>  8:       8 Lithocarpus densiflorus
+#>  9:       9             Alnus rubra
+#> 10:      10          Abies amabilis
 #> 11:      11                   other
 ```
 
@@ -98,9 +120,15 @@ ggplot(obs_long[species %in% top_sp & variable %in% c("ba", "trees")],
 
 ## Initial cohorts
 
+Each simulation starts from the observed first inventory. We build the
+starting state for both samples — the holdout gets its own cohorts, from
+its own sites.
+
 ``` r
 
-init_cohorts <- makeInitCohorts(init_trees, Nspecies = max(obs_dt$species))
+Nsp <- max(obs_dt$species)
+init_cohorts      <- makeInitCohorts(init_trees, Nspecies = Nsp)
+init_cohorts_test <- makeInitCohorts(init_test,  Nspecies = Nsp)
 ```
 
 ## Fit a Process-FINN
@@ -132,7 +160,7 @@ fit(m,
   data        = obs_dt,
   init_cohort = init_cohorts,
   device      = "cpu",
-  epochs      = 3000L,
+  epochs      = EPOCHS,
   batchsize   = 40L,
   patches     = 4,
   patch_size  = 0.06,
@@ -174,7 +202,7 @@ m_hybrid <- finn(
 
 fit(m_hybrid,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
-  epochs = 3000L, batchsize = 40L, patches = 4, patch_size = 0.06,
+  epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
   weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
 )
 ```
@@ -223,170 +251,212 @@ FINN model summary
 ### GROWTH
 
 Analytical ALE importance (rate-normalised) (species in columns):
-  variable    sp1     sp2      sp3      sp4     sp5    sp6     sp7     sp8
-   tempmin 0.4044 18.6261 0.743434  2.18656 57.7642  0.831 0.90627  1.6865
-      prec 7.1751  0.0587 0.104220 16.77873  8.2326 21.075 1.97203  0.0176
-  precseas 0.4239  0.0936 0.067566  0.05002  0.7255  0.190 7.71865 27.0653
- precwarmq 5.8811  2.0147 0.823782  8.47265  1.0840 11.749 0.30062  0.1141
-      temp 1.6235  4.8445 1.540920  0.00211  0.5391  0.103 0.25495  7.1976
-   tempmax 0.0138  1.1516 0.000398  0.20759  0.0158  0.197 0.00647  0.4446
-      sp9    sp10     sp11
- 0.000221 0.24107 1.853373
- 0.092211 0.10477 1.336186
- 0.767364 0.00185 0.000305
- 0.011779 1.87228 0.000268
- 0.021319 3.82022 0.514906
- 0.842131 0.92028 0.458500
+  variable    sp1      sp2     sp3     sp4    sp5     sp6     sp7    sp8    sp9
+   tempmax 0.0229 1.03e+01 0.00729 0.81609 10.267 0.14773 0.02672 0.0051 0.0631
+ precwarmq 1.3149 4.68e-04 0.62125 0.33105 18.912 0.05040 0.00391 1.8151 0.0706
+      prec 3.0803 5.44e-01 3.03680 0.11145  1.255 2.18050 0.38360 1.1333 0.7879
+      temp 0.3247 1.88e-03 0.14186 1.85987  3.463 0.00192 1.71827 0.2585 2.7509
+  precseas 0.4551 1.37e-02 0.31977 0.00736  0.442 0.36148 2.25481 0.0791 2.8965
+   tempmin 0.4592 2.13e-06 1.04825 0.72424  0.227 0.34340 3.18356 0.2439 0.1563
+   sp10   sp11
+ 3.6323 0.0331
+ 0.3655 0.3447
+ 0.5747 0.0508
+ 0.1965 0.0184
+ 0.7833 0.0454
+ 0.0287 0.1869
 
 Average conditional effects (mean; species in columns):
-  variable      sp1     sp2      sp3     sp4     sp5     sp6    sp7     sp8
-      prec  0.15163  0.0111  0.05843 -0.3772  0.1357  0.1923 -0.828  0.0132
- precwarmq -0.12144 -0.0764 -0.13355  0.2595  0.1676 -0.1576  0.532 -0.1585
-   tempmin  0.03567  0.1204 -0.08736  0.2078 -0.3606 -0.0317 -0.522  0.0453
-  precseas -0.03420 -0.0199  0.03484  0.0707  0.2055 -0.0389 -0.644  0.1837
-      temp -0.06448  0.0706  0.09689  0.0145 -0.1612 -0.0247 -0.152 -0.1031
-   tempmax -0.00596 -0.0688 -0.00163 -0.1033 -0.0142 -0.0268 -0.030 -0.0838
-      sp9     sp10     sp11
-  0.01882 -0.05439  0.17422
- -0.00952  0.09541  0.00234
-  0.00132 -0.05462 -0.22585
-  0.04293 -0.00177 -0.00318
-  0.01398 -0.04639  0.08774
-  0.03356  0.05453  0.09643
+  variable      sp1       sp2      sp3      sp4     sp5      sp6      sp7
+  precseas -0.04752 -0.014535 -0.02760  0.00313  0.0666  0.07646  0.30757
+   tempmax -0.00992 -0.126989  0.00354  0.05965  0.2232  0.02905  0.01275
+      prec  0.13544  0.059236  0.10135 -0.03964  0.0739  0.10153 -0.04582
+ precwarmq -0.07931 -0.001282 -0.03749 -0.07012  0.1781 -0.02825 -0.00951
+      temp  0.04421  0.003300 -0.01740 -0.11353 -0.1581  0.00588 -0.05545
+   tempmin -0.05756  0.000146 -0.04760  0.08053 -0.0298  0.05289  0.07806
+      sp8     sp9    sp10    sp11
+  0.02125  0.0839  0.4113  0.0223
+ -0.00149 -0.0162  0.4754  0.0227
+  0.02512  0.0513  0.2248 -0.0298
+ -0.10819 -0.0231  0.1980  0.0671
+  0.02566 -0.1253 -0.1875  0.0166
+  0.02547 -0.0333  0.0598 -0.0571
 
 ### MORTALITY
 
 Analytical ALE importance (rate-normalised) (species in columns):
-  variable     sp1      sp2     sp3    sp4   sp5      sp6     sp7    sp8
-  precseas 0.00121 9.25e-05 2.22571 0.0240 1.856 4.51e+00 0.00754 0.4966
-      prec 0.00166 3.08e-04 0.04467 0.2317 4.554 1.92e-01 0.34862 0.0288
- precwarmq 0.25551 2.74e-04 0.24790 0.0515 1.112 1.41e+00 1.63846 0.0193
-   tempmax 0.00939 6.49e-04 0.53415 0.0392 0.175 5.93e-01 0.28001 0.5523
-      temp 0.02455 1.58e-02 0.07171 0.0384 0.231 3.89e-06 0.46884 0.9415
-   tempmin 0.00515 3.79e-02 0.00529 0.0170 0.193 2.43e-03 0.02935 0.4499
-     sp9     sp10    sp11
- 0.09310 0.101783 0.10763
- 0.00155 0.465988 0.05248
- 0.07147 0.054372 0.00580
- 1.15134 0.085076 0.04698
- 0.23381 0.000242 0.00524
- 0.04732 0.060924 0.03113
+  variable     sp1     sp2    sp3     sp4      sp5      sp6     sp7     sp8
+   tempmin 0.01914 0.00730 3.2123 0.15891 2.14e-02 0.003907 0.00692 0.93460
+  precseas 0.00854 0.22824 0.5268 1.03761 6.91e-01 0.026385 0.76699 0.09532
+ precwarmq 1.34311 0.04601 1.1191 0.01920 2.49e-01 0.000241 0.15960 0.10694
+      prec 0.14842 0.28415 0.0552 0.00284 4.67e-01 0.657343 0.09104 0.02990
+   tempmax 0.31544 0.20049 0.0588 0.61677 8.74e-02 0.001740 0.36878 0.00773
+      temp 0.05133 0.00445 0.2427 0.51636 6.29e-06 0.020808 0.13030 0.66020
+      sp9   sp10     sp11
+ 0.008299 0.2988 7.98e-09
+ 0.101850 0.0129 1.74e-02
+ 0.000581 0.0259 3.03e-02
+ 0.087108 0.2140 2.63e-02
+ 0.024677 0.0278 1.45e-03
+ 0.030661 0.0169 3.62e-02
 
 Average conditional effects (mean; species in columns):
-  variable      sp1       sp2       sp3     sp4     sp5       sp6      sp7
-      prec  0.00874  0.000684  0.000585  0.1084 0.00609 -3.91e-04 -0.01039
- precwarmq  0.06873 -0.000672  0.002655 -0.0479 0.00267 -1.59e-03 -0.02593
-   tempmax -0.02676  0.000842 -0.001149  0.0406 0.00219  1.10e-03  0.01088
-      temp  0.05635  0.003255 -0.000433  0.0263 0.00201  6.66e-06  0.00878
-  precseas -0.00656 -0.000648 -0.002213 -0.0234 0.00441  1.38e-03 -0.00187
-   tempmin  0.03340  0.003638 -0.000279  0.0150 0.00221  1.13e-04  0.00295
-      sp8       sp9    sp10      sp11
-  0.00627 -0.000309 -0.1259 -0.000488
-  0.00518  0.003478  0.0961 -0.000324
- -0.00534  0.005445 -0.1025 -0.000442
- -0.00720  0.003516 -0.0869 -0.000119
- -0.00296 -0.002004 -0.1078 -0.000514
- -0.00627  0.002345 -0.0647 -0.000544
+  variable     sp1     sp2      sp3       sp4       sp5       sp6     sp7
+  precseas -0.0151 -0.0587 -0.00496 -0.031667  0.047513 -0.016101 -0.1107
+      prec  0.0375  0.1057 -0.00197 -0.000795  0.018691 -0.010655 -0.0733
+   tempmax  0.0495 -0.0494 -0.00175 -0.020016 -0.016479 -0.001095  0.1133
+      temp  0.0203  0.0111  0.00374  0.015013 -0.000197  0.008581  0.1240
+ precwarmq  0.0662 -0.0344 -0.00787  0.002446 -0.019026 -0.000637 -0.0812
+   tempmin -0.0154 -0.0109  0.01046  0.008877  0.005761  0.002774  0.0279
+      sp8      sp9    sp10      sp11
+ -0.01102  0.04108 -0.0627 -1.30e-02
+ -0.00821  0.03621 -0.0439 -2.03e-02
+  0.00534 -0.01916  0.0209 -4.62e-03
+ -0.02151 -0.03432  0.0197  2.37e-02
+  0.00943 -0.00326 -0.0301  2.00e-02
+ -0.01979 -0.01828 -0.0463 -1.15e-05
 
 ### REGENERATION
 
 Analytical ALE importance (rate-normalised) (species in columns):
-  variable    sp1    sp2     sp3      sp4     sp5    sp6      sp7     sp8
- precwarmq 0.5365 0.1449 0.46032 0.140604 0.03546 1.7046 0.000615 0.04294
-      prec 0.4161 1.6946 0.00521 0.151043 0.00966 0.7636 0.007534 1.51421
-   tempmin 3.8792 0.0458 0.21552 0.078054 0.03288 0.0240 0.033537 0.90090
-  precseas 0.0793 0.2873 2.70012 0.000799 0.27149 0.3006 0.234941 0.06619
-      temp 0.8905 0.2151 0.63478 0.475916 0.40457 0.0145 0.116060 0.04568
-   tempmax 0.0402 0.0543 0.12169 0.511657 0.13774 0.1499 0.061263 0.00668
-      sp9    sp10   sp11
- 1.46e+00 0.36871 7.6041
- 1.11e+00 0.02589 3.2665
- 5.63e-05 0.41579 0.9462
- 1.75e-01 0.00363 0.7714
- 2.25e-01 0.00484 0.3976
- 7.30e-01 0.00606 0.0326
+  variable     sp1     sp2      sp3     sp4     sp5    sp6    sp7     sp8
+   tempmin 0.81353 0.00441 0.000488 0.46634 0.00284 0.0351 0.0408 0.00850
+      temp 0.00747 0.00278 0.001104 0.27415 0.01092 0.1334 0.1383 0.02124
+ precwarmq 0.03349 0.01543 0.007795 0.18283 1.07330 0.0822 0.0575 2.75022
+   tempmax 0.00791 0.26974 0.264458 0.29047 0.02081 0.8102 0.2283 0.32659
+  precseas 0.06217 0.34980 2.014065 0.00167 0.20579 0.0255 0.1751 0.00157
+      prec 0.28120 0.43459 2.245216 0.05017 0.03274 0.0508 0.0528 0.19984
+    sp9    sp10     sp11
+ 0.0991 0.06393 6.954833
+ 0.7332 0.24821 6.145850
+ 0.0510 0.00163 0.000381
+ 0.0605 0.40306 0.990610
+ 0.0357 0.05541 0.714162
+ 0.0138 0.07209 0.000856
 
 Average conditional effects (mean; species in columns):
-  variable    sp1    sp2     sp3     sp4     sp5    sp6     sp7     sp8
-      prec  0.559 -8.810  0.0651  0.7119 -0.0370  0.542 -0.1756 -0.2050
- precwarmq -0.559  3.767 -1.0421 -0.9564  0.0513  0.646 -0.0825 -0.0957
-  precseas -0.366  3.258  1.0326  0.0411 -0.0995 -0.424  2.3818  0.0913
-   tempmin  2.132 -1.301 -0.3431 -0.4317 -0.0457  0.290 -0.4289  0.1697
-      temp -1.031 -1.173 -0.7128 -0.4233 -0.1291  0.144 -1.0326  0.0779
-   tempmax  0.230  0.672 -0.2666  0.5129  0.0582  0.713 -0.8347  0.0296
-      sp9      sp10   sp11
-  0.50644  0.000295 -2.532
- -0.91373 -0.000885  2.525
-  0.18123  0.000125  1.663
-  0.00437  0.001232  1.519
- -0.27321 -0.000116 -0.915
- -0.48617 -0.000146  0.355
+  variable    sp1     sp2     sp3     sp4     sp5     sp6    sp7     sp8
+   tempmin  1.849 -0.0339 -0.0232 -0.3040 -0.0146  0.0220 -0.294  0.0278
+      temp  0.189 -0.0271  0.0308  0.2377 -0.0204  0.0322 -0.531  0.0441
+  precseas  0.679  0.1955  0.6927  0.0136 -0.1137 -0.0197  1.018  0.0139
+      prec -1.029 -0.3801 -1.7538 -0.1636 -0.0586 -0.0224  0.138  0.0876
+   tempmax  0.155  0.1775 -0.3834  0.1290 -0.0245 -0.0601 -0.380 -0.0807
+ precwarmq  0.297 -0.0893 -0.1171 -0.3404  0.1589 -0.0142 -0.403 -0.2029
+     sp9    sp10    sp11
+  0.1138  0.1921  3.5590
+  0.2969 -0.7807 -3.8187
+ -0.1203  0.6947  1.4836
+ -0.0294  0.2006 -0.0387
+ -0.0454 -0.3573  1.3281
+ -0.0491  0.0257 -0.0261
 ```
 
 The niche and ALE sections below unpack this overview into per-driver
 response *curves*.
 
-## Assess the fit
+## Assess the fit — in-sample and on held-out sites
 
-We simulate from each fitted model and compare predictions to
-observations per response variable — **Spearman correlation** (rank
-agreement) and **RMSE** (in each response’s own units), matched on site
-× year × species:
+The fit was calibrated on the 200 training sites, so scoring it there
+only tells us how well it *reproduces* them. The honest question is
+whether it transfers, so we simulate each model twice — once on the
+training sites, once on the 200 held-out sites — and score both with
+**Spearman correlation** (rank agreement) and **RMSE** (in each
+response’s own units), matched on site × year × species.
 
 ``` r
 
-# predicted-vs-observed for each model variant, from one prediction pass each
-pred_of <- function(model, label) {
+# One prediction pass per model x sample. The holdout is driven only by its own
+# environment and starting cohorts; nothing about it entered the fit.
+pred_of <- function(model, label, env, init, obs_l, split) {
   model$eval()                                   # deterministic: dropout off
-  sim <- predict(model, env = env_dt, init_cohort = init_cohorts,
+  sim <- predict(model, env = env, init_cohort = init,
                  patches = 4, patch_size = 0.06, device = "cpu")
-  merge(obs_long, sim$long$site, by = c("siteID", "year", "species", "variable"))[, model := label]
+  merge(obs_l, sim$long$site, by = c("siteID", "year", "species", "variable"
+  ))[, `:=`(model = label, split = split)][]
 }
 FINN.seed(1)
-obs_pred <- rbind(pred_of(m,        "Process (mechanistic)"),
-                  pred_of(m_hybrid, "Hybrid (growth = NN)"))
+obs_pred <- rbind(
+  pred_of(m,        "Process (mechanistic)", env_dt,   init_cohorts,      obs_long,  "train"),
+  pred_of(m,        "Process (mechanistic)", env_test, init_cohorts_test, test_long, "holdout"),
+  pred_of(m_hybrid, "Hybrid (growth = NN)",  env_dt,   init_cohorts,      obs_long,  "train"),
+  pred_of(m_hybrid, "Hybrid (growth = NN)",  env_test, init_cohorts_test, test_long, "holdout"))
 
-# Spearman + RMSE per response variable, one column set per model
 metrics <- obs_pred[is.finite(obs) & is.finite(value),
                     .(spearman = round(cor(obs, value, method = "spearman"), 2),
-                      rmse     = round(sqrt(mean((obs - value)^2)), 2)), by = .(model, variable)]
-comparison <- merge(
-  metrics[model == "Process (mechanistic)", .(variable, spearman_proc = spearman, rmse_proc = rmse)],
-  metrics[model == "Hybrid (growth = NN)",  .(variable, spearman_hyb  = spearman, rmse_hyb  = rmse)],
-  by = "variable")[order(-spearman_proc)]
-comparison
-#>    variable spearman_proc rmse_proc spearman_hyb rmse_hyb
-#>      <fctr>         <num>     <num>        <num>    <num>
-#> 1:      dbh          0.93      7.81         0.93     8.71
-#> 2:       ba          0.89      0.18         0.86     0.15
-#> 3:    trees          0.88      0.72         0.84     0.68
-#> 4:   growth          0.43      0.11         0.26     0.15
-#> 5:      reg          0.33      6.29         0.22     6.32
-#> 6:     mort          0.07      0.15         0.13     0.13
+                      rmse     = round(sqrt(mean((obs - value)^2)), 2),
+                      n        = .N), by = .(model, split, variable)]
+
+comparison <- dcast(metrics, variable + model ~ split, value.var = c("spearman", "rmse"))
+setcolorder(comparison, c("variable", "model", "spearman_train", "spearman_holdout",
+                          "rmse_train", "rmse_holdout"))
+comparison[order(variable, model)]
+#> Key: <variable, model>
+#>     variable                 model spearman_train spearman_holdout rmse_train
+#>       <fctr>                <char>          <num>            <num>      <num>
+#>  1:      dbh  Hybrid (growth = NN)           0.86             0.72      11.31
+#>  2:      dbh Process (mechanistic)           0.85             0.75      11.63
+#>  3:       ba  Hybrid (growth = NN)           0.84             0.81       0.12
+#>  4:       ba Process (mechanistic)           0.83             0.81       0.12
+#>  5:    trees  Hybrid (growth = NN)           0.82             0.80       0.71
+#>  6:    trees Process (mechanistic)           0.82             0.80       0.71
+#>  7:   growth  Hybrid (growth = NN)           0.30             0.24       0.13
+#>  8:   growth Process (mechanistic)           0.34             0.26       0.13
+#>  9:     mort  Hybrid (growth = NN)           0.12             0.04       0.18
+#> 10:     mort Process (mechanistic)           0.08             0.06       0.18
+#> 11:      reg  Hybrid (growth = NN)           0.21             0.19       6.22
+#> 12:      reg Process (mechanistic)           0.19             0.18       6.23
+#>     rmse_holdout
+#>            <num>
+#>  1:        15.38
+#>  2:        13.82
+#>  3:         0.10
+#>  4:         0.09
+#>  5:         0.79
+#>  6:         0.73
+#>  7:         0.16
+#>  8:         0.14
+#>  9:         0.20
+#> 10:         0.19
+#> 11:         6.47
+#> 12:         6.48
 ```
 
 The structural variables — basal area, tree numbers and diameter — are
-reconstructed well; the noisier per-tree rates (growth, mortality,
-regeneration) are harder to constrain from two inventories. The hybrid
-reproduces the structural variables about as well as the mechanistic
-model — with **no growth equation specified** — so hybrids are the tool
-of choice when a process’s mechanistic form is uncertain or you suspect
-the data carry structure the equation misses; the surrounding
-mechanistic processes still anchor the model ecologically.
+reconstructed well, **and hold up on sites the model never saw**: that
+gap between the train and holdout columns is the part that matters,
+because it is the only evidence that the fitted processes generalise
+rather than memorise. The noisier per-tree rates (growth, mortality,
+regeneration) are harder to constrain from two inventories and should be
+read with that in mind (see the caveat below). The hybrid tracks the
+mechanistic model on the structural variables — with **no growth
+equation specified** — which is what makes hybrids useful when a
+process’s form is uncertain; the surrounding mechanistic processes still
+anchor the model ecologically.
 
 ``` r
 
 ggplot(obs_pred[variable %in% c("ba", "trees", "dbh") & is.finite(obs)],
        aes(obs, value, colour = model)) +
   geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
-  geom_point(alpha = 0.3, size = 0.6) +
-  facet_wrap(~variable, scales = "free") +
+  geom_point(alpha = 0.25, size = 0.5) +
+  facet_grid(split ~ variable, scales = "free") +
   scale_colour_manual(values = model_cols) +
   labs(x = "observed", y = "predicted", colour = NULL) +
   theme_minimal() + theme(legend.position = "top")
 ```
 
 ![](D/D-assess-plot-1.png)
+
+> **A caveat on the rate variables.** `growth`, `mort` and `reg` are
+> per-tree rates and are only weakly constrained by two inventories, so
+> their Spearman is a **noisy estimate** — refitting with a different
+> random seed moves it by a few hundredths. Differences of that size
+> between the models should not be over-read; the structural variables,
+> estimated from far more information, are what carry the comparison.
+> `mort` is the extreme case and gets a vignette of its own —
+> **Mortality: a binomial response and a neural-network process** —
+> because rank correlation is the wrong tool for a response that is
+> mostly zeros.
 
 ## Interpreting the growth process with ALE
 
@@ -513,8 +583,7 @@ Each curve spans only the range its *own* model actually simulates (ALE
 never extrapolates), so where the process and hybrid cover different
 ranges — as for *Abies grandis* light — the two models simply place that
 species in different conditions; the mismatch is information, not an
-artefact. The same `ale_*$mortality` / `$regeneration` tables carry the
-other two processes — plot any of them the same way.
+artefact.
 
 ``` r
 
@@ -537,7 +606,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       
+#> [1] torch_0.15.1      ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       

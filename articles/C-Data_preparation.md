@@ -21,10 +21,17 @@ library(data.table)
 FINN is calibrated against a few tidy tables:
 
 - **`obs_dt`** — demographic responses per site × year × species:
-  `siteID, year, ba, dbh, trees, growth, mort, reg, species, species_name`.
+  `siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species, species_name`.
   Year starts at 1; the initial state (year 0) is *not* included. NAs
   are allowed in any response. Units: `ba` m², `dbh` cm, `trees` count,
-  `growth` relative growth rate, `mort` rate, `reg` trees ha⁻¹.
+  `growth` relative growth rate, `reg` trees ha⁻¹. Mortality comes back
+  as a **pair of counts** — `n_at_risk` (trees alive at the start of the
+  interval) and `n_died` (how many of them were dead at the end) — with
+  the rate `mort = n_died / n_at_risk` derived for convenience. That
+  pair is the `cbind(died, survived)` response of a binomial GLM, and it
+  is what the default `mortality = "binomial"` loss consumes: the counts
+  carry the sample size, so a 60-tree observation outweighs a 1-tree
+  one.
 - **`env_dt`** — `siteID, year, <env vars…>` in **natural units**; must
   cover every site × year in `obs_dt`. No manual scaling is needed: FINN
   z-standardizes the predictors internally when fitting
@@ -48,19 +55,19 @@ vignette builds the FINN tables from those two.
 # built by dev/make_extdata.R from the data-raw/ source; see data-raw/README.md.
 tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
 str(tree_dt)
-#> Classes 'data.table' and 'data.frame':   864 obs. of  13 variables:
-#>  $ siteName     : chr  "17_84974" "17_84974" "17_84974" "17_84974" ...
-#>  $ patchName    : chr  "17_84974_1" "17_84974_1" "17_84974_1" "17_84974_1" ...
-#>  $ treeName     : chr  "17_84974_1_100" "17_84974_1_100" "17_84974_1_100" "17_84974_1_101" ...
+#> Classes 'data.table' and 'data.frame':   500 obs. of  13 variables:
+#>  $ siteName     : chr  "11_66410" "11_66410" "11_66410" "11_66410" ...
+#>  $ patchName    : chr  "11_66410_1" "11_66410_1" "11_66410_1" "11_66410_2" ...
+#>  $ treeName     : chr  "11_66410_1_100" "11_66410_1_100" "11_66410_1_100" "11_66410_2_103" ...
 #>  $ year         : int  2001 2011 2021 2001 2011 2021 2001 2011 2021 2001 ...
-#>  $ species_name : chr  "Tsuga mertensiana" "Tsuga mertensiana" "Tsuga mertensiana" "Tsuga mertensiana" ...
-#>  $ dbh          : num  53.1 52.1 50.8 49.3 48.8 ...
-#>  $ status       : chr  "dead" "dead" "dead" "dead" ...
-#>  $ status_before: chr  "" "dead" "dead" "" ...
+#>  $ species_name : chr  "Pseudotsuga menziesii" "Pseudotsuga menziesii" "Pseudotsuga menziesii" "Pseudotsuga menziesii" ...
+#>  $ dbh          : num  47.2 57.4 65 26.9 30.7 ...
+#>  $ status       : chr  "new" "alive" "alive" "new" ...
+#>  $ status_before: chr  "" "new" "alive" "" ...
 #>  $ mort_cause   : chr  "" "" "" "" ...
-#>  $ reg          : logi  NA NA NA NA NA NA ...
+#>  $ reg          : logi  TRUE NA NA TRUE NA NA ...
 #>  $ mort         : logi  NA NA NA NA NA NA ...
-#>  $ living       : logi  NA NA NA NA NA NA ...
+#>  $ living       : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
 #>  $ complete     : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
 #>  - attr(*, ".internal.selfref")=<externalptr>
 ```
@@ -68,9 +75,11 @@ str(tree_dt)
 A raw tree record carries, at minimum:
 `siteName, patchName, treeName, year` (calendar year of the inventory),
 `species_name`, `dbh` (cm), and a `status` of `new` / `alive` / `dead`.
-Our example also carries `status_before` (the tree’s status at the
-previous inventory) and a `complete` flag marking trees from fully
-re-measured plots.
+That is enough:
+[`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
+reconstructs each tree’s previous state itself, by sorting on `treeName`
+and `year`. Our example also carries a `status_before` column and a
+`complete` flag marking trees from fully re-measured plots.
 
 ## Acquiring raw data (example: US FIA)
 
@@ -87,24 +96,32 @@ fia <- readFIA(dir = "data/FIA", common = TRUE, states = "OR")
 
 ## Define status flags
 
-FINN’s builders key off three logical flags derived from `status`:
+FINN’s builders key off two logical flags derived from `status`:
 
 ``` r
 
 # reg    = newly recruited this inventory
-# mort   = died since the previous inventory
 # living = currently alive
 tree_dt[, reg    := status == "new"]
-tree_dt[, mort   := status == "dead" & status_before %chin% c("alive", "new")]
 tree_dt[, living := status %chin% c("alive", "new")]
-tree_dt[, .(n = .N), by = .(status, reg, mort, living)]
-#>    status    reg   mort living     n
-#>    <char> <lgcl> <lgcl> <lgcl> <int>
-#> 1:   dead  FALSE  FALSE  FALSE    60
-#> 2:    new   TRUE  FALSE   TRUE   342
-#> 3:  alive  FALSE  FALSE   TRUE   423
-#> 4:   dead  FALSE   TRUE  FALSE    39
+tree_dt[, .(n = .N), by = .(status, reg, living)]
+#>    status    reg living     n
+#>    <char> <lgcl> <lgcl> <int>
+#> 1:    new   TRUE   TRUE   193
+#> 2:  alive  FALSE   TRUE   239
+#> 3:   dead  FALSE  FALSE    68
 ```
+
+There is deliberately **no tree-level `mort` flag** here.
+[`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
+derives mortality itself, from `status` and `living`, as a closed
+cohort: for each interval it takes the trees that were alive at the
+*start*, and counts how many of them were dead at the *end*. Both
+columns are pinned to the tree’s state at the start of the interval,
+which matters because FIA re-identifies a tree’s species between visits
+— a hand-rolled rate can otherwise book a death against the species a
+tree *ended* as while the denominator counted the species it *started*
+as, and report more deaths than trees.
 
 ## Build `obs_dt` with `makeObsData()`
 
@@ -128,20 +145,20 @@ obs_dt <- obs_list$obs_dt
 head(obs_dt)
 #>    siteName  patchName  year   species_name    ba   dbh trees growth  mort
 #>      <char>     <char> <int>         <char> <num> <num> <int>  <num> <num>
-#> 1: 17_84974 17_84974_1  2001 Abies concolor     0    NA     0     NA    NA
-#> 2: 17_84974 17_84974_1  2011 Abies concolor     0    NA     0     NA    NA
-#> 3: 17_84974 17_84974_1  2021 Abies concolor     0    NA     0     NA    NA
-#> 4: 17_84974 17_84974_1  2001  Abies grandis     0    NA     0     NA    NA
-#> 5: 17_84974 17_84974_1  2011  Abies grandis     0    NA     0     NA    NA
-#> 6: 17_84974 17_84974_1  2021  Abies grandis     0    NA     0     NA    NA
-#>      reg
-#>    <num>
-#> 1:     0
-#> 2:     0
-#> 3:     0
-#> 4:     0
-#> 5:     0
-#> 6:     0
+#> 1: 11_66410 11_66410_1  2001 Abies concolor     0    NA     0     NA    NA
+#> 2: 11_66410 11_66410_1  2011 Abies concolor     0    NA     0     NA    NA
+#> 3: 11_66410 11_66410_1  2021 Abies concolor     0    NA     0     NA    NA
+#> 4: 11_66410 11_66410_1  2001  Abies grandis     0    NA     0     NA    NA
+#> 5: 11_66410 11_66410_1  2011  Abies grandis     0    NA     0     NA    NA
+#> 6: 11_66410 11_66410_1  2021  Abies grandis     0    NA     0     NA    NA
+#>    n_at_risk n_died   reg
+#>        <int>  <int> <num>
+#> 1:         0      0     0
+#> 2:         0      0     0
+#> 3:         0      0     0
+#> 4:         0      0     0
+#> 5:         0      0     0
+#> 6:         0      0     0
 ```
 
 Use `Nspecies` (a hard cap) or `NspeciesQuantile` (smallest set covering
@@ -166,14 +183,14 @@ env_dt[, temp := terra::extract(bio1, project(pts, crs(bio1)))[, 2]]
 
 env_dt <- fread(system.file("extdata", "example_env_dt.csv", package = "FINN"))
 head(env_dt)
-#>    siteName  year   temp tempmax tempmin  prec precseas precwarmq
-#>      <char> <int>  <num>   <num>   <num> <int>    <num>     <int>
-#> 1: 17_84974  2001 3.8375    22.3    -7.9  1296 67.18066       100
-#> 2: 17_84974  2011 3.8375    22.3    -7.9  1296 67.18066       100
-#> 3: 17_84974  2021 3.8375    22.3    -7.9  1296 67.18066       100
-#> 4:  1_75669  2001 4.9000    26.2    -9.7   501 29.38825        95
-#> 5:  1_75669  2011 4.9000    26.2    -9.7   501 29.38825        95
-#> 6:  1_75669  2021 4.9000    26.2    -9.7   501 29.38825        95
+#>    siteName  year     temp tempmax tempmin  prec precseas precwarmq
+#>      <char> <int>    <num>   <num>   <num> <int>    <num>     <int>
+#> 1: 11_66410  2001 10.69167    22.8     2.7  1880 70.15234       103
+#> 2: 11_66410  2011 10.69167    22.8     2.7  1880 70.15234       103
+#> 3: 11_66410  2021 10.69167    22.8     2.7  1880 70.15234       103
+#> 4: 17_65658  2002  6.48750    26.1    -6.6   417 55.10012        56
+#> 5: 17_65658  2012  6.48750    26.1    -6.6   417 55.10012        56
+#> 6: 17_65658  2022  6.48750    26.1    -6.6   417 55.10012        56
 ```
 
 There is **no manual standardization step**. FINN z-scales the
@@ -204,26 +221,36 @@ inputs <- resolveSiteIDs(
 )
 # obs_dt / env_dt now carry integer siteID/patchID/species, aligned across tables
 head(inputs$obs_dt)
-#>    siteID  year    ba   dbh trees growth  mort   reg species   species_name
-#>     <int> <num> <num> <num> <num>  <num> <num> <num>   <int>         <char>
-#> 1:      1     0     0   NaN     0    NaN   NaN     0       1 Abies concolor
-#> 2:      1     1     0   NaN     0    NaN   NaN     0       1 Abies concolor
-#> 3:      1     2     0   NaN     0    NaN   NaN     0       1 Abies concolor
-#> 4:      2     0     0   NaN     0    NaN   NaN     0       1 Abies concolor
-#> 5:      2     1     0   NaN     0    NaN   NaN     0       1 Abies concolor
-#> 6:      2     2     0   NaN     0    NaN   NaN     0       1 Abies concolor
+#>    siteID  year    ba   dbh trees growth  mort n_at_risk n_died   reg species
+#>     <int> <num> <num> <num> <num>  <num> <num>     <int>  <int> <num>   <int>
+#> 1:      1     0     0   NaN     0    NaN    NA         0      0     0       1
+#> 2:      1     1     0   NaN     0    NaN    NA         0      0     0       1
+#> 3:      1     2     0   NaN     0    NaN    NA         0      0     0       1
+#> 4:      2     0     0   NaN     0    NaN    NA         0      0     0       1
+#> 5:      2     1     0   NaN     0    NaN    NA         0      0     0       1
+#> 6:      2     2     0   NaN     0    NaN    NA         0      0     0       1
+#>      species_name
+#>            <char>
+#> 1: Abies concolor
+#> 2: Abies concolor
+#> 3: Abies concolor
+#> 4: Abies concolor
+#> 5: Abies concolor
+#> 6: Abies concolor
 inputs$species_dt
-#>    species          species_name
-#>      <int>                <char>
-#> 1:       8     Tsuga mertensiana
-#> 2:       5        Pinus contorta
-#> 3:       3      Abies shastensis
-#> 4:       9                 other
-#> 5:       2         Abies grandis
-#> 6:       7 Pseudotsuga menziesii
-#> 7:       6       Pinus ponderosa
-#> 8:       4    Larix occidentalis
-#> 9:       1        Abies concolor
+#>     species           species_name
+#>       <int>                 <char>
+#>  1:       9  Pseudotsuga menziesii
+#>  2:      11                  other
+#>  3:       8        Pinus ponderosa
+#>  4:       5     Larix occidentalis
+#>  5:       2          Abies grandis
+#>  6:       4 Juniperus occidentalis
+#>  7:       7        Pinus monticola
+#>  8:       6         Pinus contorta
+#>  9:       1         Abies concolor
+#> 10:      10      Tsuga mertensiana
+#> 11:       3       Abies shastensis
 ```
 
 ## Initial cohorts
@@ -240,9 +267,9 @@ init_cohorts
 #> An `nn_module` containing 0 parameters.
 #> 
 #> -- Buffers ---------------------------------------------------------------------
-#> * dbh: Float [1:8, 1:4, 1:17]
-#> * trees: Float [1:8, 1:4, 1:17]
-#> * species: Long [1:8, 1:4, 1:17]
+#> * dbh: Float [1:8, 1:4, 1:14]
+#> * trees: Float [1:8, 1:4, 1:14]
+#> * species: Long [1:8, 1:4, 1:14]
 ```
 
 To build cohorts yourself from a year-0 tree slice, call

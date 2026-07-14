@@ -5,8 +5,8 @@ importance and the average conditional effects. Both are derived from
 the model's conditional effects, which are computed once and cached — so
 if [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) was
 already run (or a previous
-[`summary()`](https://rdrr.io/r/base/summary.html)), the default path
-needs no further simulation.
+[`summary()`](https://rspatial.github.io/terra/reference/summary.html)),
+the default path needs no further simulation.
 
 ## Usage
 
@@ -73,8 +73,8 @@ summary(
 - ...:
 
   passed through (e.g. to
-  [`predict()`](https://rdrr.io/r/stats/predict.html) for the
-  permutation option).
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)
+  for the permutation option).
 
 ## Value
 
