@@ -213,9 +213,9 @@ obs_pred[is.finite(obs) & is.finite(value),
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
 #> 1: Hybrid (mortality = NN) holdout     0.09   994
-#> 2:   Process (mechanistic) holdout     0.03   994
-#> 3: Hybrid (mortality = NN)   train     0.29  1003
-#> 4:   Process (mechanistic)   train     0.22  1003
+#> 2:   Process (mechanistic) holdout     0.05   994
+#> 3: Hybrid (mortality = NN)   train     0.24  1003
+#> 4:   Process (mechanistic)   train     0.23  1003
 ```
 
 **AUC** asks the question the binomial actually poses: does the model
@@ -248,10 +248,10 @@ auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
 auc_tab[order(split, -AUC)]
 #>                      model   split   AUC deaths at_risk
 #>                     <char>  <char> <num>  <int>   <int>
-#> 1: Hybrid (mortality = NN) holdout 0.524    727   10013
-#> 2:   Process (mechanistic) holdout 0.485    727   10013
-#> 3: Hybrid (mortality = NN)   train 0.668    656    9907
-#> 4:   Process (mechanistic)   train 0.620    656    9907
+#> 1: Hybrid (mortality = NN) holdout 0.549    727   10013
+#> 2:   Process (mechanistic) holdout 0.488    727   10013
+#> 3: Hybrid (mortality = NN)   train 0.665    656    9907
+#> 4:   Process (mechanistic)   train 0.654    656    9907
 ```
 
 0.5 is coin-flipping, 1.0 is perfect ranking.

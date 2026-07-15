@@ -212,22 +212,22 @@ filter:</p>
 <span><span class="op">)</span></span>
 <span><span class="va">obs_dt</span> <span class="op">&lt;-</span> <span class="va">obs_list</span><span class="op">$</span><span class="va">obs_dt</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/headtail.html" class="external-link">head</a></span><span class="op">(</span><span class="va">obs_dt</span><span class="op">)</span></span>
-<span><span class="co">#&gt;    siteName  patchName  year   species_name    ba   dbh trees growth  mort</span></span>
-<span><span class="co">#&gt;      &lt;char&gt;     &lt;char&gt; &lt;int&gt;         &lt;char&gt; &lt;num&gt; &lt;num&gt; &lt;int&gt;  &lt;num&gt; &lt;num&gt;</span></span>
-<span><span class="co">#&gt; 1: 11_66410 11_66410_1  2001 Abies concolor     0    NA     0     NA    NA</span></span>
-<span><span class="co">#&gt; 2: 11_66410 11_66410_1  2011 Abies concolor     0    NA     0     NA    NA</span></span>
-<span><span class="co">#&gt; 3: 11_66410 11_66410_1  2021 Abies concolor     0    NA     0     NA    NA</span></span>
-<span><span class="co">#&gt; 4: 11_66410 11_66410_1  2001  Abies grandis     0    NA     0     NA    NA</span></span>
-<span><span class="co">#&gt; 5: 11_66410 11_66410_1  2011  Abies grandis     0    NA     0     NA    NA</span></span>
-<span><span class="co">#&gt; 6: 11_66410 11_66410_1  2021  Abies grandis     0    NA     0     NA    NA</span></span>
-<span><span class="co">#&gt;    n_at_risk n_died   reg</span></span>
-<span><span class="co">#&gt;        &lt;int&gt;  &lt;int&gt; &lt;num&gt;</span></span>
-<span><span class="co">#&gt; 1:         0      0     0</span></span>
-<span><span class="co">#&gt; 2:         0      0     0</span></span>
-<span><span class="co">#&gt; 3:         0      0     0</span></span>
-<span><span class="co">#&gt; 4:         0      0     0</span></span>
-<span><span class="co">#&gt; 5:         0      0     0</span></span>
-<span><span class="co">#&gt; 6:         0      0     0</span></span></code></pre></div>
+<span><span class="co">#&gt;    siteName  patchName  year   species_name    ba   dbh trees growth growth_n</span></span>
+<span><span class="co">#&gt;      &lt;char&gt;     &lt;char&gt; &lt;int&gt;         &lt;char&gt; &lt;num&gt; &lt;num&gt; &lt;int&gt;  &lt;num&gt;    &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1: 11_66410 11_66410_1  2001 Abies concolor     0    NA     0     NA        0</span></span>
+<span><span class="co">#&gt; 2: 11_66410 11_66410_1  2011 Abies concolor     0    NA     0     NA        0</span></span>
+<span><span class="co">#&gt; 3: 11_66410 11_66410_1  2021 Abies concolor     0    NA     0     NA        0</span></span>
+<span><span class="co">#&gt; 4: 11_66410 11_66410_1  2001  Abies grandis     0    NA     0     NA        0</span></span>
+<span><span class="co">#&gt; 5: 11_66410 11_66410_1  2011  Abies grandis     0    NA     0     NA        0</span></span>
+<span><span class="co">#&gt; 6: 11_66410 11_66410_1  2021  Abies grandis     0    NA     0     NA        0</span></span>
+<span><span class="co">#&gt;     mort n_at_risk n_died   reg</span></span>
+<span><span class="co">#&gt;    &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 2:    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 3:    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 4:    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 5:    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 6:    NA         0      0     0</span></span></code></pre></div>
 <p>Use <code>Nspecies</code> (a hard cap) or
 <code>NspeciesQuantile</code> (smallest set covering a stem fraction) to
 control how many species you model — everything else becomes
@@ -282,22 +282,22 @@ species lumping as <code>obs_dt</code>, so the two stay consistent.</p>
 <span><span class="op">)</span></span>
 <span><span class="co"># obs_dt / env_dt now carry integer siteID/patchID/species, aligned across tables</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/headtail.html" class="external-link">head</a></span><span class="op">(</span><span class="va">inputs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">)</span></span>
-<span><span class="co">#&gt;    siteID  year    ba   dbh trees growth  mort n_at_risk n_died   reg species</span></span>
-<span><span class="co">#&gt;     &lt;int&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt;  &lt;num&gt; &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;   &lt;int&gt;</span></span>
-<span><span class="co">#&gt; 1:      1     0     0   NaN     0    NaN    NA         0      0     0       1</span></span>
-<span><span class="co">#&gt; 2:      1     1     0   NaN     0    NaN    NA         0      0     0       1</span></span>
-<span><span class="co">#&gt; 3:      1     2     0   NaN     0    NaN    NA         0      0     0       1</span></span>
-<span><span class="co">#&gt; 4:      2     0     0   NaN     0    NaN    NA         0      0     0       1</span></span>
-<span><span class="co">#&gt; 5:      2     1     0   NaN     0    NaN    NA         0      0     0       1</span></span>
-<span><span class="co">#&gt; 6:      2     2     0   NaN     0    NaN    NA         0      0     0       1</span></span>
-<span><span class="co">#&gt;      species_name</span></span>
-<span><span class="co">#&gt;            &lt;char&gt;</span></span>
-<span><span class="co">#&gt; 1: Abies concolor</span></span>
-<span><span class="co">#&gt; 2: Abies concolor</span></span>
-<span><span class="co">#&gt; 3: Abies concolor</span></span>
-<span><span class="co">#&gt; 4: Abies concolor</span></span>
-<span><span class="co">#&gt; 5: Abies concolor</span></span>
-<span><span class="co">#&gt; 6: Abies concolor</span></span>
+<span><span class="co">#&gt;    siteID  year    ba   dbh trees growth growth_n  mort n_at_risk n_died   reg</span></span>
+<span><span class="co">#&gt;     &lt;int&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt;  &lt;num&gt;    &lt;int&gt; &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:      1     0     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 2:      1     1     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 3:      1     2     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 4:      2     0     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 5:      2     1     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 6:      2     2     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt;    species   species_name</span></span>
+<span><span class="co">#&gt;      &lt;int&gt;         &lt;char&gt;</span></span>
+<span><span class="co">#&gt; 1:       1 Abies concolor</span></span>
+<span><span class="co">#&gt; 2:       1 Abies concolor</span></span>
+<span><span class="co">#&gt; 3:       1 Abies concolor</span></span>
+<span><span class="co">#&gt; 4:       1 Abies concolor</span></span>
+<span><span class="co">#&gt; 5:       1 Abies concolor</span></span>
+<span><span class="co">#&gt; 6:       1 Abies concolor</span></span>
 <span><span class="va">inputs</span><span class="op">$</span><span class="va">species_dt</span></span>
 <span><span class="co">#&gt;     species           species_name</span></span>
 <span><span class="co">#&gt;       &lt;int&gt;                 &lt;char&gt;</span></span>

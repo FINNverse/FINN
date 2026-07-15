@@ -250,9 +250,9 @@ cannot see what it learned”.</p>
 <span><span class="co">#&gt;                      model   split spearman     n</span></span>
 <span><span class="co">#&gt;                     &lt;char&gt;  &lt;char&gt;    &lt;num&gt; &lt;int&gt;</span></span>
 <span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout     0.09   994</span></span>
-<span><span class="co">#&gt; 2:   Process (mechanistic) holdout     0.03   994</span></span>
-<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train     0.29  1003</span></span>
-<span><span class="co">#&gt; 4:   Process (mechanistic)   train     0.22  1003</span></span></code></pre></div>
+<span><span class="co">#&gt; 2:   Process (mechanistic) holdout     0.05   994</span></span>
+<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train     0.24  1003</span></span>
+<span><span class="co">#&gt; 4:   Process (mechanistic)   train     0.23  1003</span></span></code></pre></div>
 <p><strong>AUC</strong> asks the question the binomial actually poses:
 does the model give a higher death probability to a tree that died than
 to one that survived? Each observation stands for <code>n_at_risk</code>
@@ -282,10 +282,10 @@ standard Mann-Whitney treatment).</p>
 <span><span class="va">auc_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">split</span>, <span class="op">-</span><span class="va">AUC</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;                      model   split   AUC deaths at_risk</span></span>
 <span><span class="co">#&gt;                     &lt;char&gt;  &lt;char&gt; &lt;num&gt;  &lt;int&gt;   &lt;int&gt;</span></span>
-<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout 0.524    727   10013</span></span>
-<span><span class="co">#&gt; 2:   Process (mechanistic) holdout 0.485    727   10013</span></span>
-<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train 0.668    656    9907</span></span>
-<span><span class="co">#&gt; 4:   Process (mechanistic)   train 0.620    656    9907</span></span></code></pre></div>
+<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout 0.549    727   10013</span></span>
+<span><span class="co">#&gt; 2:   Process (mechanistic) holdout 0.488    727   10013</span></span>
+<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train 0.665    656    9907</span></span>
+<span><span class="co">#&gt; 4:   Process (mechanistic)   train 0.654    656    9907</span></span></code></pre></div>
 <p>0.5 is coin-flipping, 1.0 is perfect ranking.</p>
 <p>Read the two splits <strong>together</strong>, because the gap
 between them is the result. On the training sites the model ranks deaths
