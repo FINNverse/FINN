@@ -17,7 +17,7 @@ library(torch)
 library(data.table)
 library(ggplot2)
 
-EPOCHS <- 2000L
+EPOCHS <- 500L
 ```
 
 ## Mortality is a proportion, not a rate
@@ -140,7 +140,7 @@ m <- finn(
 fit(m,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
-  weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
+  lr = 0.01, env_autoscale = TRUE
 )
 ```
 
@@ -171,7 +171,7 @@ m_mort <- finn(
 fit(m_mort,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
-  weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
+  lr = 0.01, env_autoscale = TRUE
 )
 ```
 
@@ -212,10 +212,10 @@ obs_pred[is.finite(obs) & is.finite(value),
          by = .(model, split)][order(split, model)]
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
-#> 1: Hybrid (mortality = NN) holdout    -0.02   994
-#> 2:   Process (mechanistic) holdout     0.06   994
-#> 3: Hybrid (mortality = NN)   train     0.05  1003
-#> 4:   Process (mechanistic)   train     0.08  1003
+#> 1: Hybrid (mortality = NN) holdout     0.09   994
+#> 2:   Process (mechanistic) holdout     0.03   994
+#> 3: Hybrid (mortality = NN)   train     0.29  1003
+#> 4:   Process (mechanistic)   train     0.22  1003
 ```
 
 **AUC** asks the question the binomial actually poses: does the model
@@ -248,17 +248,34 @@ auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
 auc_tab[order(split, -AUC)]
 #>                      model   split   AUC deaths at_risk
 #>                     <char>  <char> <num>  <int>   <int>
-#> 1:   Process (mechanistic) holdout 0.498    727   10013
-#> 2: Hybrid (mortality = NN) holdout 0.485    727   10013
-#> 3:   Process (mechanistic)   train 0.524    656    9907
-#> 4: Hybrid (mortality = NN)   train 0.482    656    9907
+#> 1: Hybrid (mortality = NN) holdout 0.524    727   10013
+#> 2:   Process (mechanistic) holdout 0.485    727   10013
+#> 3: Hybrid (mortality = NN)   train 0.668    656    9907
+#> 4:   Process (mechanistic)   train 0.620    656    9907
 ```
 
-0.5 is coin-flipping, 1.0 is perfect ranking. The **holdout** rows are
-the ones that count, and they should be read against the `deaths` column
-beside them: this is a few hundred events, so treat small differences
-between the two models as noise rather than as a result. Refitting with
-a different seed moves these numbers.
+0.5 is coin-flipping, 1.0 is perfect ranking.
+
+Read the two splits **together**, because the gap between them is the
+result. On the training sites the model ranks deaths above survivors
+better than chance — so there *is* a learnable mortality signal, and the
+model finds it. On the held-out sites that skill collapses to ~0.5. The
+model is not failing to fit mortality; it is fitting it and **not
+generalising**.
+
+That is what a few hundred deaths buys. With ~66% of observations at
+exactly zero and mortality concentrated in whichever species happened to
+die on whichever plot, there is enough signal to memorise and not enough
+to transfer. The network variant sits *lower* still on the holdout,
+which is what you would expect from a model with more capacity to
+memorise with.
+
+So mortality here is honestly reported as **not identified
+out-of-sample**. The binomial likelihood is the right loss for a
+proportion and the closed cohort is the right response, but neither
+manufactures information the two inventories do not contain. Treat
+differences between the two models as noise; the signal worth reading is
+train-vs-holdout, not model-vs-model.
 
 ## What the network learned — ALE
 

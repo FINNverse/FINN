@@ -67,8 +67,8 @@ in a single optimization, rather than calibrating each process in isolation.</p>
 <span>  lr <span class="op">=</span> <span class="fl">0.01</span>,</span>
 <span>  lr_scheduler <span class="op">=</span> <span class="st">"none"</span>,</span>
 <span>  lr_scheduler_params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>dbh <span class="op">=</span> <span class="st">"mse"</span>, ba <span class="op">=</span> <span class="st">"mse"</span>, trees <span class="op">=</span> <span class="st">"poisson"</span>, growth <span class="op">=</span> <span class="st">"mse"</span>, mortality <span class="op">=</span> <span class="st">"mse"</span>,</span>
-<span>    regeneration <span class="op">=</span> <span class="st">"nbinom"</span><span class="op">)</span>,</span>
+<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>dbh <span class="op">=</span> <span class="st">"mse"</span>, ba <span class="op">=</span> <span class="st">"mse"</span>, trees <span class="op">=</span> <span class="st">"poisson"</span>, growth <span class="op">=</span> <span class="st">"mse"</span>, mortality <span class="op">=</span></span>
+<span>    <span class="st">"binomial"</span>, regeneration <span class="op">=</span> <span class="st">"nbinom"</span><span class="op">)</span>,</span>
 <span>  weights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">6</span><span class="op">)</span>,</span>
 <span>  optimizer <span class="op">=</span> <span class="va">optim_ignite_adam</span>,</span>
 <span>  batchsize <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -145,11 +145,27 @@ chosen via <code>lr_scheduler</code>, e.g. <code>list(step_size = 50, gamma = 0.
 
 
 <dt id="arg-loss">loss<a class="anchor" aria-label="anchor" href="#arg-loss"></a></dt>
-<dd><p>(<code>character(6)</code>)<br> Named vector of the different losses. Names should be <code>dbh</code>, <code>ba</code>, <code>trees</code>, <code>growth</code>, <code>mortality</code>, and <code>regeneration</code>. Supported losses are <code>mse</code>, <code>poisson</code>, <code>nbinom</code>, and <code>gaussian</code>.</p></dd>
+<dd><p>(<code>character(6)</code>)<br> Named vector of the different losses. Names should be <code>dbh</code>, <code>ba</code>, <code>trees</code>, <code>growth</code>, <code>mortality</code>, and <code>regeneration</code>. Supported losses are <code>mse</code>, <code>poisson</code>, <code>nbinom</code>, <code>gaussian</code>, and <code>binomial</code>. <code>binomial</code> is a Bernoulli/binomial negative log-likelihood intended for <code>mortality</code>; it expects both the prediction and the observation to be proportions in [0, 1].</p></dd>
 
 
 <dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
-<dd><p>(<code>numeric(6)</code>)<br> Weights of the different losses.</p></dd>
+<dd><p>(<code>numeric(6)</code>)<br> Weights of the different losses, in the order
+<code>dbh</code>, <code>ba</code>, <code>trees</code>, <code>growth</code>, <code>mortality</code>, <code>regeneration</code>.</p>
+<p><strong>These must account for the raw scale of each loss, not just its
+importance.</strong> The six terms are summed, and their raw magnitudes differ by
+orders of magnitude: on the bundled FIA data <code>dbh</code> is an MSE in cm^2 (~130)
+while <code>growth</code> is an MSE on a ratio (~0.012) — a factor of ~1e4. A weight
+vector chosen by importance alone will therefore be dominated by whichever
+response happens to have the largest units, and the rest receive too little
+gradient to learn from. The default (<code>rep(1, 6)</code>) is <em>not</em> a neutral choice
+for this reason: it lets <code>dbh</code> take the overwhelming majority of the
+objective.</p>
+<p>A practical recipe: fit once, read the per-response terms off <code>m$loss_raw</code>
+(or <code>m$history</code>), and set each weight to roughly the inverse of its raw
+magnitude so that every term contributes a comparable share. On the FIA
+example this is worth ~+0.24 Spearman on held-out <code>growth</code> — far more than
+tuning <code>lr</code> or <code>epochs</code>. See the "Fitting FINN to forest inventory data"
+vignette.</p></dd>
 
 
 <dt id="arg-optimizer">optimizer<a class="anchor" aria-label="anchor" href="#arg-optimizer"></a></dt>
@@ -233,10 +249,14 @@ log-likelihoods), one for each of <code>dbh</code>, <code>ba</code> (basal area)
 trees), <code>growth</code>, <code>mortality</code> and <code>regeneration</code>. Following Pichler &amp; Käber
 (2026), reasonable choices are mean squared error (<code>"mse"</code>, equivalent to a
 Gaussian likelihood) for <code>dbh</code> and <code>ba</code>, Poisson likelihood for <code>trees</code>,
-negative binomial (<code>"nbinom"</code>) for <code>regeneration</code>, and <code>"mse"</code> for <code>mortality</code>
-and <code>growth</code> as continuous rates (the model also supports <code>"gaussian"</code> and
-<code>"poisson"</code> as alternatives via the <code>loss</code> argument; see Appendix B of the
-paper for details). Each loss can be weighted individually via <code>weights</code>, and
+negative binomial (<code>"nbinom"</code>) for <code>regeneration</code>, and <code>"mse"</code> for <code>growth</code> as
+a continuous rate. <code>mortality</code> is an observed <em>proportion</em> of trees that died
+and the model predicts it through a sigmoid, so it defaults to <code>"binomial"</code> —
+a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
+targets). This respects the [0, 1] support and the mean-variance link of a
+proportion, both of which <code>"mse"</code> ignores (the model also supports
+<code>"gaussian"</code> and <code>"poisson"</code> as alternatives via the <code>loss</code> argument; see
+Appendix B of the paper for details). Each loss can be weighted individually via <code>weights</code>, and
 missing values in the observed data are masked out of the corresponding loss
 term. The model is trained for <code>epochs</code> iterations over the (optionally
 batched and shuffled) data using <code>optimizer</code> with learning rate <code>lr</code>.</p>
@@ -257,7 +277,7 @@ allow periodically saving the model state during training.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Yannek Käber, Maximilian Pichler.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

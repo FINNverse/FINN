@@ -24,7 +24,9 @@ makeObsData(
 - tree_dt:
 
   data.table of tree records with siteName, patchName, year, treeName,
-  species_name, dbh, status, living, and optional `mort`.
+  species_name, dbh, `status` (one of "alive", "new", "dead") and
+  `living`. Mortality is derived from `status`; a `mort` column, if
+  present, is ignored.
 
 - plotsize:
 
@@ -67,6 +69,11 @@ makeObsData(
 
 A list with:
 
-- `obs_dt`: observations at site or patch level.
+- `obs_dt`: observations at site or patch level. Mortality comes back as
+  a closed-cohort pair of counts, `n_at_risk` (trees alive at the start
+  of the interval) and `n_died` (how many of them were dead at the end),
+  plus the derived rate `mort = n_died / n_at_risk` (`NA` where no
+  cohort was at risk). The counts are the binomial response; pass them
+  to `fit` with `mortality = "binomial"`.
 
 - `tree_dt`: input trees with added growth fields and species recode.

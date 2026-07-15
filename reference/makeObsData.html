@@ -68,7 +68,9 @@ filters sites, harmonizes years, optionally aggregates by site.</p>
 
 <dl><dt id="arg-tree-dt">tree_dt<a class="anchor" aria-label="anchor" href="#arg-tree-dt"></a></dt>
 <dd><p>data.table of tree records with siteName, patchName, year,
-treeName, species_name, dbh, status, living, and optional <code>mort</code>.</p></dd>
+treeName, species_name, dbh, <code>status</code> (one of "alive", "new", "dead")
+and <code>living</code>. Mortality is derived from <code>status</code>; a <code>mort</code>
+column, if present, is ignored.</p></dd>
 
 
 <dt id="arg-plotsize">plotsize<a class="anchor" aria-label="anchor" href="#arg-plotsize"></a></dt>
@@ -109,7 +111,12 @@ this fraction of individuals; overrides <code>Nspecies</code> if supplied.</p></
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with:</p><ul><li><p><code>obs_dt</code>: observations at site or patch level.</p></li>
+    <p>A list with:</p><ul><li><p><code>obs_dt</code>: observations at site or patch level. Mortality comes
+back as a closed-cohort pair of counts, <code>n_at_risk</code> (trees alive at
+the start of the interval) and <code>n_died</code> (how many of them were dead
+at the end), plus the derived rate <code>mort = n_died / n_at_risk</code>
+(<code>NA</code> where no cohort was at risk). The counts are the binomial
+response; pass them to <code>fit</code> with <code>mortality = "binomial"</code>.</p></li>
 <li><p><code>tree_dt</code>: input trees with added growth fields and species recode.</p></li>
 </ul></div>
 
@@ -118,7 +125,7 @@ this fraction of individuals; overrides <code>Nspecies</code> if supplied.</p></
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Yannek Käber, Maximilian Pichler.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

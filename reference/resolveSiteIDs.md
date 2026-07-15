@@ -24,7 +24,8 @@ resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = T)
 - obs_dt:
 
   data.table with observations including siteName, patchName, year,
-  species_name, and stand metrics (ba, dbh, trees, growth, mort, reg).
+  species_name, and stand metrics (ba, dbh, trees, growth, mort,
+  n_at_risk, n_died, reg), as returned by `makeObsData`.
 
 - createInitCohorts:
 

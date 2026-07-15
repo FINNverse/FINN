@@ -2,11 +2,16 @@
 
 ## Authors
 
-- **Yannek Käber**. Author, maintainer.
-  [](https://orcid.org/0000-0002-7041-9849)
+FINN is created and developed by **Yannek Käber** and **Maximilian
+Pichler**. R package metadata records only one person as
+creator/maintainer, so that field names a single point of contact - it
+does not rank authorship.
 
-- **Maximilian Pichler**. Author.
-  [](https://orcid.org/0000-0003-2252-8327)
+- **[Yannek Käber](https://orcid.org/0000-0002-7041-9849)**. Author,
+  maintainer. [](https://orcid.org/0000-0002-7041-9849)
+
+- **[Maximilian Pichler](https://orcid.org/0000-0003-2252-8327)**.
+  Author. [](https://orcid.org/0000-0003-2252-8327)
 
 ## Citation
 

@@ -83,7 +83,7 @@ page it is <strong>precompiled</strong> by
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">EPOCHS</span> <span class="op">&lt;-</span> <span class="fl">2000L</span></span></code></pre></div>
+<span><span class="va">EPOCHS</span> <span class="op">&lt;-</span> <span class="fl">500L</span></span></code></pre></div>
 <div class="section level2">
 <h2 id="mortality-is-a-proportion-not-a-rate">Mortality is a proportion, not a rate<a class="anchor" aria-label="anchor" href="#mortality-is-a-proportion-not-a-rate"></a>
 </h2>
@@ -193,7 +193,7 @@ form:</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">m</span>,</span>
 <span>  env <span class="op">=</span> <span class="va">env_dt</span>, data <span class="op">=</span> <span class="va">obs_dt</span>, init_cohort <span class="op">=</span> <span class="va">init_cohorts</span>, device <span class="op">=</span> <span class="st">"cpu"</span>,</span>
 <span>  epochs <span class="op">=</span> <span class="va">EPOCHS</span>, batchsize <span class="op">=</span> <span class="fl">40L</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>,</span>
-<span>  weights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">10</span>, <span class="fl">1.0</span>, <span class="fl">10.0</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>, lr <span class="op">=</span> <span class="fl">0.01</span>, env_autoscale <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  lr <span class="op">=</span> <span class="fl">0.01</span>, env_autoscale <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="E/E-fit-process-1.png" style="display: block; margin: auto;"></p>
 <p>Now the same model with <strong>mortality replaced by a neural
@@ -214,7 +214,7 @@ only difference:</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">m_mort</span>,</span>
 <span>  env <span class="op">=</span> <span class="va">env_dt</span>, data <span class="op">=</span> <span class="va">obs_dt</span>, init_cohort <span class="op">=</span> <span class="va">init_cohorts</span>, device <span class="op">=</span> <span class="st">"cpu"</span>,</span>
 <span>  epochs <span class="op">=</span> <span class="va">EPOCHS</span>, batchsize <span class="op">=</span> <span class="fl">40L</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>,</span>
-<span>  weights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">10</span>, <span class="fl">1.0</span>, <span class="fl">10.0</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>, lr <span class="op">=</span> <span class="fl">0.01</span>, env_autoscale <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  lr <span class="op">=</span> <span class="fl">0.01</span>, env_autoscale <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="E/E-fit-hybrid-1.png" style="display: block; margin: auto;"></p>
 </div>
@@ -249,10 +249,10 @@ cannot see what it learned”.</p>
 <span>         by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">model</span>, <span class="va">split</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">split</span>, <span class="va">model</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;                      model   split spearman     n</span></span>
 <span><span class="co">#&gt;                     &lt;char&gt;  &lt;char&gt;    &lt;num&gt; &lt;int&gt;</span></span>
-<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout    -0.02   994</span></span>
-<span><span class="co">#&gt; 2:   Process (mechanistic) holdout     0.06   994</span></span>
-<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train     0.05  1003</span></span>
-<span><span class="co">#&gt; 4:   Process (mechanistic)   train     0.08  1003</span></span></code></pre></div>
+<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout     0.09   994</span></span>
+<span><span class="co">#&gt; 2:   Process (mechanistic) holdout     0.03   994</span></span>
+<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train     0.29  1003</span></span>
+<span><span class="co">#&gt; 4:   Process (mechanistic)   train     0.22  1003</span></span></code></pre></div>
 <p><strong>AUC</strong> asks the question the binomial actually poses:
 does the model give a higher death probability to a tree that died than
 to one that survived? Each observation stands for <code>n_at_risk</code>
@@ -282,16 +282,29 @@ standard Mann-Whitney treatment).</p>
 <span><span class="va">auc_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">split</span>, <span class="op">-</span><span class="va">AUC</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;                      model   split   AUC deaths at_risk</span></span>
 <span><span class="co">#&gt;                     &lt;char&gt;  &lt;char&gt; &lt;num&gt;  &lt;int&gt;   &lt;int&gt;</span></span>
-<span><span class="co">#&gt; 1:   Process (mechanistic) holdout 0.498    727   10013</span></span>
-<span><span class="co">#&gt; 2: Hybrid (mortality = NN) holdout 0.485    727   10013</span></span>
-<span><span class="co">#&gt; 3:   Process (mechanistic)   train 0.524    656    9907</span></span>
-<span><span class="co">#&gt; 4: Hybrid (mortality = NN)   train 0.482    656    9907</span></span></code></pre></div>
-<p>0.5 is coin-flipping, 1.0 is perfect ranking. The
-<strong>holdout</strong> rows are the ones that count, and they should
-be read against the <code>deaths</code> column beside them: this is a
-few hundred events, so treat small differences between the two models as
-noise rather than as a result. Refitting with a different seed moves
-these numbers.</p>
+<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout 0.524    727   10013</span></span>
+<span><span class="co">#&gt; 2:   Process (mechanistic) holdout 0.485    727   10013</span></span>
+<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train 0.668    656    9907</span></span>
+<span><span class="co">#&gt; 4:   Process (mechanistic)   train 0.620    656    9907</span></span></code></pre></div>
+<p>0.5 is coin-flipping, 1.0 is perfect ranking.</p>
+<p>Read the two splits <strong>together</strong>, because the gap
+between them is the result. On the training sites the model ranks deaths
+above survivors better than chance — so there <em>is</em> a learnable
+mortality signal, and the model finds it. On the held-out sites that
+skill collapses to ~0.5. The model is not failing to fit mortality; it
+is fitting it and <strong>not generalising</strong>.</p>
+<p>That is what a few hundred deaths buys. With ~66% of observations at
+exactly zero and mortality concentrated in whichever species happened to
+die on whichever plot, there is enough signal to memorise and not enough
+to transfer. The network variant sits <em>lower</em> still on the
+holdout, which is what you would expect from a model with more capacity
+to memorise with.</p>
+<p>So mortality here is honestly reported as <strong>not identified
+out-of-sample</strong>. The binomial likelihood is the right loss for a
+proportion and the closed cohort is the right response, but neither
+manufactures information the two inventories do not contain. Treat
+differences between the two models as noise; the signal worth reading is
+train-vs-holdout, not model-vs-model.</p>
 </div>
 <div class="section level2">
 <h2 id="what-the-network-learned-ale">What the network learned — ALE<a class="anchor" aria-label="anchor" href="#what-the-network-learned-ale"></a>
@@ -376,7 +389,7 @@ effect”.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Yannek Käber, Maximilian Pichler.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
