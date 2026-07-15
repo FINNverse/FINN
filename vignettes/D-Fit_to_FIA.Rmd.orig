@@ -48,9 +48,30 @@ library(torch)
 library(data.table)
 library(ggplot2)
 
-# Training length. Lower this (e.g. 500L) for a quick knit while developing.
-EPOCHS <- 2000L
+# Training length. 500 is comfortably past convergence: every response plateaus
+# by ~epoch 400 (checked across 3 seeds). Raising it changes nothing except the
+# knit time.
+EPOCHS <- 500L
 ```
+
+A note on the **loss weights**, because they matter more than anything else here
+— more than the learning rate, more than the epoch budget. FINN sums one loss per
+response, and their raw scales differ by ~10<sup>4</sup>: `dbh` is a squared error
+in cm² (variance ≈ 494), while `growth` is a squared error on a ratio (variance
+≈ 0.012). Summed as-is, `dbh` takes ~87% of the objective and `growth` ~1% — far
+too little gradient to learn from, so growth simply never improves.
+
+`fit()` handles this by default (`weights = "auto"`): each loss is divided by its
+**intercept-only baseline** — the loss you would get by predicting the single best
+constant. Every term then measures the same thing, *the fraction of its own null
+deviance*, and becomes directly readable: **1 means no better than the mean, below
+1 is better.** For a squared-error term the baseline is exactly the variance, so
+this is just scaling by 1/σ²; but it also covers the Poisson, negative-binomial
+and binomial terms, where a standard deviation is not the right scale.
+
+On this data that is worth about **+0.24 Spearman on held-out growth**, for ~0.01
+of basal area. You can still pass a `numeric(6)` to override it.
+
 
 ## The data
 
@@ -165,7 +186,6 @@ fit(m,
   batchsize   = 40L,
   patches     = 4,
   patch_size  = 0.06,
-  weights     = c(0.1, 10, 1.0, 10.0, 1, 1),
   lr          = 0.01,
   env_autoscale   = TRUE         # default
 )
@@ -197,7 +217,7 @@ m_hybrid <- finn(
 fit(m_hybrid,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
-  weights = c(0.1, 10, 1.0, 10.0, 1, 1), lr = 0.01, env_autoscale = TRUE
+  lr = 0.01, env_autoscale = TRUE
 )
 ```
 
@@ -208,16 +228,29 @@ that reveal what the network learned.
 
 ## Training convergence
 
-Both variants are trained the same way; the training loss of the process model is
-shown here.
+Both variants are trained the same way. Because the losses are scaled by their
+intercept-only baselines, `m$history` can be read **per response** on one axis,
+and the dashed line at 1 is a real reference: it is the intercept-only model, so a
+curve below it means that response is predicted better than by its own mean.
 
-```{r convergence, fig.width = 6, fig.height = 3}
-loss <- data.table(epoch = seq_along(m$history), loss = sapply(m$history, sum))
-ggplot(loss, aes(epoch, loss)) +
-  geom_line(colour = "steelblue") +
+```{r convergence, fig.width = 7, fig.height = 3.5}
+hist_dt <- as.data.table(do.call(rbind, m$history))[, 1:6]
+setnames(hist_dt, c("dbh", "ba", "trees", "growth", "mort", "reg"))
+hist_dt[, epoch := .I]
+ggplot(melt(hist_dt, id.vars = "epoch", variable.name = "response"),
+       aes(epoch, value, colour = response)) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  geom_line(alpha = 0.8) +
   scale_y_log10() +
-  labs(x = "epoch", y = "total training loss (log scale)") + theme_minimal()
+  scale_colour_viridis_d() +
+  labs(x = "epoch", y = "loss / intercept-only baseline\n(1 = no better than the mean)",
+       colour = NULL) +
+  theme_minimal()
 ```
+
+The structural responses drop well below 1 within a few epochs. The per-tree rates
+sit much closer to it — they are only weakly constrained by two inventories, which
+is the honest picture and the reason for the caveat further down.
 
 ## What the model learned — `summary()`
 
@@ -270,6 +303,13 @@ setcolorder(comparison, c("variable", "model", "spearman_train", "spearman_holdo
 comparison[order(variable, model)]
 ```
 
+```{r save-preds, include = FALSE}
+# Persist predictions so a metric or a figure can be revised without refitting.
+# The models live only in this knit's memory; without this, changing a plot costs
+# a full retrain. Written by the same knit that trained them, so it cannot drift.
+fwrite(obs_pred, "D-fit-predictions.csv")
+```
+
 The structural variables — basal area, tree numbers and diameter — are
 reconstructed well, **and hold up on sites the model never saw**: that gap
 between the train and holdout columns is the part that matters, because it is
@@ -281,16 +321,25 @@ variables — with **no growth equation specified** — which is what makes hybr
 useful when a process's form is uncertain; the surrounding mechanistic processes
 still anchor the model ecologically.
 
-```{r assess-plot, fig.width = 7.5, fig.height = 5}
-ggplot(obs_pred[variable %in% c("ba", "trees", "dbh") & is.finite(obs)],
+```{r assess-plot, fig.width = 7.5, fig.height = 5.5}
+# facet_wrap, NOT facet_grid: the three responses live on completely different
+# scales (dbh ~150 cm, ba ~8 m2, trees ~20). facet_grid(scales = "free") frees x
+# per column but y per ROW, so ba and trees would be drawn on dbh's y-axis -
+# squashing them onto y = 0 and flattening the 1:1 line until a good fit looks
+# like a broken one. facet_wrap frees both axes per panel.
+ggplot(obs_pred[variable %in% c("dbh", "ba", "trees") & is.finite(obs)],
        aes(obs, value, colour = model)) +
   geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
   geom_point(alpha = 0.25, size = 0.5) +
-  facet_grid(split ~ variable, scales = "free") +
+  facet_wrap(~ split + variable, scales = "free", ncol = 3,
+             labeller = labeller(.multi_line = FALSE)) +
   scale_colour_manual(values = model_cols) +
   labs(x = "observed", y = "predicted", colour = NULL) +
   theme_minimal() + theme(legend.position = "top")
 ```
+
+Each panel is on its **own** axes, and the grey line is 1:1 — so the diagonal is
+the target in every panel regardless of the units on it.
 
 > **A caveat on the rate variables.** `growth`, `mort` and `reg` are per-tree
 > rates and are only weakly constrained by two inventories, so their Spearman is

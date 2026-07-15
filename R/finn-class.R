@@ -145,7 +145,38 @@ finn = function(N_species,
 #'   20)` for `"plateau"`. Unset entries fall back to defaults scaled off
 #'   `epochs`/`lr`.
 #' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, `gaussian`, and `binomial`. `binomial` is a Bernoulli/binomial negative log-likelihood intended for `mortality`; it expects both the prediction and the observation to be proportions in \[0, 1\].
-#' @param weights (`numeric(6)`)\cr Weights of the different losses.
+#' @param weights (`"auto"` or `numeric(6)`)\cr Weights of the six losses, in the
+#'   order `dbh`, `ba`, `trees`, `growth`, `mortality`, `regeneration`.
+#'
+#'   **Weights must account for the raw scale of each loss, not just its
+#'   importance.** The six terms are summed, and their raw magnitudes differ by
+#'   orders of magnitude: on the bundled FIA data `dbh` is an MSE in cm^2 (~430
+#'   at the start of training) while `growth` is an MSE on a ratio (~0.03) — a
+#'   factor of ~1e4. Weights chosen by importance alone are therefore dominated
+#'   by whichever response happens to have the largest units, and the rest
+#'   receive too little gradient to learn from. With equal weights, `dbh` takes
+#'   ~87% of the FIA objective and `growth` ~1%; `growth` then never improves.
+#'
+#'   `"auto"` (the default) fixes this without needing to know the units. Each
+#'   loss is divided by its **intercept-only baseline** — the loss you would get
+#'   by predicting the single best constant (the null model). Every term then
+#'   measures the same thing on the same scale: the fraction of its own null
+#'   deviance. For a squared-error term the baseline is exactly \eqn{var(y)}, so
+#'   this reduces to scaling by \eqn{1/sd(y)^2}; but it generalises to the
+#'   Poisson, negative-binomial and binomial terms, where a standard deviation is
+#'   not the right scale. It is the same idea as `env_autoscale = TRUE`, applied
+#'   to the responses rather than the predictors.
+#'
+#'   A useful side effect: the per-response values in `m$history` become directly
+#'   interpretable as **"how much better than the mean"** — `1` is no better than
+#'   the intercept, below `1` is better, above `1` is worse. The baselines are
+#'   stored in `m$loss_baseline`, the resulting weights in `m$loss_weights`, and
+#'   both are reported once when fitting starts.
+#'
+#'   Passing a `numeric(6)` uses those weights as-is and disables the scaling.
+#'   On the FIA example, balancing the objective is worth ~+0.24 Spearman on
+#'   held-out `growth` — far more than tuning `lr` or `epochs`. See the
+#'   "Fitting FINN to forest inventory data" vignette.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
 #' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
@@ -188,7 +219,7 @@ fit = function(model,
                lr_scheduler = "none",
                lr_scheduler_params = list(),
                loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
-               weights = rep(1, 6),
+               weights = "auto",
                optimizer = optim_ignite_adam,
                batchsize = NULL,
                device = c("cpu", "gpu"),
@@ -330,6 +361,11 @@ finn_class = nn_module(
     self$conditional_effects = NULL
     self$ale                 = NULL
     self$perm_importance     = NULL
+    # Set by fit(). With weights = "auto", loss_baseline holds each response's
+    # intercept-only (null) loss and loss_weights is 1/that - so every term in
+    # `history` reads as a fraction of its own baseline.
+    self$loss_weights        = NULL
+    self$loss_baseline       = NULL
     private$add_process(mortality_process, "mortality")
     private$add_process(growth_process, "growth")
     private$add_process(regeneration_process, "regeneration")
@@ -1039,7 +1075,7 @@ finn_class = nn_module(
                  lr_scheduler_params = list(),
                  # # 1 -> dbh, 2 -> ba, 3 -> trees, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
                  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
-                 weights = rep(1, 6),
+                 weights = "auto",
                  optimizer = optim_ignite_adam,
                  batchsize = NULL,
                  device = c("cpu", "gpu"),
@@ -1081,7 +1117,27 @@ finn_class = nn_module(
     self$perm_importance     = NULL
 
     # setup loss functions
-    private$create_loss_functions(loss, weights)
+    # weights = "auto" (the default): epoch 1 runs unweighted so each loss term
+    # can be MEASURED, then the weights are set to the inverse of those
+    # magnitudes (see the rescale block in the epoch loop). A numeric vector is
+    # used as-is and disables the rescaling.
+    # `loss` (the argument) names the loss FAMILY per response. The batch loop
+    # below reuses the name `loss` for a torch tensor of the current losses,
+    # which shadows this argument - so snapshot the spec now, and use the
+    # snapshot anywhere the families are needed later (e.g. the "auto" rescale).
+    loss_spec = loss
+    auto_weights = is.character(weights) && length(weights) == 1L && identical(weights, "auto")
+    if (auto_weights) {
+      weights = rep(1, 6)
+    } else {
+      if (!is.numeric(weights) || length(weights) != 6L) {
+        stop("`weights` must be \"auto\" or a numeric vector of length 6 (dbh, ba, trees, growth, mortality, regeneration).")
+      }
+      self$loss_weights = weights
+    }
+    # NOTE: the loss closures are built further down, AFTER the response tensor Y
+    # exists - "auto" needs the observed responses to compute the intercept-only
+    # baseline it scales by.
 
     # setup data
     device = match.arg(device)
@@ -1111,6 +1167,34 @@ finn_class = nn_module(
     options(na.action='na.omit')
 
     Y = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+
+    # ---- weights = "auto": scale each loss by its intercept-only baseline ----
+    # The six losses are summed, and their raw magnitudes differ by orders of
+    # magnitude (on FIA: dbh is an MSE in cm^2 ~ 1e2; growth an MSE on a ratio
+    # ~ 1e-2). Summed as-is, dbh takes ~87% of the objective and growth ~1%, so
+    # growth never learns - and no fixed weight vector fixes this in general,
+    # because the imbalance follows the units of the user's data.
+    #
+    # The reference is the null model: what the loss would be if we predicted the
+    # best CONSTANT (the intercept). Weighting by 1/baseline makes every term a
+    # fraction of its own null deviance, so they are commensurable and each one
+    # reads directly as "how much better than the mean": 1 = no better, < 1 =
+    # better. For an MSE this is exactly Max's 1/sd(y)^2 - the loss of predicting
+    # the mean IS the variance - but it generalises to the Poisson, negative
+    # binomial and binomial terms, where sd() is not the right scale.
+    private$create_loss_functions(loss_spec, weights)   # unweighted for now
+    if (auto_weights) {
+      base = private$compute_baseline_losses(Y, loss_spec)
+      w = 1/base
+      w[!is.finite(w) | w <= 0] = 1        # no data / degenerate -> leave alone
+      names(w) = names(loss_spec)
+      weights = w
+      self$loss_baseline = base
+      self$loss_weights  = w
+      private$create_loss_functions(loss_spec, weights)
+      cli::cli_alert_info(
+        "weights = 'auto': scaled by the intercept-only baseline ({paste(sprintf('%s=%.3g', names(w), w), collapse = ', ')})")
+    }
 
     envs = private$extract_env_method(env)
 
@@ -1482,6 +1566,55 @@ finn_class = nn_module(
         return(torch::lr_reduce_on_plateau(optimizer, mode = a$mode, factor = a$factor, patience = a$patience))
       }
     },
+    # Loss of an INTERCEPT-ONLY model: what each response's loss would be if we
+    # predicted the single best constant. This is the null deviance, and it is
+    # what `weights = "auto"` divides by, so every term becomes a fraction of its
+    # own baseline ("how much better than the mean").
+    #
+    # The constant used is the MLE intercept, which is the mean for every family
+    # here (Gaussian/MSE, Poisson, negative binomial) and the pooled proportion
+    # sum(n*y)/sum(n) for the binomial.
+    #
+    # The real loss functions are reused rather than reimplemented, so this
+    # cannot drift from them, and any future family is handled for free. They are
+    # called with 2D [sites, species] tensors during fitting (the reg/nbinom one
+    # sizes theta off pred$shape[1]), so Y's [sites, years, species] slices are
+    # flattened to match.
+    compute_baseline_losses = function(Y, loss_spec) {
+      nm  = names(loss_spec)
+      out = stats::setNames(rep(NA_real_, 6), nm)
+      torch::with_no_grad({
+        for (i in 1:6) {
+          out[i] = tryCatch({
+            flat = function(t) t$reshape(c(-1, t$shape[length(t$shape)]))
+            true = flat(Y[,,,i])
+            n    = if (identical(nm[i], "mortality")) flat(Y[,,,8]) else NULL
+            mask = true$isnan()$bitwise_not()
+            if (!as.logical(mask$max()$data())) stop("no observations")
+            yv = true[mask]
+            mu = if (is.null(n)) {
+              as.numeric(yv$mean())
+            } else {
+              wv = n[mask]$clamp(min = 0)
+              as.numeric((yv * wv)$sum()) / max(as.numeric(wv$sum()), 1e-8)
+            }
+            if (!is.finite(mu)) stop("non-finite intercept")
+            pred = torch::torch_full_like(true, mu)
+            f = self[[paste0("loss_", nm[i], "_func")]]
+            v = if (is.null(n)) f(true, pred) else f(true, pred, n)
+            as.numeric(v)
+          }, error = function(e) {
+            # A baseline we cannot compute must not silently become a weight of
+            # Inf/NaN; fall back to 1 (i.e. leave that term unscaled) and say so.
+            warning(sprintf("weights = 'auto': could not compute a baseline for '%s' (%s); leaving it unscaled.",
+                            nm[i], conditionMessage(e)), call. = FALSE)
+            NA_real_
+          })
+        }
+      })
+      out
+    },
+
     create_loss_functions = function(loss, weights) {
       for(l in 1:6) {
           tmp_loss = loss[l]

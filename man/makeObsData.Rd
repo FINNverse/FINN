@@ -18,7 +18,9 @@ makeObsData(
 }
 \arguments{
 \item{tree_dt}{data.table of tree records with siteName, patchName, year,
-treeName, species_name, dbh, status, living, and optional \code{mort}.}
+treeName, species_name, dbh, \code{status} (one of "alive", "new", "dead")
+and \code{living}. Mortality is derived from \code{status}; a \code{mort}
+column, if present, is ignored.}
 
 \item{plotsize}{numeric plot area used to scale recruitment.}
 
@@ -43,7 +45,12 @@ this fraction of individuals; overrides \code{Nspecies} if supplied.}
 \value{
 A list with:
 \itemize{
-\item \code{obs_dt}: observations at site or patch level.
+\item \code{obs_dt}: observations at site or patch level. Mortality comes
+back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
+the start of the interval) and \code{n_died} (how many of them were dead
+at the end), plus the derived rate \code{mort = n_died / n_at_risk}
+(\code{NA} where no cohort was at risk). The counts are the binomial
+response; pass them to \code{fit} with \code{mortality = "binomial"}.
 \item \code{tree_dt}: input trees with added growth fields and species recode.
 }
 }

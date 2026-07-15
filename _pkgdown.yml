@@ -22,6 +22,22 @@ navbar:
       - text: Mortality - binomial response and NN process
         href: articles/E-Mortality.html
 
+# CRAN metadata allows exactly ONE person to hold the creator/maintainer role
+# ("cre"), so DESCRIPTION names Yannek there and Max as an author. That is a
+# packaging constraint, not a statement about who made the package - pkgdown
+# reads roles straight from DESCRIPTION and they cannot be overridden here, so
+# the site states the real situation in prose instead.
+#
+# NB: non-ASCII must be written as a YAML \u escape. This file is read with
+# readLines(), which fails outright on raw UTF-8 under a C locale - so a literal
+# "a-umlaut" here breaks the whole site build.
+authors:
+  before: "FINN is created and developed by **Yannek K\u00E4ber** and **Maximilian Pichler**. R package metadata records only one person as creator/maintainer, so that field names a single point of contact - it does not rank authorship."
+  "Yannek K\u00E4ber":
+    href: https://orcid.org/0000-0002-7041-9849
+  Maximilian Pichler:
+    href: https://orcid.org/0000-0003-2252-8327
+
 reference:
 - title: Model setup
   desc: Define a FINN model and how each demographic process is represented.
@@ -92,3 +108,4 @@ reference:
   - np_runif
   - rweibull_cohorts
   - sample_poisson_relaxed
+

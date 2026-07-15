@@ -16,5 +16,7 @@
 /.quarto/
 **/*.quarto_ipynb
 
-# Prediction dump written by E-Mortality (regenerated on every knit).
+# Prediction dumps written by D/E (regenerated on every knit). They exist so a
+# figure or metric can be revised without a 30-min refit.
+D-fit-predictions.csv
 E-mortality-predictions.csv

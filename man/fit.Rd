@@ -16,8 +16,8 @@ fit(
   lr = 0.01,
   lr_scheduler = "none",
   lr_scheduler_params = list(),
-  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse",
-    regeneration = "nbinom"),
+  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
+    "binomial", regeneration = "nbinom"),
   weights = rep(1, 6),
   optimizer = optim_ignite_adam,
   batchsize = NULL,
@@ -67,9 +67,27 @@ chosen via \code{lr_scheduler}, e.g. \code{list(step_size = 50, gamma = 0.5)} fo
 \code{"step"}, \code{list(T_max = 200)} for \code{"cosine"}, \code{list(factor = 0.5, patience = 20)} for \code{"plateau"}. Unset entries fall back to defaults scaled off
 \code{epochs}/\code{lr}.}
 
-\item{loss}{(\code{character(6)})\cr Named vector of the different losses. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, and \code{regeneration}. Supported losses are \code{mse}, \code{poisson}, \code{nbinom}, and \code{gaussian}.}
+\item{loss}{(\code{character(6)})\cr Named vector of the different losses. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, and \code{regeneration}. Supported losses are \code{mse}, \code{poisson}, \code{nbinom}, \code{gaussian}, and \code{binomial}. \code{binomial} is a Bernoulli/binomial negative log-likelihood intended for \code{mortality}; it expects both the prediction and the observation to be proportions in [0, 1].}
 
-\item{weights}{(\code{numeric(6)})\cr Weights of the different losses.}
+\item{weights}{(\code{numeric(6)})\cr Weights of the different losses, in the order
+\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
+
+\strong{These must account for the raw scale of each loss, not just its
+importance.} The six terms are summed, and their raw magnitudes differ by
+orders of magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~130)
+while \code{growth} is an MSE on a ratio (~0.012) — a factor of ~1e4. A weight
+vector chosen by importance alone will therefore be dominated by whichever
+response happens to have the largest units, and the rest receive too little
+gradient to learn from. The default (\code{rep(1, 6)}) is \emph{not} a neutral choice
+for this reason: it lets \code{dbh} take the overwhelming majority of the
+objective.
+
+A practical recipe: fit once, read the per-response terms off \code{m$loss_raw}
+(or \code{m$history}), and set each weight to roughly the inverse of its raw
+magnitude so that every term contributes a comparable share. On the FIA
+example this is worth ~+0.24 Spearman on held-out \code{growth} — far more than
+tuning \code{lr} or \code{epochs}. See the "Fitting FINN to forest inventory data"
+vignette.}
 
 \item{optimizer}{(\code{torch_optimizer_generator})\cr Optimizer from the \code{torch} package.}
 
@@ -132,10 +150,14 @@ log-likelihoods), one for each of \code{dbh}, \code{ba} (basal area), \code{tree
 trees), \code{growth}, \code{mortality} and \code{regeneration}. Following Pichler & Käber
 (2026), reasonable choices are mean squared error (\code{"mse"}, equivalent to a
 Gaussian likelihood) for \code{dbh} and \code{ba}, Poisson likelihood for \code{trees},
-negative binomial (\code{"nbinom"}) for \code{regeneration}, and \code{"mse"} for \code{mortality}
-and \code{growth} as continuous rates (the model also supports \code{"gaussian"} and
-\code{"poisson"} as alternatives via the \code{loss} argument; see Appendix B of the
-paper for details). Each loss can be weighted individually via \code{weights}, and
+negative binomial (\code{"nbinom"}) for \code{regeneration}, and \code{"mse"} for \code{growth} as
+a continuous rate. \code{mortality} is an observed \emph{proportion} of trees that died
+and the model predicts it through a sigmoid, so it defaults to \code{"binomial"} —
+a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
+targets). This respects the [0, 1] support and the mean-variance link of a
+proportion, both of which \code{"mse"} ignores (the model also supports
+\code{"gaussian"} and \code{"poisson"} as alternatives via the \code{loss} argument; see
+Appendix B of the paper for details). Each loss can be weighted individually via \code{weights}, and
 missing values in the observed data are masked out of the corresponding loss
 term. The model is trained for \code{epochs} iterations over the (optionally
 batched and shuffled) data using \code{optimizer} with learning rate \code{lr}.

@@ -43,3 +43,7 @@ vignettes/annimated-plots/combined_iterations.gif
 
 # pkgdown site build output (deployed to the gh-pages branch, not committed to main)
 docs/
+
+# fit() draws a per-response loss plot as a side effect; this is the stray
+# device output, regenerated on every run. Never useful to track.
+Rplots.pdf

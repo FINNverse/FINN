@@ -13,7 +13,8 @@ species_name, dbh, status, living, and optional trees.}
 \item{env_dt}{data.table with environment data including siteName and year.}
 
 \item{obs_dt}{data.table with observations including siteName, patchName, year,
-species_name, and stand metrics (ba, dbh, trees, growth, mort, reg).}
+species_name, and stand metrics (ba, dbh, trees, growth, mort, n_at_risk,
+n_died, reg), as returned by \code{makeObsData}.}
 
 \item{createInitCohorts}{logical. If TRUE, build FINN initial cohorts from
 trees with \code{living == TRUE} and \code{year == 1}. Default TRUE.}
