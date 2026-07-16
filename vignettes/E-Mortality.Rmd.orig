@@ -131,9 +131,9 @@ m <- finn(
   N_species            = Nsp,
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
 
@@ -155,9 +155,9 @@ m_mort <- finn(
   N_species            = Nsp,
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createHybrid(~., hidden = c(20L, 20L), transformer = FALSE)
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE)
 )
 ```
 

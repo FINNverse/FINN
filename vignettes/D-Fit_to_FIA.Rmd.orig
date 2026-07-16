@@ -160,9 +160,20 @@ model_cols <- c("Process (mechanistic)" = "#1b9e77", "Hybrid (growth = NN)" = "#
 
 In the fully mechanistic configuration every process keeps its predefined form,
 while its species and environmental parameters are learned (`optimize* = TRUE`)
-and the `~.` formula lets every environmental predictor enter the growth,
+and the formula chooses which environmental predictors enter the growth,
 regeneration and mortality responses. The model is calibrated end-to-end by
 gradient descent through the entire simulation.
+
+We pass **two** climate drivers rather than all six available. `~.` would use
+every column, but the six are strongly collinear — `temp` and `tempmin` correlate
+at r = 0.93, `prec` and `precwarmq` at 0.86, and two principal components carry
+90% of the variance. Collinear predictors are not a problem for the *fit* (that is
+what ALE is designed for), but they are a problem for the *interpretation* below:
+two drivers that correlate at 0.93 have no separately identifiable response
+curves, so calling each one a "niche" would be reading structure into an arbitrary
+split. Two weakly-correlated drivers (r = 0.64) give curves that mean what the
+text says they mean. Measured across three seeds, the cost is nothing on growth
+(0.56 vs 0.55 held out) and ~0.02 on basal area, tree numbers and regeneration.
 
 ```{r build-process}
 FINN.seed(42)
@@ -170,9 +181,9 @@ m <- finn(
   N_species            = uniqueN(obs_dt$species),
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
 
@@ -207,9 +218,9 @@ m_hybrid <- finn(
   N_species            = uniqueN(obs_dt$species),
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createHybrid(~., hidden = c(20L, 20L), transformer = FALSE),  # NN replaces growth
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE),  # NN replaces growth
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
 

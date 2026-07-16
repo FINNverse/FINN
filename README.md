@@ -9,6 +9,7 @@ v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org
 <!-- badges: end -->
 
 <!-- [![R-CMD-check](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FINNverse/FINN/actions/workflows/R-CMD-check.yaml) -->
+
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # Forest Informed Neural Networks (FINN)
@@ -43,5 +44,22 @@ devtools::install_github("FINNverse/FINN")
 
 ## Introduction
 
-An introduction to FINN can be found in the package vignette, or
-[online](https://github.com/FINNverse/FINN/blob/main/vignettes/Introduction-to-FINN.qmd)
+Start with [Introduction to
+FINN](https://finnverse.github.io/FINN/articles/A-Introduction_to_FINN.html),
+then browse the rest:
+
+| Vignette | What it covers |
+|----|----|
+| [Introduction to FINN](https://finnverse.github.io/FINN/articles/A-Introduction_to_FINN.html) | the model, its processes, and a first simulation |
+| [Succession from a handful of species](https://finnverse.github.io/FINN/articles/B-Succession_demo.html) | plausible succession emerging from the processes |
+| [Preparing your data for FINN](https://finnverse.github.io/FINN/articles/C-Data_preparation.html) | going from a raw tree list to FINN’s input tables |
+| [Fitting FINN to forest inventory data](https://finnverse.github.io/FINN/articles/D-Fit_to_FIA.html) | calibrating on US FIA data, with a held-out test |
+| [Mortality: a binomial response and a NN process](https://finnverse.github.io/FINN/articles/E-Mortality.html) | choosing the right likelihood, and scoring it honestly |
+
+The same pages ship with the package — `vignette(package = "FINN")`
+lists them.
+
+<!-- Link to the RENDERED articles, not to files in vignettes/. Source paths break
+     whenever a vignette is renamed (they did once already, when these moved from
+     .qmd to precompiled .Rmd), and GitHub shows the un-executed source anyway -
+     no figures, no results. The site URLs survive renames. -->
