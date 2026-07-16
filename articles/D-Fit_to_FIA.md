@@ -159,10 +159,23 @@ init_cohorts_test <- makeInitCohorts(init_test,  Nspecies = Nsp)
 
 In the fully mechanistic configuration every process keeps its
 predefined form, while its species and environmental parameters are
-learned (`optimize* = TRUE`) and the `~.` formula lets every
-environmental predictor enter the growth, regeneration and mortality
-responses. The model is calibrated end-to-end by gradient descent
-through the entire simulation.
+learned (`optimize* = TRUE`) and the formula chooses which environmental
+predictors enter the growth, regeneration and mortality responses. The
+model is calibrated end-to-end by gradient descent through the entire
+simulation.
+
+We pass **two** climate drivers rather than all six available. `~.`
+would use every column, but the six are strongly collinear — `temp` and
+`tempmin` correlate at r = 0.93, `prec` and `precwarmq` at 0.86, and two
+principal components carry 90% of the variance. Collinear predictors are
+not a problem for the *fit* (that is what ALE is designed for), but they
+are a problem for the *interpretation* below: two drivers that correlate
+at 0.93 have no separately identifiable response curves, so calling each
+one a “niche” would be reading structure into an arbitrary split. Two
+weakly-correlated drivers (r = 0.64) give curves that mean what the text
+says they mean. Measured across three seeds, the cost is nothing on
+growth (0.56 vs 0.55 held out) and ~0.02 on basal area, tree numbers and
+regeneration.
 
 ``` r
 
@@ -171,9 +184,9 @@ m <- finn(
   N_species            = uniqueN(obs_dt$species),
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
 
@@ -215,9 +228,9 @@ m_hybrid <- finn(
   N_species            = uniqueN(obs_dt$species),
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createHybrid(~., hidden = c(20L, 20L), transformer = FALSE),  # NN replaces growth
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE),  # NN replaces growth
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
 
@@ -289,104 +302,53 @@ FINN model summary
 ### GROWTH
 
 Analytical ALE importance (rate-normalised) (species in columns):
-  variable    sp1    sp2     sp3      sp4      sp5    sp6     sp7    sp8
- precwarmq 0.0777 0.2431 0.05043 0.796841 0.084939 0.7666 3.09420 7.4790
-   tempmax 0.0400 0.0163 0.01517 0.272596 0.177615 0.3990 0.27777 0.3691
-      prec 0.0629 2.8378 0.00842 4.938956 0.005970 0.5971 0.86532 0.1145
-      temp 0.0279 0.1512 0.27304 0.000966 0.974698 0.0647 0.10584 1.8580
-  precseas 0.6239 0.0081 0.19111 0.096503 0.273255 0.5201 0.43262 0.0216
-   tempmin 0.1222 0.4398 1.49744 2.028579 0.000523 0.0174 0.00976 0.4448
-     sp9    sp10     sp11
- 0.04296  0.2646 1.10e+00
- 0.00171 10.9017 3.38e-01
- 0.48435  0.0577 5.37e-07
- 0.08967  4.9145 2.60e-01
- 2.10261  1.5018 3.04e-01
- 0.50974  0.3609 8.84e-02
+ variable    sp1    sp2      sp3      sp4      sp5   sp6   sp7    sp8   sp9
+     temp 0.0242 0.0133 0.744175 0.000735 0.000385 0.473 0.489 2.7839 0.342
+     prec 0.2288 2.5776 0.000987 0.005823 0.002549 0.297 0.383 0.0168 0.635
+   sp10   sp11
+ 2.7389 0.0854
+ 0.0286 0.4186
 
 Average conditional effects (mean; species in columns):
-  variable     sp1      sp2     sp3      sp4      sp5     sp6      sp7     sp8
- precwarmq  0.0282 -0.03273 -0.0302 -0.15030  0.01540 -0.0811  0.10503 -1.0869
-      temp -0.0169  0.02643  0.0575  0.00406  0.06109  0.0268  0.01678 -0.3803
-      prec  0.0229  0.12334  0.0101  0.31810 -0.00531  0.0805 -0.07479  0.1168
-   tempmin -0.0392 -0.04434  0.1075 -0.17882 -0.00142  0.0145  0.00642 -0.2296
-   tempmax  0.0193  0.00850 -0.0115  0.05938 -0.02722 -0.0528  0.03594 -0.2309
-  precseas  0.0724  0.00692 -0.0444  0.05006 -0.03492 -0.0789 -0.03451  0.0204
-      sp9    sp10      sp11
- -0.03115  0.0411  7.35e-02
- -0.06232 -0.2451 -4.12e-02
-  0.08809  0.0222 -5.99e-05
- -0.12212  0.0759 -2.28e-02
- -0.00763  0.2774  4.35e-02
-  0.24099  0.1058  4.43e-02
+ variable     sp1     sp2     sp3      sp4      sp5    sp6    sp7      sp8
+     temp -0.0158 0.00638 0.07445 -0.00308  0.00199 0.0975 0.0421 -0.03546
+     prec  0.0497 0.08533 0.00361 -0.01113 -0.00454 0.0713 0.0354 -0.00381
+     sp9    sp10    sp11
+ -0.0879  0.2412 -0.0218
+  0.1042 -0.0224  0.0496
 
 ### MORTALITY
 
 Analytical ALE importance (rate-normalised) (species in columns):
-  variable     sp1     sp2    sp3    sp4      sp5    sp6    sp7     sp8     sp9
- precwarmq 0.74077 1.12288 0.0264 0.4891 0.756559 0.0243 0.0661 0.25948 0.20964
-  precseas 0.15872 0.00903 0.1513 0.1861 1.348941 1.3885 0.0979 0.00503 0.02273
-      prec 0.29065 0.84383 0.2782 0.0267 1.005813 0.0749 0.0463 0.00263 0.51044
-   tempmax 0.05344 1.29433 0.1664 0.8065 0.001803 0.2124 0.0287 0.02451 0.46741
-      temp 0.01877 0.39330 0.0332 0.0450 0.000367 0.2727 0.0158 0.28261 0.02899
-   tempmin 0.00144 0.07040 0.0633 0.1304 0.023599 0.2555 0.0393 0.17846 0.00322
-    sp10     sp11
- 0.21021 9.26e-07
- 0.11655 1.43e-01
- 0.41213 6.39e-02
- 0.02673 2.74e-02
- 0.01368 2.96e-01
- 0.00226 1.90e-02
+ variable    sp1    sp2    sp3   sp4  sp5    sp6    sp7    sp8      sp9  sp10
+     prec 0.0605 3.6817 0.4992 0.201 1.07 0.0711 0.5722 0.0183 0.292514 1.192
+     temp 0.0508 0.0545 0.0836 0.200 0.41 1.9825 0.0238 1.5557 0.000331 0.237
+   sp11
+ 0.0151
+ 0.3825
 
 Average conditional effects (mean; species in columns):
-  variable      sp1      sp2      sp3     sp4      sp5      sp6     sp7
-  precseas  0.01281  0.00213  0.02022 -0.0227  0.06221 -0.02095 -0.0443
-      prec -0.01818  0.02292  0.03012  0.0100  0.03817 -0.00903 -0.0340
- precwarmq  0.02466 -0.02202  0.00731  0.0365 -0.05088  0.00359 -0.0416
-   tempmax  0.00660 -0.01844  0.01671 -0.0417 -0.00255 -0.01217  0.0192
-      temp  0.00464  0.01307 -0.01113  0.0106  0.00118 -0.00639  0.0197
-   tempmin  0.00131  0.00547 -0.01473 -0.0191  0.00665 -0.00805 -0.0307
-      sp8      sp9     sp10      sp11
- -0.00543  0.01244 -0.10191  0.015183
- -0.00226  0.03094 -0.06847  0.011071
-  0.01499 -0.01681 -0.05457 -0.000039
- -0.00742 -0.02880 -0.02427 -0.006484
- -0.01306 -0.00766 -0.02066 -0.023918
- -0.01065  0.00208 -0.00779 -0.006117
+ variable     sp1      sp2     sp3     sp4    sp5      sp6     sp7     sp8
+     prec 0.00770  0.02773 0.02021 -0.0245 0.0262 -0.00244 -0.0976 -0.0102
+     temp 0.00742 -0.00326 0.00883 -0.0211 0.0232 -0.01712  0.0149 -0.0645
+       sp9    sp10    sp11
+  0.009963 -0.0741 -0.0066
+ -0.000322 -0.0302 -0.0297
 
 ### REGENERATION
 
 Analytical ALE importance (rate-normalised) (species in columns):
-  variable   sp1    sp2    sp3   sp4    sp5      sp6      sp7     sp8     sp9
-  precseas 0.138 0.0606 1.2937 2.600 0.4397 0.008384 0.218402 0.00184 0.08923
- precwarmq 0.205 0.1233 0.0326 0.907 0.2480 0.309712 0.050345 1.73169 0.91725
-      temp 0.019 0.0136 0.3565 0.699 0.0317 0.084249 0.166767 0.02020 0.53911
-   tempmin 0.857 0.0129 0.1620 0.840 0.0178 0.042227 0.081534 0.00946 0.04209
-      prec 0.185 0.7159 0.5609 0.595 0.0789 0.000534 0.000347 0.06862 0.06328
-   tempmax 0.792 0.0132 0.0529 0.540 0.0801 0.130536 0.018251 0.32347 0.00859
-   sp10    sp11
- 0.0517 0.66061
- 0.5885 0.07052
- 0.2796 2.23342
- 0.1254 1.30112
- 0.2980 0.01013
- 0.1215 0.00517
+ variable     sp1   sp2   sp3    sp4   sp5    sp6   sp7   sp8   sp9  sp10  sp11
+     prec 0.00331 0.923 0.148 1.1918 0.337 1.0344 0.501 0.294 0.677 0.701 1.169
+     temp 0.91140 0.144 0.564 0.0518 0.676 0.0754 0.860 0.452 0.423 0.360 0.132
 
 Average conditional effects (mean; species in columns):
-  variable    sp1    sp2    sp3    sp4    sp5     sp6      sp7     sp8     sp9
-  precseas -1.095  0.221  1.965  1.165 -0.836 -0.1119  0.72202  0.0739 -0.2636
-      prec  0.936 -1.735 -2.399 -0.541 -0.677 -0.0125 -0.00692  0.2395  0.1249
-      temp -0.310 -0.168 -1.577 -0.907 -0.189  0.1583 -0.39983  0.1788  0.3380
-   tempmin  2.071  0.169 -1.374  0.880  0.213  0.1690 -0.18202  0.1368  0.1370
- precwarmq  0.776 -0.687 -0.748 -1.579  0.538  0.1673  0.14256 -0.6776  0.2422
-   tempmax  1.775  0.116 -0.555 -0.572 -0.286 -0.1854 -0.06065 -0.3358  0.0503
-   sp10    sp11
-  0.935  1.3941
-  0.705 -0.1413
- -0.979 -2.2936
- -0.395  1.6252
-  0.618  0.3360
-  0.305 -0.0932
+ variable   sp1    sp2   sp3    sp4    sp5   sp6    sp7     sp8   sp9   sp10
+     prec 0.143 -3.083 -1.33 -0.410 -0.794 0.487  0.500 0.00812 0.543  1.074
+     temp 2.604  0.766 -1.62  0.077 -0.644 0.125 -0.553 0.01056 0.389 -0.827
+   sp11
+  1.525
+ -0.514
 ```
 
 The niche and ALE sections below unpack this overview into per-driver
@@ -431,32 +393,32 @@ comparison[order(variable, model)]
 #> Key: <variable, model>
 #>     variable                 model spearman_train spearman_holdout rmse_train
 #>       <fctr>                <char>          <num>            <num>      <num>
-#>  1:      dbh  Hybrid (growth = NN)           0.81             0.75      13.05
-#>  2:      dbh Process (mechanistic)           0.83             0.72      12.09
-#>  3:       ba  Hybrid (growth = NN)           0.81             0.80       0.12
-#>  4:       ba Process (mechanistic)           0.82             0.80       0.13
-#>  5:    trees  Hybrid (growth = NN)           0.80             0.78       0.74
-#>  6:    trees Process (mechanistic)           0.80             0.78       0.76
-#>  7:   growth  Hybrid (growth = NN)           0.60             0.54       0.09
-#>  8:   growth Process (mechanistic)           0.60             0.54       0.10
-#>  9:     mort  Hybrid (growth = NN)           0.27             0.03       0.15
-#> 10:     mort Process (mechanistic)           0.23             0.05       0.15
-#> 11:      reg  Hybrid (growth = NN)           0.28             0.26       6.21
-#> 12:      reg Process (mechanistic)           0.28             0.27       6.21
+#>  1:      dbh  Hybrid (growth = NN)           0.80             0.73      13.05
+#>  2:      dbh Process (mechanistic)           0.80             0.73      12.93
+#>  3:       ba  Hybrid (growth = NN)           0.80             0.79       0.12
+#>  4:       ba Process (mechanistic)           0.80             0.80       0.12
+#>  5:    trees  Hybrid (growth = NN)           0.78             0.77       0.75
+#>  6:    trees Process (mechanistic)           0.78             0.78       0.77
+#>  7:   growth  Hybrid (growth = NN)           0.58             0.50       0.09
+#>  8:   growth Process (mechanistic)           0.60             0.56       0.10
+#>  9:     mort  Hybrid (growth = NN)           0.18             0.04       0.15
+#> 10:     mort Process (mechanistic)           0.17             0.03       0.15
+#> 11:      reg  Hybrid (growth = NN)           0.23             0.23       6.20
+#> 12:      reg Process (mechanistic)           0.23             0.24       6.22
 #>     rmse_holdout
 #>            <num>
-#>  1:        13.86
-#>  2:        14.20
+#>  1:        13.89
+#>  2:        13.78
 #>  3:         0.09
 #>  4:         0.09
-#>  5:         0.92
+#>  5:         0.77
 #>  6:         0.78
 #>  7:         0.10
-#>  8:         0.12
+#>  8:         0.11
 #>  9:         0.16
-#> 10:         0.16
+#> 10:         0.15
 #> 11:         6.47
-#> 12:         6.45
+#> 12:         6.46
 ```
 
 The structural variables — basal area, tree numbers and diameter — are

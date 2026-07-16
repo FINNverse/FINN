@@ -212,19 +212,32 @@ from its own sites.</p>
 </h2>
 <p>In the fully mechanistic configuration every process keeps its
 predefined form, while its species and environmental parameters are
-learned (<code>optimize* = TRUE</code>) and the <code>~.</code> formula
-lets every environmental predictor enter the growth, regeneration and
-mortality responses. The model is calibrated end-to-end by gradient
-descent through the entire simulation.</p>
+learned (<code>optimize* = TRUE</code>) and the formula chooses which
+environmental predictors enter the growth, regeneration and mortality
+responses. The model is calibrated end-to-end by gradient descent
+through the entire simulation.</p>
+<p>We pass <strong>two</strong> climate drivers rather than all six
+available. <code>~.</code> would use every column, but the six are
+strongly collinear — <code>temp</code> and <code>tempmin</code>
+correlate at r = 0.93, <code>prec</code> and <code>precwarmq</code> at
+0.86, and two principal components carry 90% of the variance. Collinear
+predictors are not a problem for the <em>fit</em> (that is what ALE is
+designed for), but they are a problem for the <em>interpretation</em>
+below: two drivers that correlate at 0.93 have no separately
+identifiable response curves, so calling each one a “niche” would be
+reading structure into an arbitrary split. Two weakly-correlated drivers
+(r = 0.64) give curves that mean what the text says they mean. Measured
+across three seeds, the cost is nothing on growth (0.56 vs 0.55 held
+out) and ~0.02 on basal area, tree numbers and regeneration.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/finn.html">finn</a></span><span class="op">(</span></span>
 <span>  N_species            <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/duplicated.html" class="external-link">uniqueN</a></span><span class="op">(</span><span class="va">obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span>,</span>
 <span>  recruits_dbh         <span class="op">=</span> <span class="fl">12.9</span>,</span>
 <span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span>,  optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="va">.</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="va">.</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="va">.</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">m</span>,</span>
@@ -259,9 +272,9 @@ the <strong>identical <code><a href="../reference/fit.html">fit()</a></code> cal
 <span>  N_species            <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/duplicated.html" class="external-link">uniqueN</a></span><span class="op">(</span><span class="va">obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span>,</span>
 <span>  recruits_dbh         <span class="op">=</span> <span class="fl">12.9</span>,</span>
 <span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span>,  optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createHybrid.html">createHybrid</a></span><span class="op">(</span><span class="op">~</span><span class="va">.</span>, hidden <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">20L</span>, <span class="fl">20L</span><span class="op">)</span>, transformer <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span>,  <span class="co"># NN replaces growth</span></span>
-<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="va">.</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="va">.</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createHybrid.html">createHybrid</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, hidden <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">20L</span>, <span class="fl">20L</span><span class="op">)</span>, transformer <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span>,  <span class="co"># NN replaces growth</span></span>
+<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">m_hybrid</span>,</span>
@@ -319,104 +332,53 @@ simulation.</p>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="do">### GROWTH</span></span>
 <span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a></span>
 <span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>Analytical ALE <span class="fu">importance</span> (rate<span class="sc">-</span>normalised) (species <span class="cf">in</span> columns)<span class="sc">:</span></span>
-<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  variable    sp1    sp2     sp3      sp4      sp5    sp6     sp7    sp8</span>
-<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a> precwarmq <span class="fl">0.0777</span> <span class="fl">0.2431</span> <span class="fl">0.05043</span> <span class="fl">0.796841</span> <span class="fl">0.084939</span> <span class="fl">0.7666</span> <span class="fl">3.09420</span> <span class="fl">7.4790</span></span>
-<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>   tempmax <span class="fl">0.0400</span> <span class="fl">0.0163</span> <span class="fl">0.01517</span> <span class="fl">0.272596</span> <span class="fl">0.177615</span> <span class="fl">0.3990</span> <span class="fl">0.27777</span> <span class="fl">0.3691</span></span>
-<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>      prec <span class="fl">0.0629</span> <span class="fl">2.8378</span> <span class="fl">0.00842</span> <span class="fl">4.938956</span> <span class="fl">0.005970</span> <span class="fl">0.5971</span> <span class="fl">0.86532</span> <span class="fl">0.1145</span></span>
-<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>      temp <span class="fl">0.0279</span> <span class="fl">0.1512</span> <span class="fl">0.27304</span> <span class="fl">0.000966</span> <span class="fl">0.974698</span> <span class="fl">0.0647</span> <span class="fl">0.10584</span> <span class="fl">1.8580</span></span>
-<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a>  precseas <span class="fl">0.6239</span> <span class="fl">0.0081</span> <span class="fl">0.19111</span> <span class="fl">0.096503</span> <span class="fl">0.273255</span> <span class="fl">0.5201</span> <span class="fl">0.43262</span> <span class="fl">0.0216</span></span>
-<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a>   tempmin <span class="fl">0.1222</span> <span class="fl">0.4398</span> <span class="fl">1.49744</span> <span class="fl">2.028579</span> <span class="fl">0.000523</span> <span class="fl">0.0174</span> <span class="fl">0.00976</span> <span class="fl">0.4448</span></span>
-<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a>     sp9    sp10     sp11</span>
-<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a> <span class="fl">0.04296</span>  <span class="fl">0.2646</span> <span class="fl">1.10e+00</span></span>
-<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a> <span class="fl">0.00171</span> <span class="fl">10.9017</span> <span class="fl">3.38e-01</span></span>
-<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a> <span class="fl">0.48435</span>  <span class="fl">0.0577</span> <span class="fl">5.37e-07</span></span>
-<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a> <span class="fl">0.08967</span>  <span class="fl">4.9145</span> <span class="fl">2.60e-01</span></span>
-<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a> <span class="fl">2.10261</span>  <span class="fl">1.5018</span> <span class="fl">3.04e-01</span></span>
-<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a> <span class="fl">0.50974</span>  <span class="fl">0.3609</span> <span class="fl">8.84e-02</span></span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a> variable    sp1    sp2      sp3      sp4      sp5   sp6   sp7    sp8   sp9</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>     temp <span class="fl">0.0242</span> <span class="fl">0.0133</span> <span class="fl">0.744175</span> <span class="fl">0.000735</span> <span class="fl">0.000385</span> <span class="fl">0.473</span> <span class="fl">0.489</span> <span class="fl">2.7839</span> <span class="fl">0.342</span></span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>     prec <span class="fl">0.2288</span> <span class="fl">2.5776</span> <span class="fl">0.000987</span> <span class="fl">0.005823</span> <span class="fl">0.002549</span> <span class="fl">0.297</span> <span class="fl">0.383</span> <span class="fl">0.0168</span> <span class="fl">0.635</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>   sp10   sp11</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a> <span class="fl">2.7389</span> <span class="fl">0.0854</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a> <span class="fl">0.0286</span> <span class="fl">0.4186</span></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a>Average conditional <span class="fu">effects</span> (mean; species <span class="cf">in</span> columns)<span class="sc">:</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a> variable     sp1     sp2     sp3      sp4      sp5    sp6    sp7      sp8</span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a>     temp <span class="sc">-</span><span class="fl">0.0158</span> <span class="fl">0.00638</span> <span class="fl">0.07445</span> <span class="sc">-</span><span class="fl">0.00308</span>  <span class="fl">0.00199</span> <span class="fl">0.0975</span> <span class="fl">0.0421</span> <span class="sc">-</span><span class="fl">0.03546</span></span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a>     prec  <span class="fl">0.0497</span> <span class="fl">0.08533</span> <span class="fl">0.00361</span> <span class="sc">-</span><span class="fl">0.01113</span> <span class="sc">-</span><span class="fl">0.00454</span> <span class="fl">0.0713</span> <span class="fl">0.0354</span> <span class="sc">-</span><span class="fl">0.00381</span></span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a>     sp9    sp10    sp11</span>
+<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.0879</span>  <span class="fl">0.2412</span> <span class="sc">-</span><span class="fl">0.0218</span></span>
+<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a>  <span class="fl">0.1042</span> <span class="sc">-</span><span class="fl">0.0224</span>  <span class="fl">0.0496</span></span>
 <span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a></span>
-<span id="cb11-23"><a href="#cb11-23" tabindex="-1"></a>Average conditional <span class="fu">effects</span> (mean; species <span class="cf">in</span> columns)<span class="sc">:</span></span>
-<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a>  variable     sp1      sp2     sp3      sp4      sp5     sp6      sp7     sp8</span>
-<span id="cb11-25"><a href="#cb11-25" tabindex="-1"></a> precwarmq  <span class="fl">0.0282</span> <span class="sc">-</span><span class="fl">0.03273</span> <span class="sc">-</span><span class="fl">0.0302</span> <span class="sc">-</span><span class="fl">0.15030</span>  <span class="fl">0.01540</span> <span class="sc">-</span><span class="fl">0.0811</span>  <span class="fl">0.10503</span> <span class="sc">-</span><span class="fl">1.0869</span></span>
-<span id="cb11-26"><a href="#cb11-26" tabindex="-1"></a>      temp <span class="sc">-</span><span class="fl">0.0169</span>  <span class="fl">0.02643</span>  <span class="fl">0.0575</span>  <span class="fl">0.00406</span>  <span class="fl">0.06109</span>  <span class="fl">0.0268</span>  <span class="fl">0.01678</span> <span class="sc">-</span><span class="fl">0.3803</span></span>
-<span id="cb11-27"><a href="#cb11-27" tabindex="-1"></a>      prec  <span class="fl">0.0229</span>  <span class="fl">0.12334</span>  <span class="fl">0.0101</span>  <span class="fl">0.31810</span> <span class="sc">-</span><span class="fl">0.00531</span>  <span class="fl">0.0805</span> <span class="sc">-</span><span class="fl">0.07479</span>  <span class="fl">0.1168</span></span>
-<span id="cb11-28"><a href="#cb11-28" tabindex="-1"></a>   tempmin <span class="sc">-</span><span class="fl">0.0392</span> <span class="sc">-</span><span class="fl">0.04434</span>  <span class="fl">0.1075</span> <span class="sc">-</span><span class="fl">0.17882</span> <span class="sc">-</span><span class="fl">0.00142</span>  <span class="fl">0.0145</span>  <span class="fl">0.00642</span> <span class="sc">-</span><span class="fl">0.2296</span></span>
-<span id="cb11-29"><a href="#cb11-29" tabindex="-1"></a>   tempmax  <span class="fl">0.0193</span>  <span class="fl">0.00850</span> <span class="sc">-</span><span class="fl">0.0115</span>  <span class="fl">0.05938</span> <span class="sc">-</span><span class="fl">0.02722</span> <span class="sc">-</span><span class="fl">0.0528</span>  <span class="fl">0.03594</span> <span class="sc">-</span><span class="fl">0.2309</span></span>
-<span id="cb11-30"><a href="#cb11-30" tabindex="-1"></a>  precseas  <span class="fl">0.0724</span>  <span class="fl">0.00692</span> <span class="sc">-</span><span class="fl">0.0444</span>  <span class="fl">0.05006</span> <span class="sc">-</span><span class="fl">0.03492</span> <span class="sc">-</span><span class="fl">0.0789</span> <span class="sc">-</span><span class="fl">0.03451</span>  <span class="fl">0.0204</span></span>
-<span id="cb11-31"><a href="#cb11-31" tabindex="-1"></a>      sp9    sp10      sp11</span>
-<span id="cb11-32"><a href="#cb11-32" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.03115</span>  <span class="fl">0.0411</span>  <span class="fl">7.35e-02</span></span>
-<span id="cb11-33"><a href="#cb11-33" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.06232</span> <span class="sc">-</span><span class="fl">0.2451</span> <span class="sc">-</span><span class="fl">4.12e-02</span></span>
-<span id="cb11-34"><a href="#cb11-34" tabindex="-1"></a>  <span class="fl">0.08809</span>  <span class="fl">0.0222</span> <span class="sc">-</span><span class="fl">5.99e-05</span></span>
-<span id="cb11-35"><a href="#cb11-35" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.12212</span>  <span class="fl">0.0759</span> <span class="sc">-</span><span class="fl">2.28e-02</span></span>
-<span id="cb11-36"><a href="#cb11-36" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.00763</span>  <span class="fl">0.2774</span>  <span class="fl">4.35e-02</span></span>
-<span id="cb11-37"><a href="#cb11-37" tabindex="-1"></a>  <span class="fl">0.24099</span>  <span class="fl">0.1058</span>  <span class="fl">4.43e-02</span></span>
-<span id="cb11-38"><a href="#cb11-38" tabindex="-1"></a></span>
-<span id="cb11-39"><a href="#cb11-39" tabindex="-1"></a><span class="do">### MORTALITY</span></span>
+<span id="cb11-23"><a href="#cb11-23" tabindex="-1"></a><span class="do">### MORTALITY</span></span>
+<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a></span>
+<span id="cb11-25"><a href="#cb11-25" tabindex="-1"></a>Analytical ALE <span class="fu">importance</span> (rate<span class="sc">-</span>normalised) (species <span class="cf">in</span> columns)<span class="sc">:</span></span>
+<span id="cb11-26"><a href="#cb11-26" tabindex="-1"></a> variable    sp1    sp2    sp3   sp4  sp5    sp6    sp7    sp8      sp9  sp10</span>
+<span id="cb11-27"><a href="#cb11-27" tabindex="-1"></a>     prec <span class="fl">0.0605</span> <span class="fl">3.6817</span> <span class="fl">0.4992</span> <span class="fl">0.201</span> <span class="fl">1.07</span> <span class="fl">0.0711</span> <span class="fl">0.5722</span> <span class="fl">0.0183</span> <span class="fl">0.292514</span> <span class="fl">1.192</span></span>
+<span id="cb11-28"><a href="#cb11-28" tabindex="-1"></a>     temp <span class="fl">0.0508</span> <span class="fl">0.0545</span> <span class="fl">0.0836</span> <span class="fl">0.200</span> <span class="fl">0.41</span> <span class="fl">1.9825</span> <span class="fl">0.0238</span> <span class="fl">1.5557</span> <span class="fl">0.000331</span> <span class="fl">0.237</span></span>
+<span id="cb11-29"><a href="#cb11-29" tabindex="-1"></a>   sp11</span>
+<span id="cb11-30"><a href="#cb11-30" tabindex="-1"></a> <span class="fl">0.0151</span></span>
+<span id="cb11-31"><a href="#cb11-31" tabindex="-1"></a> <span class="fl">0.3825</span></span>
+<span id="cb11-32"><a href="#cb11-32" tabindex="-1"></a></span>
+<span id="cb11-33"><a href="#cb11-33" tabindex="-1"></a>Average conditional <span class="fu">effects</span> (mean; species <span class="cf">in</span> columns)<span class="sc">:</span></span>
+<span id="cb11-34"><a href="#cb11-34" tabindex="-1"></a> variable     sp1      sp2     sp3     sp4    sp5      sp6     sp7     sp8</span>
+<span id="cb11-35"><a href="#cb11-35" tabindex="-1"></a>     prec <span class="fl">0.00770</span>  <span class="fl">0.02773</span> <span class="fl">0.02021</span> <span class="sc">-</span><span class="fl">0.0245</span> <span class="fl">0.0262</span> <span class="sc">-</span><span class="fl">0.00244</span> <span class="sc">-</span><span class="fl">0.0976</span> <span class="sc">-</span><span class="fl">0.0102</span></span>
+<span id="cb11-36"><a href="#cb11-36" tabindex="-1"></a>     temp <span class="fl">0.00742</span> <span class="sc">-</span><span class="fl">0.00326</span> <span class="fl">0.00883</span> <span class="sc">-</span><span class="fl">0.0211</span> <span class="fl">0.0232</span> <span class="sc">-</span><span class="fl">0.01712</span>  <span class="fl">0.0149</span> <span class="sc">-</span><span class="fl">0.0645</span></span>
+<span id="cb11-37"><a href="#cb11-37" tabindex="-1"></a>       sp9    sp10    sp11</span>
+<span id="cb11-38"><a href="#cb11-38" tabindex="-1"></a>  <span class="fl">0.009963</span> <span class="sc">-</span><span class="fl">0.0741</span> <span class="sc">-</span><span class="fl">0.0066</span></span>
+<span id="cb11-39"><a href="#cb11-39" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.000322</span> <span class="sc">-</span><span class="fl">0.0302</span> <span class="sc">-</span><span class="fl">0.0297</span></span>
 <span id="cb11-40"><a href="#cb11-40" tabindex="-1"></a></span>
-<span id="cb11-41"><a href="#cb11-41" tabindex="-1"></a>Analytical ALE <span class="fu">importance</span> (rate<span class="sc">-</span>normalised) (species <span class="cf">in</span> columns)<span class="sc">:</span></span>
-<span id="cb11-42"><a href="#cb11-42" tabindex="-1"></a>  variable     sp1     sp2    sp3    sp4      sp5    sp6    sp7     sp8     sp9</span>
-<span id="cb11-43"><a href="#cb11-43" tabindex="-1"></a> precwarmq <span class="fl">0.74077</span> <span class="fl">1.12288</span> <span class="fl">0.0264</span> <span class="fl">0.4891</span> <span class="fl">0.756559</span> <span class="fl">0.0243</span> <span class="fl">0.0661</span> <span class="fl">0.25948</span> <span class="fl">0.20964</span></span>
-<span id="cb11-44"><a href="#cb11-44" tabindex="-1"></a>  precseas <span class="fl">0.15872</span> <span class="fl">0.00903</span> <span class="fl">0.1513</span> <span class="fl">0.1861</span> <span class="fl">1.348941</span> <span class="fl">1.3885</span> <span class="fl">0.0979</span> <span class="fl">0.00503</span> <span class="fl">0.02273</span></span>
-<span id="cb11-45"><a href="#cb11-45" tabindex="-1"></a>      prec <span class="fl">0.29065</span> <span class="fl">0.84383</span> <span class="fl">0.2782</span> <span class="fl">0.0267</span> <span class="fl">1.005813</span> <span class="fl">0.0749</span> <span class="fl">0.0463</span> <span class="fl">0.00263</span> <span class="fl">0.51044</span></span>
-<span id="cb11-46"><a href="#cb11-46" tabindex="-1"></a>   tempmax <span class="fl">0.05344</span> <span class="fl">1.29433</span> <span class="fl">0.1664</span> <span class="fl">0.8065</span> <span class="fl">0.001803</span> <span class="fl">0.2124</span> <span class="fl">0.0287</span> <span class="fl">0.02451</span> <span class="fl">0.46741</span></span>
-<span id="cb11-47"><a href="#cb11-47" tabindex="-1"></a>      temp <span class="fl">0.01877</span> <span class="fl">0.39330</span> <span class="fl">0.0332</span> <span class="fl">0.0450</span> <span class="fl">0.000367</span> <span class="fl">0.2727</span> <span class="fl">0.0158</span> <span class="fl">0.28261</span> <span class="fl">0.02899</span></span>
-<span id="cb11-48"><a href="#cb11-48" tabindex="-1"></a>   tempmin <span class="fl">0.00144</span> <span class="fl">0.07040</span> <span class="fl">0.0633</span> <span class="fl">0.1304</span> <span class="fl">0.023599</span> <span class="fl">0.2555</span> <span class="fl">0.0393</span> <span class="fl">0.17846</span> <span class="fl">0.00322</span></span>
-<span id="cb11-49"><a href="#cb11-49" tabindex="-1"></a>    sp10     sp11</span>
-<span id="cb11-50"><a href="#cb11-50" tabindex="-1"></a> <span class="fl">0.21021</span> <span class="fl">9.26e-07</span></span>
-<span id="cb11-51"><a href="#cb11-51" tabindex="-1"></a> <span class="fl">0.11655</span> <span class="fl">1.43e-01</span></span>
-<span id="cb11-52"><a href="#cb11-52" tabindex="-1"></a> <span class="fl">0.41213</span> <span class="fl">6.39e-02</span></span>
-<span id="cb11-53"><a href="#cb11-53" tabindex="-1"></a> <span class="fl">0.02673</span> <span class="fl">2.74e-02</span></span>
-<span id="cb11-54"><a href="#cb11-54" tabindex="-1"></a> <span class="fl">0.01368</span> <span class="fl">2.96e-01</span></span>
-<span id="cb11-55"><a href="#cb11-55" tabindex="-1"></a> <span class="fl">0.00226</span> <span class="fl">1.90e-02</span></span>
-<span id="cb11-56"><a href="#cb11-56" tabindex="-1"></a></span>
-<span id="cb11-57"><a href="#cb11-57" tabindex="-1"></a>Average conditional <span class="fu">effects</span> (mean; species <span class="cf">in</span> columns)<span class="sc">:</span></span>
-<span id="cb11-58"><a href="#cb11-58" tabindex="-1"></a>  variable      sp1      sp2      sp3     sp4      sp5      sp6     sp7</span>
-<span id="cb11-59"><a href="#cb11-59" tabindex="-1"></a>  precseas  <span class="fl">0.01281</span>  <span class="fl">0.00213</span>  <span class="fl">0.02022</span> <span class="sc">-</span><span class="fl">0.0227</span>  <span class="fl">0.06221</span> <span class="sc">-</span><span class="fl">0.02095</span> <span class="sc">-</span><span class="fl">0.0443</span></span>
-<span id="cb11-60"><a href="#cb11-60" tabindex="-1"></a>      prec <span class="sc">-</span><span class="fl">0.01818</span>  <span class="fl">0.02292</span>  <span class="fl">0.03012</span>  <span class="fl">0.0100</span>  <span class="fl">0.03817</span> <span class="sc">-</span><span class="fl">0.00903</span> <span class="sc">-</span><span class="fl">0.0340</span></span>
-<span id="cb11-61"><a href="#cb11-61" tabindex="-1"></a> precwarmq  <span class="fl">0.02466</span> <span class="sc">-</span><span class="fl">0.02202</span>  <span class="fl">0.00731</span>  <span class="fl">0.0365</span> <span class="sc">-</span><span class="fl">0.05088</span>  <span class="fl">0.00359</span> <span class="sc">-</span><span class="fl">0.0416</span></span>
-<span id="cb11-62"><a href="#cb11-62" tabindex="-1"></a>   tempmax  <span class="fl">0.00660</span> <span class="sc">-</span><span class="fl">0.01844</span>  <span class="fl">0.01671</span> <span class="sc">-</span><span class="fl">0.0417</span> <span class="sc">-</span><span class="fl">0.00255</span> <span class="sc">-</span><span class="fl">0.01217</span>  <span class="fl">0.0192</span></span>
-<span id="cb11-63"><a href="#cb11-63" tabindex="-1"></a>      temp  <span class="fl">0.00464</span>  <span class="fl">0.01307</span> <span class="sc">-</span><span class="fl">0.01113</span>  <span class="fl">0.0106</span>  <span class="fl">0.00118</span> <span class="sc">-</span><span class="fl">0.00639</span>  <span class="fl">0.0197</span></span>
-<span id="cb11-64"><a href="#cb11-64" tabindex="-1"></a>   tempmin  <span class="fl">0.00131</span>  <span class="fl">0.00547</span> <span class="sc">-</span><span class="fl">0.01473</span> <span class="sc">-</span><span class="fl">0.0191</span>  <span class="fl">0.00665</span> <span class="sc">-</span><span class="fl">0.00805</span> <span class="sc">-</span><span class="fl">0.0307</span></span>
-<span id="cb11-65"><a href="#cb11-65" tabindex="-1"></a>      sp8      sp9     sp10      sp11</span>
-<span id="cb11-66"><a href="#cb11-66" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.00543</span>  <span class="fl">0.01244</span> <span class="sc">-</span><span class="fl">0.10191</span>  <span class="fl">0.015183</span></span>
-<span id="cb11-67"><a href="#cb11-67" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.00226</span>  <span class="fl">0.03094</span> <span class="sc">-</span><span class="fl">0.06847</span>  <span class="fl">0.011071</span></span>
-<span id="cb11-68"><a href="#cb11-68" tabindex="-1"></a>  <span class="fl">0.01499</span> <span class="sc">-</span><span class="fl">0.01681</span> <span class="sc">-</span><span class="fl">0.05457</span> <span class="sc">-</span><span class="fl">0.000039</span></span>
-<span id="cb11-69"><a href="#cb11-69" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.00742</span> <span class="sc">-</span><span class="fl">0.02880</span> <span class="sc">-</span><span class="fl">0.02427</span> <span class="sc">-</span><span class="fl">0.006484</span></span>
-<span id="cb11-70"><a href="#cb11-70" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.01306</span> <span class="sc">-</span><span class="fl">0.00766</span> <span class="sc">-</span><span class="fl">0.02066</span> <span class="sc">-</span><span class="fl">0.023918</span></span>
-<span id="cb11-71"><a href="#cb11-71" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.01065</span>  <span class="fl">0.00208</span> <span class="sc">-</span><span class="fl">0.00779</span> <span class="sc">-</span><span class="fl">0.006117</span></span>
-<span id="cb11-72"><a href="#cb11-72" tabindex="-1"></a></span>
-<span id="cb11-73"><a href="#cb11-73" tabindex="-1"></a><span class="do">### REGENERATION</span></span>
-<span id="cb11-74"><a href="#cb11-74" tabindex="-1"></a></span>
-<span id="cb11-75"><a href="#cb11-75" tabindex="-1"></a>Analytical ALE <span class="fu">importance</span> (rate<span class="sc">-</span>normalised) (species <span class="cf">in</span> columns)<span class="sc">:</span></span>
-<span id="cb11-76"><a href="#cb11-76" tabindex="-1"></a>  variable   sp1    sp2    sp3   sp4    sp5      sp6      sp7     sp8     sp9</span>
-<span id="cb11-77"><a href="#cb11-77" tabindex="-1"></a>  precseas <span class="fl">0.138</span> <span class="fl">0.0606</span> <span class="fl">1.2937</span> <span class="fl">2.600</span> <span class="fl">0.4397</span> <span class="fl">0.008384</span> <span class="fl">0.218402</span> <span class="fl">0.00184</span> <span class="fl">0.08923</span></span>
-<span id="cb11-78"><a href="#cb11-78" tabindex="-1"></a> precwarmq <span class="fl">0.205</span> <span class="fl">0.1233</span> <span class="fl">0.0326</span> <span class="fl">0.907</span> <span class="fl">0.2480</span> <span class="fl">0.309712</span> <span class="fl">0.050345</span> <span class="fl">1.73169</span> <span class="fl">0.91725</span></span>
-<span id="cb11-79"><a href="#cb11-79" tabindex="-1"></a>      temp <span class="fl">0.019</span> <span class="fl">0.0136</span> <span class="fl">0.3565</span> <span class="fl">0.699</span> <span class="fl">0.0317</span> <span class="fl">0.084249</span> <span class="fl">0.166767</span> <span class="fl">0.02020</span> <span class="fl">0.53911</span></span>
-<span id="cb11-80"><a href="#cb11-80" tabindex="-1"></a>   tempmin <span class="fl">0.857</span> <span class="fl">0.0129</span> <span class="fl">0.1620</span> <span class="fl">0.840</span> <span class="fl">0.0178</span> <span class="fl">0.042227</span> <span class="fl">0.081534</span> <span class="fl">0.00946</span> <span class="fl">0.04209</span></span>
-<span id="cb11-81"><a href="#cb11-81" tabindex="-1"></a>      prec <span class="fl">0.185</span> <span class="fl">0.7159</span> <span class="fl">0.5609</span> <span class="fl">0.595</span> <span class="fl">0.0789</span> <span class="fl">0.000534</span> <span class="fl">0.000347</span> <span class="fl">0.06862</span> <span class="fl">0.06328</span></span>
-<span id="cb11-82"><a href="#cb11-82" tabindex="-1"></a>   tempmax <span class="fl">0.792</span> <span class="fl">0.0132</span> <span class="fl">0.0529</span> <span class="fl">0.540</span> <span class="fl">0.0801</span> <span class="fl">0.130536</span> <span class="fl">0.018251</span> <span class="fl">0.32347</span> <span class="fl">0.00859</span></span>
-<span id="cb11-83"><a href="#cb11-83" tabindex="-1"></a>   sp10    sp11</span>
-<span id="cb11-84"><a href="#cb11-84" tabindex="-1"></a> <span class="fl">0.0517</span> <span class="fl">0.66061</span></span>
-<span id="cb11-85"><a href="#cb11-85" tabindex="-1"></a> <span class="fl">0.5885</span> <span class="fl">0.07052</span></span>
-<span id="cb11-86"><a href="#cb11-86" tabindex="-1"></a> <span class="fl">0.2796</span> <span class="fl">2.23342</span></span>
-<span id="cb11-87"><a href="#cb11-87" tabindex="-1"></a> <span class="fl">0.1254</span> <span class="fl">1.30112</span></span>
-<span id="cb11-88"><a href="#cb11-88" tabindex="-1"></a> <span class="fl">0.2980</span> <span class="fl">0.01013</span></span>
-<span id="cb11-89"><a href="#cb11-89" tabindex="-1"></a> <span class="fl">0.1215</span> <span class="fl">0.00517</span></span>
-<span id="cb11-90"><a href="#cb11-90" tabindex="-1"></a></span>
-<span id="cb11-91"><a href="#cb11-91" tabindex="-1"></a>Average conditional <span class="fu">effects</span> (mean; species <span class="cf">in</span> columns)<span class="sc">:</span></span>
-<span id="cb11-92"><a href="#cb11-92" tabindex="-1"></a>  variable    sp1    sp2    sp3    sp4    sp5     sp6      sp7     sp8     sp9</span>
-<span id="cb11-93"><a href="#cb11-93" tabindex="-1"></a>  precseas <span class="sc">-</span><span class="fl">1.095</span>  <span class="fl">0.221</span>  <span class="fl">1.965</span>  <span class="fl">1.165</span> <span class="sc">-</span><span class="fl">0.836</span> <span class="sc">-</span><span class="fl">0.1119</span>  <span class="fl">0.72202</span>  <span class="fl">0.0739</span> <span class="sc">-</span><span class="fl">0.2636</span></span>
-<span id="cb11-94"><a href="#cb11-94" tabindex="-1"></a>      prec  <span class="fl">0.936</span> <span class="sc">-</span><span class="fl">1.735</span> <span class="sc">-</span><span class="fl">2.399</span> <span class="sc">-</span><span class="fl">0.541</span> <span class="sc">-</span><span class="fl">0.677</span> <span class="sc">-</span><span class="fl">0.0125</span> <span class="sc">-</span><span class="fl">0.00692</span>  <span class="fl">0.2395</span>  <span class="fl">0.1249</span></span>
-<span id="cb11-95"><a href="#cb11-95" tabindex="-1"></a>      temp <span class="sc">-</span><span class="fl">0.310</span> <span class="sc">-</span><span class="fl">0.168</span> <span class="sc">-</span><span class="fl">1.577</span> <span class="sc">-</span><span class="fl">0.907</span> <span class="sc">-</span><span class="fl">0.189</span>  <span class="fl">0.1583</span> <span class="sc">-</span><span class="fl">0.39983</span>  <span class="fl">0.1788</span>  <span class="fl">0.3380</span></span>
-<span id="cb11-96"><a href="#cb11-96" tabindex="-1"></a>   tempmin  <span class="fl">2.071</span>  <span class="fl">0.169</span> <span class="sc">-</span><span class="fl">1.374</span>  <span class="fl">0.880</span>  <span class="fl">0.213</span>  <span class="fl">0.1690</span> <span class="sc">-</span><span class="fl">0.18202</span>  <span class="fl">0.1368</span>  <span class="fl">0.1370</span></span>
-<span id="cb11-97"><a href="#cb11-97" tabindex="-1"></a> precwarmq  <span class="fl">0.776</span> <span class="sc">-</span><span class="fl">0.687</span> <span class="sc">-</span><span class="fl">0.748</span> <span class="sc">-</span><span class="fl">1.579</span>  <span class="fl">0.538</span>  <span class="fl">0.1673</span>  <span class="fl">0.14256</span> <span class="sc">-</span><span class="fl">0.6776</span>  <span class="fl">0.2422</span></span>
-<span id="cb11-98"><a href="#cb11-98" tabindex="-1"></a>   tempmax  <span class="fl">1.775</span>  <span class="fl">0.116</span> <span class="sc">-</span><span class="fl">0.555</span> <span class="sc">-</span><span class="fl">0.572</span> <span class="sc">-</span><span class="fl">0.286</span> <span class="sc">-</span><span class="fl">0.1854</span> <span class="sc">-</span><span class="fl">0.06065</span> <span class="sc">-</span><span class="fl">0.3358</span>  <span class="fl">0.0503</span></span>
-<span id="cb11-99"><a href="#cb11-99" tabindex="-1"></a>   sp10    sp11</span>
-<span id="cb11-100"><a href="#cb11-100" tabindex="-1"></a>  <span class="fl">0.935</span>  <span class="fl">1.3941</span></span>
-<span id="cb11-101"><a href="#cb11-101" tabindex="-1"></a>  <span class="fl">0.705</span> <span class="sc">-</span><span class="fl">0.1413</span></span>
-<span id="cb11-102"><a href="#cb11-102" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.979</span> <span class="sc">-</span><span class="fl">2.2936</span></span>
-<span id="cb11-103"><a href="#cb11-103" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.395</span>  <span class="fl">1.6252</span></span>
-<span id="cb11-104"><a href="#cb11-104" tabindex="-1"></a>  <span class="fl">0.618</span>  <span class="fl">0.3360</span></span>
-<span id="cb11-105"><a href="#cb11-105" tabindex="-1"></a>  <span class="fl">0.305</span> <span class="sc">-</span><span class="fl">0.0932</span></span></code></pre></div>
+<span id="cb11-41"><a href="#cb11-41" tabindex="-1"></a><span class="do">### REGENERATION</span></span>
+<span id="cb11-42"><a href="#cb11-42" tabindex="-1"></a></span>
+<span id="cb11-43"><a href="#cb11-43" tabindex="-1"></a>Analytical ALE <span class="fu">importance</span> (rate<span class="sc">-</span>normalised) (species <span class="cf">in</span> columns)<span class="sc">:</span></span>
+<span id="cb11-44"><a href="#cb11-44" tabindex="-1"></a> variable     sp1   sp2   sp3    sp4   sp5    sp6   sp7   sp8   sp9  sp10  sp11</span>
+<span id="cb11-45"><a href="#cb11-45" tabindex="-1"></a>     prec <span class="fl">0.00331</span> <span class="fl">0.923</span> <span class="fl">0.148</span> <span class="fl">1.1918</span> <span class="fl">0.337</span> <span class="fl">1.0344</span> <span class="fl">0.501</span> <span class="fl">0.294</span> <span class="fl">0.677</span> <span class="fl">0.701</span> <span class="fl">1.169</span></span>
+<span id="cb11-46"><a href="#cb11-46" tabindex="-1"></a>     temp <span class="fl">0.91140</span> <span class="fl">0.144</span> <span class="fl">0.564</span> <span class="fl">0.0518</span> <span class="fl">0.676</span> <span class="fl">0.0754</span> <span class="fl">0.860</span> <span class="fl">0.452</span> <span class="fl">0.423</span> <span class="fl">0.360</span> <span class="fl">0.132</span></span>
+<span id="cb11-47"><a href="#cb11-47" tabindex="-1"></a></span>
+<span id="cb11-48"><a href="#cb11-48" tabindex="-1"></a>Average conditional <span class="fu">effects</span> (mean; species <span class="cf">in</span> columns)<span class="sc">:</span></span>
+<span id="cb11-49"><a href="#cb11-49" tabindex="-1"></a> variable   sp1    sp2   sp3    sp4    sp5   sp6    sp7     sp8   sp9   sp10</span>
+<span id="cb11-50"><a href="#cb11-50" tabindex="-1"></a>     prec <span class="fl">0.143</span> <span class="sc">-</span><span class="fl">3.083</span> <span class="sc">-</span><span class="fl">1.33</span> <span class="sc">-</span><span class="fl">0.410</span> <span class="sc">-</span><span class="fl">0.794</span> <span class="fl">0.487</span>  <span class="fl">0.500</span> <span class="fl">0.00812</span> <span class="fl">0.543</span>  <span class="fl">1.074</span></span>
+<span id="cb11-51"><a href="#cb11-51" tabindex="-1"></a>     temp <span class="fl">2.604</span>  <span class="fl">0.766</span> <span class="sc">-</span><span class="fl">1.62</span>  <span class="fl">0.077</span> <span class="sc">-</span><span class="fl">0.644</span> <span class="fl">0.125</span> <span class="sc">-</span><span class="fl">0.553</span> <span class="fl">0.01056</span> <span class="fl">0.389</span> <span class="sc">-</span><span class="fl">0.827</span></span>
+<span id="cb11-52"><a href="#cb11-52" tabindex="-1"></a>   sp11</span>
+<span id="cb11-53"><a href="#cb11-53" tabindex="-1"></a>  <span class="fl">1.525</span></span>
+<span id="cb11-54"><a href="#cb11-54" tabindex="-1"></a> <span class="sc">-</span><span class="fl">0.514</span></span></code></pre></div>
 <p>The niche and ALE sections below unpack this overview into per-driver
 response <em>curves</em>.</p>
 </div>
@@ -459,32 +421,32 @@ year × species.</p>
 <span><span class="co">#&gt; Key: &lt;variable, model&gt;</span></span>
 <span><span class="co">#&gt;     variable                 model spearman_train spearman_holdout rmse_train</span></span>
 <span><span class="co">#&gt;       &lt;fctr&gt;                &lt;char&gt;          &lt;num&gt;            &lt;num&gt;      &lt;num&gt;</span></span>
-<span><span class="co">#&gt;  1:      dbh  Hybrid (growth = NN)           0.81             0.75      13.05</span></span>
-<span><span class="co">#&gt;  2:      dbh Process (mechanistic)           0.83             0.72      12.09</span></span>
-<span><span class="co">#&gt;  3:       ba  Hybrid (growth = NN)           0.81             0.80       0.12</span></span>
-<span><span class="co">#&gt;  4:       ba Process (mechanistic)           0.82             0.80       0.13</span></span>
-<span><span class="co">#&gt;  5:    trees  Hybrid (growth = NN)           0.80             0.78       0.74</span></span>
-<span><span class="co">#&gt;  6:    trees Process (mechanistic)           0.80             0.78       0.76</span></span>
-<span><span class="co">#&gt;  7:   growth  Hybrid (growth = NN)           0.60             0.54       0.09</span></span>
-<span><span class="co">#&gt;  8:   growth Process (mechanistic)           0.60             0.54       0.10</span></span>
-<span><span class="co">#&gt;  9:     mort  Hybrid (growth = NN)           0.27             0.03       0.15</span></span>
-<span><span class="co">#&gt; 10:     mort Process (mechanistic)           0.23             0.05       0.15</span></span>
-<span><span class="co">#&gt; 11:      reg  Hybrid (growth = NN)           0.28             0.26       6.21</span></span>
-<span><span class="co">#&gt; 12:      reg Process (mechanistic)           0.28             0.27       6.21</span></span>
+<span><span class="co">#&gt;  1:      dbh  Hybrid (growth = NN)           0.80             0.73      13.05</span></span>
+<span><span class="co">#&gt;  2:      dbh Process (mechanistic)           0.80             0.73      12.93</span></span>
+<span><span class="co">#&gt;  3:       ba  Hybrid (growth = NN)           0.80             0.79       0.12</span></span>
+<span><span class="co">#&gt;  4:       ba Process (mechanistic)           0.80             0.80       0.12</span></span>
+<span><span class="co">#&gt;  5:    trees  Hybrid (growth = NN)           0.78             0.77       0.75</span></span>
+<span><span class="co">#&gt;  6:    trees Process (mechanistic)           0.78             0.78       0.77</span></span>
+<span><span class="co">#&gt;  7:   growth  Hybrid (growth = NN)           0.58             0.50       0.09</span></span>
+<span><span class="co">#&gt;  8:   growth Process (mechanistic)           0.60             0.56       0.10</span></span>
+<span><span class="co">#&gt;  9:     mort  Hybrid (growth = NN)           0.18             0.04       0.15</span></span>
+<span><span class="co">#&gt; 10:     mort Process (mechanistic)           0.17             0.03       0.15</span></span>
+<span><span class="co">#&gt; 11:      reg  Hybrid (growth = NN)           0.23             0.23       6.20</span></span>
+<span><span class="co">#&gt; 12:      reg Process (mechanistic)           0.23             0.24       6.22</span></span>
 <span><span class="co">#&gt;     rmse_holdout</span></span>
 <span><span class="co">#&gt;            &lt;num&gt;</span></span>
-<span><span class="co">#&gt;  1:        13.86</span></span>
-<span><span class="co">#&gt;  2:        14.20</span></span>
+<span><span class="co">#&gt;  1:        13.89</span></span>
+<span><span class="co">#&gt;  2:        13.78</span></span>
 <span><span class="co">#&gt;  3:         0.09</span></span>
 <span><span class="co">#&gt;  4:         0.09</span></span>
-<span><span class="co">#&gt;  5:         0.92</span></span>
+<span><span class="co">#&gt;  5:         0.77</span></span>
 <span><span class="co">#&gt;  6:         0.78</span></span>
 <span><span class="co">#&gt;  7:         0.10</span></span>
-<span><span class="co">#&gt;  8:         0.12</span></span>
+<span><span class="co">#&gt;  8:         0.11</span></span>
 <span><span class="co">#&gt;  9:         0.16</span></span>
-<span><span class="co">#&gt; 10:         0.16</span></span>
+<span><span class="co">#&gt; 10:         0.15</span></span>
 <span><span class="co">#&gt; 11:         6.47</span></span>
-<span><span class="co">#&gt; 12:         6.45</span></span></code></pre></div>
+<span><span class="co">#&gt; 12:         6.46</span></span></code></pre></div>
 <p>The structural variables — basal area, tree numbers and diameter —
 are reconstructed well, <strong>and hold up on sites the model never
 saw</strong>: that gap between the train and holdout columns is the part

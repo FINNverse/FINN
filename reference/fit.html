@@ -69,7 +69,7 @@ in a single optimization, rather than calibrating each process in isolation.</p>
 <span>  lr_scheduler_params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>dbh <span class="op">=</span> <span class="st">"mse"</span>, ba <span class="op">=</span> <span class="st">"mse"</span>, trees <span class="op">=</span> <span class="st">"poisson"</span>, growth <span class="op">=</span> <span class="st">"mse"</span>, mortality <span class="op">=</span></span>
 <span>    <span class="st">"binomial"</span>, regeneration <span class="op">=</span> <span class="st">"nbinom"</span><span class="op">)</span>,</span>
-<span>  weights <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">6</span><span class="op">)</span>,</span>
+<span>  weights <span class="op">=</span> <span class="st">"auto"</span>,</span>
 <span>  optimizer <span class="op">=</span> <span class="va">optim_ignite_adam</span>,</span>
 <span>  batchsize <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  device <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"cpu"</span>, <span class="st">"gpu"</span><span class="op">)</span>,</span>
@@ -95,7 +95,21 @@ in a single optimization, rather than calibrating each process in isolation.</p>
 
 
 <dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
-<dd><p>(<code>data.table|data.frame</code>)<br> Data about demographic rates and stand variables must be passed as <code>data.table</code> or <code>data.frame</code>.</p></dd>
+<dd><p>(<code>data.table|data.frame</code>)<br> Data about demographic rates and stand
+variables must be passed as <code>data.table</code> or <code>data.frame</code>.</p>
+<p>Optional columns that change how the responses are scored:</p><ul><li><p><code>period_length</code> — how many simulated timesteps each observation's
+inventory interval spans. The rate responses (<code>growth</code>, <code>mortality</code>) are
+then compared against the model's <strong>mean</strong> over that interval, and
+<code>regeneration</code> against its <strong>sum</strong> (recruits accumulate). Absent or <code>NA</code>
+means each observation is compared against a single timestep. NOTE: this
+must currently be the SAME for every site — a per-site interval is not
+supported yet, so inventories with varying remeasurement gaps need
+filtering to a constant interval first.</p></li>
+<li><p><code>n_at_risk</code> — trees behind each observed <code>mortality</code> proportion; used
+to weight the binomial term (see <code>weights</code>).</p></li>
+<li><p><code>growth_n</code> — trees behind each observed <code>growth</code> mean; used to weight
+the squared-error term, since the variance of a mean is \(\sigma^2/n\).</p></li>
+</ul></dd>
 
 
 <dt id="arg-env">env<a class="anchor" aria-label="anchor" href="#arg-env"></a></dt>
@@ -149,23 +163,34 @@ chosen via <code>lr_scheduler</code>, e.g. <code>list(step_size = 50, gamma = 0.
 
 
 <dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
-<dd><p>(<code>numeric(6)</code>)<br> Weights of the different losses, in the order
-<code>dbh</code>, <code>ba</code>, <code>trees</code>, <code>growth</code>, <code>mortality</code>, <code>regeneration</code>.</p>
-<p><strong>These must account for the raw scale of each loss, not just its
+<dd><p>(<code>"auto"</code> or <code>numeric(6)</code>)<br> Weights of the six losses, in the
+order <code>dbh</code>, <code>ba</code>, <code>trees</code>, <code>growth</code>, <code>mortality</code>, <code>regeneration</code>.</p>
+<p><strong>Weights must account for the raw scale of each loss, not just its
 importance.</strong> The six terms are summed, and their raw magnitudes differ by
-orders of magnitude: on the bundled FIA data <code>dbh</code> is an MSE in cm^2 (~130)
-while <code>growth</code> is an MSE on a ratio (~0.012) — a factor of ~1e4. A weight
-vector chosen by importance alone will therefore be dominated by whichever
-response happens to have the largest units, and the rest receive too little
-gradient to learn from. The default (<code>rep(1, 6)</code>) is <em>not</em> a neutral choice
-for this reason: it lets <code>dbh</code> take the overwhelming majority of the
-objective.</p>
-<p>A practical recipe: fit once, read the per-response terms off <code>m$loss_raw</code>
-(or <code>m$history</code>), and set each weight to roughly the inverse of its raw
-magnitude so that every term contributes a comparable share. On the FIA
-example this is worth ~+0.24 Spearman on held-out <code>growth</code> — far more than
-tuning <code>lr</code> or <code>epochs</code>. See the "Fitting FINN to forest inventory data"
-vignette.</p></dd>
+orders of magnitude: on the bundled FIA data <code>dbh</code> is an MSE in cm^2 (~430
+at the start of training) while <code>growth</code> is an MSE on a ratio (~0.03) — a
+factor of ~1e4. Weights chosen by importance alone are therefore dominated
+by whichever response happens to have the largest units, and the rest
+receive too little gradient to learn from. With equal weights, <code>dbh</code> takes
+~87% of the FIA objective and <code>growth</code> ~1%; <code>growth</code> then never improves.</p>
+<p><code>"auto"</code> (the default) fixes this without needing to know the units. Each
+loss is divided by its <strong>intercept-only baseline</strong> — the loss you would get
+by predicting the single best constant (the null model). Every term then
+measures the same thing on the same scale: the fraction of its own null
+deviance. For a squared-error term the baseline is exactly \(var(y)\), so
+this reduces to scaling by \(1/sd(y)^2\); but it generalises to the
+Poisson, negative-binomial and binomial terms, where a standard deviation is
+not the right scale. It is the same idea as <code>env_autoscale = TRUE</code>, applied
+to the responses rather than the predictors.</p>
+<p>A useful side effect: the per-response values in <code>m$history</code> become directly
+interpretable as <strong>"how much better than the mean"</strong> — <code>1</code> is no better than
+the intercept, below <code>1</code> is better, above <code>1</code> is worse. The baselines are
+stored in <code>m$loss_baseline</code>, the resulting weights in <code>m$loss_weights</code>, and
+both are reported once when fitting starts.</p>
+<p>Passing a <code>numeric(6)</code> uses those weights as-is and disables the scaling.
+On the FIA example, balancing the objective is worth ~+0.24 Spearman on
+held-out <code>growth</code> — far more than tuning <code>lr</code> or <code>epochs</code>. See the
+"Fitting FINN to forest inventory data" vignette.</p></dd>
 
 
 <dt id="arg-optimizer">optimizer<a class="anchor" aria-label="anchor" href="#arg-optimizer"></a></dt>
@@ -212,7 +237,7 @@ vignette.</p></dd>
 <dd><p>(<code>logical(1)</code>)<br> If <code>TRUE</code>, FINN z-standardizes the
 environmental predictors in <code>env</code> internally: the per-variable mean and
 standard deviation are learned from the training <code>env</code> and stored on the
-model, then re-applied automatically at every <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code>/<code><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate()</a></code> call.
+model, then re-applied automatically at every <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>/<code><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate()</a></code> call.
 This lets you pass raw (untransformed) <code>env</code> for both calibration and
 prediction; FINN guarantees an identical transformation at both stages.
 Recommended (and the default) for numerical stability when predictors are on
@@ -270,6 +295,12 @@ learning signal; larger values let the loss integrate over a longer trajectory
 at increased computational cost. <code>start_time</code> allows discarding an initial
 burn-in period of the simulation from the loss, and <code>checkpoints</code>/<code>folder</code>
 allow periodically saving the model state during training.</p>
+<p><code>growth</code> is compared as a <strong>relative</strong> rate (<code>dbh/dbh_before - 1</code>), which is
+the model's native parameter (<code>dbh_new = dbh * (1 + g)</code>). Training against the
+absolute diameter increment (<code>dbh * g</code>) instead was tested over three seeds and
+was worse on every one — even when scored on the absolute scale — and about
+four times more seed-variable, because it couples the growth parameter to
+whichever trees happen to be present.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -129,9 +129,9 @@ m <- finn(
   N_species            = Nsp,
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createProcess(~., FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
 
@@ -160,9 +160,9 @@ m_mort <- finn(
   N_species            = Nsp,
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
-  growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  mortality_process    = createHybrid(~., hidden = c(20L, 20L), transformer = FALSE)
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE)
 )
 ```
 
@@ -212,10 +212,10 @@ obs_pred[is.finite(obs) & is.finite(value),
          by = .(model, split)][order(split, model)]
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
-#> 1: Hybrid (mortality = NN) holdout     0.09   994
-#> 2:   Process (mechanistic) holdout     0.05   994
-#> 3: Hybrid (mortality = NN)   train     0.24  1003
-#> 4:   Process (mechanistic)   train     0.23  1003
+#> 1: Hybrid (mortality = NN) holdout     0.12   994
+#> 2:   Process (mechanistic) holdout     0.03   994
+#> 3: Hybrid (mortality = NN)   train     0.19  1003
+#> 4:   Process (mechanistic)   train     0.17  1003
 ```
 
 **AUC** asks the question the binomial actually poses: does the model
@@ -248,10 +248,10 @@ auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
 auc_tab[order(split, -AUC)]
 #>                      model   split   AUC deaths at_risk
 #>                     <char>  <char> <num>  <int>   <int>
-#> 1: Hybrid (mortality = NN) holdout 0.549    727   10013
-#> 2:   Process (mechanistic) holdout 0.488    727   10013
-#> 3: Hybrid (mortality = NN)   train 0.665    656    9907
-#> 4:   Process (mechanistic)   train 0.654    656    9907
+#> 1: Hybrid (mortality = NN) holdout 0.573    727   10013
+#> 2:   Process (mechanistic) holdout 0.517    727   10013
+#> 3: Hybrid (mortality = NN)   train 0.648    656    9907
+#> 4:   Process (mechanistic)   train 0.609    656    9907
 ```
 
 0.5 is coin-flipping, 1.0 is perfect ranking.

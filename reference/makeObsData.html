@@ -111,7 +111,17 @@ this fraction of individuals; overrides <code>Nspecies</code> if supplied.</p></
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with:</p><ul><li><p><code>obs_dt</code>: observations at site or patch level. Mortality comes
+    <p>A list with:</p><ul><li><p><code>obs_dt</code>: observations at site or patch level. <code>growth</code> is
+the mean relative diameter increment (<code>dbh/dbh_before - 1</code>), and
+<code>growth_n</code> is how many trees that mean rests on. Both matter: means
+are aggregated across patches TREE-WEIGHTED (by <code>growth_n</code>), because
+that is the quantity the model predicts - it simulates
+<code>sum(g*trees)/sum(trees)</code> over the whole site, so an unweighted mean
+of patch means would be a different number. <code>growth_n</code> also travels
+with the response so <code>fit</code> can weight the likelihood by it: 34% of
+patch-level growth observations rest on a single tree while others average
+30+, and the variance of a mean is \(\sigma^2/n\).</p></li>
+<li><p><code>obs_dt</code>: observations at site or patch level. Mortality comes
 back as a closed-cohort pair of counts, <code>n_at_risk</code> (trees alive at
 the start of the interval) and <code>n_died</code> (how many of them were dead
 at the end), plus the derived rate <code>mort = n_died / n_at_risk</code>

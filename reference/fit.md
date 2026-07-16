@@ -23,7 +23,7 @@ fit(
   lr_scheduler_params = list(),
   loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
     "binomial", regeneration = "nbinom"),
-  weights = rep(1, 6),
+  weights = "auto",
   optimizer = optim_ignite_adam,
   batchsize = NULL,
   device = c("cpu", "gpu"),
@@ -53,6 +53,24 @@ fit(
   (`data.table|data.frame`)  
   Data about demographic rates and stand variables must be passed as
   `data.table` or `data.frame`.
+
+  Optional columns that change how the responses are scored:
+
+  - `period_length` — how many simulated timesteps each observation's
+    inventory interval spans. The rate responses (`growth`, `mortality`)
+    are then compared against the model's **mean** over that interval,
+    and `regeneration` against its **sum** (recruits accumulate). Absent
+    or `NA` means each observation is compared against a single
+    timestep. NOTE: this must currently be the SAME for every site — a
+    per-site interval is not supported yet, so inventories with varying
+    remeasurement gaps need filtering to a constant interval first.
+
+  - `n_at_risk` — trees behind each observed `mortality` proportion;
+    used to weight the binomial term (see `weights`).
+
+  - `growth_n` — trees behind each observed `growth` mean; used to
+    weight the squared-error term, since the variance of a mean is
+    \\\sigma^2/n\\.
 
 - env:
 
@@ -124,26 +142,41 @@ fit(
 
 - weights:
 
-  (`numeric(6)`)  
-  Weights of the different losses, in the order `dbh`, `ba`, `trees`,
+  (`"auto"` or `numeric(6)`)  
+  Weights of the six losses, in the order `dbh`, `ba`, `trees`,
   `growth`, `mortality`, `regeneration`.
 
-  **These must account for the raw scale of each loss, not just its
+  **Weights must account for the raw scale of each loss, not just its
   importance.** The six terms are summed, and their raw magnitudes
   differ by orders of magnitude: on the bundled FIA data `dbh` is an MSE
-  in cm^2 (~130) while `growth` is an MSE on a ratio (~0.012) — a factor
-  of ~1e4. A weight vector chosen by importance alone will therefore be
-  dominated by whichever response happens to have the largest units, and
-  the rest receive too little gradient to learn from. The default
-  (`rep(1, 6)`) is *not* a neutral choice for this reason: it lets `dbh`
-  take the overwhelming majority of the objective.
+  in cm^2 (~430 at the start of training) while `growth` is an MSE on a
+  ratio (~0.03) — a factor of ~1e4. Weights chosen by importance alone
+  are therefore dominated by whichever response happens to have the
+  largest units, and the rest receive too little gradient to learn from.
+  With equal weights, `dbh` takes ~87% of the FIA objective and `growth`
+  ~1%; `growth` then never improves.
 
-  A practical recipe: fit once, read the per-response terms off
-  `m$loss_raw` (or `m$history`), and set each weight to roughly the
-  inverse of its raw magnitude so that every term contributes a
-  comparable share. On the FIA example this is worth ~+0.24 Spearman on
-  held-out `growth` — far more than tuning `lr` or `epochs`. See the
-  "Fitting FINN to forest inventory data" vignette.
+  `"auto"` (the default) fixes this without needing to know the units.
+  Each loss is divided by its **intercept-only baseline** — the loss you
+  would get by predicting the single best constant (the null model).
+  Every term then measures the same thing on the same scale: the
+  fraction of its own null deviance. For a squared-error term the
+  baseline is exactly \\var(y)\\, so this reduces to scaling by
+  \\1/sd(y)^2\\; but it generalises to the Poisson, negative-binomial
+  and binomial terms, where a standard deviation is not the right scale.
+  It is the same idea as `env_autoscale = TRUE`, applied to the
+  responses rather than the predictors.
+
+  A useful side effect: the per-response values in `m$history` become
+  directly interpretable as **"how much better than the mean"** — `1` is
+  no better than the intercept, below `1` is better, above `1` is worse.
+  The baselines are stored in `m$loss_baseline`, the resulting weights
+  in `m$loss_weights`, and both are reported once when fitting starts.
+
+  Passing a `numeric(6)` uses those weights as-is and disables the
+  scaling. On the FIA example, balancing the objective is worth ~+0.24
+  Spearman on held-out `growth` — far more than tuning `lr` or `epochs`.
+  See the "Fitting FINN to forest inventory data" vignette.
 
 - optimizer:
 
@@ -209,7 +242,7 @@ fit(
   internally: the per-variable mean and standard deviation are learned
   from the training `env` and stored on the model, then re-applied
   automatically at every
-  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)/[`simulate()`](https://rdrr.io/r/stats/simulate.html)
+  [`predict()`](https://rdrr.io/r/stats/predict.html)/[`simulate()`](https://rdrr.io/r/stats/simulate.html)
   call. This lets you pass raw (untransformed) `env` for both
   calibration and prediction; FINN guarantees an identical
   transformation at both stages. Recommended (and the default) for
@@ -277,3 +310,10 @@ integrate over a longer trajectory at increased computational cost.
 `start_time` allows discarding an initial burn-in period of the
 simulation from the loss, and `checkpoints`/`folder` allow periodically
 saving the model state during training.
+
+`growth` is compared as a **relative** rate (`dbh/dbh_before - 1`),
+which is the model's native parameter (`dbh_new = dbh * (1 + g)`).
+Training against the absolute diameter increment (`dbh * g`) instead was
+tested over three seeds and was worse on every one — even when scored on
+the absolute scale — and about four times more seed-variable, because it
+couples the growth parameter to whichever trees happen to be present.

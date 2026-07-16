@@ -5,8 +5,8 @@ Re-applies the constants learned by
 to `env`. The transformation uses the *stored* mean/sd only and never
 recomputes them from `env`, so calibration and prediction use an
 identical transformation (the usual pitfall of
-[`scale()`](https://rspatial.github.io/terra/reference/scale.html)
-inside a model formula is avoided).
+[`scale()`](https://rdrr.io/r/base/scale.html) inside a model formula is
+avoided).
 
 ## Usage
 
