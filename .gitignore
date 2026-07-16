@@ -47,3 +47,7 @@ docs/
 # fit() draws a per-response loss plot as a side effect; this is the stray
 # device output, regenerated on every run. Never useful to track.
 Rplots.pdf
+
+# Stray render artifact: rmarkdown::render("README.Rmd") emits this alongside
+# README.md. Never wanted - README.md is the deliverable.
+README.html

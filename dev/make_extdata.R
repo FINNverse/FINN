@@ -58,7 +58,7 @@ mort_src <- full_tree[, .(siteName, patchName, treeName, year, species_name,
 mort_counts <- suppressMessages(
   makeObsData(mort_src, plotsize = 0.06, aggregate_by_site = TRUE,
               minNyears = NULL, dbh_growth_thresh = NULL)
-)$obs_dt[, .(siteName, year, species_name, n_at_risk, n_died)]
+)$obs_dt[, .(siteName, year, species_name, n_at_risk, n_died, growth_n)]
 
 # obs_dt is keyed by siteID; full_tree carries both keys, so map across.
 site_key <- unique(full_tree[, .(siteID, siteName)])
@@ -127,7 +127,11 @@ build_split <- function(sites) {
     trees     = sum(trees, na.rm = TRUE),
     reg       = sum(reg,   na.rm = TRUE),
     dbh       = wmean(dbh,    trees),
-    growth    = wmean(growth, trees),
+    # growth means are weighted by the trees BEHIND THE MEAN (growth_n), not by
+    # the standing tree count - they are different numbers, and growth_n is the
+    # one that sets the mean's precision.
+    growth     = wmean(growth, growth_n),
+    growth_n   = sum(growth_n, na.rm = TRUE),
     n_at_risk = sum(n_at_risk, na.rm = TRUE),
     n_died    = sum(n_died,    na.rm = TRUE)
   ), by = .(siteID, year, species_name)]

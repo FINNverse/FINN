@@ -45,6 +45,16 @@ this fraction of individuals; overrides \code{Nspecies} if supplied.}
 \value{
 A list with:
 \itemize{
+\item \code{obs_dt}: observations at site or patch level. \code{growth} is
+the mean relative diameter increment (\code{dbh/dbh_before - 1}), and
+\code{growth_n} is how many trees that mean rests on. Both matter: means
+are aggregated across patches TREE-WEIGHTED (by \code{growth_n}), because
+that is the quantity the model predicts - it simulates
+\code{sum(g*trees)/sum(trees)} over the whole site, so an unweighted mean
+of patch means would be a different number. \code{growth_n} also travels
+with the response so \code{fit} can weight the likelihood by it: 34\% of
+patch-level growth observations rest on a single tree while others average
+30+, and the variance of a mean is \eqn{\sigma^2/n}.
 \item \code{obs_dt}: observations at site or patch level. Mortality comes
 back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
 the start of the interval) and \code{n_died} (how many of them were dead

@@ -18,7 +18,7 @@ fit(
   lr_scheduler_params = list(),
   loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
     "binomial", regeneration = "nbinom"),
-  weights = rep(1, 6),
+  weights = "auto",
   optimizer = optim_ignite_adam,
   batchsize = NULL,
   device = c("cpu", "gpu"),
@@ -37,7 +37,24 @@ fit(
 \arguments{
 \item{model}{(\code{finn_class})\cr Object of class \code{finn_class} created by \link{finn}.}
 
-\item{data}{(\code{data.table|data.frame})\cr Data about demographic rates and stand variables must be passed as \code{data.table} or \code{data.frame}.}
+\item{data}{(\code{data.table|data.frame})\cr Data about demographic rates and stand
+variables must be passed as \code{data.table} or \code{data.frame}.
+
+Optional columns that change how the responses are scored:
+\itemize{
+\item \code{period_length} — how many simulated timesteps each observation's
+inventory interval spans. The rate responses (\code{growth}, \code{mortality}) are
+then compared against the model's \strong{mean} over that interval, and
+\code{regeneration} against its \strong{sum} (recruits accumulate). Absent or \code{NA}
+means each observation is compared against a single timestep. NOTE: this
+must currently be the SAME for every site — a per-site interval is not
+supported yet, so inventories with varying remeasurement gaps need
+filtering to a constant interval first.
+\item \code{n_at_risk} — trees behind each observed \code{mortality} proportion; used
+to weight the binomial term (see \code{weights}).
+\item \code{growth_n} — trees behind each observed \code{growth} mean; used to weight
+the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
+}}
 
 \item{env}{(\code{data.table|data.frame})\cr Data with environmental covariates must be passed as \code{data.table} or \code{data.frame}.}
 
@@ -69,25 +86,38 @@ chosen via \code{lr_scheduler}, e.g. \code{list(step_size = 50, gamma = 0.5)} fo
 
 \item{loss}{(\code{character(6)})\cr Named vector of the different losses. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, and \code{regeneration}. Supported losses are \code{mse}, \code{poisson}, \code{nbinom}, \code{gaussian}, and \code{binomial}. \code{binomial} is a Bernoulli/binomial negative log-likelihood intended for \code{mortality}; it expects both the prediction and the observation to be proportions in [0, 1].}
 
-\item{weights}{(\code{numeric(6)})\cr Weights of the different losses, in the order
-\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
+\item{weights}{(\code{"auto"} or \code{numeric(6)})\cr Weights of the six losses, in the
+order \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
 
-\strong{These must account for the raw scale of each loss, not just its
+\strong{Weights must account for the raw scale of each loss, not just its
 importance.} The six terms are summed, and their raw magnitudes differ by
-orders of magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~130)
-while \code{growth} is an MSE on a ratio (~0.012) — a factor of ~1e4. A weight
-vector chosen by importance alone will therefore be dominated by whichever
-response happens to have the largest units, and the rest receive too little
-gradient to learn from. The default (\code{rep(1, 6)}) is \emph{not} a neutral choice
-for this reason: it lets \code{dbh} take the overwhelming majority of the
-objective.
+orders of magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~430
+at the start of training) while \code{growth} is an MSE on a ratio (~0.03) — a
+factor of ~1e4. Weights chosen by importance alone are therefore dominated
+by whichever response happens to have the largest units, and the rest
+receive too little gradient to learn from. With equal weights, \code{dbh} takes
+~87\% of the FIA objective and \code{growth} ~1\%; \code{growth} then never improves.
 
-A practical recipe: fit once, read the per-response terms off \code{m$loss_raw}
-(or \code{m$history}), and set each weight to roughly the inverse of its raw
-magnitude so that every term contributes a comparable share. On the FIA
-example this is worth ~+0.24 Spearman on held-out \code{growth} — far more than
-tuning \code{lr} or \code{epochs}. See the "Fitting FINN to forest inventory data"
-vignette.}
+\code{"auto"} (the default) fixes this without needing to know the units. Each
+loss is divided by its \strong{intercept-only baseline} — the loss you would get
+by predicting the single best constant (the null model). Every term then
+measures the same thing on the same scale: the fraction of its own null
+deviance. For a squared-error term the baseline is exactly \eqn{var(y)}, so
+this reduces to scaling by \eqn{1/sd(y)^2}; but it generalises to the
+Poisson, negative-binomial and binomial terms, where a standard deviation is
+not the right scale. It is the same idea as \code{env_autoscale = TRUE}, applied
+to the responses rather than the predictors.
+
+A useful side effect: the per-response values in \code{m$history} become directly
+interpretable as \strong{"how much better than the mean"} — \code{1} is no better than
+the intercept, below \code{1} is better, above \code{1} is worse. The baselines are
+stored in \code{m$loss_baseline}, the resulting weights in \code{m$loss_weights}, and
+both are reported once when fitting starts.
+
+Passing a \code{numeric(6)} uses those weights as-is and disables the scaling.
+On the FIA example, balancing the objective is worth ~+0.24 Spearman on
+held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See the
+"Fitting FINN to forest inventory data" vignette.}
 
 \item{optimizer}{(\code{torch_optimizer_generator})\cr Optimizer from the \code{torch} package.}
 
@@ -172,4 +202,11 @@ learning signal; larger values let the loss integrate over a longer trajectory
 at increased computational cost. \code{start_time} allows discarding an initial
 burn-in period of the simulation from the loss, and \code{checkpoints}/\code{folder}
 allow periodically saving the model state during training.
+
+\code{growth} is compared as a \strong{relative} rate (\code{dbh/dbh_before - 1}), which is
+the model's native parameter (\code{dbh_new = dbh * (1 + g)}). Training against the
+absolute diameter increment (\code{dbh * g}) instead was tested over three seeds and
+was worse on every one — even when scored on the absolute scale — and about
+four times more seed-variable, because it couples the growth parameter to
+whichever trees happen to be present.
 }

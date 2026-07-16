@@ -60,12 +60,13 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   obs_dt[, year := period-1,]
   obs_dt <- obs_dt[, -"period"]
   obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = T)
-  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
+  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
 
   obs_dt_aggr <- obs_dt[,.(ba = mean(ba, na.rm = T),
                         dbh = mean(dbh, na.rm = T),
                         trees = mean(trees, na.rm = T),
-                        growth = mean(growth, na.rm = T),
+                        growth = stats::weighted.mean(growth, growth_n, na.rm = T),
+                        growth_n = sum(growth_n, na.rm = T),
                         # mortality counts pool by summing; the rate is derived
                         # from the pooled counts, never averaged from rates.
                         n_at_risk = sum(n_at_risk, na.rm = T),
@@ -73,7 +74,7 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
                         reg = mean(reg, na.rm = T)),
                     by = .(siteID, year, species, species_name)]
   obs_dt_aggr[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
-  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
+  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
 
   siteID_dt[, OrigYear := year, by = .(siteID, patchID)]
   siteID_dt[, year := period, by = .(siteID, patchID)]
@@ -140,6 +141,16 @@ dbh2ba <- function(dbh){
 #'
 #' @return A list with:
 #' \itemize{
+#'   \item \code{obs_dt}: observations at site or patch level. \code{growth} is
+#'     the mean relative diameter increment (\code{dbh/dbh_before - 1}), and
+#'     \code{growth_n} is how many trees that mean rests on. Both matter: means
+#'     are aggregated across patches TREE-WEIGHTED (by \code{growth_n}), because
+#'     that is the quantity the model predicts - it simulates
+#'     \code{sum(g*trees)/sum(trees)} over the whole site, so an unweighted mean
+#'     of patch means would be a different number. \code{growth_n} also travels
+#'     with the response so \code{fit} can weight the likelihood by it: 34% of
+#'     patch-level growth observations rest on a single tree while others average
+#'     30+, and the variance of a mean is \eqn{\sigma^2/n}.
 #'   \item \code{obs_dt}: observations at site or patch level. Mortality comes
 #'     back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
 #'     the start of the interval) and \code{n_died} (how many of them were dead
@@ -207,6 +218,11 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   obs_dt <- tree_dt[,.(
     ba = sum(dbh2ba(dbh)*(living == T), na.rm = T),
     growth = mean(rel_growth[living == T], na.rm = T),
+    # `growth_n` is how many trees the growth mean rests on. 34% of FIA growth
+    # observations come from a SINGLE tree while others average 30+, and the
+    # variance of a mean is sigma^2/n - so the count has to travel with the
+    # response for the loss to weight it (as n_at_risk does for mortality).
+    growth_n = sum(is.finite(rel_growth) & living == T, na.rm = T),
     dbh = mean(dbh[living == T], na.rm = T),
     trees = sum(living == T, na.rm = T),
     reg = sum(status == "new", na.rm = T)/plotsize
@@ -262,6 +278,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   obs_dt[is.na(trees), trees := 0]
   obs_dt[is.na(reg), reg := 0]
   obs_dt[is.na(growth), growth := NA_real_]
+  obs_dt[is.na(growth_n), growth_n := 0L]
   obs_dt[is.na(dbh), dbh := NA_real_]
   # No cohort at risk -> the rate is undefined, not zero. Keep the counts at 0 so
   # they still sum correctly on aggregation, and let `mort` carry the NA so the
@@ -292,7 +309,12 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
       ba = mean(ba, na.rm = T),
       trees = mean(trees, na.rm = T),
       dbh = mean(dbh, na.rm = T),
-      growth = mean(growth, na.rm = T),
+      # Tree-weighted, NOT a plain mean of patch means: the model predicts
+      # sum(g*trees)/sum(trees) over the whole site, so an unweighted mean of
+      # patch means is comparing against a different quantity (and lets a
+      # 1-tree patch count as much as a 30-tree one).
+      growth = stats::weighted.mean(growth, growth_n, na.rm = T),
+      growth_n = sum(growth_n, na.rm = T),
       # counts SUM across patches; the site rate is then the pooled rate. The
       # old `mean(mort)` weighted a 1-tree patch the same as a 50-tree one.
       n_at_risk = sum(n_at_risk, na.rm = T),
@@ -303,7 +325,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
     obs_dt[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
     message("Aggregated obs_dt by siteName. For unaggregated data, set aggregate_by_site = FALSE")
   }else{
-    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg)]
+    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, growth_n, mort, n_at_risk, n_died, reg)]
     message("Kept obs_dt unaggregated by siteName. For aggregated data, set aggregate_by_site = TRUE")
   }
 

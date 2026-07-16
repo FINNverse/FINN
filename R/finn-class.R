@@ -123,7 +123,24 @@ finn = function(N_species,
 #' allow periodically saving the model state during training.
 #'
 #' @param model (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
-#' @param data (`data.table|data.frame`)\cr Data about demographic rates and stand variables must be passed as `data.table` or `data.frame`.
+#' @param data (`data.table|data.frame`)\cr Data about demographic rates and stand
+#'   variables must be passed as `data.table` or `data.frame`.
+#'
+#'   Optional columns that change how the responses are scored:
+#'   \itemize{
+#'     \item `period_length` — how many simulated timesteps each observation's
+#'       inventory interval spans. The rate responses (`growth`, `mortality`) are
+#'       then compared against the model's **mean** over that interval, and
+#'       `regeneration` against its **sum** (recruits accumulate). Absent or `NA`
+#'       means each observation is compared against a single timestep. NOTE: this
+#'       must currently be the SAME for every site — a per-site interval is not
+#'       supported yet, so inventories with varying remeasurement gaps need
+#'       filtering to a constant interval first.
+#'     \item `n_at_risk` — trees behind each observed `mortality` proportion; used
+#'       to weight the binomial term (see `weights`).
+#'     \item `growth_n` — trees behind each observed `growth` mean; used to weight
+#'       the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
+#'   }
 #' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
 #' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
 #' @param patches (`integer(1)`)\cr Number of patches.
@@ -145,6 +162,14 @@ finn = function(N_species,
 #'   20)` for `"plateau"`. Unset entries fall back to defaults scaled off
 #'   `epochs`/`lr`.
 #' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, `gaussian`, and `binomial`. `binomial` is a Bernoulli/binomial negative log-likelihood intended for `mortality`; it expects both the prediction and the observation to be proportions in \[0, 1\].
+#' @details
+#' `growth` is compared as a **relative** rate (`dbh/dbh_before - 1`), which is
+#' the model's native parameter (`dbh_new = dbh * (1 + g)`). Training against the
+#' absolute diameter increment (`dbh * g`) instead was tested over three seeds and
+#' was worse on every one — even when scored on the absolute scale — and about
+#' four times more seed-variable, because it couples the growth parameter to
+#' whichever trees happen to be present.
+#'
 #' @param weights (`"auto"` or `numeric(6)`)\cr Weights of the six losses, in the
 #'   order `dbh`, `ba`, `trees`, `growth`, `mortality`, `regeneration`.
 #'
@@ -677,6 +702,13 @@ finn_class = nn_module(
           "m*trees_before",
           "trees_before"
         )
+        # Result[[4]] is the tree-weighted mean of g, matching an observed
+        # mean(dbh/dbh_before - 1). `g` is the model's native parameter
+        # (dbh_new = dbh*(1+g)), which is why the relative rate is the right
+        # target here: training on the absolute increment (dbh*g) instead was
+        # tested over 3 seeds and came out WORSE on every one, even when scored
+        # on the absolute scale, and ~4x more seed-variable - it couples the
+        # growth parameter to whichever trees happen to be present.
         samples[[1]] = g*trees_before
         samples[[2]] = m*trees_before
         samples[[3]] = trees_before # original number of trees
@@ -833,7 +865,7 @@ finn_class = nn_module(
             # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,(i-period+1):(i),]$mean(2))
 
             #browser()
-            loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,(i-period+1):(i),]$mean(2) )
+            loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,9])
             # mort rates
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,8])
             # reg rates ha
@@ -865,7 +897,7 @@ finn_class = nn_module(
             # # counts
             # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
 
-            loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,i,])
+            loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,i,], y[,tmp_index,,9])
             # mort rates
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,i,], y[,tmp_index,,8])
             # reg rates ha
@@ -1076,7 +1108,7 @@ finn_class = nn_module(
                  # # 1 -> dbh, 2 -> ba, 3 -> trees, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
                  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
                  weights = "auto",
-                 optimizer = optim_ignite_adam,
+                   optimizer = optim_ignite_adam,
                  batchsize = NULL,
                  device = c("cpu", "gpu"),
                  update_step = 1L,
@@ -1153,6 +1185,7 @@ finn_class = nn_module(
     # more than a 1-tree one. Data built before makeObsData emitted this column
     # falls back to 1, which reduces the binomial exactly to an unweighted one.
     if(!"n_at_risk" %in% colnames(data)) data$n_at_risk = 1.0
+    if(!"growth_n" %in% colnames(data)) data$growth_n = 1.0
     response = list(
       dbh = abind::abind(lapply(1:self$N_species, function(i) extract_env(~0+dbh, data[data$species==i,])), along = 3L),
       ba = abind::abind(lapply(1:sp, function(i) extract_env(~0+ba, data[data$species==i,])), along = 3L),
@@ -1162,7 +1195,12 @@ finn_class = nn_module(
       reg = abind::abind(lapply(1:sp, function(i) extract_env(~0+reg, data[data$species==i,])), along = 3L),
       period_length = abind::abind(lapply(1:sp, function(i) extract_env(~0+period_length, data[data$species==i,])), along = 3L),
       # slice 8 - appended last so the existing y[,,,1:7] indices stay valid
-      n_at_risk = abind::abind(lapply(1:sp, function(i) extract_env(~0+n_at_risk, data[data$species==i,])), along = 3L)
+      n_at_risk = abind::abind(lapply(1:sp, function(i) extract_env(~0+n_at_risk, data[data$species==i,])), along = 3L),
+      # slice 9 - trees behind each growth mean. 34% of FIA growth observations
+      # rest on a SINGLE tree while others average 32, and the variance of a mean
+      # is sigma^2/n - so the Gaussian term is weighted by n, exactly as the
+      # binomial term is weighted by n_at_risk.
+      growth_n = abind::abind(lapply(1:sp, function(i) extract_env(~0+growth_n, data[data$species==i,])), along = 3L)
     )
     options(na.action='na.omit')
 
@@ -1588,7 +1626,11 @@ finn_class = nn_module(
           out[i] = tryCatch({
             flat = function(t) t$reshape(c(-1, t$shape[length(t$shape)]))
             true = flat(Y[,,,i])
-            n    = if (identical(nm[i], "mortality")) flat(Y[,,,8]) else NULL
+            # slice 8 = n_at_risk (binomial), slice 9 = growth_n (weighted MSE).
+            # The baseline must use the SAME weighting as the loss it scales.
+            n = if (identical(nm[i], "mortality")) flat(Y[,,,8])
+                else if (identical(nm[i], "growth")) flat(Y[,,,9])
+                else NULL
             mask = true$isnan()$bitwise_not()
             if (!as.logical(mask$max()$data())) stop("no observations")
             yv = true[mask]
@@ -1640,8 +1682,16 @@ finn_class = nn_module(
               local_weights = weights
               function(true, pred, n = NULL) {
                 mask = true$isnan()$bitwise_not()
-                if(as.logical(mask$max()$data())) return(torch::nnf_mse_loss(pred[mask], true[mask])$mean()*local_weights[local_l])
-                else return(0.0)
+                if(!as.logical(mask$max()$data())) return(0.0)
+                if(is.null(n)) return(torch::nnf_mse_loss(pred[mask], true[mask])$mean()*local_weights[local_l])
+                # `true` is a MEAN of n trees, so its variance is sigma^2/n: an
+                # observation from 32 trees is worth 32x one from a single tree.
+                # Weighting the squared error by n is the Gaussian counterpart of
+                # weighting the binomial by n_at_risk. Normalised by sum(w) so the
+                # term stays O(1) and comparable to the unweighted form.
+                w = n[mask]$clamp(min = 0)
+                se = (pred[mask] - true[mask])$pow(2)
+                return(((se*w)$sum()/w$sum()$clamp(min = 1e-8))*local_weights[local_l])
               }
             })
           } else if(tmp_loss == "binomial") {
