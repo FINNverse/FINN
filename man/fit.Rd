@@ -158,7 +158,7 @@ parameters. A single number (default \code{2.0}) applies the same budget to
 every group; a named list/vector keyed by \code{"mechanistic"}/\code{"nn"}/\code{"loss"}
 overrides individual groups, e.g. \code{clip_norm = list(loss = 5, nn = 1)}.}
 
-\item{...}{\cr Additional arguments passed to \code{optimizer}.}
+\item{...}{Additional arguments passed to \code{optimizer}.}
 }
 \value{
 The fitted \code{model}, invisibly. \code{fit()} trains the model in place, so

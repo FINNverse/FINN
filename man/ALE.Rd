@@ -44,7 +44,7 @@ simulation, so the (stochastic) conditional effects / ALE are reproducible and c
 process x species rate, yielding dimensionless, comparable effects (the curve's
 variance then equals the Sobol-style normalised importance). Default \code{FALSE}.}
 
-\item{...}{\cr Not supported yet.}
+\item{...}{Not supported yet.}
 }
 \value{
 A list with one table per process (e.g. \verb{$growth}, \verb{$mortality},

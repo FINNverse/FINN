@@ -200,7 +200,7 @@ ALE_ce = function(X, ce) {
 #' @param scale (`logical(1)`)\cr If `TRUE` each curve is divided by the SD of its
 #'   process x species rate, yielding dimensionless, comparable effects (the curve's
 #'   variance then equals the Sobol-style normalised importance). Default `FALSE`.
-#' @param ... \cr Not supported yet.
+#' @param ... Not supported yet.
 #'
 #' @return A list with one table per process (e.g. `$growth`, `$mortality`,
 #'   `$regeneration`). Each table gives the accumulated local effect (`ale`) of

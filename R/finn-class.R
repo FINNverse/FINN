@@ -231,7 +231,7 @@ finn = function(N_species,
 #'   parameters. A single number (default `2.0`) applies the same budget to
 #'   every group; a named list/vector keyed by `"mechanistic"`/`"nn"`/`"loss"`
 #'   overrides individual groups, e.g. `clip_norm = list(loss = 5, nn = 1)`.
-#' @param ... \cr Additional arguments passed to `optimizer`.
+#' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
 #'   the returned object is the one passed in, now carrying the training results
@@ -306,7 +306,7 @@ fit = function(model,
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
 #' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
-#' @param ... \cr Not used.
+#' @param ... Not used.
 #'
 #' @return A named list of predictions. `$long$site` and `$long$patch` give the
 #'   site- and patch-level results in long format (columns `siteID`, `year`,

@@ -36,7 +36,7 @@
 
 \item{debug}{(\code{logical(1)})\cr Debug modus or not. If \code{TRUE}, individual tree states are stored.}
 
-\item{...}{\cr Not used.}
+\item{...}{Not used.}
 }
 \value{
 A named list of predictions. \verb{$long$site} and \verb{$long$patch} give the
