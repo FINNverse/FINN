@@ -11,6 +11,11 @@ index_species(pred, species)
 
 \item{species}{species index vector, must be int64}
 }
+\value{
+A \code{torch} tensor of \code{pred} gathered along its species dimension by
+\code{species}.
+}
 \description{
 Index species
 }
+\keyword{internal}

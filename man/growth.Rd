@@ -36,5 +36,5 @@ growth(
 torch.Tensor A tensor representing the forest plot growth.
 }
 \description{
-This function calculates growth BA_stemsed on specified parameters.
+This function calculates growth based on specified parameters.
 }

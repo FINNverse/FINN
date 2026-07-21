@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{competition}
 \alias{competition}
-\title{Compute the fraction of available light (light) for each cohort BA_stemsed on the given parameters.}
+\title{Compute the fraction of available light (light) for each cohort based on the given parameters.}
 \usage{
 competition(
   dbh,
@@ -42,7 +42,7 @@ competition(
 torch.Tensor Fraction of available light (light) for each cohort.
 }
 \description{
-This function calculates the fraction of available light for each cohort of trees BA_stemsed on their diameter at breast height (dbh), species, number of trees, and global parameters.
+This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
 }
 \examples{
 \dontrun{

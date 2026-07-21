@@ -34,7 +34,9 @@ Sensitivity of basal area for different combinations of dbh, number of trees to 
 \figure{BA_stand_plot1.png}{Patch size, dbh, trees, basal area}
 }
 \examples{
-# Example usage
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# BA_stand operates on torch tensors, so this runs only where the torch
+# backend (libtorch) is available.
 dbh_vec <- seq(1, 200, 1)
 trees_vec <- c(0:500, 10^(seq(2, 4, length.out = 20)))
 
@@ -58,21 +60,10 @@ cohort_df1$trees <- round(cohort_df1$trees_ha * patch_size)
 
 cohort <- CohortMat$new(obs_df = cohort_df1)
 
-cohort_df1$basal_area <- torch::as_array(BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
+cohort_df1$basal_area <- torch::as_array(
+  BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
 
 # View the first few rows of the resulting data frame
 head(cohort_df1)
-
-# Basic plot showing the function of trees and dbh for basal area
-
-# only keep rows with basal area <100
-cohort_df1 <- cohort_df1[cohort_df1$basal_area < 100,]
-
-library(ggplot2)
-ggplot(cohort_df1, aes(x = dbh, y = basal_area, color = trees, group = trees)) +
-  geom_line() +
-  ylab("Basal Area (m^2/ha)") +
-  xlab("Diameter at Breast Height (cm)") +
-  scale_color_viridis_c(name = "Trees per ha", trans = "log10", option = "magma", direction = -1) +
-  ggtitle("Basal Area as a Function of Trees and DBH")
+\dontshow{\}) # examplesIf}
 }

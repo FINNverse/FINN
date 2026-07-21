@@ -33,7 +33,7 @@ The vignettes give a guided tour: \code{browseVignettes("FINN")}.
 Useful links:
 \itemize{
   \item \url{https://github.com/FINNverse/FINN}
-  \item \url{https://finnverse.github.io/FINN}
+  \item \url{https://finnverse.github.io/FINN/}
   \item Report bugs at \url{https://github.com/FINNverse/FINN/issues}
 }
 

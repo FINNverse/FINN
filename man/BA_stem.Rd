@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{BA_stem}
 \alias{BA_stem}
-\title{Calculate the BA_stemsal area of a tree given the diameter at breast height (dbh).}
+\title{Calculate the basal area of a tree given the diameter at breast height (dbh).}
 \usage{
 BA_stem(dbh)
 }
@@ -10,16 +10,16 @@ BA_stem(dbh)
 \item{dbh}{torch.Tensor The diameter at breast height of the tree.}
 }
 \value{
-torch.Tensor The BA_stemsal area of the tree.
+torch.Tensor The basal area of the tree.
 }
 \description{
-This function calculates the BA_stemsal area of a tree given the diameter at breast height (dbh).
+This function calculates the basal area of a tree given the diameter at breast height (dbh).
 }
 \examples{
 \dontrun{
 dbh = torch::torch_tensor(50)
-BA_stemsal_area = BA_stem(dbh)
-print(BA_stemsal_area)
+basal_area = BA_stem(dbh)
+print(basal_area)
 }
 
 }

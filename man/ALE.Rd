@@ -46,6 +46,12 @@ variance then equals the Sobol-style normalised importance). Default \code{FALSE
 
 \item{...}{\cr Not supported yet.}
 }
+\value{
+A list with one table per process (e.g. \verb{$growth}, \verb{$mortality},
+\verb{$regeneration}). Each table gives the accumulated local effect (\code{ale}) of
+every driver (\code{var}) across its observed range (\code{x}), per \code{species}. When
+\code{plot = TRUE} the effects are also drawn.
+}
 \description{
 Calculates accumulated local effects (ALE) for the three processes
 }

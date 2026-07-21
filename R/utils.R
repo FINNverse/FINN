@@ -111,6 +111,9 @@ check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), devic
 #' @param pred predictions
 #' @param species species index vector, must be int64
 #'
+#' @return A `torch` tensor of `pred` gathered along its species dimension by
+#'   `species`.
+#' @keywords internal
 #' @export
 index_species = function(pred, species) {
   shapes = pred$shape
@@ -130,6 +133,9 @@ index_species = function(pred, species) {
 #' @param drop_rows logical Drop empty rows from the aggregated output. Defaults to TRUE.
 #' @param sp_max integer (Optional) Maximum species index to aggregate over. Defaults to NULL.
 #'
+#' @return A list of `torch` tensors, one per element of `samples`, each holding
+#'   the per-species aggregated result.
+#' @keywords internal
 #' @export
 aggregate_results_old = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
 
@@ -210,6 +216,9 @@ aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max 
 #' @param values list of value tensors
 #' @param labels labels
 #'
+#' @return A `torch` tensor of the mean of `values` within each unique group in
+#'   `labels`.
+#' @keywords internal
 #' @export
 groupby_mean = function(values, labels) {
   uniques = unique(as.matrix(labels))
@@ -330,6 +339,8 @@ pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
 #' @param num_samples number of samples
 #' @param temperature temperature
 #'
+#' @return A `torch` tensor of relaxed (differentiable) Poisson samples.
+#' @keywords internal
 #' @export
 sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
   t = ((torch::torch_rand(c(num_samples,lmbd$shape))+0.0001)$log()$negative()/lmbd)$cumsum(dim=1L)
@@ -373,6 +384,9 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
 #' @param p probability of success
 #' @param sample_size sample size
 #'
+#' @return A `torch` tensor of binomial samples drawn via the gamma-Poisson
+#'   relationship.
+#' @keywords internal
 #' @export
 binomial_from_gamma = function(n, p, sample_size=1) {
   mean = n * p
@@ -609,7 +623,7 @@ dnbinom_torch = function(pred, true, theta) {
 
 #' @export
 plot.finn_class = function(x, pars = c("process", "env"), env_names = NULL, species_names = NULL, ...) {
-  if(is.null(species_names)) species_names = 1:m1$N_species
+  if(is.null(species_names)) species_names = 1:x$N_species
   if(tolower(pars) == "env"){
     growth = x$parameters_r$nn_growth.0.weight
     mort = x$parameters_r$nn_mortality.0.weight

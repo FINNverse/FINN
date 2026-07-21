@@ -23,6 +23,11 @@ aggregate_results_old(
 
 \item{sp_max}{integer (Optional) Maximum species index to aggregate over. Defaults to NULL.}
 }
+\value{
+A list of \code{torch} tensors, one per element of \code{samples}, each holding
+the per-species aggregated result.
+}
 \description{
 Aggregate function
 }
+\keyword{internal}

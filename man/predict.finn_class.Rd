@@ -38,6 +38,11 @@
 
 \item{...}{\cr Not used.}
 }
+\value{
+A named list of predictions. \verb{$long$site} and \verb{$long$patch} give the
+site- and patch-level results in long format (columns \code{siteID}, \code{year},
+\code{species}, \code{variable}, \code{value}).
+}
 \description{
 Predict from a FINN model
 }

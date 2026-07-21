@@ -202,6 +202,10 @@ ALE_ce = function(X, ce) {
 #'   variance then equals the Sobol-style normalised importance). Default `FALSE`.
 #' @param ... \cr Not supported yet.
 #'
+#' @return A list with one table per process (e.g. `$growth`, `$mortality`,
+#'   `$regeneration`). Each table gives the accumulated local effect (`ale`) of
+#'   every driver (`var`) across its observed range (`x`), per `species`. When
+#'   `plot = TRUE` the effects are also drawn.
 #' @export
 ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L, plot = TRUE, process = NULL, scale = FALSE, ...) {
 

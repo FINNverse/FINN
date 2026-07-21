@@ -19,3 +19,5 @@
 ^vignettes/D-fit-predictions\.csv$
 ^vignettes/\.quarto$
 ^vignettes/FINN-process\.png$
+\.DS_Store$
+^\.Rhistory$

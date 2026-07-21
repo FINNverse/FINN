@@ -34,6 +34,10 @@ mechanistic competition process is used.}
 
 \item{recruits_dbh}{(\code{numeric(1)})\cr Starting dbh for recruits. Has value 1.0 as default.}
 }
+\value{
+An object of class \code{finn_class} (a \link[torch:nn_module]{torch::nn_module}): an assembled
+but un-fitted FINN model, ready to pass to \code{\link[=fit]{fit()}} or \code{\link[=simulateForest]{simulateForest()}}.
+}
 \description{
 Creates a Forest Informed Neural Network (FINN), a differentiable, cohort-based
 dynamic forest (gap) model in the tradition of JABOWA/ForClim-style models, in

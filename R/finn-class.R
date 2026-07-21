@@ -61,6 +61,8 @@
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
+#' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
+#'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
 #' @export
 finn = function(N_species,
                 mortality_process = NULL,
@@ -231,6 +233,9 @@ finn = function(N_species,
 #'   overrides individual groups, e.g. `clip_norm = list(loss = 5, nn = 1)`.
 #' @param ... \cr Additional arguments passed to `optimizer`.
 #'
+#' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
+#'   the returned object is the one passed in, now carrying the training results
+#'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`).
 #' @export
 fit = function(model,
                data = NULL,
@@ -303,6 +308,9 @@ fit = function(model,
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
 #' @param ... \cr Not used.
 #'
+#' @return A named list of predictions. `$long$site` and `$long$patch` give the
+#'   site- and patch-level results in long format (columns `siteID`, `year`,
+#'   `species`, `variable`, `value`).
 #' @method predict finn_class
 #' @export
 predict.finn_class = function(object,
@@ -343,6 +351,9 @@ predict.finn_class = function(object,
 #' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
 #'
+#' @return A named list of simulation results, with the site- and patch-level
+#'   state variables and demographic rates in `$long$site` / `$long$patch`
+#'   (long format: `siteID`, `year`, `species`, `variable`, `value`).
 #' @export
 simulateForest = function(model,
                           env,

@@ -13,6 +13,10 @@ sample_poisson_relaxed(lmbd, num_samples = 50, temperature = 0.01)
 
 \item{temperature}{temperature}
 }
+\value{
+A \code{torch} tensor of relaxed (differentiable) Poisson samples.
+}
 \description{
 Sample poisson relaxed
 }
+\keyword{internal}

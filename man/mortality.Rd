@@ -35,6 +35,10 @@ mortality(
 
 \item{growth}{torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.}
 }
+\value{
+A \code{torch} tensor of per-cohort mortality probabilities; or, if
+\code{debug = TRUE}, a list of the intermediate components.
+}
 \description{
 Mortality
 }

@@ -22,4 +22,26 @@
 #' The vignettes give a guided tour: `browseVignettes("FINN")`.
 #'
 #' @keywords internal
+#' @importFrom abind abind
+#' @importFrom coro loop
+#' @importFrom utils modifyList str capture.output
+#' @importFrom stats model.matrix runif predict
+#' @importFrom graphics matplot
 "_PACKAGE"
+
+# data.table uses non-standard evaluation, so column names referenced inside
+# `dt[...]` read to R CMD check as undefined global variables. Declaring them
+# here silences the (harmless) "no visible binding" NOTEs. Also lists a couple of
+# package-internal objects created dynamically via torch::nn_module().
+utils::globalVariables(c(
+  ".", "..cols_env", "..out_cols_obs_dt", "..out_cols_obs_dt_aggr",
+  "..out_cols_siteID_dt", "..spc", "NpatchesPerSite", "NyearsPerPatch",
+  "OrigYear", "ale", "ba", "cohortID", "common", "complete", "day", "dbh",
+  "dbh_before", "dbh_growth", "gPSize", "growth_n", "i.is_complete",
+  "importance", "living", "living_before", "mort", "n_at_risk", "n_died",
+  "parHeight", "patchID", "patchName", "period", "period_length", "process",
+  "rate_sd", "reg", "rel_growth", "sameYearsAllPatches", "shade", "siteID",
+  "siteName", "species", "species_before", "species_name", "status", "td",
+  "treeName", "trees", "trees_ha", "value", "var", "variable", "year_before",
+  "years", "TransformerEncoderLayer"
+))

@@ -160,6 +160,11 @@ overrides individual groups, e.g. \code{clip_norm = list(loss = 5, nn = 1)}.}
 
 \item{...}{\cr Additional arguments passed to \code{optimizer}.}
 }
+\value{
+The fitted \code{model}, invisibly. \code{fit()} trains the model in place, so
+the returned object is the one passed in, now carrying the training results
+(e.g. \verb{$history}, \verb{$loss_weights}, \verb{$loss_baseline}).
+}
 \description{
 Fit (calibrate) a FINN model end-to-end by gradient-descent optimization. All
 mechanistic process parameters, environmental-response coefficients and, if

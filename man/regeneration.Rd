@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{regeneration}
 \alias{regeneration}
-\title{Calculate the regeneration of forest patches BA_stemsed on the input parameters.}
+\title{Calculate the regeneration of forest patches based on the input parameters.}
 \usage{
 regeneration(species, parReg, pred, light, debug = F)
 }
@@ -23,5 +23,5 @@ In general low values for high regeneration and high values for low regeneration
 torch.Tensor Regeneration values for forest patches.
 }
 \description{
-This function calculates the regeneration of forest patches BA_stemsed on species information, regeneration parameters, prediction values, and available light.
+This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 }

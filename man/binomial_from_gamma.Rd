@@ -13,6 +13,11 @@ binomial_from_gamma(n, p, sample_size = 1)
 
 \item{sample_size}{sample size}
 }
+\value{
+A \code{torch} tensor of binomial samples drawn via the gamma-Poisson
+relationship.
+}
 \description{
 Sample from binomial with gradient
 }
+\keyword{internal}

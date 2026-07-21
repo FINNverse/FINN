@@ -1,16 +1,16 @@
-#' Calculate the BA_stemsal area of a tree given the diameter at breast height (dbh).
+#' Calculate the basal area of a tree given the diameter at breast height (dbh).
 #'
-#' This function calculates the BA_stemsal area of a tree given the diameter at breast height (dbh).
+#' This function calculates the basal area of a tree given the diameter at breast height (dbh).
 #'
 #' @param dbh torch.Tensor The diameter at breast height of the tree.
 #'
-#' @return torch.Tensor The BA_stemsal area of the tree.
+#' @return torch.Tensor The basal area of the tree.
 #'
 #' @examples
 #' \dontrun{
 #' dbh = torch::torch_tensor(50)
-#' BA_stemsal_area = BA_stem(dbh)
-#' print(BA_stemsal_area)
+#' basal_area = BA_stem(dbh)
+#' print(basal_area)
 #' }
 #'
 #' @import torch
@@ -43,8 +43,9 @@ BA_stem = function(dbh) {
 #' \figure{BA_stand_plot1.png}{Patch size, dbh, trees, basal area}
 #'
 #' @return A numeric value representing the basal area of the stand in square meters per hectare.
-#' @examples
-#' # Example usage
+#' @examplesIf torch::torch_is_installed()
+#' # BA_stand operates on torch tensors, so this runs only where the torch
+#' # backend (libtorch) is available.
 #' dbh_vec <- seq(1, 200, 1)
 #' trees_vec <- c(0:500, 10^(seq(2, 4, length.out = 20)))
 #'
@@ -68,23 +69,11 @@ BA_stem = function(dbh) {
 #'
 #' cohort <- CohortMat$new(obs_df = cohort_df1)
 #'
-#' cohort_df1$basal_area <- torch::as_array(BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
+#' cohort_df1$basal_area <- torch::as_array(
+#'   BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
 #'
 #' # View the first few rows of the resulting data frame
 #' head(cohort_df1)
-#'
-#' # Basic plot showing the function of trees and dbh for basal area
-#'
-#' # only keep rows with basal area <100
-#' cohort_df1 <- cohort_df1[cohort_df1$basal_area < 100,]
-#'
-#' library(ggplot2)
-#' ggplot(cohort_df1, aes(x = dbh, y = basal_area, color = trees, group = trees)) +
-#'   geom_line() +
-#'   ylab("Basal Area (m^2/ha)") +
-#'   xlab("Diameter at Breast Height (cm)") +
-#'   scale_color_viridis_c(name = "Trees per ha", trans = "log10", option = "magma", direction = -1) +
-#'   ggtitle("Basal Area as a Function of Trees and DBH")
 #' @export
 BA_stand <- function(dbh, trees, patch_size_ha) {
   return((pi * (dbh / 100 / 2)^2 * trees) / patch_size_ha)
@@ -92,10 +81,10 @@ BA_stand <- function(dbh, trees, patch_size_ha) {
 
 
 
-#' Calculate the height of a tree based on its diameter at breast height and an alometry parameter.
+#' Calculate the height of a tree based on its diameter at breast height and an allometry parameter.
 #'
 #' @param dbh A numeric value representing the diameter at breast height of the tree in cm.
-#' @param parHeight A numeric value representing the species height alometry.
+#' @param parHeight A numeric value representing the species height allometry.
 #'
 #' @details
 #'
@@ -103,7 +92,7 @@ BA_stand <- function(dbh, trees, patch_size_ha) {
 #'
 #' The height is calculated using the formula:
 #' \deqn{height = \left( \exp \left( \frac{(\text{dbh} \times \text{parHeight})}{(\text{dbh} + 100)} \right) - 1 \right) \times 100 + 0.001}
-#' where dbh is the diameter at breast height of the tree in cm and parHeight is an alometric species specific parameter.
+#' where dbh is the diameter at breast height of the tree in cm and parHeight is an allometric species specific parameter.
 #'
 #' All parameters of parHeight from 0 to 1 result in physiologicaly plausible heights.
 #' The range from 0.3 to 0.9 results in realistic tree heights.
@@ -124,9 +113,9 @@ height = function(dbh, parHeight) {
 }
 
 
-#' Compute the fraction of available light (light) for each cohort BA_stemsed on the given parameters.
+#' Compute the fraction of available light (light) for each cohort based on the given parameters.
 #'
-#' This function calculates the fraction of available light for each cohort of trees BA_stemsed on their diameter at breast height (dbh), species, number of trees, and global parameters.
+#' This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
 #'
 #' @param dbh torch.Tensor Diameter at breast height for each cohort.
 #' @param species torch.Tensor species index for each cohort.
@@ -226,6 +215,8 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #' @param growth torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.
 #'
+#' @return A `torch` tensor of per-cohort mortality probabilities; or, if
+#'   `debug = TRUE`, a list of the intermediate components.
 #' @export
 mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F, growth = NULL) {
   if(is.null(growth)) growth = self$g
@@ -263,7 +254,7 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 
 #' Calculate growth
 #'
-#' This function calculates growth BA_stemsed on specified parameters.
+#' This function calculates growth based on specified parameters.
 #'
 #' @param dbh torch.Tensor Diameter at breast height.
 #' @param species torch.Tensor species of tree.
@@ -313,9 +304,9 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 }
 
 
-#' Calculate the regeneration of forest patches BA_stemsed on the input parameters.
+#' Calculate the regeneration of forest patches based on the input parameters.
 #'
-#' This function calculates the regeneration of forest patches BA_stemsed on species information, regeneration parameters, prediction values, and available light.
+#' This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 #'
 #' @param species torch.Tensor species information.
 #' @param parReg torch.Tensor Regeneration parameters. 0 <= parReg <= 1

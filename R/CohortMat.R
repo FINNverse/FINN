@@ -8,7 +8,10 @@ NULL
 #' @param additional_cols character vector Optional. Additional columns to be included as arrays.
 #' @return A list of arrays for species, dbh, trees, and additional columns.
 #' @examples
-#' obs_dt <- data.frame(siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2), species = c(1, 2, 1), dbh = c(10, 20, 30), trees = c(100, 200, 150), height = c(5, 10, 15))
+#' obs_dt <- data.frame(
+#'   siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2),
+#'   species = c(1, 2, 1), dbh = c(10, 20, 30), trees = c(100, 200, 150),
+#'   height = c(5, 10, 15))
 #' result <- obsDF2arrays(obs_dt, additional_cols = c("height"))
 #' @export
 obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
@@ -136,7 +139,10 @@ rweibull_cohorts = function(
 #' @return A data.frame with columns siteID, patchID, cohortID, species, dbh, and trees.
 #'
 #' @examples
-#' obs_array <- list(species = array(c("A", "B"), dim = c(2, 2, 2)), dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)), trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
+#' obs_array <- list(
+#'   species = array(c("A", "B"), dim = c(2, 2, 2)),
+#'   dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)),
+#'   trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
 #' result <- array2obsDF(obs_array)
 #'
 #' @export

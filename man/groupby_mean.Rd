@@ -11,6 +11,11 @@ groupby_mean(values, labels)
 
 \item{labels}{labels}
 }
+\value{
+A \code{torch} tensor of the mean of \code{values} within each unique group in
+\code{labels}.
+}
 \description{
 group by mean
 }
+\keyword{internal}

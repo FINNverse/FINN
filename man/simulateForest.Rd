@@ -35,6 +35,11 @@ simulateForest(
 
 \item{debug}{(\code{logical(1)})\cr Debug modus or not. If \code{TRUE}, individual tree states are stored.}
 }
+\value{
+A named list of simulation results, with the site- and patch-level
+state variables and demographic rates in \verb{$long$site} / \verb{$long$patch}
+(long format: \code{siteID}, \code{year}, \code{species}, \code{variable}, \code{value}).
+}
 \description{
 Simulate
 }

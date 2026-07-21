@@ -2,27 +2,27 @@
 % Please edit documentation in R/Processes.R
 \name{height}
 \alias{height}
-\title{Calculate the height of a tree based on its diameter at breast height and an alometry parameter.}
+\title{Calculate the height of a tree based on its diameter at breast height and an allometry parameter.}
 \usage{
 height(dbh, parHeight)
 }
 \arguments{
 \item{dbh}{A numeric value representing the diameter at breast height of the tree in cm.}
 
-\item{parHeight}{A numeric value representing the species height alometry.}
+\item{parHeight}{A numeric value representing the species height allometry.}
 }
 \value{
 A numeric value representing the calculated height of the tree.
 }
 \description{
-Calculate the height of a tree based on its diameter at breast height and an alometry parameter.
+Calculate the height of a tree based on its diameter at breast height and an allometry parameter.
 }
 \details{
 This function calculates the height of a tree based on the diameter at breast height (dbh) and a parameter parHeight.
 
 The height is calculated using the formula:
 \deqn{height = \left( \exp \left( \frac{(\text{dbh} \times \text{parHeight})}{(\text{dbh} + 100)} \right) - 1 \right) \times 100 + 0.001}
-where dbh is the diameter at breast height of the tree in cm and parHeight is an alometric species specific parameter.
+where dbh is the diameter at breast height of the tree in cm and parHeight is an allometric species specific parameter.
 
 All parameters of parHeight from 0 to 1 result in physiologicaly plausible heights.
 The range from 0.3 to 0.9 results in realistic tree heights.
