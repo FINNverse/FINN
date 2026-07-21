@@ -18,3 +18,4 @@
 ^vignettes/E-mortality-predictions\.csv$
 ^vignettes/D-fit-predictions\.csv$
 ^vignettes/\.quarto$
+^vignettes/FINN-process\.png$
