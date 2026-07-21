@@ -21,3 +21,8 @@ binomial_from_gamma(n, p, sample_size = 1)
 - sample_size:
 
   sample size
+
+## Value
+
+A `torch` tensor of binomial samples drawn via the gamma-Poisson
+relationship.

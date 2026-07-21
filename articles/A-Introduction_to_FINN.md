@@ -90,14 +90,21 @@ modulate the effect of the environment on a process. Environmental
 parameters also include an intercept that modulates the overall effect
 size of a process.
 
-The following code generates random species parameters for a simple
-model with `Nsp` (here 5) species and 1 environmental variable.
+The following code sets up illustrative species parameters for a simple
+model with `Nsp` (here 5) species and 1 environmental variable. Some
+values are hand-picked to span a range of strategies and some are drawn
+at random — the **exact numbers are arbitrary**, chosen only to give
+visibly different species. In a real application you would not set them
+at all; they would be *learned* from data (see the [Fitting FINN to
+forest inventory
+data](https://finnverse.github.io/FINN/articles/D-Fit_to_FIA.md)
+vignette).
 
 ``` r
 
 FINN.seed(1234)
 # we draw the same shade parameters for each process for simplicity
-# shade parameters correspond to the fraction of light a species needs to succesfully grow, regenerate, or survive.
+# shade parameters correspond to the fraction of light a species needs to successfully grow, regenerate, or survive.
 shadeSP = c(0.1,0.2,0.5,0.5,0.7)
 
 # regeneration parameters

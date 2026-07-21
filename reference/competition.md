@@ -1,8 +1,8 @@
-# Compute the fraction of available light (light) for each cohort BA_stemsed on the given parameters.
+# Compute the fraction of available light (light) for each cohort based on the given parameters.
 
 This function calculates the fraction of available light for each cohort
-of trees BA_stemsed on their diameter at breast height (dbh), species,
-number of trees, and global parameters.
+of trees based on their diameter at breast height (dbh), species, number
+of trees, and global parameters.
 
 ## Usage
 

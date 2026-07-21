@@ -1,7 +1,7 @@
-# Calculate the regeneration of forest patches BA_stemsed on the input parameters.
+# Calculate the regeneration of forest patches based on the input parameters.
 
-This function calculates the regeneration of forest patches BA_stemsed
-on species information, regeneration parameters, prediction values, and
+This function calculates the regeneration of forest patches based on
+species information, regeneration parameters, prediction values, and
 available light.
 
 ## Usage

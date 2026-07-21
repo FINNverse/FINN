@@ -21,3 +21,7 @@ sample_poisson_relaxed(lmbd, num_samples = 50, temperature = 0.01)
 - temperature:
 
   temperature
+
+## Value
+
+A `torch` tensor of relaxed (differentiable) Poisson samples.

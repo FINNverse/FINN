@@ -83,19 +83,19 @@ The built-in mechanistic demographic functions and allometries.
 - [`mortality()`](https://finnverse.github.io/FINN/reference/mortality.md)
   : Mortality
 - [`regeneration()`](https://finnverse.github.io/FINN/reference/regeneration.md)
-  : Calculate the regeneration of forest patches BA_stemsed on the input
+  : Calculate the regeneration of forest patches based on the input
   parameters.
 - [`competition()`](https://finnverse.github.io/FINN/reference/competition.md)
   : Compute the fraction of available light (light) for each cohort
-  BA_stemsed on the given parameters.
+  based on the given parameters.
 - [`height()`](https://finnverse.github.io/FINN/reference/height.md) :
   Calculate the height of a tree based on its diameter at breast height
-  and an alometry parameter.
+  and an allometry parameter.
 - [`BA_stand()`](https://finnverse.github.io/FINN/reference/BA_stand.md)
   : Calculate the Basal Area of a Stand
 - [`BA_stem()`](https://finnverse.github.io/FINN/reference/BA_stem.md) :
-  Calculate the BA_stemsal area of a tree given the diameter at breast
-  height (dbh).
+  Calculate the basal area of a tree given the diameter at breast height
+  (dbh).
 - [`dbh2ba()`](https://finnverse.github.io/FINN/reference/dbh2ba.md) :
   Convert DBH to basal area
 

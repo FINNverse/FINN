@@ -265,8 +265,13 @@ fit(
 
 - ...:
 
-    
   Additional arguments passed to `optimizer`.
+
+## Value
+
+The fitted `model`, invisibly. `fit()` trains the model in place, so the
+returned object is the one passed in, now carrying the training results
+(e.g. `$history`, `$loss_weights`, `$loss_baseline`).
 
 ## Details
 

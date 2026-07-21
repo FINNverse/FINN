@@ -1,6 +1,6 @@
 # Calculate growth
 
-This function calculates growth BA_stemsed on specified parameters.
+This function calculates growth based on specified parameters.
 
 ## Usage
 

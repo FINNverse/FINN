@@ -119,6 +119,12 @@ init_cohorts      <- makeInitCohorts(init_trees, Nspecies = Nsp)
 init_cohorts_test <- makeInitCohorts(init_test,  Nspecies = Nsp)
 ```
 
+``` r
+
+# shared colours for the two model variants, reused below
+model_cols <- c("Process (mechanistic)" = "#1b9e77", "Hybrid (mortality = NN)" = "#7570b3")
+```
+
 The mechanistic baseline, with all four processes in their functional
 form:
 
@@ -127,7 +133,7 @@ form:
 FINN.seed(42)
 m <- finn(
   N_species            = Nsp,
-  recruits_dbh         = 12.9,
+  recruits_dbh         = 12.9,   # DBH (cm) assigned to a new recruit; ~ FIA's 12.7 cm (5 in) minimum
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
   regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
@@ -140,11 +146,9 @@ m <- finn(
 fit(m,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
-  lr = 0.01, env_autoscale = TRUE
+  lr = 0.01, env_autoscale = TRUE, plot_progress = FALSE
 )
 ```
-
-![](E/E-fit-process-1.png)
 
 Now the same model with **mortality replaced by a neural network** —
 every other process, and the entire
@@ -171,11 +175,9 @@ m_mort <- finn(
 fit(m_mort,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
-  lr = 0.01, env_autoscale = TRUE
+  lr = 0.01, env_autoscale = TRUE, plot_progress = FALSE
 )
 ```
-
-![](E/E-fit-hybrid-1.png)
 
 ## Scoring mortality: why not Spearman
 

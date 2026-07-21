@@ -17,3 +17,8 @@ groupby_mean(values, labels)
 - labels:
 
   labels
+
+## Value
+
+A `torch` tensor of the mean of `values` within each unique group in
+`labels`.

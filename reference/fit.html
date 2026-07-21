@@ -30,6 +30,7 @@ in a single optimization, rather than calibrating each process in isolation."></
     <li><a class="dropdown-item" href="../articles/E-Mortality.html">Mortality - binomial response and NN process</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/FINNverse/FINN/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
@@ -257,9 +258,15 @@ overrides individual groups, e.g. <code>clip_norm = list(loss = 5, nn = 1)</code
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p><br> Additional arguments passed to <code>optimizer</code>.</p></dd>
+<dd><p>Additional arguments passed to <code>optimizer</code>.</p></dd>
 
 </dl></div>
+    <div class="section level2">
+    <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
+    <p>The fitted <code>model</code>, invisibly. <code>fit()</code> trains the model in place, so
+the returned object is the one passed in, now carrying the training results
+(e.g. <code>$history</code>, <code>$loss_weights</code>, <code>$loss_baseline</code>).</p>
+    </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Calibration relies on the fact that FINN is implemented in <code>torch</code> for R and is

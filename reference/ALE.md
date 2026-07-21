@@ -82,5 +82,11 @@ ALE(
 
 - ...:
 
-    
   Not supported yet.
+
+## Value
+
+A list with one table per process (e.g. `$growth`, `$mortality`,
+`$regeneration`). Each table gives the accumulated local effect (`ale`)
+of every driver (`var`) across its observed range (`x`), per `species`.
+When `plot = TRUE` the effects are also drawn.

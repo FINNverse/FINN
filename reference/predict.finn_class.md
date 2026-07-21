@@ -75,8 +75,13 @@ predict(
 
 - ...:
 
-    
   Not used.
+
+## Value
+
+A named list of predictions. `$long$site` and `$long$patch` give the
+site- and patch-level results in long format (columns `siteID`, `year`,
+`species`, `variable`, `value`).
 
 ## Details
 

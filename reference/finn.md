@@ -72,6 +72,14 @@ finn(
   (`numeric(1)`)  
   Starting dbh for recruits. Has value 1.0 as default.
 
+## Value
+
+An object of class `finn_class` (a
+[torch::nn_module](https://torch.mlverse.org/docs/reference/nn_module.html)):
+an assembled but un-fitted FINN model, ready to pass to
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) or
+[`simulateForest()`](https://finnverse.github.io/FINN/reference/simulateForest.md).
+
 ## Details
 
 FINN represents the forest as cohorts of trees, grouped by site, patch

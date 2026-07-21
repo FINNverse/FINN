@@ -55,7 +55,8 @@ trees to patch size.
 ## Examples
 
 ``` r
-# Example usage
+# BA_stand operates on torch tensors, so this runs only where the torch
+# backend (libtorch) is available.
 dbh_vec <- seq(1, 200, 1)
 trees_vec <- c(0:500, 10^(seq(2, 4, length.out = 20)))
 
@@ -79,7 +80,8 @@ cohort_df1$trees <- round(cohort_df1$trees_ha * patch_size)
 
 cohort <- CohortMat$new(obs_df = cohort_df1)
 
-cohort_df1$basal_area <- torch::as_array(BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
+cohort_df1$basal_area <- torch::as_array(
+  BA_stand(cohort$dbh, cohort$trees, patch_size_ha = patch_size))
 
 # View the first few rows of the resulting data frame
 head(cohort_df1)
@@ -90,18 +92,4 @@ head(cohort_df1)
 #> 4       1        1       1        3           0.1   1      4     0          0
 #> 5       1        1       1        4           0.1   1      5     0          0
 #> 6       1        1       1        5           0.1   1      6     0          0
-
-# Basic plot showing the function of trees and dbh for basal area
-
-# only keep rows with basal area <100
-cohort_df1 <- cohort_df1[cohort_df1$basal_area < 100,]
-
-library(ggplot2)
-ggplot(cohort_df1, aes(x = dbh, y = basal_area, color = trees, group = trees)) +
-  geom_line() +
-  ylab("Basal Area (m^2/ha)") +
-  xlab("Diameter at Breast Height (cm)") +
-  scale_color_viridis_c(name = "Trees per ha", trans = "log10", option = "magma", direction = -1) +
-  ggtitle("Basal Area as a Function of Trees and DBH")
-#> Warning: log-10 transformation introduced infinite values.
 ```

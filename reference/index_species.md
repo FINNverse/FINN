@@ -17,3 +17,8 @@ index_species(pred, species)
 - species:
 
   species index vector, must be int64
+
+## Value
+
+A `torch` tensor of `pred` gathered along its species dimension by
+`species`.

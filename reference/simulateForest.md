@@ -71,6 +71,12 @@ simulateForest(
   (`logical(1)`)  
   Debug modus or not. If `TRUE`, individual tree states are stored.
 
+## Value
+
+A named list of simulation results, with the site- and patch-level state
+variables and demographic rates in `$long$site` / `$long$patch` (long
+format: `siteID`, `year`, `species`, `variable`, `value`).
+
 ## Details
 
 Simulate from a fitted FINN model. This is a thin, backwards-compatible

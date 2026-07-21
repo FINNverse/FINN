@@ -36,3 +36,8 @@ aggregate_results_old(
 
   integer (Optional) Maximum species index to aggregate over. Defaults
   to NULL.
+
+## Value
+
+A list of `torch` tensors, one per element of `samples`, each holding
+the per-species aggregated result.

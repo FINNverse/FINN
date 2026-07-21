@@ -155,6 +155,12 @@ init_cohorts      <- makeInitCohorts(init_trees, Nspecies = Nsp)
 init_cohorts_test <- makeInitCohorts(init_test,  Nspecies = Nsp)
 ```
 
+``` r
+
+# shared colours for the two model variants, reused by the scatter and ALE panels
+model_cols <- c("Process (mechanistic)" = "#1b9e77", "Hybrid (growth = NN)" = "#d95f02")
+```
+
 ## Fit a Process-FINN
 
 In the fully mechanistic configuration every process keeps its
@@ -182,7 +188,7 @@ regeneration.
 FINN.seed(42)
 m <- finn(
   N_species            = uniqueN(obs_dt$species),
-  recruits_dbh         = 12.9,
+  recruits_dbh         = 12.9,   # DBH (cm) assigned to a new recruit; ~ FIA's 12.7 cm (5 in) minimum
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
   regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
@@ -202,11 +208,10 @@ fit(m,
   patches     = 4,
   patch_size  = 0.06,
   lr          = 0.01,
-  env_autoscale   = TRUE         # default
+  env_autoscale   = TRUE,        # default
+  plot_progress   = FALSE        # the convergence plot below is the readable one
 )
 ```
-
-![](D/D-fit-process-1.png)
 
 ## Replace growth with a neural network (Hybrid-FINN)
 
@@ -239,11 +244,9 @@ m_hybrid <- finn(
 fit(m_hybrid,
   env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
   epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
-  lr = 0.01, env_autoscale = TRUE
+  lr = 0.01, env_autoscale = TRUE, plot_progress = FALSE
 )
 ```
-
-![](D/D-hybrid-fit-1.png)
 
 With both variants fitted, the rest of the vignette inspects and
 compares them: training convergence, a
@@ -521,12 +524,19 @@ plot_growth_ale <- function(vars, labs) {
 
 ### Environmental niches
 
-Because the environmental responses are learned, each curve is an
-inferred **niche** — how a species’ growth scales along a climate
-gradient. Ecologically familiar contrasts emerge without being
-prescribed: *Pinus ponderosa* grows best on the driest sites, while
-wetter-climate species ramp up with precipitation. The hybrid’s learned
-climate response broadly tracks the mechanistic one.
+Because the environmental responses are learned rather than prescribed,
+each curve is an inferred **niche** — how a species’ growth scales along
+a climate gradient. Growth generally rises with precipitation, and the
+temperature responses are single-peaked, with an optimum in the middle
+of the sampled range.
+
+Read these as *illustrations of what ALE recovers*, not as settled
+ecology. The per-species shapes are noisier than the structural
+responses below — growth is weakly constrained by two inventories (see
+the caveat above), and the mechanistic and hybrid curves do not always
+agree, even on the sign of a response. That disagreement is itself
+informative: where two models trained on the same data diverge, the data
+are not pinning that response down.
 
 ``` r
 
@@ -575,10 +585,14 @@ learned per species, not shared.
 
 The point of a hybrid is to ask which functional form the neural network
 learned and how it *compares* to the mechanistic function it replaced.
-For the pines the network recovered the mechanistic decline of growth
-with size almost exactly; for *Abies grandis* and *Pseudotsuga* it
-settled on a different, data-driven shape — the freedom that makes
-hybrids useful when the mechanistic form is uncertain.
+Here the two agree on the structural responses that are well constrained
+by the data: growth **declines with tree size** and **increases with
+light availability** for every species, and the network recovered both
+shapes without being given the functional form. That agreement is the
+useful result — it says the mechanistic size-and-light response was a
+reasonable choice, and that a flexible network, free to do anything,
+reproduces it. The remaining gaps between the curves are small next to
+the noise in the rate itself.
 
 ``` r
 

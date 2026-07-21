@@ -40,6 +40,7 @@
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -148,13 +149,18 @@ effect of size (DBH) on a process. 2) Environmental parameters that
 modulate the effect of the environment on a process. Environmental
 parameters also include an intercept that modulates the overall effect
 size of a process.</p>
-<p>The following code generates random species parameters for a simple
-model with <code>Nsp</code> (here 5) species and 1 environmental
-variable.</p>
+<p>The following code sets up illustrative species parameters for a
+simple model with <code>Nsp</code> (here 5) species and 1 environmental
+variable. Some values are hand-picked to span a range of strategies and
+some are drawn at random — the <strong>exact numbers are
+arbitrary</strong>, chosen only to give visibly different species. In a
+real application you would not set them at all; they would be
+<em>learned</em> from data (see the <a href="D-Fit_to_FIA.html">Fitting
+FINN to forest inventory data</a> vignette).</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1234</span><span class="op">)</span></span>
 <span><span class="co"># we draw the same shade parameters for each process for simplicity</span></span>
-<span><span class="co"># shade parameters correspond to the fraction of light a species needs to succesfully grow, regenerate, or survive.</span></span>
+<span><span class="co"># shade parameters correspond to the fraction of light a species needs to successfully grow, regenerate, or survive.</span></span>
 <span><span class="va">shadeSP</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>,<span class="fl">0.2</span>,<span class="fl">0.5</span>,<span class="fl">0.5</span>,<span class="fl">0.7</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># regeneration parameters</span></span>

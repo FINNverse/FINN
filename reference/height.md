@@ -1,7 +1,7 @@
-# Calculate the height of a tree based on its diameter at breast height and an alometry parameter.
+# Calculate the height of a tree based on its diameter at breast height and an allometry parameter.
 
 Calculate the height of a tree based on its diameter at breast height
-and an alometry parameter.
+and an allometry parameter.
 
 ## Usage
 
@@ -18,7 +18,7 @@ height(dbh, parHeight)
 
 - parHeight:
 
-  A numeric value representing the species height alometry.
+  A numeric value representing the species height allometry.
 
 ## Value
 
@@ -32,7 +32,7 @@ breast height (dbh) and a parameter parHeight.
 The height is calculated using the formula: \$\$height = \left( \exp
 \left( \frac{(\text{dbh} \times \text{parHeight})}{(\text{dbh} + 100)}
 \right) - 1 \right) \times 100 + 0.001\$\$ where dbh is the diameter at
-breast height of the tree in cm and parHeight is an alometric species
+breast height of the tree in cm and parHeight is an allometric species
 specific parameter.
 
 All parameters of parHeight from 0 to 1 result in physiologicaly

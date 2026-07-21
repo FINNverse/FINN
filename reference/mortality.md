@@ -57,3 +57,8 @@ mortality(
 
   torch.Tensor (Optional) Growth entering the mortality response;
   defaults to the model's current growth.
+
+## Value
+
+A `torch` tensor of per-cohort mortality probabilities; or, if
+`debug = TRUE`, a list of the intermediate components.
