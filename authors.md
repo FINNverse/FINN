@@ -18,8 +18,8 @@ does not rank authorship.
 Source:
 [`DESCRIPTION`](https://github.com/FINNverse/FINN/blob/HEAD/DESCRIPTION)
 
-K\<U+00E4\>ber Y, Pichler M (2026). *FINN: Forest Informed Neural
-Networks*. R package version 0.1.0, <https://github.com/FINNverse/FINN>.
+Käber Y, Pichler M (2026). *FINN: Forest Informed Neural Networks*. R
+package version 0.1.0, <https://github.com/FINNverse/FINN>.
 
     @Manual{,
       title = {FINN: Forest Informed Neural Networks},

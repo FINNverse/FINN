@@ -8,6 +8,48 @@ by neural networks and custom functions can be incorporated, or a
 combination of both. The package is designed to be user-friendly and
 flexible, allowing users to easily modify the model.
 
+### How FINN works
+
+FINN steps a forest forward in time. Its state is a set of **cohorts** —
+groups of same-species, same-size trees — described by their size,
+species, and number. At each timestep four demographic **processes** act
+on that state: **competition** for light, **growth**, **mortality**, and
+**regeneration**. The updated cohorts become the state for the next
+step, and stand-level quantities (DBH, basal area, tree numbers,
+demographic rates) are read off along the way.
+
+What makes FINN unusual is that **each process can be a mechanistic
+function, a neural network, or a mixture of the two**, and all of them
+are calibrated together by gradient descent through the entire
+simulation. Each response is fit with the likelihood that suits it — a
+Gaussian for growth, a binomial for mortality, a negative binomial for
+regeneration.
+
+![FINN's structure. (a) FINN spans the spectrum from process-based
+dynamic vegetation models (DVM) to purely empirical approaches (SEM /
+GLM / ML), combining process knowledge with data. (b) Cohorts are
+updated each timestep by the four processes; each process can be
+mechanistic, a neural network, or both, and each has its own likelihood.
+Figure from K\<U+00E4\>ber & Pichler (2026).](FINN-overview.jpg)
+
+FINN’s structure. (a) FINN spans the spectrum from process-based dynamic
+vegetation models (DVM) to purely empirical approaches (SEM / GLM / ML),
+combining process knowledge with data. (b) Cohorts are updated each
+timestep by the four processes; each process can be mechanistic, a
+neural network, or both, and each has its own likelihood. Figure from
+K\<U+00E4\>ber & Pichler (2026).
+
+This vignette builds a **fully mechanistic** model from known parameters
+and simulates it — the natural starting point. Two later vignettes take
+the other steps: [Fitting FINN to forest inventory
+data](https://finnverse.github.io/FINN/articles/D-Fit_to_FIA.md)
+*calibrates* a model to real data and replaces the growth process with a
+neural network, and
+[Mortality](https://finnverse.github.io/FINN/articles/E-Mortality.md)
+does the same for mortality. If you came here wondering what a
+process-replaced-by-a-network looks like, those are the pages to read
+next.
+
 ## Installation
 
 The development version of FINN can be installed from GitHub. Currently
@@ -34,7 +76,6 @@ library(ggplot2)
 Ntimesteps = 500  # number of timesteps
 Nsites = 1 # number of sites
 patch_size = 0.1
-# one species
 Nsp = 5 # number of species
 ```
 
@@ -50,7 +91,7 @@ parameters also include an intercept that modulates the overall effect
 size of a process.
 
 The following code generates random species parameters for a simple
-model with 10 species and 1 environmental variable.
+model with `Nsp` (here 5) species and 1 environmental variable.
 
 ``` r
 
@@ -129,6 +170,27 @@ pars_dt
 #> 5:          0.1       1 -1.545186        0.1  -1.039534 -2.306409 -2.162704
 ```
 
+Two conventions in that code are worth explaining:
+
+- **Why the environmental parameters are wrapped in
+  `list(matrix(...))`.** Each process’s environmental effect is stored
+  as a *list*, because that is the container FINN uses whether the
+  effect is a simple linear term or a full neural network. Here the list
+  holds a single matrix (species × `[intercept, slope]`) — a linear
+  effect of the one environmental variable. When a process is replaced
+  by a network, that same slot holds the network’s list of weight
+  matrices instead, so the interface does not change.
+- **Why the mortality parameters use
+  [`scale()`](https://rspatial.github.io/terra/reference/scale.html).**
+  These are arbitrary illustrative values. In the mortality function the
+  first two parameters act as *coefficients* (they multiply light and
+  size inside a link function), rather than as the light thresholds that
+  `shadeSP` represents for growth and regeneration.
+  [`scale()`](https://rspatial.github.io/terra/reference/scale.html)
+  centres them and gives them unit variance, which keeps the resulting
+  mortality rates in a plausible range for this synthetic example. For a
+  real fit you would not set these by hand at all — they are learned.
+
 ### Environment and disturbances
 
 Next we have to specify the environmental input variables. These
@@ -154,16 +216,15 @@ dist_dt <- env_dt
 # for this very simple model we will have a constant environment for all sites and timesteps
 env_dt$env1 = rep(0, Ntimesteps)
 
-# we can also specify the intensity of disturbances for each timestep
-
-# here we specify a disturbance frequency of 5%, which means that there is a 5% chance each year that a disturbance occurs
+# Disturbances are optional and specified per site-year, as a single number:
+# the fraction of patches destroyed that year (0 = nothing happens).
+#
+# Here a disturbance strikes independently each year with probability 5%
+# (a Bernoulli draw), and when it does it removes 50-100% of the patches
+# (a uniform intensity). No disturbance in a year leaves the value at 0.
 disturbance_frequency = 0.05
-
-# the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
-disturbance_intensity = rbinom(Ntimesteps*Nsites,1,0.2)*runif(Ntimesteps*Nsites, 0.5, 1)
-
-# this will result in 0 to 20 % of the patches being disturbed at each timestep
-dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
+n <- Ntimesteps * Nsites
+dist_dt$intensity <- rbinom(n, 1, disturbance_frequency) * runif(n, 0.5, 1)
 ```
 
 ### Simulate
@@ -171,6 +232,14 @@ dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturba
 The model can be run with the `simulateForest` function. Its arguments
 are `env` which is the environmental input data.table, `patches` the
 number of patches, and the processes.
+
+A model is assembled with
+[`finn()`](https://finnverse.github.io/FINN/reference/finn.md), which
+takes one process per demographic component. Each process is built with
+[`createProcess()`](https://finnverse.github.io/FINN/reference/createProcess.md)
+— so the pattern is always
+`finn(growth_process = createProcess(...), mortality_process = createProcess(...), ...)`,
+as in the call below.
 
 The processes are specified with the `createProcess` function. The first
 argument is a formula that specifies the relation between environment
@@ -220,11 +289,21 @@ predictions[["patches_100"]] =
 
 Simulating a single patch is noisy — a gap model’s dynamics are
 stochastic, so one patch is one realisation. Averaging over many patches
-recovers the smooth stand-level expectation:
+recovers the smooth stand-level expectation.
+
+You do **not** average the patches yourself:
+[`simulateForest()`](https://finnverse.github.io/FINN/reference/simulateForest.md)
+already returns patch-averaged, stand-level results in `$long$site` (the
+per-patch series are in `$long$patch` if you want them). The
+[`mean()`](https://rspatial.github.io/terra/reference/summarize-generics.html)
+in the plotting code below only collapses the *site* dimension, which
+matters when you simulate more than one site — here there is just one,
+so it is a harmless identity.
 
 ``` r
 
 for(i in c("patches_1", "patches_100")){
+  # $long$site is already averaged over patches; this mean() collapses sites
   p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year, species, variable)]
   p_dat[, variable2 := factor(
     variable,

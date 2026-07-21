@@ -242,7 +242,7 @@ fit(
   internally: the per-variable mean and standard deviation are learned
   from the training `env` and stored on the model, then re-applied
   automatically at every
-  [`predict()`](https://rdrr.io/r/stats/predict.html)/[`simulate()`](https://rdrr.io/r/stats/simulate.html)
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)/[`simulate()`](https://rdrr.io/r/stats/simulate.html)
   call. This lets you pass raw (untransformed) `env` for both
   calibration and prediction; FINN guarantees an identical
   transformation at both stages. Recommended (and the default) for
