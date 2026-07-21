@@ -21,3 +21,4 @@
 ^vignettes/FINN-process\.png$
 \.DS_Store$
 ^\.Rhistory$
+^cran-comments\.md$
