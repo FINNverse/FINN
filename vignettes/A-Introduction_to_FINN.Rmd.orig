@@ -31,7 +31,7 @@ FINN steps a forest forward in time. Its state is a set of **cohorts** — group
 
 What makes FINN unusual is that **each process can be a mechanistic function, a neural network, or a mixture of the two**, and all of them are calibrated together by gradient descent through the entire simulation. Each response is fit with the likelihood that suits it — a Gaussian for growth, a binomial for mortality, a negative binomial for regeneration.
 
-```{r concept-figure, echo = FALSE, out.width = "95%", fig.cap = "FINN's structure. (a) FINN spans the spectrum from process-based dynamic vegetation models (DVM) to purely empirical approaches (SEM / GLM / ML), combining process knowledge with data. (b) Cohorts are updated each timestep by the four processes; each process can be mechanistic, a neural network, or both, and each has its own likelihood. Figure from Käber & Pichler (2026)."}
+```{r concept-figure, echo = FALSE, out.width = "100%", fig.cap = "FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes — competition, growth, mortality and regeneration — to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Käber & Pichler (2026)."}
 knitr::include_graphics("FINN-overview.jpg")
 ```
 
