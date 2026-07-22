@@ -118,12 +118,12 @@ pars_dt <- data.table(
   mort3        = parMort[, 3],
   compHeight  = parComp[, 1],
   compStrength= parComp[, 2],
-  regEnv1     = sapply(parRegEnv, function(x) x[1, 1]),
-  regEnv2     = sapply(parRegEnv, function(x) x[1, 2]),
-  growthEnv1  = sapply(parGrowthEnv, function(x) x[1, 1]),
-  growthEnv2  = sapply(parGrowthEnv, function(x) x[1, 2]),
-  mortEnv1    = sapply(parMortEnv, function(x) x[1, 1]),
-  mortEnv2    = sapply(parMortEnv, function(x) x[1, 2])
+  regEnv1     = parRegEnv[[1]][, 1],
+  regEnv2     = parRegEnv[[1]][, 2],
+  growthEnv1  = parGrowthEnv[[1]][, 1],
+  growthEnv2  = parGrowthEnv[[1]][, 2],
+  mortEnv1    = parMortEnv[[1]][, 1],
+  mortEnv2    = parMortEnv[[1]][, 2]
 )
 pars_dt
 ```
