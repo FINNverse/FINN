@@ -51,7 +51,7 @@ then browse the rest:
 | Vignette | What it covers |
 |----|----|
 | [Introduction to FINN](https://finnverse.github.io/FINN/articles/A-Introduction_to_FINN.html) | the model, its processes, and a first simulation |
-| [Succession from a handful of species](https://finnverse.github.io/FINN/articles/B-Succession_demo.html) | plausible succession emerging from the processes |
+| [Parameterising FINN from Ellenberg indicator values](https://finnverse.github.io/FINN/articles/B-Succession_demo.html) | deriving species niches from Ellenberg values; succession along a climate gradient |
 | [Preparing your data for FINN](https://finnverse.github.io/FINN/articles/C-Data_preparation.html) | going from a raw tree list to FINN’s input tables |
 | [Fitting FINN to forest inventory data](https://finnverse.github.io/FINN/articles/D-Fit_to_FIA.html) | calibrating on US FIA data, with a held-out test |
 | [Mortality: a binomial response and a NN process](https://finnverse.github.io/FINN/articles/E-Mortality.html) | choosing the right likelihood, and scoring it honestly |

@@ -27,7 +27,7 @@ write, data needs, and acceptance criteria.
 ---
 
 ## Vignette 1 — `succession-demo.qmd`
-**Title:** "Plausible succession from a handful of species"
+**Title:** "Parameterising FINN from Ellenberg indicator values"
 
 ### Purpose
 Show that FINN, given only 3–5 fictional species with contrasting demographic
