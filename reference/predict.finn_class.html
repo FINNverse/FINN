@@ -18,7 +18,7 @@
       <ul class="navbar-nav me-auto"><li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/A-Introduction_to_FINN.html">Introduction to FINN</a></li>
-    <li><a class="dropdown-item" href="../articles/B-Succession_demo.html">Succession from a handful of species</a></li>
+    <li><a class="dropdown-item" href="../articles/B-Succession_demo.html">Parameterising FINN from Ellenberg indicator values</a></li>
     <li><a class="dropdown-item" href="../articles/C-Data_preparation.html">Preparing your data for FINN</a></li>
     <li><a class="dropdown-item" href="../articles/D-Fit_to_FIA.html">Fitting FINN to FIA data</a></li>
     <li><a class="dropdown-item" href="../articles/E-Mortality.html">Mortality - binomial response and NN process</a></li>
@@ -55,8 +55,8 @@
 <span>  patches <span class="op">=</span> <span class="fl">100L</span>,</span>
 <span>  patch_size <span class="op">=</span> <span class="fl">0.1</span>,</span>
 <span>  init_cohort <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  batchsize <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  device <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"cpu"</span>, <span class="st">"gpu"</span><span class="op">)</span>,</span>
+<span>  return_cohorts <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  debug <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -90,12 +90,17 @@
 <dd><p>(<code>CohortMat</code>)<br> Initial cohort matrix of class <code>CohortMat</code>, created by <a href="CohortMat.html">CohortMat</a>.</p></dd>
 
 
-<dt id="arg-batchsize">batchsize<a class="anchor" aria-label="anchor" href="#arg-batchsize"></a></dt>
-<dd><p>(<code>integer(1)</code>)<br> Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.</p></dd>
-
-
 <dt id="arg-device">device<a class="anchor" aria-label="anchor" href="#arg-device"></a></dt>
-<dd><p>(<code>character(1)</code>)<br> Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.</p></dd>
+<dd><p>(<code>character(1)</code>)<br> Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.</p></dd>
+
+
+<dt id="arg-return-cohorts">return_cohorts<a class="anchor" aria-label="anchor" href="#arg-return-cohorts"></a></dt>
+<dd><p>Controls whether the raw per-cohort state is returned in
+addition to the aggregated site output. Storing cohorts every timestep is
+expensive, so the default is <code>FALSE</code> (none). Use <code>TRUE</code> (or <code>"all"</code>) for
+every timestep, <code>"last"</code> for the final timestep only, or an integer vector
+of timesteps to store just those. Recorded cohorts appear as <code>$long$cohort</code>
+/ <code>$wide$cohort</code>.</p></dd>
 
 
 <dt id="arg-debug">debug<a class="anchor" aria-label="anchor" href="#arg-debug"></a></dt>
@@ -103,14 +108,19 @@
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>Not used.</p></dd>
+<dd><p>Advanced options forwarded to the internal simulator, chiefly
+<code>batchsize</code> (split the sites into batches of this many to cap memory for very
+large runs). The default processes all sites in one batch and is what almost
+all users want.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A named list of predictions. <code>$long$site</code> and <code>$long$patch</code> give the
-site- and patch-level results in long format (columns <code>siteID</code>, <code>year</code>,
-<code>species</code>, <code>variable</code>, <code>value</code>).</p>
+    <p>A named list of predictions. <code>$long$site</code> (and <code>$wide$site</code>) give the
+site-level results (columns <code>siteID</code>, <code>year</code>, <code>species</code>, <code>variable</code>,
+<code>value</code>). When <code>return_cohorts</code> is set, <code>$long$cohort</code> / <code>$wide$cohort</code> add
+the per-cohort state (<code>dbh</code>, <code>trees</code>, <code>species</code>, growth <code>g</code>, mortality <code>m</code>,
+...) for the requested timesteps.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

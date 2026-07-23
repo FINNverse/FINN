@@ -33,7 +33,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/A-Introduction_to_FINN.html">Introduction to FINN</a></li>
-    <li><a class="dropdown-item" href="../articles/B-Succession_demo.html">Succession from a handful of species</a></li>
+    <li><a class="dropdown-item" href="../articles/B-Succession_demo.html">Parameterising FINN from Ellenberg indicator values</a></li>
     <li><a class="dropdown-item" href="../articles/C-Data_preparation.html">Preparing your data for FINN</a></li>
     <li><a class="dropdown-item" href="../articles/D-Fit_to_FIA.html">Fitting FINN to FIA data</a></li>
     <li><a class="dropdown-item" href="../articles/E-Mortality.html">Mortality - binomial response and NN process</a></li>
@@ -69,49 +69,49 @@
 
     
     
-<p>FINN is an R-package of a forest gap model that seamlessly integrates
-with neural networks. The package provides various functions that allow
-the user to customize the model from a mechanistic forest gap model to a
-mostly data-driven neural network. Individual processes can be replaced
-by neural networks and custom functions can be incorporated, or a
-combination of both. The package is designed to be user-friendly and
-flexible, allowing users to easily modify the model.</p>
+<p>FINN is an R-package of a forest gap model that is designed to be fit
+to data and seamlessly integrates with neural networks. The package
+provides various functions that allow the user to customize the model
+from a mechanistic forest gap model to a mostly data-driven neural
+network. Individual processes can be replaced by neural networks and
+custom functions can be incorporated, or a combination of both. The
+package contains the FINN model itself and provides the tools to
+specify, modify, and calibrate different configurations of FINN.
+Furthermore, it provides functions to simulate under any environmental
+conditions to which FINN was calibrated and to analyse learned processes
+via xAI (Accumulated Local Effect Plots )</p>
 <div class="section level3">
 <h3 id="how-finn-works">How FINN works<a class="anchor" aria-label="anchor" href="#how-finn-works"></a>
 </h3>
-<p>FINN steps a forest forward in time. Its state is a set of
-<strong>cohorts</strong> — groups of same-species, same-size trees —
-described by their size, species, and number. At each timestep four
+<p>FINN simulated forests with discrete time steps. Its state is a set
+of <strong>cohorts</strong> (groups of same-species, same-size trees)
+described by their size, species, and number. At each time step four
 demographic <strong>processes</strong> act on that state:
 <strong>competition</strong> for light, <strong>growth</strong>,
 <strong>mortality</strong>, and <strong>regeneration</strong>. The
-updated cohorts become the state for the next step, and stand-level
-quantities (DBH, basal area, tree numbers, demographic rates) are read
-off along the way.</p>
-<p>What makes FINN unusual is that <strong>each process can be a
-mechanistic function, a neural network, or a mixture of the
-two</strong>, and all of them are calibrated together by gradient
-descent through the entire simulation. Each response is fit with the
-likelihood that suits it — a Gaussian for growth, a binomial for
-mortality, a negative binomial for regeneration.</p>
+updated cohorts become the state for the next step. For each step
+stand-level variables DBH, basal area, tree numbers, and demographic
+rates are recorded and provided as simulation output.</p>
+<p>What separates FINN from other DVM is that <strong>each process can
+be a mechanistic function, a neural network, or a mixture of the
+two</strong>, and all of them are <strong>calibrated together</strong>
+by gradient descent. Each response is combined in a joint likelihood
+that consists of a Gaussian for growth, a binomial for mortality, a
+negative binomial for regeneration.</p>
 <div class="figure" style="text-align: center">
-<img src="FINN-overview.jpg" alt="FINN's structure. (a) FINN spans the spectrum from process-based dynamic vegetation models (DVM) to purely empirical approaches (SEM / GLM / ML), combining process knowledge with data. (b) Cohorts are updated each timestep by the four processes; each process can be mechanistic, a neural network, or both, and each has its own likelihood. Figure from K&lt;U+00E4&gt;ber &amp; Pichler (2026)." width="95%"><p class="caption">
-FINN’s structure. (a) FINN spans the spectrum from process-based dynamic
-vegetation models (DVM) to purely empirical approaches (SEM / GLM / ML),
-combining process knowledge with data. (b) Cohorts are updated each
-timestep by the four processes; each process can be mechanistic, a
-neural network, or both, and each has its own likelihood. Figure from
-K&lt;U+00E4&gt;ber &amp; Pichler (2026).
-</p>
+<p><img src="FINN-overview.jpg" alt="FINN's structure. (a) FINN spans the spectrum from process-based dynamic vegetation models (DVM) to purely empirical approaches (SEM / GLM / ML), combining process knowledge with data. (b) Cohorts are updated each timestep by the four processes; each process can be mechanistic, a neural network, or both, and each has its own likelihood. Figure from K&lt;U+00E4&gt;ber &amp; Pichler (2026)." width="95%"></p>
 </div>
 <p>This vignette builds a <strong>fully mechanistic</strong> model from
-known parameters and simulates it — the natural starting point. Two
-later vignettes take the other steps: <a href="D-Fit_to_FIA.html">Fitting FINN to forest inventory data</a>
-<em>calibrates</em> a model to real data and replaces the growth process
-with a neural network, and <a href="E-Mortality.html">Mortality</a> does
-the same for mortality. If you came here wondering what a
-process-replaced-by-a-network looks like, those are the pages to read
-next.</p>
+known parameters and simulates it to showcase a key functionality of
+FINN: fitting a full DVM to recover (unknown) processes. Two later
+vignettes provide example on how to fit FINN to real forest inventory
+data: <a href="D-Fit_to_FIA.html">Fitting FINN to forest inventory
+data</a> <em>calibrates</em> a model to real data and replaces the
+growth process with a neural network, <a href="E-Mortality.html">another
+vignette on Mortality</a> does the same for mortality. If you want to
+learn how a hybrid Dynamic Vegetation Model looks like and how you can
+build your own for inference and prediction FINN is the right tool and
+these vignettes will show you how to do it.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -147,16 +147,19 @@ species and columns representing different parameters. There are two
 kinds of parameters 1) process parameters like light requirements and
 effect of size (DBH) on a process. 2) Environmental parameters that
 modulate the effect of the environment on a process. Environmental
-parameters also include an intercept that modulates the overall effect
-size of a process.</p>
-<p>The following code sets up illustrative species parameters for a
-simple model with <code>Nsp</code> (here 5) species and 1 environmental
-variable. Some values are hand-picked to span a range of strategies and
-some are drawn at random — the <strong>exact numbers are
-arbitrary</strong>, chosen only to give visibly different species. In a
-real application you would not set them at all; they would be
+parameters can be related to the processes with R formulas and naturally
+provide you with the option to include an intercept that modulates the
+overall effect size of a process.</p>
+<p>The following code sets up a simple model with 5 species and 1
+environmental variable. Some species parameters are hand-picked to span
+a range of demographic strategies and some are drawn at random: the
+<strong>exact numbers are arbitrary</strong>, chosen only to provide a
+set of species with different demographic roles in succession. In a real
+application you would not set them at all; they would be
 <em>learned</em> from data (see the <a href="D-Fit_to_FIA.html">Fitting
-FINN to forest inventory data</a> vignette).</p>
+FINN to forest inventory data</a> vignette). However, this kind of
+flexibility also provides you with the opportunity to explore the
+sensitivity of the model quire easily.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1234</span><span class="op">)</span></span>
 <span><span class="co"># we draw the same shade parameters for each process for simplicity</span></span>
@@ -165,10 +168,10 @@ FINN to forest inventory data</a> vignette).</p>
 <span></span>
 <span><span class="co"># regeneration parameters</span></span>
 <span><span class="va">parReg</span> <span class="op">=</span> <span class="va">shadeSP</span> <span class="co"># regeneration is only dependent on shade and environment</span></span>
-<span><span class="va">parRegEnv</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span><span class="va">parRegEnv</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>,<span class="fl">2</span>,<span class="fl">3</span>,<span class="fl">3</span>,<span class="fl">5</span><span class="op">)</span>, <span class="co"># intercept regulating the overall effect size</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">Nsp</span>, <span class="op">-</span><span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span> <span class="co"># the second parameter modulates the effect of the environmental variable</span></span>
-<span>  <span class="op">)</span>,<span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">)</span>,<span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># growth parameters</span></span>
 <span><span class="va">parGrowth</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -176,21 +179,22 @@ FINN to forest inventory data</a> vignette).</p>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.04</span>,<span class="fl">0.05</span>,<span class="fl">0.05</span>,<span class="fl">0.06</span>,<span class="fl">0.1</span><span class="op">)</span> <span class="co"># the second growth parameter modulates the size dependent growth</span></span>
 <span>  <span class="op">)</span>,<span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">parGrowthEnv</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span><span class="va">parGrowthEnv</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>,<span class="fl">0.3</span>,<span class="fl">0.5</span>,<span class="fl">1</span>,<span class="fl">1</span><span class="op">)</span><span class="op">*</span><span class="fl">0.5</span>, <span class="co"># intercept regulating the overall effect size</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">Nsp</span>, <span class="op">-</span><span class="fl">2</span>, <span class="op">-</span><span class="fl">0.5</span><span class="op">)</span> <span class="co"># the second parameter modulates the effect of the environmental variable</span></span>
-<span>  <span class="op">)</span>,<span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">)</span>,<span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># mortality parameters</span></span>
+<span><span class="co"># we scale the shadeSP and parGrowth parameters to generate mortality parameters that vary similar to growth but are compatible with mortality as a binomial process.</span></span>
 <span><span class="va">parMort</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/scale.html" class="external-link">scale</a></span><span class="op">(</span><span class="va">shadeSP</span><span class="op">)</span><span class="op">)</span>, <span class="co"># see above</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/scale.html" class="external-link">scale</a></span><span class="op">(</span><span class="va">parGrowth</span><span class="op">[</span>,<span class="fl">2</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>, <span class="co"># the second growth parameter modulates the size dependent mortality</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0</span>,<span class="va">Nsp</span><span class="op">)</span> <span class="co"># the third mort parameter modulates the growth dependent mortality</span></span>
 <span>  <span class="op">)</span>,<span class="va">Nsp</span>, <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="va">parMortEnv</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span><span class="va">parMortEnv</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">Nsp</span>, <span class="op">-</span><span class="fl">3</span>, <span class="op">-</span><span class="fl">2</span><span class="op">)</span>, <span class="co"># intercept regulating the overall effect size</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">Nsp</span>, <span class="op">-</span><span class="fl">3</span>, <span class="op">-</span><span class="fl">2</span><span class="op">)</span> <span class="co"># the second parameter modulates the effect of the environmental variable</span></span>
-<span>  <span class="op">)</span>, <span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">)</span>, <span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># allometric parameters for the calculation of tree height from a trees diameter</span></span>
 <span><span class="va">parComp</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -209,12 +213,12 @@ FINN to forest inventory data</a> vignette).</p>
 <span>  mort3        <span class="op">=</span> <span class="va">parMort</span><span class="op">[</span>, <span class="fl">3</span><span class="op">]</span>,</span>
 <span>  compHeight  <span class="op">=</span> <span class="va">parComp</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>,</span>
 <span>  compStrength<span class="op">=</span> <span class="va">parComp</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>,</span>
-<span>  regEnv1     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">parRegEnv</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  regEnv2     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">parRegEnv</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  growthEnv1  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">parGrowthEnv</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  growthEnv2  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">parGrowthEnv</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  mortEnv1    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">parMortEnv</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  mortEnv2    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">parMortEnv</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
+<span>  regEnv1     <span class="op">=</span> <span class="va">parRegEnv</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>,</span>
+<span>  regEnv2     <span class="op">=</span> <span class="va">parRegEnv</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>,</span>
+<span>  growthEnv1  <span class="op">=</span> <span class="va">parGrowthEnv</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>,</span>
+<span>  growthEnv2  <span class="op">=</span> <span class="va">parGrowthEnv</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>,</span>
+<span>  mortEnv1    <span class="op">=</span> <span class="va">parMortEnv</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>,</span>
+<span>  mortEnv2    <span class="op">=</span> <span class="va">parMortEnv</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">pars_dt</span></span>
 <span><span class="co">#&gt;    speciesID   reg growth1 growth2      mort1         mort2 mort3 compHeight</span></span>
@@ -224,36 +228,13 @@ FINN to forest inventory data</a> vignette).</p>
 <span><span class="co">#&gt; 3:         3   0.5     0.5    0.05  0.4082483 -4.264014e-01     0        0.4</span></span>
 <span><span class="co">#&gt; 4:         4   0.5     0.5    0.06  0.4082483 -5.917509e-16     0        0.7</span></span>
 <span><span class="co">#&gt; 5:         5   0.7     0.7    0.10  1.2247449  1.705606e+00     0        0.6</span></span>
-<span><span class="co">#&gt;    compStrength regEnv1   regEnv2 growthEnv1 growthEnv2  mortEnv1  mortEnv2</span></span>
-<span><span class="co">#&gt;           &lt;num&gt;   &lt;num&gt;     &lt;num&gt;      &lt;num&gt;      &lt;num&gt;     &lt;num&gt;     &lt;num&gt;</span></span>
-<span><span class="co">#&gt; 1:          0.3       1 -1.545186        0.1  -1.039534 -2.306409 -2.162704</span></span>
-<span><span class="co">#&gt; 2:          0.2       1 -1.545186        0.1  -1.039534 -2.306409 -2.162704</span></span>
-<span><span class="co">#&gt; 3:          0.2       1 -1.545186        0.1  -1.039534 -2.306409 -2.162704</span></span>
-<span><span class="co">#&gt; 4:          0.2       1 -1.545186        0.1  -1.039534 -2.306409 -2.162704</span></span>
-<span><span class="co">#&gt; 5:          0.1       1 -1.545186        0.1  -1.039534 -2.306409 -2.162704</span></span></code></pre></div>
-<p>Two conventions in that code are worth explaining:</p>
-<ul>
-<li>
-<strong>Why the environmental parameters are wrapped in
-<code>list(matrix(...))</code>.</strong> Each process’s environmental
-effect is stored as a <em>list</em>, because that is the container FINN
-uses whether the effect is a simple linear term or a full neural
-network. Here the list holds a single matrix (species ×
-<code>[intercept, slope]</code>) — a linear effect of the one
-environmental variable. When a process is replaced by a network, that
-same slot holds the network’s list of weight matrices instead, so the
-interface does not change.</li>
-<li>
-<strong>Why the mortality parameters use
-<code><a href="https://rspatial.github.io/terra/reference/scale.html" class="external-link">scale()</a></code>.</strong> These are arbitrary illustrative values.
-In the mortality function the first two parameters act as
-<em>coefficients</em> (they multiply light and size inside a link
-function), rather than as the light thresholds that <code>shadeSP</code>
-represents for growth and regeneration. <code><a href="https://rspatial.github.io/terra/reference/scale.html" class="external-link">scale()</a></code> centres
-them and gives them unit variance, which keeps the resulting mortality
-rates in a plausible range for this synthetic example. For a real fit
-you would not set these by hand at all — they are learned.</li>
-</ul>
+<span><span class="co">#&gt;    compStrength regEnv1    regEnv2 growthEnv1 growthEnv2  mortEnv1  mortEnv2</span></span>
+<span><span class="co">#&gt;           &lt;num&gt;   &lt;num&gt;      &lt;num&gt;      &lt;num&gt;      &lt;num&gt;     &lt;num&gt;     &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:          0.3       1 -1.5451864       0.10  -1.039534 -2.306409 -2.162704</span></span>
+<span><span class="co">#&gt; 2:          0.2       2  0.4891976       0.15  -1.985756 -2.455025 -2.713777</span></span>
+<span><span class="co">#&gt; 3:          0.2       3  0.4370989       0.25  -1.651174 -2.717266 -2.733179</span></span>
+<span><span class="co">#&gt; 4:          0.2       3  0.4935178       0.50  -1.000874 -2.076567 -2.813277</span></span>
+<span><span class="co">#&gt; 5:          0.1       5  1.4436615       0.50  -1.228623 -2.707684 -2.767774</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="environment-and-disturbances">Environment and disturbances<a class="anchor" aria-label="anchor" href="#environment-and-disturbances"></a>
@@ -296,16 +277,17 @@ and the environmental variables as additional columns.</p>
 Its arguments are <code>env</code> which is the environmental input
 data.table, <code>patches</code> the number of patches, and the
 processes.</p>
-<p>A model is assembled with <code><a href="../reference/finn.html">finn()</a></code>, which takes one
-process per demographic component. Each process is built with
-<code><a href="../reference/createProcess.html">createProcess()</a></code> — so the pattern is always
+<p>A model is defined with <code><a href="../reference/finn.html">finn()</a></code>, which takes one process
+per demographic component. Each process is built with
+<code><a href="../reference/createProcess.html">createProcess()</a></code>. So the workflow is always
 <code>finn(growth_process = createProcess(...), mortality_process = createProcess(...), ...)</code>,
 as in the call below.</p>
 <p>The processes are specified with the <code>createProcess</code>
-function. The first argument is a formula that specifies the relation
-between environment and the process. The formula includes the intercept
-and the environmental variables that are provided with <code>env</code>.
-The second argument is the function that should be used for the process.
+function. The first argument is a formula (interpreted according to the
+R formula definitions) that specifies the relation between environment
+and the process. The formula includes the intercept and the
+environmental variables that are provided with <code>env</code>. The
+second argument is the function that should be used for the process.
 FINN includes the default functions <code>growth</code>,
 <code>mortality</code>, and <code>regeneration</code>. The user can also
 provide custom functions. The function should take the species
@@ -343,9 +325,9 @@ specified above.</p>
 <span></span>
 <span><span class="va">predictions</span><span class="op">[[</span><span class="st">"patches_100"</span><span class="op">]</span><span class="op">]</span> <span class="op">=</span></span>
 <span>  <span class="fu"><a href="../reference/simulateForest.html">simulateForest</a></span><span class="op">(</span><span class="va">simulationModel</span>, init_cohort <span class="op">=</span> <span class="cn">NULL</span>, env <span class="op">=</span> <span class="va">env_dt</span>, disturbance <span class="op">=</span> <span class="va">dist_dt</span>, device <span class="op">=</span> <span class="st">"cpu"</span>, patches <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
-<p>Simulating a single patch is noisy — a gap model’s dynamics are
-stochastic, so one patch is one realisation. Averaging over many patches
-recovers the smooth stand-level expectation.</p>
+<p>Naturally forest gap models are stochastic, so one patch is only one
+noisy realisation. Averaging over many patches creates a smooth
+stand-level aggregation of the forest state.</p>
 <p>You do <strong>not</strong> average the patches yourself:
 <code><a href="../reference/simulateForest.html">simulateForest()</a></code> already returns patch-averaged,
 stand-level results in <code>$long$site</code> (the per-patch series are
@@ -409,12 +391,12 @@ one, so it is a harmless identity.</p>
 <span><span class="co">#&gt;  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       </span></span>
 <span><span class="co">#&gt;  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     torch_0.15.1      </span></span>
 <span><span class="co">#&gt;  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         </span></span>
-<span><span class="co">#&gt; [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         evaluate_1.0.5    </span></span>
-<span><span class="co">#&gt; [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       </span></span>
-<span><span class="co">#&gt; [21] RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3    farver_2.1.2      </span></span>
-<span><span class="co">#&gt; [25] R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0      callr_3.7.6       </span></span>
-<span><span class="co">#&gt; [29] magrittr_2.0.3     withr_3.0.2        tools_4.5.0        bit64_4.6.0-1     </span></span>
-<span><span class="co">#&gt; [33] gtable_0.3.6</span></span></code></pre></div>
+<span><span class="co">#&gt; [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         abind_1.4-8       </span></span>
+<span><span class="co">#&gt; [17] evaluate_1.0.5     tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0    </span></span>
+<span><span class="co">#&gt; [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3   </span></span>
+<span><span class="co">#&gt; [25] farver_2.1.2       R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     </span></span>
+<span><span class="co">#&gt; [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       </span></span>
+<span><span class="co">#&gt; [33] bit64_4.6.0-1      gtable_0.3.6</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
