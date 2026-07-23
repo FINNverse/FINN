@@ -354,7 +354,22 @@ apply_env_scaling = function(env, scaling) {
   env
 }
 
-backward = function(value, upper, lower) stats::qlogis( t((t(value) - as.numeric(lower)) / (as.numeric(upper) - as.numeric(lower)) ))
+backward = function(value, upper, lower) {
+  ratio <- t((t(value) - as.numeric(lower)) / (as.numeric(upper) - as.numeric(lower)))
+  # `qlogis` maps a value sitting exactly on a bound to +/-Inf, and one outside
+  # the bounds to NaN. Either silently poisons the whole model (every downstream
+  # tensor becomes NaN and the simulation collapses to zero). Clamp strictly
+  # inside (0, 1) so initialisation stays finite, and warn if an initial value
+  # was at or beyond its [lower, upper] range so the user can widen the bounds.
+  if (any(!is.na(ratio) & (ratio <= 0 | ratio >= 1))) {
+    warning("an initial parameter value is at or outside its [lower, upper] bound; ",
+            "clamping it to keep the model finite. Consider passing `lower`/`upper` ",
+            "to createProcess() to widen the range.", call. = FALSE)
+  }
+  eps <- 1e-6
+  ratio <- pmin(pmax(ratio, eps), 1 - eps)
+  stats::qlogis(ratio)
+}
 forward =  function(value, upper, lower) torch::torch_sigmoid(value) * (upper - lower) + lower
 
 init_species_parameters = function(type, N_species){

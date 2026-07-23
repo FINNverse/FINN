@@ -101,6 +101,9 @@ pred2DF <- function(pred, format = "wide") {
     for(year_i in seq_along(pred$Predictions$Cohort$cohortID)) {
       # Select the cohort array for the current year
       cohorts_array_i = pred$Predictions$Cohort$cohortID[[year_i]]
+      # Timesteps that were not recorded (return_cohorts subset) stay NULL; the
+      # list position still encodes the true year, so we simply skip the gaps.
+      if(is.null(cohorts_array_i)) next
       # Set dimension names
       dim_names = c("siteID", "patchID", "species")
       # Convert the cohort-level array to a data frame
@@ -139,7 +142,7 @@ pred2DF <- function(pred, format = "wide") {
   if(format == "long") {
     if(exists("site_dt")) site_dt <- melt(site_dt, id.vars = c("siteID", "year", "species"), variable.name = "variable")
     if(exists("patch_dt")) patch_dt <- melt(patch_dt, id.vars = c("siteID", "patchID", "year", "species"), variable.name = "variable")
-    if(exists("cohort_dt")) cohort_dt <- melt(cohort_dt, id.vars = c("siteID", "patchID", "year", "species", "cohortID"), variable.name = "variable")
+    if(exists("cohort_dt") && nrow(cohort_dt) > 0) cohort_dt <- melt(cohort_dt, id.vars = c("siteID", "patchID", "year", "species", "cohortID"), variable.name = "variable")
   } else if(format != "wide") {
     stop("Invalid format argument. Use either 'long' or 'wide'")
   }

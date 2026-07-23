@@ -11,8 +11,8 @@
   patches = 100L,
   patch_size = 0.1,
   init_cohort = NULL,
-  batchsize = NULL,
   device = c("cpu", "gpu"),
+  return_cohorts = FALSE,
   debug = FALSE,
   ...
 )
@@ -30,18 +30,28 @@
 
 \item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}.}
 
-\item{batchsize}{(\code{integer(1)})\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.}
+\item{device}{(\code{character(1)})\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.}
 
-\item{device}{(\code{character(1)})\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.}
+\item{return_cohorts}{Controls whether the raw per-cohort state is returned in
+addition to the aggregated site output. Storing cohorts every timestep is
+expensive, so the default is \code{FALSE} (none). Use \code{TRUE} (or \code{"all"}) for
+every timestep, \code{"last"} for the final timestep only, or an integer vector
+of timesteps to store just those. Recorded cohorts appear as \verb{$long$cohort}
+/ \verb{$wide$cohort}.}
 
 \item{debug}{(\code{logical(1)})\cr Debug modus or not. If \code{TRUE}, individual tree states are stored.}
 
-\item{...}{Not used.}
+\item{...}{Advanced options forwarded to the internal simulator, chiefly
+\code{batchsize} (split the sites into batches of this many to cap memory for very
+large runs). The default processes all sites in one batch and is what almost
+all users want.}
 }
 \value{
-A named list of predictions. \verb{$long$site} and \verb{$long$patch} give the
-site- and patch-level results in long format (columns \code{siteID}, \code{year},
-\code{species}, \code{variable}, \code{value}).
+A named list of predictions. \verb{$long$site} (and \verb{$wide$site}) give the
+site-level results (columns \code{siteID}, \code{year}, \code{species}, \code{variable},
+\code{value}). When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
+the per-cohort state (\code{dbh}, \code{trees}, \code{species}, growth \code{g}, mortality \code{m},
+...) for the requested timesteps.
 }
 \description{
 Predict from a FINN model

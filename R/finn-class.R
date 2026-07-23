@@ -303,14 +303,24 @@ fit = function(model,
 #' @param patches (`integer(1)`)\cr Number of patches.
 #' @param patch_size (`numeric(1)`)\cr Patch size.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
-#' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
-#' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param device (`character(1)`)\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.
+#' @param return_cohorts Controls whether the raw per-cohort state is returned in
+#'   addition to the aggregated site output. Storing cohorts every timestep is
+#'   expensive, so the default is `FALSE` (none). Use `TRUE` (or `"all"`) for
+#'   every timestep, `"last"` for the final timestep only, or an integer vector
+#'   of timesteps to store just those. Recorded cohorts appear as `$long$cohort`
+#'   / `$wide$cohort`.
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
-#' @param ... Not used.
+#' @param ... Advanced options forwarded to the internal simulator, chiefly
+#'   `batchsize` (split the sites into batches of this many to cap memory for very
+#'   large runs). The default processes all sites in one batch and is what almost
+#'   all users want.
 #'
-#' @return A named list of predictions. `$long$site` and `$long$patch` give the
-#'   site- and patch-level results in long format (columns `siteID`, `year`,
-#'   `species`, `variable`, `value`).
+#' @return A named list of predictions. `$long$site` (and `$wide$site`) give the
+#'   site-level results (columns `siteID`, `year`, `species`, `variable`,
+#'   `value`). When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
+#'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
+#'   ...) for the requested timesteps.
 #' @method predict finn_class
 #' @export
 predict.finn_class = function(object,
@@ -319,8 +329,8 @@ predict.finn_class = function(object,
                               patches = 100L,
                               patch_size = 0.1,
                               init_cohort = NULL,
-                              batchsize = NULL,
                               device = c("cpu", "gpu"),
+                              return_cohorts = FALSE,
                               debug = FALSE,
                               ...) {
   object$simulate(env = env,
@@ -328,9 +338,10 @@ predict.finn_class = function(object,
                   patches = patches,
                   patch_size = patch_size,
                   init_cohort = init_cohort,
-                  batchsize = batchsize,
                   device = device,
-                  debug = debug)
+                  return_cohorts = return_cohorts,
+                  debug = debug,
+                  ...)
 }
 
 
@@ -347,13 +358,24 @@ predict.finn_class = function(object,
 #' @param patches (`integer(1)`)\cr Number of patches.
 #' @param patch_size (`numeric(1)`)\cr Patch size.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
-#' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
-#' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param device (`character(1)`)\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.
+#' @param return_cohorts Controls whether the raw per-cohort state is returned in
+#'   addition to the aggregated site output. Storing cohorts every timestep is
+#'   expensive, so the default is `FALSE` (none). Use `TRUE` (or `"all"`) for
+#'   every timestep, `"last"` for the final timestep only, or an integer vector
+#'   of timesteps to store just those. Recorded cohorts appear as `$long$cohort`
+#'   / `$wide$cohort`.
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
+#' @param ... Advanced options forwarded to the internal simulator, chiefly
+#'   `batchsize` (split the sites into batches of this many to cap memory for very
+#'   large runs). The default processes all sites in one batch and is what almost
+#'   all users want.
 #'
-#' @return A named list of simulation results, with the site- and patch-level
-#'   state variables and demographic rates in `$long$site` / `$long$patch`
-#'   (long format: `siteID`, `year`, `species`, `variable`, `value`).
+#' @return A named list of simulation results. The patch-averaged, stand-level
+#'   state variables and demographic rates are in `$long$site` / `$wide$site`
+#'   (long format: `siteID`, `year`, `species`, `variable`, `value`). When
+#'   `return_cohorts` is set, `$long$cohort` / `$wide$cohort` hold the raw
+#'   per-cohort state for the requested timesteps.
 #' @export
 simulateForest = function(model,
                           env,
@@ -361,18 +383,49 @@ simulateForest = function(model,
                           patches = 100L,
                           patch_size = 0.1,
                           init_cohort = NULL,
-                          batchsize = NULL,
                           device = c("cpu", "gpu"),
-                          debug = FALSE) {
+                          return_cohorts = FALSE,
+                          debug = FALSE,
+                          ...) {
   predict(model,
           env = env,
           disturbance = disturbance,
           patches = patches,
           patch_size = patch_size,
           init_cohort = init_cohort,
-          batchsize = batchsize,
           device = device,
-          debug = debug)
+          return_cohorts = return_cohorts,
+          debug = debug,
+          ...)
+}
+
+# Translate the user-facing `return_cohorts` argument into the concrete vector of
+# timesteps whose cohort states should be stored. Keeping this separate makes the
+# rule (FALSE = none, TRUE / "all" = every step, "last" = final step, or an
+# explicit integer vector) testable in isolation. `debug = TRUE` keeps its legacy
+# meaning and records every timestep regardless of `return_cohorts`.
+resolve_record_years = function(return_cohorts, time, debug = FALSE) {
+  time = as.integer(time)
+  if (isTRUE(debug)) return(seq_len(time))
+  if (is.null(return_cohorts) || isFALSE(return_cohorts)) return(integer(0))
+  if (isTRUE(return_cohorts)) return(seq_len(time))
+  if (is.character(return_cohorts)) {
+    if (length(return_cohorts) == 1L && return_cohorts %in% c("last", "all")) {
+      return(if (return_cohorts == "last") time else seq_len(time))
+    }
+    stop('`return_cohorts` must be FALSE, TRUE, "last", or a vector of timesteps.',
+         call. = FALSE)
+  }
+  if (is.numeric(return_cohorts)) {
+    yrs = as.integer(round(return_cohorts))
+    if (anyNA(yrs) || any(yrs < 1L) || any(yrs > time)) {
+      stop(sprintf("`return_cohorts` timesteps must all be between 1 and %d.", time),
+           call. = FALSE)
+    }
+    return(sort(unique(yrs)))
+  }
+  stop('`return_cohorts` must be FALSE, TRUE, "last", or a vector of timesteps.',
+       call. = FALSE)
 }
 
 #' finn class (internal representation of FINN); use [finn()] to construct.
@@ -426,6 +479,8 @@ finn_class = nn_module(
   #' @param pred_reg torch.Tensor (Optional). Predicted regeneration values.
   #' @param patches numeric. Number of patches.
   #' @param debug logical. Run in debug mode if TRUE.
+  #' @param return_cohorts Which timesteps' cohort states to store: `FALSE` (none),
+  #'   `TRUE`/`"all"` (every timestep), `"last"`, or an integer vector of timesteps.
   #' @param update_step integer. Backpropagation step length.
   #' @param verbose logical. Print progress if TRUE.
   #' @param year_sequence at which year indices should the predictions compared with the observed values
@@ -442,6 +497,7 @@ finn_class = nn_module(
                      pred_reg = NULL,
                      patches = 100L,
                      debug = FALSE,
+                     return_cohorts = FALSE,
                      update_step = 1L,
                      verbose = TRUE,
                      year_sequence = NULL){
@@ -470,6 +526,11 @@ finn_class = nn_module(
     time =  env[[1]]$shape[2]
     patches = dbh$shape[2]
     sp = self$N_species
+
+    # Which timesteps' cohorts to store (see resolve_record_years()). `debug`
+    # keeps recording every step; `return_cohorts` is the lightweight selector.
+    record_years = resolve_record_years(return_cohorts, time, debug)
+    record_cohorts = length(record_years) > 0
 
     # check dtype and device of disturbance
     if(!is.null(disturbance)) {
@@ -509,10 +570,15 @@ finn_class = nn_module(
     loss_total = torch::torch_zeros(7L, device = self$device)
     loss_count = 0L
 
-    # if debug modus, create empty lists
-    if(debug) {
+    # storage for the raw per-timestep state. Cohort snapshots are kept only for
+    # the requested timesteps (`record_cohorts`); patch snapshots stay tied to the
+    # legacy `debug` path. Entries are indexed by their true timestep, so skipped
+    # steps stay NULL and pred2DF() labels every recorded step with its real year.
+    if(record_cohorts) {
       Raw_cohort_results = list()
       Raw_cohort_ids = list()
+    }
+    if(debug) {
       Raw_patch_results = list()
     }
 
@@ -526,6 +592,9 @@ finn_class = nn_module(
     # create process bar
     if(verbose) cli::cli_progress_bar(format = "Year: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} ", total = time, clear = FALSE)
     for(i in 1:time){
+
+      # store this timestep's cohorts?
+      rec_i = record_cohorts && (i %in% record_years)
 
       # In inference mode, make env predictions in each time step (to get the gradients)
       # otherwise, just take the i-th prediction
@@ -544,7 +613,7 @@ finn_class = nn_module(
       g = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
       m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
       r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
-      if(debug) trees_before = torch::torch_zeros_like(g)
+      if(rec_i) trees_before = torch::torch_zeros_like(g)
 
       # detach previous cohort objects (to interrupt the gradients)
 
@@ -758,7 +827,7 @@ finn_class = nn_module(
       species = torch::torch_cat(list(species, species_new), 3)
       cohort_ids = torch::torch_cat(list(cohort_ids, new_cohort_id), 3)
 
-      if (debug) {
+      if (rec_i) {
         tmp = torch::torch_zeros_like(dbh_new)
         tmp[] = NaN
         g = torch::torch_cat(list(g, tmp), 3)
@@ -787,7 +856,7 @@ finn_class = nn_module(
           cohort_ids = cohort_ids$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
           species = species$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
 
-          if(debug) {
+          if(rec_i) {
             g = g$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
             m = m$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
             trees_before = trees_before$flatten(start_dim = 1, end_dim = 2)$gather(2, sorted_tensor)[, 1:max_non_zeros]$unflatten(1, org_dim)
@@ -831,7 +900,8 @@ finn_class = nn_module(
       }
       # end aggregation
 
-      if (debug) {
+      if (rec_i) {
+        # index by the true timestep `i`; unrecorded steps stay NULL
         Raw_cohort_results[[i]] = list(
           "species" = torch::as_array(species$cpu()),
           "trees" = torch::as_array(trees$cpu()),
@@ -840,10 +910,12 @@ finn_class = nn_module(
           "g" = torch::as_array(g$cpu()),
           "trees_before" = torch::as_array(trees_before$cpu()) # noob
         )
+        Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
+      }
+      if (debug) {
         Raw_patch_results[[i]] = list(
           "r" = torch::as_array(r$cpu())
         )
-        Raw_cohort_ids[[i]] = torch::as_array(cohort_ids$cpu())
       }
 
       loss = torch_zeros(7L, device = self$device)
@@ -977,24 +1049,18 @@ finn_class = nn_module(
     loss_out = if (loss_count > 0L) loss_total / loss_count else loss_total
 
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
-    if(debug){
-      Result_out = list(
-        Predictions = list(
-          Site = lapply(Result, function(x) as_array(x)),
-          Patch = Raw_patch_results,
-          Cohort = list(
-            cohortStates = Raw_cohort_results,
-            cohortID = Raw_cohort_ids
-            # cohortID = lapply(Raw_cohort_ids, function(x) torch::as_array(x))
-          )
-        ),
-        loss = loss_out)
-    }else if(!debug){
-      Result_out = list(
-        Predictions = list(
-          Site = lapply(Result, function(x) torch::as_array(x))),
-        loss = loss_out)
+    Predictions = list(Site = lapply(Result, function(x) torch::as_array(x)))
+    # `debug` additionally exposes the per-timestep patch state (unchanged)
+    if(debug) Predictions$Patch = Raw_patch_results
+    # cohorts are attached whenever any timestep was recorded (debug or the
+    # user-facing `return_cohorts`); pred2DF() turns them into a tidy table
+    if(record_cohorts) {
+      Predictions$Cohort = list(
+        cohortStates = Raw_cohort_results,
+        cohortID = Raw_cohort_ids
+      )
     }
+    Result_out = list(Predictions = Predictions, loss = loss_out)
 
     # (parameters' requires_grad is restored via on.exit() above, even if this
     # function exits early due to an error)
@@ -1009,6 +1075,7 @@ finn_class = nn_module(
                       init_cohort = NULL,
                       batchsize = NULL,
                       device = c("cpu", "gpu"),
+                      return_cohorts = FALSE,
                       debug = FALSE
                       ) {
     device = match.arg(device)
@@ -1079,15 +1146,34 @@ finn_class = nn_module(
                               env = list(x_mort, x_growth, x_reg),
                               disturbance = dist,
                               verbose = TRUE,
+                              return_cohorts = return_cohorts,
                               debug = debug)
       pred = pred_tmp[[1]]
-      predictions_batch = append(predictions_batch, list(list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))))
+      long_b = pred2DF(list(Predictions = pred), "long")
+      wide_b = pred2DF(list(Predictions = pred), "wide")
+      # pred2DF() labels sites 1..batch_size within this batch; remap those to the
+      # batch's global site indices (`ind`) so that runs split across more than one
+      # batch keep correct, non-colliding siteIDs. For the default single batch
+      # (batchsize = all sites) this is the identity.
+      ind_r = as.integer(torch::as_array(ind$cpu()))
+      for (nm in intersect(names(long_b), c("site", "patch", "cohort"))) {
+        long_b[[nm]][, siteID := ind_r[siteID]]
+        wide_b[[nm]][, siteID := ind_r[siteID]]
+      }
+      predictions_batch = append(predictions_batch, list(list(long = long_b, wide = wide_b)))
 
       })
     predictions =
       list(long = list(site = rbindlist( lapply(predictions_batch, function(X) X$long$site ))),
            wide = list(site = rbindlist( lapply(predictions_batch, function(X) X$wide$site )))
       )
+    # If cohorts were requested, forward() will have stored them and pred2DF()
+    # will have produced a `$cohort` table per batch; surface them alongside
+    # the site output in the same nested structure.
+    if(!is.null(predictions_batch[[1]]$long$cohort)) {
+      predictions$long$cohort = rbindlist( lapply(predictions_batch, function(X) X$long$cohort) )
+      predictions$wide$cohort = rbindlist( lapply(predictions_batch, function(X) X$wide$cohort) )
+    }
     if(debug){
       predictions = list(wide = pred2DF(pred_tmp, format = "wide"), long = pred2DF(pred_tmp, format = "long"))
     }
