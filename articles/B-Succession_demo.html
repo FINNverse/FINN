@@ -73,10 +73,11 @@
 growth, mortality and competition as ecological processes. Here we give
 it four species with contrasting life-history strategies derived from
 Ellenberg values and let it simulate succession from bare ground to show
-that FINN provides that structure to translate Ellenberg indicator
-values into a plausible succession trajectory. This is the traditional
-way of dynamic forest modeling introduced by Botkin et al. (1972). No
-data, no fitting.</p>
+that FINN provides the necessary structure to translate Ellenberg
+indicator values into a plausible succession trajectory. This vignette
+provides a rough sketch of how the first dynamic forest models were
+developed (cf. Botkin et al., 1972). No data, no fitting, just basic
+ecological knowledge.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/FINNverse/FINN" class="external-link">FINN</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span>
@@ -88,11 +89,11 @@ data, no fitting.</p>
 <span><span class="va">Nsp</span>        <span class="op">&lt;-</span> <span class="fl">4</span>          <span class="co"># pioneer -&gt; early-mid -&gt; mid-late -&gt; climax</span></span>
 <span><span class="va">patch_size</span> <span class="op">&lt;-</span> <span class="fl">0.1</span></span></code></pre></div>
 <div class="section level2">
-<h2 id="the-species-and-their-trade-offs">The species and their trade-offs<a class="anchor" aria-label="anchor" href="#the-species-and-their-trade-offs"></a>
+<h2 id="from-ellenberg-to-finn-parameters">From Ellenberg to FINN parameters<a class="anchor" aria-label="anchor" href="#from-ellenberg-to-finn-parameters"></a>
 </h2>
-<p>We use four well-known European tree species along a life-history
-gradient, from the fast, light-demanding <strong>pioneer</strong>
-<em>Betula pendula</em> (silver birch) to the slow, shade-tolerant
+<p>We use four European tree species along a life-history gradient, from
+the fast, light-demanding <strong>pioneer</strong> <em>Betula
+pendula</em> (silver birch) to the slow, shade-tolerant
 <strong>climax</strong> <em>Fagus sylvatica</em> (beech), with <em>Tilia
 cordata</em> (small-leaved lime) and <em>Carpinus betulus</em>
 (hornbeam) in between. Every parameter below specifies one end of a
@@ -107,12 +108,10 @@ species that establishes under a closed canopy). We derive it from each
 species’ Ellenberg light-indicator value L rescaled into a range that is
 compatible with FINN. Ellenberg L describes a species’ realised light
 niche, which we use here as a convenient proxy for shade tolerance
-(Ellenberg et al. 1991; for a more rigorous, continuous shade-tolerance
-scale see Niinemets and Valladares 2006).</p>
+(Ellenberg et al. 1991).</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Four well-known European species along a light-tolerance gradient. Each has an</span></span>
-<span><span class="co"># Ellenberg light-indicator value L (1 = deep shade ... 9 = full light); we</span></span>
-<span><span class="co"># rescale L into the shade parameter so shade tolerance comes from the indicator value</span></span>
+<code class="sourceCode R"><span><span class="co"># The Ellenberg light-indicator value L ranges from 1 = deep shade ... 9 = full light; we</span></span>
+<span><span class="co"># rescale L into the shade parameter.</span></span>
 <span><span class="va">species</span>     <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Betula pendula"</span>, <span class="st">"Tilia cordata"</span>, <span class="st">"Carpinus betulus"</span>, <span class="st">"Fagus sylvatica"</span><span class="op">)</span></span>
 <span><span class="va">ellenberg_L</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">7</span>, <span class="fl">5</span>, <span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span>   <span class="co"># birch (pioneer) ... beech (climax)</span></span>
 <span></span>
@@ -122,14 +121,13 @@ scale see Niinemets and Valladares 2006).</p>
 <span>  <span class="op">(</span><span class="va">ellenberg_L</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">ellenberg_L</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">ellenberg_L</span><span class="op">)</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">ellenberg_L</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co"># -&gt; 0.60 birch, 0.34 lime, 0.21 hornbeam, 0.08 beech</span></span>
 <span></span>
-<span><span class="co"># Only `shade` is read from an indicator value. The parameters below are not from</span></span>
-<span><span class="co"># Ellenberg: they are illustrative life-history values, each encoding one</span></span>
+<span><span class="co"># Other parameters are derived from a basic understanding of demographic trade-offs.</span></span>
 <span><span class="co"># pioneer &lt;-&gt; climax trade-off (fast, short-lived, prolific vs slow, long-lived,</span></span>
-<span><span class="co"># sparse). The comments give the reasoning; the exact magnitudes are not critical.</span></span>
+<span><span class="co"># sparse).</span></span>
 <span></span>
 <span><span class="co"># --- regeneration ----------------------------------------------------------</span></span>
 <span><span class="co"># reg light threshold = shade tolerance; the intercept is relative seed rain,</span></span>
-<span><span class="co"># higher for the pioneer (many small wind seeds) than the climax (fewer, masting).</span></span>
+<span><span class="co"># higher for the pioneer (many seeds) than the climax (fewer, masting).</span></span>
 <span><span class="va">parReg</span>    <span class="op">&lt;-</span> <span class="va">shadeSP</span></span>
 <span><span class="va">parRegEnv</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3.2</span>, <span class="fl">2.6</span>, <span class="fl">2.0</span>, <span class="fl">1.2</span><span class="op">)</span>,   <span class="co"># intercept: relative seed rain, pioneer -&gt; climax</span></span>
@@ -152,16 +150,18 @@ scale see Niinemets and Valladares 2006).</p>
 <span><span class="op">)</span>, <span class="va">Nsp</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># --- mortality -------------------------------------------------------------</span></span>
-<span><span class="co"># Mortality is mort = plogis(intercept + col1*light + col3*growth), so it</span></span>
-<span><span class="co"># changes through the run as light and growth change:</span></span>
+<span><span class="co"># Mortality is mort = plogis(intercept + col1*light + col2*dbh/100 + col3*growth),</span></span>
+<span><span class="co"># so it changes through the run as light, size and growth change:</span></span>
 <span><span class="co">#   col1 (light): negative -&gt; mortality RISES as a cohort is overtopped (low</span></span>
 <span><span class="co">#                 light). Steep for the pioneer (shade-intolerant), ~flat for</span></span>
 <span><span class="co">#                 the climax (shade-tolerant).</span></span>
+<span><span class="co">#   col2 (dbh): positive -&gt; senescence: mortality rises as a tree approaches its</span></span>
+<span><span class="co">#               maximum size. Steep for the short-lived pioneer (senesces small</span></span>
+<span><span class="co">#               and young), gentle for the long-lived climax.</span></span>
 <span><span class="co">#   col3 (growth): negative -&gt; suppressed, slow-growing trees die more (vigour).</span></span>
-<span><span class="co">#   col2 (dbh): left 0.</span></span>
 <span><span class="va">parMort</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.0</span>, <span class="op">-</span><span class="fl">0.8</span>, <span class="op">-</span><span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.3</span><span class="op">)</span>,   <span class="co"># col1 light: pioneer strongly shade-intolerant</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">Nsp</span><span class="op">)</span>,                 <span class="co"># col2 dbh: off</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.60</span>, <span class="fl">0.35</span>, <span class="fl">0.30</span>, <span class="fl">0.15</span><span class="op">)</span>,   <span class="co"># col2 dbh: senescence, steep pioneer -&gt; gentle climax</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.3</span><span class="op">)</span>    <span class="co"># col3 growth: vigour lowers mortality</span></span>
 <span><span class="op">)</span>, <span class="va">Nsp</span>, <span class="fl">3</span><span class="op">)</span></span>
 <span><span class="co"># baseline mortality ~ inverse longevity: high for the short-lived pioneer,</span></span>
@@ -228,20 +228,20 @@ the rescaling; the points are our four species.
 <h2 id="simulate-succession">Simulate succession<a class="anchor" aria-label="anchor" href="#simulate-succession"></a>
 </h2>
 <p>In this example we simulate under constant environment
-(<code>env1 = 0</code>), so succession here comes purely from the
+(<code>climate = 0</code>), so succession here comes purely from the
 demographic trade-offs. We run from bare ground with no disturbance. We
 will explore the implications of adding an environmental gradient in the
 next section.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">env_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Nsites</span>, year <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Ntimesteps</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">env_dt</span><span class="op">$</span><span class="va">env1</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span><span class="va">env_dt</span><span class="op">$</span><span class="va">climate</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
 <span></span>
 <span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/finn.html">finn</a></span><span class="op">(</span></span>
 <span>  N_species            <span class="op">=</span> <span class="va">Nsp</span>,</span>
 <span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>,      <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span><span class="op">)</span>,</span>
-<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">env1</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       initSpecies <span class="op">=</span> <span class="va">parGrowth</span>, initEnv <span class="op">=</span> <span class="va">parGrowthEnv</span><span class="op">)</span>,</span>
-<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">env1</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, initSpecies <span class="op">=</span> <span class="va">parReg</span>,    initEnv <span class="op">=</span> <span class="va">parRegEnv</span><span class="op">)</span>,</span>
-<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">env1</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    initSpecies <span class="op">=</span> <span class="va">parMort</span>,   initEnv <span class="op">=</span> <span class="va">parMortEnv</span><span class="op">)</span></span>
+<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">climate</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       initSpecies <span class="op">=</span> <span class="va">parGrowth</span>, initEnv <span class="op">=</span> <span class="va">parGrowthEnv</span><span class="op">)</span>,</span>
+<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">climate</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, initSpecies <span class="op">=</span> <span class="va">parReg</span>,    initEnv <span class="op">=</span> <span class="va">parRegEnv</span><span class="op">)</span>,</span>
+<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">climate</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    initSpecies <span class="op">=</span> <span class="va">parMort</span>,   initEnv <span class="op">=</span> <span class="va">parMortEnv</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">m</span>, init_cohort <span class="op">=</span> <span class="cn">NULL</span>, env <span class="op">=</span> <span class="va">env_dt</span>, disturbance <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -258,7 +258,7 @@ next section.</p>
 </h2>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ba</span> <span class="op">&lt;-</span> <span class="va">p_dat</span><span class="op">[</span><span class="va">variable</span> <span class="op">==</span> <span class="st">"ba"</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">ba</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">ba</span><span class="op">[</span><span class="va">year</span> <span class="op">&lt;=</span> <span class="fl">150</span><span class="op">]</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_colour_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Dark2"</span>, name <span class="op">=</span> <span class="st">"Species"</span>, labels <span class="op">=</span> <span class="va">sp_labs</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Year"</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression</a></span><span class="op">(</span><span class="va">Basal</span><span class="op">~</span><span class="va">area</span><span class="op">~</span><span class="op">(</span><span class="va">m</span><span class="op">^</span><span class="fl">2</span><span class="op">/</span><span class="va">ha</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
@@ -282,7 +282,7 @@ basal area, tree numbers, growth, mortality and regeneration:</p>
 <span>  labels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"avg. DBH [cm]"</span>, <span class="st">"Basal Area [m2/ha]"</span>, <span class="st">"Trees [N/ha]"</span>,</span>
 <span>             <span class="st">"Available Light [%]"</span>, <span class="st">"Growth [cm/yr]"</span>, <span class="st">"Mortality [%]"</span>,</span>
 <span>             <span class="st">"Regeneration [N/ha]"</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">panel</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">variable2</span><span class="op">)</span><span class="op">]</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">panel</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">variable2</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">year</span> <span class="op">&lt;=</span> <span class="fl">150</span><span class="op">]</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span><span class="va">variable2</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">2</span>, strip.position <span class="op">=</span> <span class="st">"left"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/coord_cartesian.html" class="external-link">coord_cartesian</a></span><span class="op">(</span>ylim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="cn">NA</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
@@ -297,11 +297,10 @@ basal area, tree numbers, growth, mortality and regeneration:</p>
 Succession across all FINN state variables for the four species.
 </p>
 </div>
-</div>
-<div class="section level2">
-<h2 id="what-just-happened">What just happened<a class="anchor" aria-label="anchor" href="#what-just-happened"></a>
-</h2>
-<p>The figures showed classic expected successional patterns that are
+<div class="section level3">
+<h3 id="ecological-plausibility-of-the-successional-pattern">Ecological plausibility of the successional pattern<a class="anchor" aria-label="anchor" href="#ecological-plausibility-of-the-successional-pattern"></a>
+</h3>
+<p>The figures showed classic expected succession patterns that are
 simulated by many dynamic forest models, and every feature maps back to
 a parameter choice we made earlier:</p>
 <ul>
@@ -328,18 +327,19 @@ it regenerates under shade (lowest <code>shade</code>), is
 shade-tolerant so it barely dies even when overtopped (mortality stays
 ~0.02–0.03 yr⁻¹ throughout), and is the tallest (highest
 <code>height_allom</code>). So once the early- and mid-successional
-canopy disappears it overtopps and dominates the mature forest.</li>
+canopy disappears it overtops and dominates the mature forest.</li>
 </ul>
 <p>This is an emergent pattern resulting from the parameters that encode
 demographic trade-offs for four species and FINN providing the structure
 to create the successional turnover.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="adding-a-climate-gradient">Adding a climate gradient<a class="anchor" aria-label="anchor" href="#adding-a-climate-gradient"></a>
 </h2>
 <p>So far we ignored the environment. We now add a climate gradient to
 let FINN differentiate between species environmental niche. The gradient
-<code>env1</code> runs from a cold and wet site at <code>-1</code>,
+<code>climate</code> ranges from a cold and wet site at <code>-1</code>,
 through a benign site, to a warm and dry site at <code>+1</code>, so
 temperature and drought increase together along one axis. We keep the
 birch pioneer and add six species that each prefer a different position
@@ -354,19 +354,29 @@ preferred position on the cold-wet to warm-dry axis. Growth peaks at
 <code>t_opt</code> and mortality is lowest there and rises as a site
 moves away from it, so a species grows and survives well only where the
 climate suits it. The constants <code>k</code> and <code>km</code> set
-how quickly growth and survival fall off away from the optimum.</p>
-<p>In addition two other terms act on every species at once rather than
-on its own optimum. <code>g_prod</code> makes warmer sites more
-productive and <code>h_cold</code> makes the cold-wet end harsher, so
-overall growth and survival decline toward the cold. Without them each
-species at its own optimum would do equally well and the boreal site
-would be as dense as the warm one; with them the boreal stand stays
-realistically sparse.</p>
+how quickly growth and survival fall off away from the optimum. Other
+dynamic forest models often implement such environmental niches with
+lower and upper thresholds for environmental variables like Degree Day
+Sum, Minimum Winter Temperature, or water availability (e.g.,
+ForClim).</p>
+<p>In addition two terms act on every species alike at the edges of the
+gradient. <code>growth_stress</code> lowers growth toward the cold-wet
+and warm-dry extremes, so the benign middle grows best, and
+<code>mort_stress</code> raises mortality there, the cold-wet end
+cold-stressed and the warm-dry end drought-stressed. Because standing
+basal area is set mostly by mortality, <code>mort_stress</code> is what
+makes it peak in the benign middle and fall off toward both extremes,
+the realistic pattern of a mesic optimum with cold-limited and
+drought-limited edges.</p>
+<p>Admittedly, this is an extremely simplified representation of
+multidimensional environments, but it serves the purpose of showcasing
+the interplay of environmental stress and competition during
+succession.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#                birch   pine   spruce   lime   hornbeam  beech   oak</span></span>
 <span><span class="va">species_T</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Betula pendula"</span>, <span class="st">"Pinus sylvestris"</span>, <span class="st">"Picea abies"</span>, <span class="st">"Tilia cordata"</span>,</span>
 <span>                 <span class="st">"Carpinus betulus"</span>, <span class="st">"Fagus sylvatica"</span>, <span class="st">"Quercus robur"</span><span class="op">)</span></span>
-<span><span class="va">ellenberg_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span> <span class="fl">5</span>,      <span class="fl">4</span>,      <span class="fl">3</span>,       <span class="fl">5</span>,      <span class="fl">6</span>,       <span class="fl">5</span>,      <span class="fl">6</span><span class="op">)</span>  <span class="co"># cold 1 ... warm 9 (birch indifferent)</span></span>
+<span><span class="va">ellenberg_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">4</span>, <span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">6</span>, <span class="fl">5</span>, <span class="fl">6</span><span class="op">)</span>  <span class="co"># cold 1 ... warm 9 (birch indifferent)</span></span>
 <span><span class="va">Nsp_T</span>       <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">species_T</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Only the climate optimum is derived from an indicator value: rescale Ellenberg T</span></span>
@@ -379,23 +389,31 @@ realistically sparse.</p>
 <span><span class="va">base_g</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1.00</span>, <span class="fl">0.70</span>, <span class="fl">0.25</span>, <span class="fl">0.28</span>, <span class="fl">0.25</span>, <span class="fl">0.36</span>, <span class="fl">0.55</span><span class="op">)</span>   <span class="co"># growth speed at the optimum</span></span>
 <span><span class="va">m_opt</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.7</span>, <span class="op">-</span><span class="fl">2.5</span>, <span class="op">-</span><span class="fl">2.5</span>, <span class="op">-</span><span class="fl">2.5</span>, <span class="op">-</span><span class="fl">2.5</span>, <span class="op">-</span><span class="fl">2.5</span>, <span class="op">-</span><span class="fl">2.5</span><span class="op">)</span>   <span class="co"># baseline mortality at the optimum</span></span>
 <span></span>
-<span><span class="co"># Shared climate effects. Magnitudes are tuned so the matched species clearly wins</span></span>
-<span><span class="co"># each site and the cold-wet stand stays realistically sparse, not fitted to data.</span></span>
-<span><span class="va">k</span> <span class="op">&lt;-</span> <span class="fl">1.0</span>;  <span class="va">g_prod</span> <span class="op">&lt;-</span> <span class="fl">0.40</span>   <span class="co"># growth: width of the optimum, and warmer = more productive</span></span>
-<span><span class="va">km</span> <span class="op">&lt;-</span> <span class="fl">0.9</span>; <span class="va">h_cold</span> <span class="op">&lt;-</span> <span class="fl">0.45</span>   <span class="co"># mortality: penalty for climatic mismatch, and cold-wet harshness</span></span>
+<span><span class="co"># Shared climate effects (illustrative magnitudes, not fitted). Two describe each</span></span>
+<span><span class="co"># species' own climate niche: `k` is how fast its growth falls off away from its</span></span>
+<span><span class="co"># optimum, `km` how fast its mortality rises away from it. Two more act at the</span></span>
+<span><span class="co"># EDGES of the gradient (the cold-wet and warm-dry extremes) on every species</span></span>
+<span><span class="co"># alike: `growth_stress` lowers growth there and `mort_stress`</span></span>
+<span><span class="co"># raises mortality there. Because basal area is set mostly by mortality,</span></span>
+<span><span class="co"># `mort_stress` is what makes the stand densest in the benign middle and</span></span>
+<span><span class="co"># sparser toward both extremes.</span></span>
+<span><span class="va">k</span>  <span class="op">&lt;-</span> <span class="fl">1.0</span>; <span class="va">growth_stress</span> <span class="op">&lt;-</span> <span class="fl">0.40</span></span>
+<span><span class="va">km</span> <span class="op">&lt;-</span> <span class="fl">0.9</span>; <span class="va">mort_stress</span>   <span class="op">&lt;-</span> <span class="fl">0.90</span></span>
 <span></span>
-<span><span class="co"># Each species gets a hump-shaped climate response: growth peaks at its optimum</span></span>
-<span><span class="co"># t_opt, mortality is lowest there and rises with mismatch. Written as</span></span>
-<span><span class="co"># intercept + b1*env1 + b2*env1^2 (the columns of the env-parameter matrix).</span></span>
-<span><span class="va">parGrowthEnv_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">base_g</span> <span class="op">-</span> <span class="va">k</span>  <span class="op">*</span> <span class="va">t_opt</span><span class="op">^</span><span class="fl">2</span>,  <span class="fl">2</span> <span class="op">*</span> <span class="va">k</span>  <span class="op">*</span> <span class="va">t_opt</span> <span class="op">+</span> <span class="va">g_prod</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="va">k</span>,  <span class="va">Nsp_T</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">parMortEnv_T</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">m_opt</span>  <span class="op">+</span> <span class="va">km</span> <span class="op">*</span> <span class="va">t_opt</span><span class="op">^</span><span class="fl">2</span>, <span class="op">-</span><span class="fl">2</span> <span class="op">*</span> <span class="va">km</span> <span class="op">*</span> <span class="va">t_opt</span> <span class="op">-</span> <span class="va">h_cold</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span> <span class="va">km</span>, <span class="va">Nsp_T</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co"># Growth response = a species niche peaking at t_opt (curvature -k) minus the</span></span>
+<span><span class="co"># shared growth stress, combined into the climate^2 column -(k + growth_stress).</span></span>
+<span><span class="co"># Mortality response = a species mismatch penalty (curvature km, lowest at t_opt)</span></span>
+<span><span class="co"># plus the shared mortality stress, combined into the climate^2 column</span></span>
+<span><span class="co"># km + mort_stress. Both are written as intercept + b1*climate + b2*climate^2.</span></span>
+<span><span class="va">parGrowthEnv_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">base_g</span> <span class="op">-</span> <span class="va">k</span> <span class="op">*</span> <span class="va">t_opt</span><span class="op">^</span><span class="fl">2</span>,  <span class="fl">2</span> <span class="op">*</span> <span class="va">k</span> <span class="op">*</span> <span class="va">t_opt</span>,  <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="op">(</span><span class="va">k</span> <span class="op">+</span> <span class="va">growth_stress</span><span class="op">)</span>, <span class="va">Nsp_T</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">parMortEnv_T</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">m_opt</span> <span class="op">+</span> <span class="va">km</span> <span class="op">*</span> <span class="va">t_opt</span><span class="op">^</span><span class="fl">2</span>, <span class="op">-</span><span class="fl">2</span> <span class="op">*</span> <span class="va">km</span> <span class="op">*</span> <span class="va">t_opt</span>,  <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">km</span> <span class="op">+</span> <span class="va">mort_stress</span>, <span class="va">Nsp_T</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Birch is the exception. It is a fast, short-lived, light-demanding generalist</span></span>
-<span><span class="co"># that pioneers every site, so it has no climate optimum: flat growth and</span></span>
-<span><span class="co"># mortality, with only the shared warmth/harshness terms and no env1^2 curvature.</span></span>
+<span><span class="co"># that pioneers every site, so it has no climate optimum of its own: it feels only</span></span>
+<span><span class="co"># the shared productivity hump and end-harshness (climate^2), not a species niche.</span></span>
 <span><span class="va">birch</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/match.html" class="external-link">match</a></span><span class="op">(</span><span class="st">"Betula pendula"</span>, <span class="va">species_T</span><span class="op">)</span></span>
-<span><span class="va">parGrowthEnv_T</span><span class="op">[</span><span class="va">birch</span>, <span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">base_g</span><span class="op">[</span><span class="va">birch</span><span class="op">]</span>,  <span class="va">g_prod</span>, <span class="fl">0</span><span class="op">)</span></span>
-<span><span class="va">parMortEnv_T</span><span class="op">[</span><span class="va">birch</span>, <span class="op">]</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">m_opt</span><span class="op">[</span><span class="va">birch</span><span class="op">]</span>,  <span class="op">-</span><span class="va">h_cold</span>, <span class="fl">0</span><span class="op">)</span></span>
+<span><span class="va">parGrowthEnv_T</span><span class="op">[</span><span class="va">birch</span>, <span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">base_g</span><span class="op">[</span><span class="va">birch</span><span class="op">]</span>, <span class="fl">0</span>, <span class="op">-</span><span class="va">growth_stress</span><span class="op">)</span></span>
+<span><span class="va">parMortEnv_T</span><span class="op">[</span><span class="va">birch</span>, <span class="op">]</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">m_opt</span><span class="op">[</span><span class="va">birch</span><span class="op">]</span>, <span class="fl">0</span>, <span class="va">mort_stress</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># shade tolerance and the other traits from autecology (birch light-demanding,</span></span>
 <span><span class="co"># spruce and beech tolerant, oak and pine more light-demanding, hornbeam sub-canopy)</span></span>
@@ -403,36 +421,44 @@ realistically sparse.</p>
 <span><span class="va">parGrowth_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">shade_T</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.040</span>, <span class="fl">0.038</span>, <span class="fl">0.030</span>, <span class="fl">0.034</span>, <span class="fl">0.032</span>, <span class="fl">0.030</span>, <span class="fl">0.036</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">parReg_T</span>    <span class="op">&lt;-</span> <span class="va">shade_T</span></span>
 <span><span class="va">parRegEnv_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3.4</span>, <span class="fl">3.0</span>, <span class="fl">2.4</span>, <span class="fl">2.4</span>, <span class="fl">2.2</span>, <span class="fl">2.2</span>, <span class="fl">2.6</span><span class="op">)</span>, <span class="va">Nsp_T</span>, <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="va">parMort_T</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.0</span>, <span class="op">-</span><span class="fl">0.9</span>, <span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.35</span>, <span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.7</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">Nsp_T</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.3</span>, <span class="va">Nsp_T</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co"># mortality columns: col1 light (shade-intolerance), col2 dbh (senescence: steep</span></span>
+<span><span class="co"># for the short-lived birch and hornbeam, gentle for the long-lived conifers, beech</span></span>
+<span><span class="co"># and oak), col3 growth (vigour). See the main example for the mortality equation.</span></span>
+<span><span class="va">parMort_T</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.0</span>, <span class="op">-</span><span class="fl">0.9</span>, <span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.35</span>, <span class="op">-</span><span class="fl">0.3</span>, <span class="op">-</span><span class="fl">0.7</span><span class="op">)</span>,</span>
+<span>                     <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.60</span>, <span class="fl">0.25</span>, <span class="fl">0.20</span>, <span class="fl">0.20</span>, <span class="fl">0.35</span>, <span class="fl">0.15</span>, <span class="fl">0.15</span><span class="op">)</span>,</span>
+<span>                     <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.3</span>, <span class="va">Nsp_T</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">parComp_T</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.55</span>, <span class="fl">0.64</span>, <span class="fl">0.66</span>, <span class="fl">0.58</span>, <span class="fl">0.45</span>, <span class="fl">0.66</span>, <span class="fl">0.66</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.30</span>, <span class="fl">0.28</span>, <span class="fl">0.16</span>, <span class="fl">0.22</span>, <span class="fl">0.20</span>, <span class="fl">0.15</span>, <span class="fl">0.20</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">m_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/finn.html">finn</a></span><span class="op">(</span></span>
 <span>  N_species            <span class="op">=</span> <span class="va">Nsp_T</span>,</span>
 <span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>,           <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span>, initSpecies <span class="op">=</span> <span class="va">parComp_T</span><span class="op">)</span>,</span>
-<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">env1</span><span class="op">+</span><span class="va">env2</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       initSpecies <span class="op">=</span> <span class="va">parGrowth_T</span>, initEnv <span class="op">=</span> <span class="va">parGrowthEnv_T</span><span class="op">)</span>,</span>
+<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">climate</span><span class="op">+</span><span class="va">climate_sq</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       initSpecies <span class="op">=</span> <span class="va">parGrowth_T</span>, initEnv <span class="op">=</span> <span class="va">parGrowthEnv_T</span><span class="op">)</span>,</span>
 <span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span>,           <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, initSpecies <span class="op">=</span> <span class="va">parReg_T</span>,    initEnv <span class="op">=</span> <span class="va">parRegEnv_T</span><span class="op">)</span>,</span>
-<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">env1</span><span class="op">+</span><span class="va">env2</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    initSpecies <span class="op">=</span> <span class="va">parMort_T</span>,   initEnv <span class="op">=</span> <span class="va">parMortEnv_T</span><span class="op">)</span></span>
+<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">climate</span><span class="op">+</span><span class="va">climate_sq</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    initSpecies <span class="op">=</span> <span class="va">parMort_T</span>,   initEnv <span class="op">=</span> <span class="va">parMortEnv_T</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p>The two steps behind this are worth seeing directly. First each
-species’ Ellenberg T is rescaled to an optimum position on the axis,
-then that optimum becomes a bell-shaped growth niche. Birch has no
-optimum and stays flat, the generalist that pioneers every site.</p>
+<p>Note that first each species’ Ellenberg T is rescaled to an optimum
+position on the axis, then that optimum becomes a bell-shaped climate
+niche. Birch has no optimum and stays flat, the generalist that pioneers
+every site.</p>
 <div class="figure" style="text-align: center">
-<img src="B/B-climate-niches-1.png" alt="Left: Ellenberg temperature value T mapped to each species' climate optimum. Right: the resulting growth niche along the cold-wet to warm-dry axis, a bell peaking at the optimum (birch stays flat)."><p class="caption">
+<img src="B/B-climate-niches-1.png" alt="Left: Ellenberg temperature value T mapped to each species' climate optimum. Right: the resulting climate niche along the cold-wet to warm-dry axis, a bell peaking at the optimum (birch stays flat). On top of these niches the model adds a site-productivity hump that makes the benign middle most productive."><p class="caption">
 Left: Ellenberg temperature value T mapped to each species’ climate
-optimum. Right: the resulting growth niche along the cold-wet to
-warm-dry axis, a bell peaking at the optimum (birch stays flat).
+optimum. Right: the resulting climate niche along the cold-wet to
+warm-dry axis, a bell peaking at the optimum (birch stays flat). On top
+of these niches the model adds a site-productivity hump that makes the
+benign middle most productive.
 </p>
 </div>
-<p>We run this pool on three sites along the gradient and show the
-basal-area succession side by side.</p>
+<p>We use the <code>predict</code> function to simulate from
+<code>m_T</code> for three artificial sites along the climate gradient
+and compare the simulated succession trajectories.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">site_temp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`cold-wet` <span class="op">=</span> <span class="op">-</span><span class="fl">1</span>, benign <span class="op">=</span> <span class="fl">0.33</span>, `warm-dry` <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">runs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/rbindlist.html" class="external-link">rbindlist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">site_temp</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">nm</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">tt</span> <span class="op">&lt;-</span> <span class="va">site_temp</span><span class="op">[[</span><span class="va">nm</span><span class="op">]</span><span class="op">]</span></span>
 <span>  <span class="va">env_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Nsites</span>, year <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Ntimesteps</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">env_dt</span><span class="op">$</span><span class="va">env1</span> <span class="op">&lt;-</span> <span class="va">tt</span></span>
-<span>  <span class="va">env_dt</span><span class="op">$</span><span class="va">env2</span> <span class="op">&lt;-</span> <span class="va">tt</span><span class="op">^</span><span class="fl">2</span></span>
+<span>  <span class="va">env_dt</span><span class="op">$</span><span class="va">climate</span> <span class="op">&lt;-</span> <span class="va">tt</span></span>
+<span>  <span class="va">env_dt</span><span class="op">$</span><span class="va">climate_sq</span> <span class="op">&lt;-</span> <span class="va">tt</span><span class="op">^</span><span class="fl">2</span></span>
 <span>  <span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">m_T</span>, init_cohort <span class="op">=</span> <span class="cn">NULL</span>, env <span class="op">=</span> <span class="va">env_dt</span>, disturbance <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>                 patches <span class="op">=</span> <span class="fl">100</span>, device <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
 <span>  <span class="va">ba</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">[</span><span class="va">variable</span> <span class="op">==</span> <span class="st">"ba"</span>, <span class="fu">.</span><span class="op">(</span>value <span class="op">=</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/summarize-generics.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span> <span class="op">/</span> <span class="va">patch_size</span><span class="op">)</span>,</span>
@@ -458,23 +484,20 @@ and dry, each opened by the birch pioneer.
 </p>
 </div>
 <p>One pioneer and six climate specialists, and FINN sorts them into
-three recognisable forests, a spruce and pine stand in the cold and wet,
-a beech-dominated mixed forest in the benign middle, and an oak and
-hornbeam wood in the warm and dry, each still opened by the birch
-pioneer.</p>
+three idealized ecologically plausible succession trajectories, a spruce
+and pine stand in the cold and wet, a beech-dominated mixed forest in
+the benign middle, and an oak and hornbeam wood in the warm and dry,
+each still opened by the birch pioneer.</p>
 </div>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
 </h2>
+<p>Botkin, D.B., Janak, J.F. and Wallis, J.R. (1972) Some ecological
+consequences of a computer model of forest growth. <em>Journal of
+Ecology</em> 60(3), 849–872. <a href="https://doi.org/10.2307/2258570" class="external-link uri">https://doi.org/10.2307/2258570</a></p>
 <p>Ellenberg, H., Weber, H.E., Düll, R., Wirth, V., Werner, W. and
 Paulißen, D. (1991) Zeigerwerte von Pflanzen in Mitteleuropa.
 <em>Scripta Geobotanica</em> 18, 1–248.</p>
-<p>Tichý, L., Axmanová, I., Dengler, J. <em>et al.</em> (2023)
-Ellenberg-type indicator values for European vascular plant species.
-<em>Journal of Vegetation Science</em> 34, e13168. <a href="https://doi.org/10.1111/jvs.13168" class="external-link uri">https://doi.org/10.1111/jvs.13168</a></p>
-<p>Niinemets, Ü. and Valladares, F. (2006) Tolerance to shade, drought,
-and waterlogging of temperate Northern Hemisphere trees and shrubs.
-<em>Ecological Monographs</em> 76(4), 521–547. <a href="https://doi.org/10.1890/0012-9615(2006)076%5B0521:TTSDAW%5D2.0.CO;2" class="external-link uri">https://doi.org/10.1890/0012-9615(2006)076[0521:TTSDAW]2.0.CO;2</a></p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.0 (2025-04-11)</span></span>

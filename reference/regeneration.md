@@ -1,4 +1,4 @@
-# Calculate the regeneration of forest patches based on the input parameters.
+# Calculate the regeneration of forest patches based on the input parameters
 
 This function calculates the regeneration of forest patches based on
 species information, regeneration parameters, prediction values, and

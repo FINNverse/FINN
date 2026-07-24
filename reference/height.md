@@ -1,7 +1,7 @@
-# Calculate the height of a tree based on its diameter at breast height and an allometry parameter.
+# Calculate the height of a tree based on its diameter at breast height and an allometry parameter
 
 Calculate the height of a tree based on its diameter at breast height
-and an allometry parameter.
+and an allometry parameter
 
 ## Usage
 

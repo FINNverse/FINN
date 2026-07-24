@@ -1,4 +1,4 @@
-# Compute the fraction of available light (light) for each cohort based on the given parameters.
+# Compute the fraction of available light (light) for each cohort based on the given parameters
 
 This function calculates the fraction of available light for each cohort
 of trees based on their diameter at breast height (dbh), species, number

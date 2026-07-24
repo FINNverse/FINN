@@ -1,4 +1,4 @@
-# Calculate the basal area of a tree given the diameter at breast height (dbh).
+# Calculate the basal area of a tree given the diameter at breast height (dbh)
 
 This function calculates the basal area of a tree given the diameter at
 breast height (dbh).

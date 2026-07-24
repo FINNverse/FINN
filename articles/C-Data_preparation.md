@@ -1,14 +1,13 @@
 # Preparing your data for FINN
 
-This vignette is a standalone reference for getting your own
-forest-inventory data into FINN. It documents the tables FINN needs,
-their columns and units, and the builder pipeline
+This vignette is a standalone reference for preparing forest-inventory
+data into FINN. It documents the inputs of FINN: columns names and
+units, and the helper functions for data preparation
 [`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
 →
 [`resolveSiteIDs()`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
 →
 [`makeInitCohorts()`](https://finnverse.github.io/FINN/reference/makeInitCohorts.md).
-Every step runs on a tiny bundled raw example, so you see real output.
 
 ``` r
 
@@ -18,7 +17,7 @@ library(data.table)
 
 ## What FINN needs
 
-FINN is calibrated against a few tidy tables:
+FINN is calibrated against clearly defined inputs:
 
 - **`obs_dt`** — demographic responses per site × year × species:
   `siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species, species_name`.
@@ -50,7 +49,7 @@ vignette builds the FINN tables from those two.
 
 ``` r
 
-# A tiny bundled raw example: a few Oregon FIA sites, 4 patches each, 3 inventories.
+# An example from raw data: Oregon FIA sites, 4 patches each, 3 inventories.
 # example_tree_dt.csv and example_env_dt.csv (the climate, loaded later) are both
 # built by dev/make_extdata.R from the data-raw/ source; see data-raw/README.md.
 tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
@@ -72,13 +71,12 @@ str(tree_dt)
 #>  - attr(*, ".internal.selfref")=<externalptr>
 ```
 
-A raw tree record carries, at minimum:
-`siteName, patchName, treeName, year` (calendar year of the inventory),
-`species_name`, `dbh` (cm), and a `status` of `new` / `alive` / `dead`.
-That is enough:
+A raw tree record must include: `siteName, patchName, treeName, year`
+(calendar year of the inventory), `species_name`, `dbh` (cm), and a
+`status` of `new` / `alive` / `dead`. That is enough:
 [`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
 reconstructs each tree’s previous state itself, by sorting on `treeName`
-and `year`. Our example also carries a `status_before` column and a
+and `year`. Our example also contains columns for `status_before` and a
 `complete` flag marking trees from fully re-measured plots.
 
 ## Acquiring raw data (example: US FIA)
@@ -196,7 +194,7 @@ head(env_dt)
 There is **no manual standardization step**. FINN z-scales the
 predictors internally when you fit (`env_autoscale = TRUE`, the
 default), stores the per-variable mean/sd on the model, and re-applies
-them at prediction time — so you supply (and keep) `env_dt` in natural
+them at prediction time. So you supply (and keep) `env_dt` in natural
 units throughout. `env_dt` must cover every `siteName × year` present in
 `obs_dt`.
 
@@ -322,16 +320,16 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
+#> [1] data.table_1.17.8 FINN_0.1.0       
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
 #>  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     torch_0.15.1      
-#>  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         
-#> [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         evaluate_1.0.5    
+#>  [9] coro_1.1.0         glue_1.8.0         bit_4.6.0          ps_1.9.1          
+#> [13] scales_1.4.0       grid_4.5.0         abind_1.4-8        evaluate_1.0.5    
 #> [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       
 #> [21] RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3    farver_2.1.2      
-#> [25] viridisLite_0.4.2  R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
-#> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
-#> [33] bit64_4.6.0-1      gtable_0.3.6
+#> [25] R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0      callr_3.7.6       
+#> [29] magrittr_2.0.3     tools_4.5.0        bit64_4.6.0-1      gtable_0.3.6      
+#> [33] ggplot2_3.5.2
 ```

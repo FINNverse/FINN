@@ -78,11 +78,9 @@ A list with:
   different number. `growth_n` also travels with the response so `fit`
   can weight the likelihood by it: 34% of patch-level growth
   observations rest on a single tree while others average 30+, and the
-  variance of a mean is \\\sigma^2/n\\.
-
-- `obs_dt`: observations at site or patch level. Mortality comes back as
-  a closed-cohort pair of counts, `n_at_risk` (trees alive at the start
-  of the interval) and `n_died` (how many of them were dead at the end),
+  variance of a mean is \\\sigma^2/n\\. Mortality comes back as a
+  closed-cohort pair of counts, `n_at_risk` (trees alive at the start of
+  the interval) and `n_died` (how many of them were dead at the end),
   plus the derived rate `mort = n_died / n_at_risk` (`NA` where no
   cohort was at risk). The counts are the binomial response; pass them
   to `fit` with `mortality = "binomial"`.

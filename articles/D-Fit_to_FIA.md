@@ -1,20 +1,20 @@
 # Fitting FINN to forest inventory data (Oregon, US FIA)
 
-Dynamic forest models are usually hand-calibrated. Here we calibrate
-FINN directly from data: a subset of the US Forest Inventory & Analysis
-(FIA) program for Oregon, prepared exactly as in the **Preparing your
-data for FINN** vignette.
+Dynamic forest models are usually developed through a combination of
+encoding ecological knowledge into model structures and parameters.
+Usually the resulting parameters are then further refined by manual
+calibration procedures. Here we calibrate FINN directly from data: a
+subset of the US Forest Inventory & Analysis (FIA) program for Oregon,
+prepared exactly as in the **Preparing your data for FINN** vignette.
 
-We fit on 200 sites and evaluate on 200 **held-out** sites, so every
-number below is reported both in-sample and out-of-sample.
+We fit FINN to 200 sites and evaluate on 200 **held-out** sites.
 
-Everything on this page really runs — both models are trained, simulated
-and interpreted for real. Because that needs a torch backend and several
-minutes, the vignette is **precompiled**: `vignettes/build.R` knits
-`D-Fit_to_FIA.Rmd.orig` once on a developer machine and commits the
-resulting static `.Rmd`. So the code you see is exactly the code that
-produced the output beside it, and the package builds anywhere without
-torch.
+The calibration of the model for all species parameters relies on the a
+torch backend and therefor takes several minutes, the vignette is
+**precompiled**: `vignettes/build.R` knits `D-Fit_to_FIA.Rmd.orig` once
+on a developer machine and commits the resulting static `.Rmd`. So the
+code you see is exactly the code that produced the output, and the
+package builds anywhere without torch.
 
 ``` r
 
@@ -29,42 +29,18 @@ library(ggplot2)
 EPOCHS <- 500L
 ```
 
-A note on the **loss weights**, because they matter more than anything
-else here — more than the learning rate, more than the epoch budget.
-FINN sums one loss per response, and their raw scales differ by ~10⁴:
-`dbh` is a squared error in cm² (variance ≈ 494), while `growth` is a
-squared error on a ratio (variance ≈ 0.012). Summed as-is, `dbh` takes
-~87% of the objective and `growth` ~1% — far too little gradient to
-learn from, so growth simply never improves.
-
-[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) handles
-this by default (`weights = "auto"`): each loss is divided by its
-**intercept-only baseline** — the loss you would get by predicting the
-single best constant. Every term then measures the same thing, *the
-fraction of its own null deviance*, and becomes directly readable: **1
-means no better than the mean, below 1 is better.** For a squared-error
-term the baseline is exactly the variance, so this is just scaling by
-1/σ²; but it also covers the Poisson, negative-binomial and binomial
-terms, where a standard deviation is not the right scale.
-
-On this data that is worth about **+0.24 Spearman on held-out growth**,
-for ~0.01 of basal area. You can still pass a `numeric(6)` to override
-it.
-
 ## The data
 
-The bundled tables are built by **`dev/make_extdata.R`**, which draws
-400 sites from the full Oregon FIA set in `data-raw/` and splits them
-into two disjoint samples. The **climate** (`fia_env_dt.csv`) traces
-upstream to the FINN-fia analysis repo
-(`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`); see
-`data-raw/README.md` for the full chain.
+The input tables are built by **`dev/make_extdata.R`**, which draws 400
+sites from the full Oregon FIA set in `data-raw/` and splits them into
+two train and test data. The **climate** (`fia_env_dt.csv`) was created
+in the FINN-fia analysis repo (`scripts/03_attach_environment.R` →
+`07_prepare_finn_inputs.R`); see `data-raw/README.md` for the full
+chain.
 
-The data come in two **disjoint** samples: 200 sites to fit on, and 200
-completely separate sites held out for evaluation. Because FINN’s
-parameters are per-species × environment rather than per-site, a fitted
-model transfers to sites it has never seen — so the holdout is a genuine
-out-of-sample test.
+The data consists of 200 sites to fit on, and 200 holdout sites for
+evaluation. A fitted FINN model should generalize to other sites. So the
+holdout is a genuine out-of-sample test.
 
 ``` r
 
@@ -126,18 +102,25 @@ ggplot(melt(env_dt[, c("temp", "prec")], measure.vars = c("temp", "prec")),
 
 ![](D/D-plot-env-1.png)
 
-A few observed series — basal area and tree numbers by year for the most
-abundant species:
+Stand abundance, measured as total basal area per plot (summed over
+species), against the temperature and precipitation gradients:
 
 ``` r
 
-top_sp <- obs_dt[species_name != "other", .(tot = sum(ba, na.rm = TRUE)), by = species][order(-tot)][1:4, species]
-ggplot(obs_long[species %in% top_sp & variable %in% c("ba", "trees")],
-       aes(factor(year), obs, fill = factor(species_name))) +
-  geom_boxplot(outlier.size = 0.4) +
-  facet_wrap(~variable, scales = "free_y") +
-  scale_fill_viridis_d(name = "species") +
-  labs(x = "observation year", y = NULL) + theme_minimal()
+# total stand basal area per plot: sum over species, averaged over inventories
+site_ba  <- obs_dt[, .(ba = sum(ba, na.rm = TRUE)), by = .(siteID, year)][
+                   , .(ba = mean(ba)), by = siteID]
+site_env <- env_dt[, .(temp = mean(temp), prec = mean(prec)), by = siteID]
+grad <- melt(merge(site_ba, site_env, by = "siteID"),
+             id.vars = c("siteID", "ba"), measure.vars = c("temp", "prec"),
+             variable.name = "gradient")
+
+ggplot(grad, aes(value, ba)) +
+  geom_point(alpha = 0.4, size = 0.9, colour = "grey30") +
+  geom_smooth(method = "loess", se = FALSE, colour = "firebrick", linewidth = 0.9) +
+  facet_wrap(~gradient, scales = "free_x", labeller = as_labeller(
+    c(temp = "Mean~annual~temp~(degree*C)", prec = "Annual~precip~(mm)"), label_parsed)) +
+  labs(x = NULL, y = "Total basal area per plot") + theme_minimal()
 ```
 
 ![](D/D-plot-observations-1.png)
@@ -629,16 +612,17 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] torch_0.15.1      ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
+#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
-#>  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     coro_1.1.0        
-#>  [9] labeling_0.4.3     glue_1.8.0         bit_4.6.0          ps_1.9.1          
-#> [13] scales_1.4.0       grid_4.5.0         abind_1.4-8        evaluate_1.0.5    
-#> [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       
-#> [21] RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3    farver_2.1.2      
-#> [25] viridisLite_0.4.2  R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
-#> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
-#> [33] bit64_4.6.0-1      gtable_0.3.6
+#>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       
+#>  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.0         callr_3.7.6       
+#>  [9] splines_4.5.0      scales_1.4.0       lattice_0.22-6     R6_2.6.1          
+#> [13] labeling_0.4.3     generics_0.1.4     knitr_1.50         tibble_3.3.0      
+#> [17] pillar_1.11.0      RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57         
+#> [21] bit64_4.6.0-1      viridisLite_0.4.2  cli_3.6.6          withr_3.0.2       
+#> [25] magrittr_2.0.3     mgcv_1.9-1         ps_1.9.1           grid_4.5.0        
+#> [29] processx_3.8.6     lifecycle_1.0.5    nlme_3.1-168       coro_1.1.0        
+#> [33] vctrs_0.6.5        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      
+#> [37] abind_1.4-8        tools_4.5.0        pkgconfig_2.0.3
 ```
