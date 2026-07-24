@@ -23,10 +23,9 @@ knitr::opts_chunk$set(
 )
 ```
 
-This vignette is a standalone reference for getting your own forest-inventory
-data into FINN. It documents the tables FINN needs, their columns and units, and
-the builder pipeline `makeObsData()` → `resolveSiteIDs()` → `makeInitCohorts()`.
-Every step runs on a tiny bundled raw example, so you see real output.
+This vignette is a standalone reference for preparing forest-inventory
+data into FINN. It documents the inputs of FINN: columns names and units, and
+the helper functions for data preparation `makeObsData()` → `resolveSiteIDs()` → `makeInitCohorts()`.
 
 ```{r libraries}
 library(FINN)
@@ -35,7 +34,7 @@ library(data.table)
 
 ## What FINN needs
 
-FINN is calibrated against a few tidy tables:
+FINN is calibrated against clearly defined inputs:
 
 - **`obs_dt`** — demographic responses per site × year × species:
   `siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species,
@@ -64,18 +63,18 @@ FINN tables from those two.
 ## Start from a raw tree list
 
 ```{r load-example}
-# A tiny bundled raw example: a few Oregon FIA sites, 4 patches each, 3 inventories.
+# An example from raw data: Oregon FIA sites, 4 patches each, 3 inventories.
 # example_tree_dt.csv and example_env_dt.csv (the climate, loaded later) are both
 # built by dev/make_extdata.R from the data-raw/ source; see data-raw/README.md.
 tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
 str(tree_dt)
 ```
 
-A raw tree record carries, at minimum: `siteName, patchName, treeName, year`
+A raw tree record must include: `siteName, patchName, treeName, year`
 (calendar year of the inventory), `species_name`, `dbh` (cm), and a `status` of
 `new` / `alive` / `dead`. That is enough: `makeObsData()` reconstructs each tree's
 previous state itself, by sorting on `treeName` and `year`. Our example also
-carries a `status_before` column and a `complete` flag marking trees from fully
+contains columns for `status_before` and a `complete` flag marking trees from fully
 re-measured plots.
 
 ## Acquiring raw data (example: US FIA)
@@ -155,7 +154,7 @@ head(env_dt)
 
 There is **no manual standardization step**. FINN z-scales the predictors
 internally when you fit (`env_autoscale = TRUE`, the default), stores the per-variable
-mean/sd on the model, and re-applies them at prediction time — so you supply (and
+mean/sd on the model, and re-applies them at prediction time. So you supply (and
 keep) `env_dt` in natural units throughout. `env_dt` must cover every
 `siteName × year` present in `obs_dt`.
 

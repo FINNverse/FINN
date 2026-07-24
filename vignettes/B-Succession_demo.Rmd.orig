@@ -30,10 +30,10 @@ FINN simulates forest succession as the interplay of regeneration,
 growth, mortality and competition as ecological processes. Here we give
 it four species with contrasting life-history strategies derived from
 Ellenberg values and let it simulate succession from bare ground to show
-that FINN provides that structure to translate Ellenberg indicator
-values into a plausible succession trajectory. This is the traditional
-way of dynamic forest modeling introduced by Botkin et al. (1972). No
-data, no fitting.
+that FINN provides the necessary structure to translate Ellenberg indicator
+values into a plausible succession trajectory. This vignette provides a rough
+sketch of how the first dynamic forest models were developed (cf. Botkin et al., 1972). No
+data, no fitting, just basic ecological knowledge.
 
 ```{r libraries}
 library(FINN)
@@ -47,9 +47,9 @@ Nsp        <- 4          # pioneer -> early-mid -> mid-late -> climax
 patch_size <- 0.1
 ```
 
-## The species and their trade-offs
+## From Ellenberg to FINN parameters
 
-We use four well-known European tree species along a life-history
+We use four European tree species along a life-history
 gradient, from the fast, light-demanding **pioneer** *Betula pendula*
 (silver birch) to the slow, shade-tolerant **climax** *Fagus sylvatica*
 (beech), with *Tilia cordata* (small-leaved lime) and *Carpinus betulus*
@@ -65,13 +65,11 @@ that establishes under a closed canopy). We derive it from each species'
 Ellenberg light-indicator value L rescaled into a range that is
 compatible with FINN. Ellenberg L describes a species' realised light
 niche, which we use here as a convenient proxy for shade tolerance
-(Ellenberg et al. 1991; for a more rigorous, continuous shade-tolerance
-scale see Niinemets and Valladares 2006).
+(Ellenberg et al. 1991).
 
 ```{r species-parameters}
-# Four well-known European species along a light-tolerance gradient. Each has an
-# Ellenberg light-indicator value L (1 = deep shade ... 9 = full light); we
-# rescale L into the shade parameter so shade tolerance comes from the indicator value
+# The Ellenberg light-indicator value L ranges from 1 = deep shade ... 9 = full light; we
+# rescale L into the shade parameter.
 species     <- c("Betula pendula", "Tilia cordata", "Carpinus betulus", "Fagus sylvatica")
 ellenberg_L <- c(7, 5, 4, 3)   # birch (pioneer) ... beech (climax)
 
@@ -81,14 +79,13 @@ shadeSP <- 0.08 + (0.60 - 0.08) *
   (ellenberg_L - min(ellenberg_L)) / (max(ellenberg_L) - min(ellenberg_L))
 # -> 0.60 birch, 0.34 lime, 0.21 hornbeam, 0.08 beech
 
-# Only `shade` is read from an indicator value. The parameters below are not from
-# Ellenberg: they are illustrative life-history values, each encoding one
+# Other parameters are derived from a basic understanding of demographic trade-offs.
 # pioneer <-> climax trade-off (fast, short-lived, prolific vs slow, long-lived,
-# sparse). The comments give the reasoning; the exact magnitudes are not critical.
+# sparse).
 
 # --- regeneration ----------------------------------------------------------
 # reg light threshold = shade tolerance; the intercept is relative seed rain,
-# higher for the pioneer (many small wind seeds) than the climax (fewer, masting).
+# higher for the pioneer (many seeds) than the climax (fewer, masting).
 parReg    <- shadeSP
 parRegEnv <- matrix(c(
   c(3.2, 2.6, 2.0, 1.2),   # intercept: relative seed rain, pioneer -> climax
@@ -111,16 +108,18 @@ parGrowthEnv <- matrix(c(
 ), Nsp, 2)
 
 # --- mortality -------------------------------------------------------------
-# Mortality is mort = plogis(intercept + col1*light + col3*growth), so it
-# changes through the run as light and growth change:
+# Mortality is mort = plogis(intercept + col1*light + col2*dbh/100 + col3*growth),
+# so it changes through the run as light, size and growth change:
 #   col1 (light): negative -> mortality RISES as a cohort is overtopped (low
 #                 light). Steep for the pioneer (shade-intolerant), ~flat for
 #                 the climax (shade-tolerant).
+#   col2 (dbh): positive -> senescence: mortality rises as a tree approaches its
+#               maximum size. Steep for the short-lived pioneer (senesces small
+#               and young), gentle for the long-lived climax.
 #   col3 (growth): negative -> suppressed, slow-growing trees die more (vigour).
-#   col2 (dbh): left 0.
 parMort <- matrix(c(
   c(-1.0, -0.8, -0.5, -0.3),   # col1 light: pioneer strongly shade-intolerant
-  rep(0, Nsp),                 # col2 dbh: off
+  c(0.60, 0.35, 0.30, 0.15),   # col2 dbh: senescence, steep pioneer -> gentle climax
   c(-0.3, -0.3, -0.3, -0.3)    # col3 growth: vigour lowers mortality
 ), Nsp, 3)
 # baseline mortality ~ inverse longevity: high for the short-lived pioneer,
@@ -183,20 +182,20 @@ ggplot() +
 
 ## Simulate succession
 
-In this example we simulate under constant environment (`env1 = 0`), so succession here comes
+In this example we simulate under constant environment (`climate = 0`), so succession here comes
 purely from the demographic trade-offs. We run from bare ground with no
 disturbance. We will explore the implications of adding an environmental gradient in the next section.
 
 ```{r simulate}
 env_dt <- data.table(expand.grid(siteID = 1:Nsites, year = 1:Ntimesteps))
-env_dt$env1 <- 0
+env_dt$climate <- 0
 
 m <- finn(
   N_species            = Nsp,
   competition_process  = createProcess(~0,      FINN::competition),
-  growth_process       = createProcess(~1+env1, FINN::growth,       initSpecies = parGrowth, initEnv = parGrowthEnv),
-  regeneration_process = createProcess(~1+env1, FINN::regeneration, initSpecies = parReg,    initEnv = parRegEnv),
-  mortality_process    = createProcess(~1+env1, FINN::mortality,    initSpecies = parMort,   initEnv = parMortEnv)
+  growth_process       = createProcess(~1+climate, FINN::growth,       initSpecies = parGrowth, initEnv = parGrowthEnv),
+  regeneration_process = createProcess(~1+climate, FINN::regeneration, initSpecies = parReg,    initEnv = parRegEnv),
+  mortality_process    = createProcess(~1+climate, FINN::mortality,    initSpecies = parMort,   initEnv = parMortEnv)
 )
 
 sim <- predict(m, init_cohort = NULL, env = env_dt, disturbance = NULL,
@@ -213,7 +212,7 @@ sp_labs <- species   # Betula, Tilia, Carpinus, Fagus (pioneer -> climax)
 
 ```{r plot-succession, fig.width = 7, fig.height = 4.5, fig.cap = "Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."}
 ba <- p_dat[variable == "ba"]
-ggplot(ba, aes(year, value, colour = factor(species))) +
+ggplot(ba[year <= 150], aes(year, value, colour = factor(species))) +
   geom_line(linewidth = 0.9) +
   scale_colour_brewer(palette = "Dark2", name = "Species", labels = sp_labs) +
   labs(x = "Year", y = expression(Basal~area~(m^2/ha))) +
@@ -233,7 +232,7 @@ panel[, variable2 := factor(
   labels = c("avg. DBH [cm]", "Basal Area [m2/ha]", "Trees [N/ha]",
              "Available Light [%]", "Growth [cm/yr]", "Mortality [%]",
              "Regeneration [N/ha]"))]
-ggplot(panel[!is.na(variable2)], aes(year, value, colour = factor(species))) +
+ggplot(panel[!is.na(variable2) & year <= 150], aes(year, value, colour = factor(species))) +
   geom_line(linewidth = 0.6) +
   facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +
   coord_cartesian(ylim = c(0, NA)) +
@@ -245,9 +244,9 @@ ggplot(panel[!is.na(variable2)], aes(year, value, colour = factor(species))) +
         axis.title.y = element_blank())
 ```
 
-## What just happened
+### Ecological plausibility of the successional pattern
 
-The figures showed classic expected successional patterns that are simulated by many dynamic forest models, 
+The figures showed classic expected succession patterns that are simulated by many dynamic forest models, 
 and every feature maps back to a parameter choice we made earlier:
 
 - **The pioneer (birch) erupts and collapses.** On open ground light is
@@ -267,7 +266,7 @@ and every feature maps back to a parameter choice we made earlier:
   shade (lowest `shade`), is shade-tolerant so it barely dies even when
   overtopped (mortality stays \~0.02–0.03 yr⁻¹ throughout), and is the
   tallest (highest `height_allom`). So once the early- and mid-successional canopy
-  disappears it overtopps and dominates the mature forest.
+  disappears it overtops and dominates the mature forest.
 
 This is an emergent pattern resulting from the parameters that encode demographic trade-offs for four
 species and FINN providing the structure to create the successional turnover.
@@ -275,7 +274,8 @@ species and FINN providing the structure to create the successional turnover.
 ## Adding a climate gradient
 
 So far we ignored the environment. We now add a climate gradient
-to let FINN differentiate between species environmental niche. The gradient `env1` runs from a cold and wet site at
+to let FINN differentiate between species environmental niche. 
+The gradient `climate` ranges from a cold and wet site at
 `-1`, through a benign site, to a warm and dry site at `+1`, so
 temperature and drought increase together along one axis. We keep the birch
 pioneer and add six species that each prefer a different position on the
@@ -289,19 +289,27 @@ which we rescale exactly as we rescaled L for shade into a climate optimum
 at `t_opt` and mortality is lowest there and rises as a site moves away from it,
 so a species grows and survives well only where the climate suits it. The
 constants `k` and `km` set how quickly growth and survival fall off away from the
-optimum.
+optimum. Other dynamic forest models often implement such environmental niches with 
+lower and upper thresholds for environmental variables like Degree Day Sum, Minimum
+Winter Temperature, or water availability (e.g., ForClim).
 
-In addition two other terms act on every species at once rather than on its own optimum.
-`g_prod` makes warmer sites more productive and `h_cold` makes the cold-wet end
-harsher, so overall growth and survival decline toward the cold. Without them each
-species at its own optimum would do equally well and the boreal site would be as
-dense as the warm one; with them the boreal stand stays realistically sparse.
+In addition two terms act on every species alike at the edges of the gradient.
+`growth_stress` lowers growth toward the cold-wet and warm-dry extremes, so
+the benign middle grows best, and `mort_stress` raises mortality there,
+the cold-wet end cold-stressed and the warm-dry end drought-stressed. Because
+standing basal area is set mostly by mortality, `mort_stress` is what
+makes it peak in the benign middle and fall off toward both extremes, the
+realistic pattern of a mesic optimum with cold-limited and drought-limited edges.
+
+Admittedly, this is an extremely simplified representation of multidimensional environments, 
+but it serves the purpose of showcasing the interplay of environmental stress and 
+competition during succession.
 
 ```{r climate-species}
 #                birch   pine   spruce   lime   hornbeam  beech   oak
 species_T   <- c("Betula pendula", "Pinus sylvestris", "Picea abies", "Tilia cordata",
                  "Carpinus betulus", "Fagus sylvatica", "Quercus robur")
-ellenberg_T <- c( 5,      4,      3,       5,      6,       5,      6)  # cold 1 ... warm 9 (birch indifferent)
+ellenberg_T <- c(5, 4, 3, 5, 6, 5, 6)  # cold 1 ... warm 9 (birch indifferent)
 Nsp_T       <- length(species_T)
 
 # Only the climate optimum is derived from an indicator value: rescale Ellenberg T
@@ -314,23 +322,31 @@ t_opt <- 2 * (ellenberg_T - min(ellenberg_T)) / (max(ellenberg_T) - min(ellenber
 base_g <- c(1.00, 0.70, 0.25, 0.28, 0.25, 0.36, 0.55)   # growth speed at the optimum
 m_opt  <- c(-0.7, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5)   # baseline mortality at the optimum
 
-# Shared climate effects. Magnitudes are tuned so the matched species clearly wins
-# each site and the cold-wet stand stays realistically sparse, not fitted to data.
-k <- 1.0;  g_prod <- 0.40   # growth: width of the optimum, and warmer = more productive
-km <- 0.9; h_cold <- 0.45   # mortality: penalty for climatic mismatch, and cold-wet harshness
+# Shared climate effects (illustrative magnitudes, not fitted). Two describe each
+# species' own climate niche: `k` is how fast its growth falls off away from its
+# optimum, `km` how fast its mortality rises away from it. Two more act at the
+# EDGES of the gradient (the cold-wet and warm-dry extremes) on every species
+# alike: `growth_stress` lowers growth there and `mort_stress`
+# raises mortality there. Because basal area is set mostly by mortality,
+# `mort_stress` is what makes the stand densest in the benign middle and
+# sparser toward both extremes.
+k  <- 1.0; growth_stress <- 0.40
+km <- 0.9; mort_stress   <- 0.90
 
-# Each species gets a hump-shaped climate response: growth peaks at its optimum
-# t_opt, mortality is lowest there and rises with mismatch. Written as
-# intercept + b1*env1 + b2*env1^2 (the columns of the env-parameter matrix).
-parGrowthEnv_T <- cbind(base_g - k  * t_opt^2,  2 * k  * t_opt + g_prod, rep(-k,  Nsp_T))
-parMortEnv_T   <- cbind(m_opt  + km * t_opt^2, -2 * km * t_opt - h_cold, rep( km, Nsp_T))
+# Growth response = a species niche peaking at t_opt (curvature -k) minus the
+# shared growth stress, combined into the climate^2 column -(k + growth_stress).
+# Mortality response = a species mismatch penalty (curvature km, lowest at t_opt)
+# plus the shared mortality stress, combined into the climate^2 column
+# km + mort_stress. Both are written as intercept + b1*climate + b2*climate^2.
+parGrowthEnv_T <- cbind(base_g - k * t_opt^2,  2 * k * t_opt,  rep(-(k + growth_stress), Nsp_T))
+parMortEnv_T   <- cbind(m_opt + km * t_opt^2, -2 * km * t_opt,  rep(km + mort_stress, Nsp_T))
 
 # Birch is the exception. It is a fast, short-lived, light-demanding generalist
-# that pioneers every site, so it has no climate optimum: flat growth and
-# mortality, with only the shared warmth/harshness terms and no env1^2 curvature.
+# that pioneers every site, so it has no climate optimum of its own: it feels only
+# the shared productivity hump and end-harshness (climate^2), not a species niche.
 birch <- match("Betula pendula", species_T)
-parGrowthEnv_T[birch, ] <- c(base_g[birch],  g_prod, 0)
-parMortEnv_T[birch, ]   <- c(m_opt[birch],  -h_cold, 0)
+parGrowthEnv_T[birch, ] <- c(base_g[birch], 0, -growth_stress)
+parMortEnv_T[birch, ]   <- c(m_opt[birch], 0, mort_stress)
 
 # shade tolerance and the other traits from autecology (birch light-demanding,
 # spruce and beech tolerant, oak and pine more light-demanding, hornbeam sub-canopy)
@@ -338,24 +354,28 @@ shade_T     <- c(0.60, 0.45, 0.13, 0.24, 0.15, 0.10, 0.30)
 parGrowth_T <- cbind(shade_T, c(0.040, 0.038, 0.030, 0.034, 0.032, 0.030, 0.036))
 parReg_T    <- shade_T
 parRegEnv_T <- matrix(c(3.4, 3.0, 2.4, 2.4, 2.2, 2.2, 2.6), Nsp_T, 1)
-parMort_T   <- cbind(c(-1.0, -0.9, -0.3, -0.5, -0.35, -0.3, -0.7), rep(0, Nsp_T), rep(-0.3, Nsp_T))
+# mortality columns: col1 light (shade-intolerance), col2 dbh (senescence: steep
+# for the short-lived birch and hornbeam, gentle for the long-lived conifers, beech
+# and oak), col3 growth (vigour). See the main example for the mortality equation.
+parMort_T   <- cbind(c(-1.0, -0.9, -0.3, -0.5, -0.35, -0.3, -0.7),
+                     c(0.60, 0.25, 0.20, 0.20, 0.35, 0.15, 0.15),
+                     rep(-0.3, Nsp_T))
 parComp_T   <- cbind(c(0.55, 0.64, 0.66, 0.58, 0.45, 0.66, 0.66), c(0.30, 0.28, 0.16, 0.22, 0.20, 0.15, 0.20))
 
 m_T <- finn(
   N_species            = Nsp_T,
   competition_process  = createProcess(~0,           FINN::competition, initSpecies = parComp_T),
-  growth_process       = createProcess(~1+env1+env2, FINN::growth,       initSpecies = parGrowth_T, initEnv = parGrowthEnv_T),
+  growth_process       = createProcess(~1+climate+climate_sq, FINN::growth,       initSpecies = parGrowth_T, initEnv = parGrowthEnv_T),
   regeneration_process = createProcess(~1,           FINN::regeneration, initSpecies = parReg_T,    initEnv = parRegEnv_T),
-  mortality_process    = createProcess(~1+env1+env2, FINN::mortality,    initSpecies = parMort_T,   initEnv = parMortEnv_T)
+  mortality_process    = createProcess(~1+climate+climate_sq, FINN::mortality,    initSpecies = parMort_T,   initEnv = parMortEnv_T)
 )
 ```
 
-The two steps behind this are worth seeing directly. First each species'
-Ellenberg T is rescaled to an optimum position on the axis, then that
-optimum becomes a bell-shaped growth niche. Birch has no optimum and
+Note that first each species' Ellenberg T is rescaled to an optimum position on the axis, then that
+optimum becomes a bell-shaped climate niche. Birch has no optimum and
 stays flat, the generalist that pioneers every site.
 
-```{r climate-niches, echo = FALSE, fig.width = 8, fig.height = 3.4, fig.cap = "Left: Ellenberg temperature value T mapped to each species' climate optimum. Right: the resulting growth niche along the cold-wet to warm-dry axis, a bell peaking at the optimum (birch stays flat)."}
+```{r climate-niches, echo = FALSE, fig.width = 8, fig.height = 3.4, fig.cap = "Left: Ellenberg temperature value T mapped to each species' climate optimum. Right: the resulting climate niche along the cold-wet to warm-dry axis, a bell peaking at the optimum (birch stays flat). On top of these niches the model adds a site-productivity hump that makes the benign middle most productive."}
 library(patchwork)
 Tgrid    <- seq(min(ellenberg_T), max(ellenberg_T), length.out = 50)
 opt_line <- 2 * (Tgrid - min(ellenberg_T)) / (max(ellenberg_T) - min(ellenberg_T)) - 1
@@ -367,32 +387,33 @@ p_map <- ggplot() +
   labs(x = "Ellenberg temperature value T", y = "climate optimum (axis position)") +
   theme_minimal()
 
-# growth niche = the optimum (env1^2) component of the growth response; the model
-# adds productivity and harshness terms on top. birch's curvature is 0, so flat.
+# species climate niche = the optimum component exp(-k * (climate - t_opt)^2); the
+# model layers the site-productivity hump and harshness on top. birch has no
+# climate niche of its own, so it is drawn flat.
 egrid <- seq(-1.3, 1.3, by = 0.02)
 niche <- rbindlist(lapply(seq_along(species_T), function(i)
-  data.table(species = species_T[i], env1 = egrid,
-             suitability = exp(parGrowthEnv_T[i, 3] * (egrid - t_opt[i])^2))))
+  data.table(species = species_T[i], climate = egrid,
+             suitability = if (species_T[i] == "Betula pendula") rep(1, length(egrid))
+                           else exp(-k * (egrid - t_opt[i])^2))))
 niche[, species := factor(species, levels = species_T)]
-p_niche <- ggplot(niche, aes(env1, suitability, colour = species)) +
+p_niche <- ggplot(niche, aes(climate, suitability, colour = species)) +
   geom_line(linewidth = 0.8) +
   scale_colour_brewer(palette = "Dark2", name = NULL) +
-  labs(x = "climate axis (cold-wet to warm-dry)", y = "growth niche") +
+  labs(x = "climate axis (cold-wet to warm-dry)", y = "climate niche") +
   theme_minimal()
 
 p_map | p_niche
 ```
 
-We run this pool on three sites along the gradient and show the
-basal-area succession side by side.
+We use the `predict` function to simulate from `m_T` for three artificial sites along the climate gradient and compare the simulated succession trajectories.
 
 ```{r climate-succession, fig.width = 8, fig.height = 4, fig.cap = "The same species pool along a cold-wet to warm-dry climate gradient. A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer."}
 site_temp <- c(`cold-wet` = -1, benign = 0.33, `warm-dry` = 1)
 runs <- rbindlist(lapply(names(site_temp), function(nm) {
   tt <- site_temp[[nm]]
   env_dt <- data.table(expand.grid(siteID = 1:Nsites, year = 1:Ntimesteps))
-  env_dt$env1 <- tt
-  env_dt$env2 <- tt^2
+  env_dt$climate <- tt
+  env_dt$climate_sq <- tt^2
   sim <- predict(m_T, init_cohort = NULL, env = env_dt, disturbance = NULL,
                  patches = 100, device = "cpu")
   ba <- sim$long$site[variable == "ba", .(value = mean(value) / patch_size),
@@ -412,25 +433,20 @@ ggplot(runs, aes(year, value, colour = factor(species))) +
 ```
 
 One pioneer and six climate specialists, and FINN sorts them into three
-recognisable forests, a spruce and pine stand in the cold and wet, a
+idealized ecologically plausible succession trajectories, a spruce and pine stand in the cold and wet, a
 beech-dominated mixed forest in the benign middle, and an oak and
 hornbeam wood in the warm and dry, each still opened by the birch
 pioneer.
 
 ## References
 
+Botkin, D.B., Janak, J.F. and Wallis, J.R. (1972) Some ecological
+consequences of a computer model of forest growth. *Journal of Ecology*
+60(3), 849–872. <https://doi.org/10.2307/2258570>
+
 Ellenberg, H., Weber, H.E., Düll, R., Wirth, V., Werner, W. and
 Paulißen, D. (1991) Zeigerwerte von Pflanzen in Mitteleuropa. *Scripta
 Geobotanica* 18, 1–248.
-
-Tichý, L., Axmanová, I., Dengler, J. *et al.* (2023) Ellenberg-type
-indicator values for European vascular plant species. *Journal of
-Vegetation Science* 34, e13168. <https://doi.org/10.1111/jvs.13168>
-
-Niinemets, Ü. and Valladares, F. (2006) Tolerance to shade, drought, and
-waterlogging of temperate Northern Hemisphere trees and shrubs.
-*Ecological Monographs* 76(4), 521–547.
-[https://doi.org/10.1890/0012-9615(2006)076[0521:TTSDAW]2.0.CO;2](https://doi.org/10.1890/0012-9615(2006)076%5B0521:TTSDAW%5D2.0.CO;2){.uri}
 
 ```{r session}
 sessionInfo()
