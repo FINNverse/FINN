@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{regeneration}
 \alias{regeneration}
-\title{Calculate the regeneration of forest patches based on the input parameters.}
+\title{Calculate the regeneration of forest patches based on the input parameters}
 \usage{
 regeneration(species, parReg, pred, light, debug = F)
 }

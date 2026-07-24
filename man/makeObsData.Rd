@@ -54,8 +54,7 @@ that is the quantity the model predicts - it simulates
 of patch means would be a different number. \code{growth_n} also travels
 with the response so \code{fit} can weight the likelihood by it: 34\% of
 patch-level growth observations rest on a single tree while others average
-30+, and the variance of a mean is \eqn{\sigma^2/n}.
-\item \code{obs_dt}: observations at site or patch level. Mortality comes
+30+, and the variance of a mean is \eqn{\sigma^2/n}. Mortality comes
 back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
 the start of the interval) and \code{n_died} (how many of them were dead
 at the end), plus the derived rate \code{mort = n_died / n_at_risk}

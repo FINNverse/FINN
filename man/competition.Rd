@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{competition}
 \alias{competition}
-\title{Compute the fraction of available light (light) for each cohort based on the given parameters.}
+\title{Compute the fraction of available light (light) for each cohort based on the given parameters}
 \usage{
 competition(
   dbh,

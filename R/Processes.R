@@ -1,4 +1,4 @@
-#' Calculate the basal area of a tree given the diameter at breast height (dbh).
+#' Calculate the basal area of a tree given the diameter at breast height (dbh)
 #'
 #' This function calculates the basal area of a tree given the diameter at breast height (dbh).
 #'
@@ -81,7 +81,7 @@ BA_stand <- function(dbh, trees, patch_size_ha) {
 
 
 
-#' Calculate the height of a tree based on its diameter at breast height and an allometry parameter.
+#' Calculate the height of a tree based on its diameter at breast height and an allometry parameter
 #'
 #' @param dbh A numeric value representing the diameter at breast height of the tree in cm.
 #' @param parHeight A numeric value representing the species height allometry.
@@ -113,7 +113,7 @@ height = function(dbh, parHeight) {
 }
 
 
-#' Compute the fraction of available light (light) for each cohort based on the given parameters.
+#' Compute the fraction of available light (light) for each cohort based on the given parameters
 #'
 #' This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
 #'
@@ -304,7 +304,7 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 }
 
 
-#' Calculate the regeneration of forest patches based on the input parameters.
+#' Calculate the regeneration of forest patches based on the input parameters
 #'
 #' This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 #'

@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{height}
 \alias{height}
-\title{Calculate the height of a tree based on its diameter at breast height and an allometry parameter.}
+\title{Calculate the height of a tree based on its diameter at breast height and an allometry parameter}
 \usage{
 height(dbh, parHeight)
 }
@@ -15,7 +15,7 @@ height(dbh, parHeight)
 A numeric value representing the calculated height of the tree.
 }
 \description{
-Calculate the height of a tree based on its diameter at breast height and an allometry parameter.
+Calculate the height of a tree based on its diameter at breast height and an allometry parameter
 }
 \details{
 This function calculates the height of a tree based on the diameter at breast height (dbh) and a parameter parHeight.

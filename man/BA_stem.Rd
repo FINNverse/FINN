@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{BA_stem}
 \alias{BA_stem}
-\title{Calculate the basal area of a tree given the diameter at breast height (dbh).}
+\title{Calculate the basal area of a tree given the diameter at breast height (dbh)}
 \usage{
 BA_stem(dbh)
 }

@@ -14,7 +14,17 @@ Authors@R:
              email = "maximilian.pichler@biologie.uni-regensburg.de",
              comment = c(ORCID = "0000-0003-2252-8327")))
 Maintainer: Yannek Käber <y.kaeber@posteo.de>
-Description: Implements modular dynamic vegetation (forest) models. Modularity is achieved by implementing all components and the platform in R, and by allowing users to pass their own processes to FINN as R functions. Nevertheless, FINN has a high performance (low runtime) because FINN is implemented in torch for R. torch allows access to highly optimized routines and also allows FINN to run on the GPU, hence FINN scales extremely well with the number of sites. Furthermore, FINN can seamlessly integrate neural networks into the processes or even replace them (hybrid modeling). In addition, the parameters in FINN can be directly optimized using stochastic gradient descent. 
+Description: A hybrid dynamic forest (gap) model (FINN) that can be configured
+    as a fully mechanistic, process-based model, like classic forest gap models,
+    or with its demographic processes (growth, mortality, regeneration) replaced
+    by deep neural networks (DNNs), or any combination of the two. Provides
+    functions to define a model and its mechanistic or empirical components,
+    calibrate it to forest inventory data, and interpret the calibrated
+    processes. FINN is implemented with the 'torch' package, which supplies GPU
+    support and the automatic differentiation used to calibrate the model by
+    stochastic gradient descent; no knowledge of 'torch' is required. The hybrid
+    modeling approach is described in Pichler and Käber (2026)
+    <doi:10.1111/2041-210x.70347>.
 License: GPL (>= 3)
 Encoding: UTF-8
 URL: https://github.com/FINNverse/FINN, https://finnverse.github.io/FINN/

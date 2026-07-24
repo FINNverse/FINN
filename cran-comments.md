@@ -13,9 +13,12 @@ This is a new submission of FINN, a differentiable forest gap model.
 
 * checking CRAN incoming feasibility ... NOTE
   Possibly misspelled words in DESCRIPTION:
-    Modularity (17:69)
+    DNNs, FINN, Kaeber (Käber), Pichler, torch
 
-  "Modularity" is spelled correctly.
+  These are correct: 'DNNs' (deep neural networks), 'FINN' (the package /
+  method acronym), 'torch' (the R package FINN is built on), and the two author
+  surnames. The DESCRIPTION also cites the accompanying methods paper as
+  Pichler and Käber (2026) <doi:10.1111/2041-210x.70347>, which resolves.
 
 ## Notes for the reviewer
 
