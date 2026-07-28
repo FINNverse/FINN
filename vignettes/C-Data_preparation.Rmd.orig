@@ -36,24 +36,24 @@ library(data.table)
 
 FINN is calibrated against clearly defined inputs:
 
-- **`obs_dt`** — demographic responses per site × year × species:
+- **`obs_dt`**: demographic responses per site × year × species:
   `siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species,
   species_name`. Year starts at 1; the initial state (year 0) is *not* included.
   NAs are allowed in any response. Units: `ba` m², `dbh` cm, `trees` count,
   `growth` relative growth rate, `reg` trees ha⁻¹.
-  Mortality comes back as a **pair of counts** — `n_at_risk` (trees alive at the
-  start of the interval) and `n_died` (how many of them were dead at the end) —
+  Mortality comes back as a **pair of counts**, `n_at_risk` (trees alive at the
+  start of the interval) and `n_died` (how many of them were dead at the end),
   with the rate `mort = n_died / n_at_risk` derived for convenience. That pair is
   the `cbind(died, survived)` response of a binomial GLM, and it is what the
   default `mortality = "binomial"` loss consumes: the counts carry the sample
   size, so a 60-tree observation outweighs a 1-tree one.
-- **`env_dt`** — `siteID, year, <env vars…>` in **natural units**; must cover
+- **`env_dt`**: `siteID, year, <env vars…>` in **natural units**; must cover
   every site × year in `obs_dt`. No manual scaling is needed: FINN
   z-standardizes the predictors internally when fitting (`env_autoscale = TRUE`,
   the default) and reuses the same constants at prediction time.
-- **`init_trees`** — the initial state used to build the starting cohorts:
+- **`init_trees`**: the initial state used to build the starting cohorts:
   `siteID, patchID, year, species, dbh, trees, living`.
-- **`dist_dt`** (optional) — `siteID, year, intensity` (fraction of patches
+- **`dist_dt`** (optional): `siteID, year, intensity` (fraction of patches
   disturbed that year).
 
 You assemble these from two raw ingredients: a **tree list** (one row per tree ×
@@ -106,7 +106,7 @@ mortality itself, from `status` and `living`, as a closed cohort: for each
 interval it takes the trees that were alive at the *start*, and counts how many
 of them were dead at the *end*. Both columns are pinned to the tree's state at
 the start of the interval, which matters because FIA re-identifies a tree's
-species between visits — a hand-rolled rate can otherwise book a death against
+species between visits; a hand-rolled rate can otherwise book a death against
 the species a tree *ended* as while the denominator counted the species it
 *started* as, and report more deaths than trees.
 
@@ -131,7 +131,7 @@ head(obs_dt)
 ```
 
 Use `Nspecies` (a hard cap) or `NspeciesQuantile` (smallest set covering a stem
-fraction) to control how many species you model — everything else becomes
+fraction) to control how many species you model; everything else becomes
 `"other"`, which FINN still tracks as a competitor.
 
 ## Environmental data
@@ -181,7 +181,7 @@ inputs$species_dt
 ## Initial cohorts
 
 With `createInitCohorts = TRUE`, `resolveSiteIDs()` returns a ready `CohortMat`
-describing the starting state — its `dims` are `c(sites, patches, cohorts)`:
+describing the starting state; its `dims` are `c(sites, patches, cohorts)`:
 
 ```{r init-cohorts}
 init_cohorts <- inputs$initCohorts
@@ -189,7 +189,7 @@ init_cohorts
 ```
 
 To build cohorts yourself from a year-0 tree slice, call `makeInitCohorts()`
-directly — it expects `siteID, patchID, species, dbh, treeName` (+ optional
+directly; it expects `siteID, patchID, species, dbh, treeName` (+ optional
 `trees`):
 
 ```{r init-cohorts-manual, eval = FALSE}
@@ -203,13 +203,13 @@ makeInitCohorts(init_trees, Nspecies = uniqueN(inputs$obs_dt$species))
   assumes a fixed remeasure interval.
 - **The initial state** (the first inventory) is used for `init_trees`, and the
   responses in `obs_dt` start *after* it.
-- **`env_dt` covers every `siteID × year`** in `obs_dt` — missing rows break the fit.
+- **`env_dt` covers every `siteID × year`** in `obs_dt`; missing rows break the fit.
 - **Units**: `dbh` in cm, `ba` in m², `reg` in trees ha⁻¹; env predictors in
   natural units (FINN standardizes them internally).
-- **Species IDs** are contiguous integers `1..N`, aligned across tables — always
+- **Species IDs** are contiguous integers `1..N`, aligned across tables; always
   go through `resolveSiteIDs()` rather than hand-coding them.
 
-You now have `obs_dt`, `env_dt`, and `init_cohorts` — the inputs the
+You now have `obs_dt`, `env_dt`, and `init_cohorts`, the inputs the
 **Fitting FINN to forest inventory data** vignette consumes.
 
 ```{r session}

@@ -24,14 +24,14 @@ knitr::opts_chunk$set(
 ```
 
 FINN is an R-package of a forest gap model that is designed to be fit to
-data and seamlessly integrates with neural networks. The package
+data and integrates with neural networks. The package
 provides various functions that allow the user to customize the model
 from a mechanistic forest gap model to a mostly data-driven neural
 network. Individual processes can be replaced by neural networks and
 custom functions can be incorporated, or a combination of both. The
 package contains the FINN model itself and provides the tools to
 specify, modify, and calibrate different configurations of FINN.
-Furthermore, it provides functions to simulate under any environmental
+It also provides functions to simulate under any environmental
 conditions to which FINN was calibrated and to analyse learned processes
 via xAI (Accumulated Local Effect Plots )
 
@@ -53,7 +53,7 @@ response is combined in a joint likelihood that consists of a Gaussian
 for growth, a binomial for mortality, a negative binomial for
 regeneration.
 
-```{r concept-figure, echo = FALSE, out.width = "100%", fig.cap = "FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes — competition, growth, mortality and regeneration — to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Käber & Pichler (2026)."}
+```{r concept-figure, echo = FALSE, out.width = "100%", fig.cap = "FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Käber & Pichler (2026)."}
 knitr::include_graphics("FINN-overview.jpg")
 ```
 
@@ -181,8 +181,8 @@ pars_dt
 
 Two conventions in that code are worth explaining:
 
-- **Why the environmental parameters are a `matrix`.** Each row is a species and the two columns are the `[intercept, slope]` of the linear effect of the one environmental variable. Internally FINN represents an environmental effect as a *neural network*, so it actually stores a list of weight matrices; for a plain linear term that list has a single entry, and `createProcess()` wraps a bare matrix for you. That is why the same `initEnv` slot also accepts a full network — when a process is replaced by one, the slot simply holds more weight matrices and the interface does not change.
-- **Why the mortality parameters use `scale()`.** These are arbitrary illustrative values. In the mortality function the first two parameters act as *coefficients* (they multiply light and size inside a link function), rather than as the light thresholds that `shadeSP` represents for growth and regeneration. `scale()` centres them and gives them unit variance, which keeps the resulting mortality rates in a plausible range for this synthetic example. For a real fit you would not set these by hand at all — they are learned.
+- **Why the environmental parameters are a `matrix`.** Each row is a species and the two columns are the `[intercept, slope]` of the linear effect of the one environmental variable. Internally FINN represents an environmental effect as a *neural network*, so it actually stores a list of weight matrices; for a plain linear term that list has a single entry, and `createProcess()` wraps a bare matrix for you. That is why the same `initEnv` slot also accepts a full network; when a process is replaced by one, the slot simply holds more weight matrices and the interface does not change.
+- **Why the mortality parameters use `scale()`.** These are arbitrary illustrative values. In the mortality function the first two parameters act as *coefficients* (they multiply light and size inside a link function), rather than as the light thresholds that `shadeSP` represents for growth and regeneration. `scale()` centres them and gives them unit variance, which keeps the resulting mortality rates in a plausible range for this synthetic example. For a real fit you would not set these by hand at all; they are learned.
 
 ## Environment and disturbances
 
@@ -219,7 +219,7 @@ dist_dt$intensity <- rbinom(n, 1, disturbance_frequency) * runif(n, 0.5, 1)
 
 The model can be run with the `simulateForest` function. Its main arguments are `model` the assembled FINN model (which already contains the processes), `env` the environmental input data.table, and `patches` the number of patches. Optionally `disturbances`
 
-A model is assembled with `finn()`, which takes one process per demographic component. Each process is built with `createProcess()` — so the pattern is always `finn(growth_process = createProcess(...), mortality_process = createProcess(...), ...)`, as in the call below.
+A model is assembled with `finn()`, which takes one process per demographic component. Each process is built with `createProcess()`, so the pattern is always `finn(growth_process = createProcess(...), mortality_process = createProcess(...), ...)`, as in the call below.
 
 The processes are specified with the `createProcess` function. The first argument is a formula that specifies the relation between environment and the process. The formula includes the intercept and the environmental variables that are provided with `env`. The second argument is the function that should be used for the process. FINN includes the default functions `growth`, `mortality`, and `regeneration`. The user can also provide custom functions. The function should take the species parameters and the environmental parameters as arguments. The third and fourth arguments are the initial species and environmental parameters.
 

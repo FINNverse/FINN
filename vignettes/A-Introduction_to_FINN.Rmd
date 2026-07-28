@@ -8,20 +8,19 @@ vignette: >
   %\VignetteIndexEntry{Introduction to FINN}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
-editor_options: 
-  markdown: 
-    wrap: 72
 ---
 
+
+
 FINN is an R-package of a forest gap model that is designed to be fit to
-data and seamlessly integrates with neural networks. The package
+data and integrates with neural networks. The package
 provides various functions that allow the user to customize the model
 from a mechanistic forest gap model to a mostly data-driven neural
 network. Individual processes can be replaced by neural networks and
 custom functions can be incorporated, or a combination of both. The
 package contains the FINN model itself and provides the tools to
 specify, modify, and calibrate different configurations of FINN.
-Furthermore, it provides functions to simulate under any environmental
+It also provides functions to simulate under any environmental
 conditions to which FINN was calibrated and to analyse learned processes
 via xAI (Accumulated Local Effect Plots )
 
@@ -43,9 +42,10 @@ response is combined in a joint likelihood that consists of a Gaussian
 for growth, a binomial for mortality, a negative binomial for
 regeneration.
 
-::: {.figure style="text-align: center"}
-<img src="FINN-overview.jpg" alt="FINN&apos;s structure. (a) FINN spans the spectrum from process-based dynamic vegetation models (DVM) to purely empirical approaches (SEM / GLM / ML), combining process knowledge with data. (b) Cohorts are updated each timestep by the four processes; each process can be mechanistic, a neural network, or both, and each has its own likelihood. Figure from K&lt;U+00E4&gt;ber &amp; Pichler (2026)." width="95%"/>
-:::
+<div class="figure" style="text-align: center">
+<img src="FINN-overview.jpg" alt="FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from K&lt;U+00E4&gt;ber &amp; Pichler (2026)." width="100%" />
+<p class="caption">FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from K<U+00E4>ber & Pichler (2026).</p>
+</div>
 
 This vignette builds a **fully mechanistic** model from known parameters
 and simulates it to showcase a key functionality of FINN: fitting a full
@@ -66,6 +66,7 @@ available on CRAN. If you encounter problems running the code or
 understanding the documentation, please let us know by opening an issue
 on the [GitHub repository](https://github.com/FINNverse/FINN).
 
+
 ``` r
 devtools::install_github("https://github.com/FINNverse/FINN")
 ```
@@ -73,6 +74,7 @@ devtools::install_github("https://github.com/FINNverse/FINN")
 # Run the model
 
 Load the package and setup some basic simulation parameters.
+
 
 ``` r
 library(FINN)
@@ -97,7 +99,7 @@ parameters can be related to the processes with R formulas and naturally
 provide you with the option to include an intercept that modulates the
 overall effect size of a process.
 
-The following code sets up a simple model with 5 species and 1
+The following code sets up a simple model with five species and one
 environmental variable. Some species parameters are hand-picked to span
 a range of demographic strategies and some are drawn at random: the
 **exact numbers are arbitrary**, chosen only to provide a set of species
@@ -106,6 +108,7 @@ you would not set them at all; they would be *learned* from data (see
 the [Fitting FINN to forest inventory data](D-Fit_to_FIA.html)
 vignette). However, this kind of flexibility also provides you with the
 opportunity to explore the sensitivity of the model quire easily.
+
 
 ``` r
 FINN.seed(1234)
@@ -132,7 +135,6 @@ parGrowthEnv = matrix(c(
   ),Nsp, 2)
 
 # mortality parameters
-# we scale the shadeSP and parGrowth parameters to generate mortality parameters that vary similar to growth but are compatible with mortality as a binomial process.
 parMort = matrix(c(
   as.numeric(scale(shadeSP)), # see above
   as.numeric(scale(parGrowth[,2])), # the second growth parameter modulates the size dependent mortality
@@ -184,13 +186,15 @@ pars_dt
 #> 5:          0.1       5  1.4436615       0.50  -1.228623 -2.707684 -2.767774
 ```
 
+Two conventions in that code are worth explaining:
+
+- **Why the environmental parameters are a `matrix`.** Each row is a species and the two columns are the `[intercept, slope]` of the linear effect of the one environmental variable. Internally FINN represents an environmental effect as a *neural network*, so it actually stores a list of weight matrices; for a plain linear term that list has a single entry, and `createProcess()` wraps a bare matrix for you. That is why the same `initEnv` slot also accepts a full network; when a process is replaced by one, the slot simply holds more weight matrices and the interface does not change.
+- **Why the mortality parameters use `scale()`.** These are arbitrary illustrative values. In the mortality function the first two parameters act as *coefficients* (they multiply light and size inside a link function), rather than as the light thresholds that `shadeSP` represents for growth and regeneration. `scale()` centres them and gives them unit variance, which keeps the resulting mortality rates in a plausible range for this synthetic example. For a real fit you would not set these by hand at all; they are learned.
+
 ## Environment and disturbances
 
-Next we have to specify the environmental input variables. These
-variables are used to calculate the effect of the environment on the
-processes. The environmental variables are supplied with a
-data.frame/data.table in a long format with the columns siteID and year
-and the environmental variables as additional columns.
+Next we have to specify the environmental input variables. These variables are used to calculate the effect of the environment on the processes. The environmental variables are supplied with a data.frame/data.table in a long format with the columns siteID and year and the environmental variables as additional columns.
+
 
 ``` r
 # we first generate a data.table with all combinations of site and timestep.
@@ -221,37 +225,16 @@ dist_dt$intensity <- rbinom(n, 1, disturbance_frequency) * runif(n, 0.5, 1)
 
 ## Simulate
 
-The model can be run with the `simulateForest` function. Its arguments
-are `env` which is the environmental input data.table, `patches` the
-number of patches, and the processes.
+The model can be run with the `simulateForest` function. Its main arguments are `model` the assembled FINN model (which already contains the processes), `env` the environmental input data.table, and `patches` the number of patches. Optionally `disturbances`
 
-A model is defined with `finn()`, which takes one process per
-demographic component. Each process is built with `createProcess()`. So
-the workflow is always
-`finn(growth_process = createProcess(...), mortality_process = createProcess(...), ...)`,
-as in the call below.
+A model is assembled with `finn()`, which takes one process per demographic component. Each process is built with `createProcess()`, so the pattern is always `finn(growth_process = createProcess(...), mortality_process = createProcess(...), ...)`, as in the call below.
 
-The processes are specified with the `createProcess` function. The first
-argument is a formula (interpreted according to the R formula
-definitions) that specifies the relation between environment and the
-process. The formula includes the intercept and the environmental
-variables that are provided with `env`. The second argument is the
-function that should be used for the process. FINN includes the default
-functions `growth`, `mortality`, and `regeneration`. The user can also
-provide custom functions. The function should take the species
-parameters and the environmental parameters as arguments. The third and
-fourth arguments are the initial species and environmental parameters.
+The processes are specified with the `createProcess` function. The first argument is a formula that specifies the relation between environment and the process. The formula includes the intercept and the environmental variables that are provided with `env`. The second argument is the function that should be used for the process. FINN includes the default functions `growth`, `mortality`, and `regeneration`. The user can also provide custom functions. The function should take the species parameters and the environmental parameters as arguments. The third and fourth arguments are the initial species and environmental parameters.
 
-Disturbances can be specified with the `disturbance` argument, which
-requires a data.table with the columns siteID, year, and intensity. The
-intensity is the fraction of patches that are disturbed at that
-timestep.
+Disturbances can be specified with the `disturbance` argument, which requires a data.table with the columns siteID, year, and intensity. The intensity is the fraction of patches that are disturbed at that timestep.
 
-The effect of environmental variable supplied with the environmental
-data can be defined in the process functions. For example `~ 1 + env1`
-specifies an intercept and a linear effect of env1. Both, the intercept
-`1` and the effect of `env1` can be modulated by the species parameters
-that were specified above.
+The effect of environmental variable supplied with the environmental data can be defined in the process functions. For example `~ 1 + env1` specifies an intercept and a linear effect of env1. Both, the intercept `1` and the effect of `env1` can be modulated by the species parameters that were specified above.
+
 
 ``` r
 predictions <- list()
@@ -280,12 +263,18 @@ Naturally forest gap models are stochastic, so one patch is only one
 noisy realisation. Averaging over many patches creates a smooth
 stand-level aggregation of the forest state.
 
-You do **not** average the patches yourself: `simulateForest()` already
-returns patch-averaged, stand-level results in `$long$site` (the
-per-patch series are in `$long$patch` if you want them). The `mean()` in
-the plotting code below only collapses the *site* dimension, which
-matters when you simulate more than one site — here there is just one,
-so it is a harmless identity.
+Aggregation of patches is done internally. simulateForest() returns
+patch-averaged, stand-level results in $long$site. The mean() in the
+plotting code below only collapses the site dimension, which matters when you
+simulate more than one site.
+
+If you need more than the stand-level averages, set return_cohorts to keep the
+raw per-cohort state for the timesteps you choose. This records each cohort's
+size, species and tree number together with its growth and mortality rates. Use
+TRUE for every step, "last" for the final one, or a vector of timesteps such
+as c(1, 250, 500). Those come back in $long$cohort and $wide$cohort. It is
+FALSE by default because storing every cohort at every timestep is expensive.
+
 
 ``` r
 for(i in c("patches_1", "patches_100")){
@@ -318,7 +307,8 @@ for(i in c("patches_1", "patches_100")){
 }
 ```
 
-<img src="A/A-plot-patches-1.png" style="display: block; margin: auto;"/><img src="A/A-plot-patches-2.png" style="display: block; margin: auto;"/>
+<img src="A/A-plot-patches-1.png" style="display: block; margin: auto;" /><img src="A/A-plot-patches-2.png" style="display: block; margin: auto;" />
+
 
 ``` r
 sessionInfo()

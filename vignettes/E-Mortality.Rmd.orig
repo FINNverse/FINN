@@ -26,7 +26,7 @@ knitr::opts_chunk$set(
 Mortality is the hardest of FINN's six responses to calibrate, and the one where
 the choice of likelihood matters most. This vignette takes it on its own terms:
 what the observation actually *is*, which likelihood belongs to it, how to swap
-the process for a neural network, and — the part that is easy to get wrong — how
+the process for a neural network, and (the part that is easy to get wrong) how
 to score the result.
 
 It follows the same 200-fit / 200-holdout FIA sample as **Fitting FINN to forest
@@ -46,8 +46,8 @@ EPOCHS <- 500L
 
 `makeObsData()` returns mortality as a **pair of counts** rather than a bare rate:
 
-- **`n_at_risk`** — trees alive at the *start* of an inventory interval,
-- **`n_died`** — how many of those were dead at the *end*,
+- **`n_at_risk`**: trees alive at the *start* of an inventory interval,
+- **`n_died`**: how many of those were dead at the *end*,
 
 with `mort = n_died / n_at_risk` derived for convenience. This is exactly the
 `cbind(died, survived)` response of a binomial GLM, and it is deliberate. A bare
@@ -55,7 +55,7 @@ proportion throws away the sample size: it cannot tell a site where 1 of 1 trees
 died from one where 60 of 60 did, even though the second carries sixty times the
 information.
 
-The pair is a **closed cohort** — both columns are pinned to the tree's state at
+The pair is a **closed cohort**; both columns are pinned to the tree's state at
 the start of the interval. That matters more than it sounds. FIA re-identifies a
 tree's species between visits, so a rate built by dividing "deaths this year" by
 "survivors last year" can book a death against the species a tree *ended* as while
@@ -95,7 +95,7 @@ cat(sprintf("pooled mortality rate              : %.3f per inventory interval\n"
 ```
 
 A few hundred deaths, and roughly two-thirds of the observations at exactly zero.
-No likelihood can manufacture information that is not there — but the wrong one
+No likelihood can manufacture information that is not there, but the wrong one
 can waste what is.
 
 ## Why `binomial` and not `mse`
@@ -103,7 +103,7 @@ can waste what is.
 FINN scores mortality with `loss = c(..., mortality = "binomial", ...)` by
 default. Squared error assumes an unbounded response with constant variance;
 mortality is neither. A proportion lives on \[0, 1\] and its variance *shrinks*
-as the rate approaches either end — so on a response that is ~69% zeros, MSE puts
+as the rate approaches either end, so on a response that is ~69% zeros, MSE puts
 almost no gradient where the data actually are.
 
 The binomial term is weighted by `n_at_risk`, which is what turns a Bernoulli
@@ -145,7 +145,7 @@ fit(m,
 )
 ```
 
-Now the same model with **mortality replaced by a neural network** — every other
+Now the same model with **mortality replaced by a neural network**, every other
 process, and the entire `fit()` call, unchanged. `createHybrid()` is the only
 difference:
 
@@ -204,7 +204,7 @@ obs_pred[is.finite(obs) & is.finite(value),
 **AUC** asks the question the binomial actually poses: does the model give a
 higher death probability to a tree that died than to one that survived? Each
 observation stands for `n_at_risk` Bernoulli trials of which `n_died` are deaths,
-all sharing that observation's predicted probability — so rather than expand the
+all sharing that observation's predicted probability, so rather than expand the
 trials we weight them, with tied predictions taking half credit (the standard
 Mann-Whitney treatment).
 
@@ -233,7 +233,7 @@ auc_tab[order(split, -AUC)]
 0.5 is coin-flipping, 1.0 is perfect ranking.
 
 Read the two splits **together**, because the gap between them is the result. On
-the training sites the model ranks deaths above survivors better than chance — so
+the training sites the model ranks deaths above survivors better than chance, so
 there *is* a learnable mortality signal, and the model finds it. On the held-out
 sites that skill collapses to ~0.5. The model is not failing to fit mortality; it
 is fitting it and **not generalising**.
@@ -257,7 +257,7 @@ reading is train-vs-holdout, not model-vs-model.
 fwrite(mort_pred, "E-mortality-predictions.csv")
 ```
 
-## What the network learned — ALE
+## What the network learned: ALE
 
 `ALE()` returns one table per process, so the same tool reads a mechanistic
 mortality function and a neural network standing in its place. The effect is on
@@ -293,8 +293,8 @@ ggplot(d, aes(x, ale, colour = model)) +
   theme_minimal() + theme(legend.position = "top", strip.text.y = element_text(angle = 0))
 ```
 
-Each curve spans only the range its own model actually simulates — ALE never
-extrapolates — so where the two cover different ranges they are simply placing a
+Each curve spans only the range its own model actually simulates (ALE never
+extrapolates) so where the two cover different ranges they are simply placing a
 species in different conditions.
 
 Read these as a demonstration of the *mechanism*: a process can be replaced by a
