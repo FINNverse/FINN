@@ -193,7 +193,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   }
 
   if(!is.null(Nspecies)){
-    alive_species <- names(sort(table(td[status %chin% c("alive","new")]$species_name), decreasing = TRUE))
+    alive_species <- names(sort(table(tree_dt[status %chin% c("alive","new")]$species_name), decreasing = TRUE))
     selected_species <- alive_species[seq_len(min(Nspecies, length(alive_species)))]
     message(paste0("Nspecies set to ", Nspecies))
   }else if(!is.null(NspeciesQuantile)){

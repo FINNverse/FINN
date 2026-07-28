@@ -1224,7 +1224,15 @@ finn_class = nn_module(
                  clip_norm = 2.0,
                  ...) {
 
-    old_par = par(no.readonly = TRUE)
+    # Only touch the global graphics state when we actually draw the training
+    # curve. Capturing par(no.readonly = TRUE) and restoring it otherwise is a
+    # no-op that can still emit a spurious "par(new=TRUE) with no plot" warning
+    # (when a previous plot left par$new = TRUE and no device has an active
+    # plot). Restore via on.exit() so an early error can't leak the caller's par.
+    if (isTRUE(plot_progress)) {
+      old_par = par(no.readonly = TRUE)
+      on.exit(do.call(par, old_par), add = TRUE)
+    }
     if(!any(loss %in% c("mse", "gaussian", "poisson", "nbinom"))) stop("Loss not supported")
 
     # Internal z-standardization of environmental predictors. Learn the
@@ -1611,7 +1619,7 @@ finn_class = nn_module(
 
     # ignore debugging method
     self$pred = list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))
-    do.call(par, old_par)
+    # par is restored via on.exit() (set above, only when plot_progress = TRUE)
 
   },
 

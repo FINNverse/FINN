@@ -51,3 +51,7 @@ Rplots.pdf
 # Stray render artifact: rmarkdown::render("README.Rmd") emits this alongside
 # README.md. Never wanted - README.md is the deliverable.
 README.html
+
+# testthat failure snapshots (local only)
+tests/testthat/_problems/
+tests/testthat/testthat-problems.rds
