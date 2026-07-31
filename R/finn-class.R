@@ -1082,6 +1082,7 @@ finn_class = nn_module(
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
+    if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
     # browser()
     envs = private$extract_env_method(env)
 
@@ -1281,6 +1282,7 @@ finn_class = nn_module(
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
+    if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
 
     # model.matrix() in extract_env() must keep NA rows so the response arrays
     # stay dimensionally aligned. Set na.pass, and restore the user's prior
@@ -1897,7 +1899,16 @@ finn_class = nn_module(
                     mask = true$isnan()$bitwise_not()
                     theta = self$par_theta_recruits
                     theta = theta$squeeze(1)$`repeat`(c(pred$shape[1], 1))
-                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta[mask])$mean()*local_weights[local_l])
+                    ## Observation operator (inventory simulator): map both the
+                    ## predicted recruitment DENSITY (r_mean_ha) and the observed
+                    ## target into the sampling design's OBSERVATION space by the
+                    ## inclusion weight `recruit_obs_weight` (w) before the nbinom
+                    ## likelihood. For an angle-count design w = g(recruit_dbh)/BAF,
+                    ## so density (0..~9000/ha) becomes a stable tallied-recruit
+                    ## COUNT (0..~9). Default w = 1 reproduces the previous per-ha
+                    ## behaviour exactly (fixed-area inventories, FINN-fia).
+                    w = if (is.null(self$recruit_obs_weight)) 1.0 else self$recruit_obs_weight
+                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]*w+0.001, true[mask]*w, theta[mask])$mean()*local_weights[local_l])
                     else return(0.0)
                   }
                 })
