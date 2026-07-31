@@ -214,16 +214,21 @@ finn = function(N_species,
 #' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
 #' @param shuffle (`logical(1)`)\cr Shuffle data or not.
 #' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
-#' @param env_autoscale (`logical(1)`)\cr If `TRUE`, FINN z-standardizes the
-#'   environmental predictors in `env` internally: the per-variable mean and
-#'   standard deviation are learned from the training `env` and stored on the
-#'   model, then re-applied automatically at every `predict()`/`simulate()` call.
-#'   This lets you pass raw (untransformed) `env` for both calibration and
-#'   prediction; FINN guarantees an identical transformation at both stages.
-#'   Recommended (and the default) for numerical stability when predictors are on
-#'   different scales. Set `FALSE` to use `env` exactly as supplied (e.g. if you
-#'   have already standardized it yourself). The learned constants are available
-#'   as `model$env_scaling`.
+#' @param env_autoscale \cr How to scale the environmental predictors in `env`.
+#'   The learned transformation is stored on the model and re-applied
+#'   automatically at every `predict()`/`simulate()` call, so raw (untransformed)
+#'   `env` can be passed for both calibration and prediction. Accepts:
+#'   * `TRUE` (default) -- z-standardise every predictor (mean / sd);
+#'   * `FALSE` -- use `env` exactly as supplied (no scaling);
+#'   * a **per-predictor spec** for more nuanced scaling: a length-1 string
+#'     applied to all, or a vector/list with one entry per predictor (matched by
+#'     name if named, else by position). Each entry is one of `"auto"`
+#'     (z-standardise), `"identity"`/`"none"` (leave unchanged), `"0to1"`
+#'     (min-max to [0,1]), or a function `f(x)` returning `list(center=, scale=)`
+#'     for a custom affine scaler. Every mode is affine, so ALE stays invertible.
+#'   Example: `env_autoscale = c(mat_c = "auto", management = "identity")` keeps
+#'   an ordinal management forcing on its native 0..3 scale while z-scaling
+#'   climate. The learned constants are available as `model$env_scaling`.
 #' @param clip_norm (`numeric(1)|list()`)\cr Gradient-norm budget passed to
 #'   `torch::nn_utils_clip_grad_norm_()`, applied separately to each of three
 #'   parameter groups (mechanistic per-species rates, env-effect networks,
@@ -1240,7 +1245,10 @@ finn_class = nn_module(
     # centre/scale from the (raw) training env now and store them on the model;
     # extract_env_method() re-applies them here and at every predict/simulate
     # call, so raw env can be supplied throughout. See compute_env_scaling().
-    if (isTRUE(env_autoscale)) self$env_scaling = compute_env_scaling(env)
+    # env_autoscale may be TRUE/FALSE, or a per-predictor spec (strings
+    # "auto"/"identity"/"0to1" or functions) -- see compute_env_scaling(). Any
+    # non-FALSE value computes a scaling table; FALSE leaves env untouched.
+    if (!isFALSE(env_autoscale)) self$env_scaling = compute_env_scaling(env, env_autoscale)
 
     if(is.null(data)) {
       print("No data. Switching into simulation modus...")
