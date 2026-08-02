@@ -953,7 +953,18 @@ finn_class = nn_module(
             # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,(i-period+1):(i),]$mean(2))
 
             #browser()
-            loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,9])
+            ## Growth aggregation over the period. Default: MEAN of the per-year
+            ## rates, matched by an annualised per-year target. With
+            ## `growth_period_scale = TRUE` the per-year rates are COMPOUNDED over
+            ## the window (prod(1+g)-1) to give the cumulative PERIOD increment,
+            ## matched by a de-annualised period target. This keeps env annual (so
+            ## a per-year drought forcing still lands on the right year) while
+            ## scoring growth at full period magnitude -- annualising the target
+            ## instead collapses growth's variance and flattens its env response.
+            g_pred = if (isTRUE(self$growth_period_scale))
+                       (Result[[4]][,(i-period+1):(i),] + 1)$prod(2) - 1
+                     else Result[[4]][,(i-period+1):(i),]$mean(2)
+            loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
             # mort rates
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,8])
             # reg rates ha
@@ -1088,6 +1099,7 @@ finn_class = nn_module(
     self$device = device
     self$patch_size_ha = patch_size
     if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
+    if (is.null(self$growth_period_scale)) self$growth_period_scale = FALSE  # FALSE = mean of annual rates (default); TRUE = compounded period increment
     # browser()
     envs = private$extract_env_method(env)
 
@@ -1291,6 +1303,7 @@ finn_class = nn_module(
     self$device = device
     self$patch_size_ha = patch_size
     if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
+    if (is.null(self$growth_period_scale)) self$growth_period_scale = FALSE  # FALSE = mean of annual rates (default); TRUE = compounded period increment
 
     # model.matrix() in extract_env() must keep NA rows so the response arrays
     # stay dimensionally aligned. Set na.pass, and restore the user's prior
