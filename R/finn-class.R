@@ -64,18 +64,54 @@
 #' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
 #'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
 #' @export
+#' @param recruit_obs_weight (`numeric(1)`)\cr Observation-operator inclusion
+#'   weight applied to both predicted and observed regeneration before the loss
+#'   (maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
+#'   space, e.g. `g(recruit_dbh)/BAF` for an angle-count inventory). `1.0` (default)
+#'   is the per-hectare behaviour.
+#' @param growth_period_scale (`logical(1)`)\cr If `TRUE`, growth is scored against
+#'   the COMPOUNDED period increment (`prod(1+g)-1`) rather than the mean of the
+#'   per-year rates, so a de-annualised period target aligns without collapsing
+#'   growth's variance. Default `FALSE` (mean of annual rates).
+#' @param regeneration_saturation (`list` or `NULL`)\cr If non-`NULL`, applies a
+#'   Beverton-Holt density cap `recruits = K*m/(K+m)` to recruitment with a FITTED
+#'   carrying capacity `K`. A named list with elements `K_init` (initial K,
+#'   stems/ha/step), `shared` (`TRUE` = one K for all species, else per-species),
+#'   and `bounds` (`c(lo, hi)` to confine K to a plausible band via a sigmoid, or
+#'   `NULL` for a free `exp` parameterisation). Default `NULL` (no cap).
 finn = function(N_species,
                 mortality_process = NULL,
                 growth_process = NULL,
                 regeneration_process = NULL,
                 competition_process = NULL,
-                recruits_dbh = 1.0) {
+                recruits_dbh = 1.0,
+                recruit_obs_weight = 1.0,
+                growth_period_scale = FALSE,
+                regeneration_saturation = NULL) {
   finn_class(N_species = N_species,
              mortality_process = mortality_process,
              growth_process = growth_process,
              regeneration_process = regeneration_process,
              competition_process = competition_process,
-             recruits_dbh = recruits_dbh)
+             recruits_dbh = recruits_dbh,
+             recruit_obs_weight = recruit_obs_weight,
+             growth_period_scale = growth_period_scale,
+             regeneration_saturation = regeneration_saturation)
+}
+
+#' Fitted regeneration carrying capacity K
+#'
+#' Reads back the fitted Beverton-Holt carrying capacity `K` (stems/ha/step) from a
+#' model built with `finn(regeneration_saturation = ...)`. Returns `NULL` if the
+#' model was fitted without the cap. Length 1 (shared) or `N_species` (per-species).
+#' @param m a fitted `finn_class` model.
+#' @export
+reg_saturation_K = function(m) {
+  if (is.null(m$reg_log_saturation)) return(NULL)
+  if (!is.null(m$reg_k_lo)) {
+    lo <- as.numeric(m$reg_k_lo); hi <- as.numeric(m$reg_k_hi)
+    as.numeric(lo + (hi - lo) / (1 + exp(-as.numeric(m$reg_log_saturation))))
+  } else as.numeric(torch::torch_exp(m$reg_log_saturation))
 }
 
 
@@ -443,10 +479,35 @@ finn_class = nn_module(
     growth_process = NULL,
     regeneration_process = NULL,
     competition_process = NULL,
-    recruits_dbh = 1.0
+    recruits_dbh = 1.0,
+    recruit_obs_weight = 1.0,
+    growth_period_scale = FALSE,
+    regeneration_saturation = NULL
   ) {
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
+    self$recruit_obs_weight = recruit_obs_weight
+    self$growth_period_scale = growth_period_scale
+    ## Beverton-Holt recruitment cap (applied in forward()); K is a fitted
+    ## parameter registered here so it is optimised jointly and saved/loaded with
+    ## the model -- no external attach/repair needed.
+    self$reg_saturation = regeneration_saturation
+    if (!is.null(regeneration_saturation)) {
+      spec   <- regeneration_saturation
+      K_init <- if (is.null(spec$K_init)) 800 else as.numeric(spec$K_init)
+      len    <- if (isTRUE(spec$shared)) 1L else N_species
+      if (!is.null(spec$bounds)) {
+        lo <- as.numeric(spec$bounds[1]); hi <- as.numeric(spec$bounds[2])
+        self$register_buffer("reg_k_lo", torch::torch_tensor(lo, dtype = torch::torch_float32()))
+        self$register_buffer("reg_k_hi", torch::torch_tensor(hi, dtype = torch::torch_float32()))
+        p0  <- min(max((K_init - lo) / (hi - lo), 1e-3), 1 - 1e-3)
+        raw <- rep(log(p0 / (1 - p0)), len)
+      } else {
+        raw <- rep(log(K_init), len)
+      }
+      self$register_parameter("reg_log_saturation",
+                              torch::nn_parameter(torch::torch_tensor(raw, dtype = torch::torch_float32())))
+    }
     self$record_raws = FALSE
     self$env_scaling = NULL
     self$train_env           = NULL
@@ -753,6 +814,20 @@ finn_class = nn_module(
                                           parReg = self$par_regeneration[,1],
                                           pred = pred,
                                           light = AL_reg)
+
+      ## Beverton-Holt recruitment cap (regeneration_saturation in finn()): the
+      ## fitted carrying capacity K bounds the otherwise-unbounded recruitment
+      ## drive, recruits = K*m/(K+m). K is per-species (or shared) and optionally
+      ## confined to a plausible band [lo, hi] via a sigmoid. Applied here so the
+      ## regeneration func stays the standard mechanistic one.
+      if (!is.null(self$reg_saturation)) {
+        K = if (!is.null(self$reg_k_lo))
+              self$reg_k_lo + (self$reg_k_hi - self$reg_k_lo) *
+                torch::torch_sigmoid(self$reg_log_saturation)
+            else torch::torch_exp(self$reg_log_saturation)
+        K = K$reshape(c(1L, -1L, 1L))   # broadcast along the species dim of r_mean_ha
+        r_mean_ha = K * r_mean_ha / (K + r_mean_ha)
+      }
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
