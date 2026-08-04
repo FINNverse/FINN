@@ -11,7 +11,7 @@ growth(
   pred,
   light,
   light_steepness = 10,
-  debug = F,
+  debug = FALSE,
   trees = NULL
 )
 }

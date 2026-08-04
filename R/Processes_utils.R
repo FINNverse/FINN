@@ -103,9 +103,7 @@
 #' @seealso [FINN::createHybrid()], [FINN::finn()]
 #'
 #' @examples
-#' \dontrun{
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
-#' }
 #'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE) {
@@ -237,9 +235,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @seealso [FINN::createProcess()], [FINN::finn()]
 #'
 #' @examples
-#' \dontrun{
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
-#' }
 #'
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
@@ -281,11 +277,7 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
 #'
 #' @return An array of environmental data formatted according to the process object.
 #'
-#' @import data.table
-#' @examples
-#' \dontrun{
-#' env_array <- extract_env(growth_process, env_data)
-#' }
+#' @noRd
 extract_env = function(formula, env) {
   process_env = stats::model.matrix(formula, env[,-c("siteID", "year")])
   env_names = colnames(process_env)
@@ -335,11 +327,10 @@ compute_env_scaling = function(env) {
 #' @return \code{env} with the scaled predictor columns, as a \code{data.table}.
 #' @seealso \code{\link{compute_env_scaling}}, \code{\link{fit}}
 #' @examples
-#' \dontrun{
-#' # reproduce the standardization a fitted model used (e.g. before a manual /
-#' # DALEX ALE on a model fit with env_autoscale = TRUE):
-#' env_scaled <- apply_env_scaling(env_dt, model$env_scaling)
-#' }
+#' # reproduce the standardization a model fit with env_autoscale = TRUE used:
+#' env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
+#' scaling <- compute_env_scaling(env)
+#' apply_env_scaling(env, scaling)
 #' @export
 apply_env_scaling = function(env, scaling) {
   if (is.null(scaling)) return(env)

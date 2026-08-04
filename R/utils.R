@@ -456,11 +456,9 @@ sample_poisson_gumbel <- function(lmbd, num_samples=50, temperature = 1e-2) {
 #'     `torch::torch_manual_seed()` to set the seed for Torch's random number generator. This is useful
 #'     for ensuring reproducibility in scripts that rely on both R and Torch for random operations.
 #'
-#' @examples
-#' \dontrun{
+#' @examplesIf torch::torch_is_installed()
 #' FINN.seed(123)
 #' # Now both R and Torch are seeded with 123, ensuring reproducible results
-#' }
 #'
 #' @import torch
 #' @export
@@ -504,10 +502,10 @@ checkPars = function(inputPar, parRange, name = NULL){
 
 checkParInput = function(speciesPars, speciesPars_ranges){
   checked = list()
-  valid_pars = T
+  valid_pars = TRUE
   for(i in names(speciesPars_ranges)){
     checked[[i]] = checkPars(speciesPars[[i]], speciesPars_ranges[[i]], i)
-    if(checked[[i]]$invalid) valid_pars = F
+    if(checked[[i]]$invalid) valid_pars = FALSE
   }
   if(!valid_pars){
     stop_message = paste("speciesPars must be within the range of speciesPars_ranges", sep = "\n")

@@ -39,7 +39,6 @@ This function generates cohort data for tree populations using the Weibull distr
 The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes, and the cohort data is generated accordingly.
 }
 \examples{
-\dontrun{
 obs_df <- rweibull_cohorts(
   trees = c(300, 10),
   dbh_shape = c(3, 3),
@@ -49,6 +48,5 @@ obs_df <- rweibull_cohorts(
   patchID = c(1, 1),
   species = c(3, 4)
 )
-CohortMat$new(obs_df = obs_df)
-}
+head(obs_df)
 }

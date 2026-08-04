@@ -22,6 +22,7 @@
 #' The vignettes give a guided tour: `browseVignettes("FINN")`.
 #'
 #' @keywords internal
+#' @import ggplot2
 #' @importFrom abind abind
 #' @importFrom coro loop
 #' @importFrom utils modifyList str capture.output

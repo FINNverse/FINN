@@ -1,3 +1,19 @@
+## Resubmission
+
+This is a resubmission addressing the points raised by Konstanze Lauseker:
+
+* Replaced all `T`/`F` with `TRUE`/`FALSE` in the R code (and thus in the
+  generated `\usage`), and confirmed `T`/`F` are not used as names.
+* Removed the example from the unexported `extract_env()` (now internal, `@noRd`).
+* Replaced `\dontrun{}`: examples that run in < 5 s are now unwrapped and
+  executable; examples that require the (optional, runtime-downloaded) 'torch'
+  backend use `@examplesIf torch::torch_is_installed()`.
+* No function writes to the user's home/package/working directory by default:
+  the internal figure-generation helper that wrote to `man/figures/` has been
+  moved out of the package (to `data-raw/`, which is build-ignored).
+* `options(na.action=)` in `R/finn-class.R` is now restored with an immediate
+  `on.exit()` (the earlier graphical-parameter capture already used `on.exit()`).
+
 ## Submission
 
 This is a new submission of FINN, a differentiable forest gap model.

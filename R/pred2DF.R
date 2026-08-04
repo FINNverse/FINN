@@ -31,11 +31,14 @@
 #' patch-level, and cohort-level predictions, respectively.
 #'
 #' @examples
-#' \dontrun{
-#' # Assuming `model_output` is a list with the structure required by `pred2DF`
-#' result <- pred2DF(model_output, format = "long")
-#' print(result$site)
-#' }
+#' # a minimal prediction object of the shape pred2DF() expects
+#' # (normally produced by predict()/simulateForest()):
+#' metrics <- c("dbh", "ba", "trees", "growth", "mort", "reg", "r_mean_ha")
+#' arr <- array(1, dim = c(1, 2, 3), dimnames = list(1, 1:2, 1:3))  # [site, year, species]
+#' pred <- list(Predictions = list(Site = stats::setNames(
+#'   lapply(metrics, function(m) arr), metrics)))
+#' result <- pred2DF(pred, format = "long")
+#' head(result$site)
 #'
 #' @export
 pred2DF <- function(pred, format = "wide") {
@@ -124,7 +127,7 @@ pred2DF <- function(pred, format = "wide") {
       # Get the indices of the cohortID in the cohort array
       idx_mat <- matrix(nrow = 0, ncol = 3)
       for(cohortID_i in cohort_temp_dt$cohortID) {
-        idx_mat = rbind(idx_mat, which(cohortID_i == cohorts_array_i, arr.ind = T))
+        idx_mat = rbind(idx_mat, which(cohortID_i == cohorts_array_i, arr.ind = TRUE))
       }
 
       # Add the year column to the data table

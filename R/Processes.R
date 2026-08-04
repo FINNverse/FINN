@@ -6,12 +6,10 @@
 #'
 #' @return torch.Tensor The basal area of the tree.
 #'
-#' @examples
-#' \dontrun{
+#' @examplesIf torch::torch_is_installed()
 #' dbh = torch::torch_tensor(50)
 #' basal_area = BA_stem(dbh)
 #' print(basal_area)
-#' }
 #'
 #' @import torch
 #' @export
@@ -130,11 +128,6 @@ height = function(dbh, parHeight) {
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
-#' @examples
-#' \dontrun{
-#' competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
-#'         trees = 100, parComp = torch::torch_tensor(c(0.3, 0.5)), patch_size_ha = 0.1)
-#' }
 #' @export
 competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE){
   parHeight = parComp[,1]
@@ -177,7 +170,7 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 
 #' mortality_wo_growth (internal)
 #' @noRd
-mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F) {
+mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE) {
   # TODO remove constant part
   # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
 
@@ -218,7 +211,7 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #' @return A `torch` tensor of per-cohort mortality probabilities; or, if
 #'   `debug = TRUE`, a list of the intermediate components.
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F, growth = NULL) {
+mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL) {
   if(is.null(growth)) growth = self$g
   if(self$record_raws) {
     self$raw_m = c(self$raw_m,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
@@ -237,7 +230,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 
 
 
-mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = F, growth = NULL) {
+mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL) {
   if(is.null(growth)) growth = self$g
   m = self$nn_mortality(dbh = dbh, growth = growth, trees = trees, light = light, species = species, env = pred)$sigmoid()
   if(self$record_raws) {
@@ -270,7 +263,7 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 #' @import torch
 #'
 #' @export
-growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL){
+growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = FALSE, trees = NULL){
 
   if(self$record_raws) {
     self$raw_g = c(self$raw_g,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
@@ -290,7 +283,7 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 }
 
 
-growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = FALSE, trees = NULL) {
 
   if(self$record_raws) {
     self$raw_g = c(self$raw_g,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
@@ -321,7 +314,7 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
-regeneration = function(species, parReg, pred, light, debug = F) {
+regeneration = function(species, parReg, pred, light, debug = FALSE) {
   if(self$record_raws) {
     self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))
   }
@@ -332,11 +325,11 @@ regeneration = function(species, parReg, pred, light, debug = F) {
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
   #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
-  if(debug == T) out = list(regP = regP, mean = mean) else out = mean
+  if(debug == TRUE) out = list(regP = regP, mean = mean) else out = mean
   return(out)
 }
 
-regeneration_hybrid = function(species, parReg, pred, light, debug = F) {
+regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 
   if(self$record_raws) {
     self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))

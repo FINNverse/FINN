@@ -41,10 +41,13 @@ different metrics) or a long format (one row per site/patch/cohort per year
 per metric).
 }
 \examples{
-\dontrun{
-# Assuming `model_output` is a list with the structure required by `pred2DF`
-result <- pred2DF(model_output, format = "long")
-print(result$site)
-}
+# a minimal prediction object of the shape pred2DF() expects
+# (normally produced by predict()/simulateForest()):
+metrics <- c("dbh", "ba", "trees", "growth", "mort", "reg", "r_mean_ha")
+arr <- array(1, dim = c(1, 2, 3), dimnames = list(1, 1:2, 1:3))  # [site, year, species]
+pred <- list(Predictions = list(Site = stats::setNames(
+  lapply(metrics, function(m) arr), metrics)))
+result <- pred2DF(pred, format = "long")
+head(result$site)
 
 }

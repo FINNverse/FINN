@@ -62,7 +62,7 @@ ALE_ce = function(X, ce) {
       for(siteInd in 1:sitesTotal) {
         site = (env_dt$siteID |> unique())[siteInd]
         for(patch in 1:patches) {
-          env_tmp  = as.matrix(model.matrix(proc_formula, data = env_pred[siteID==site & year == time][1,-(1:2),drop=F]))
+          env_tmp  = as.matrix(model.matrix(proc_formula, data = env_pred[siteID==site & year == time][1,-(1:2),drop=FALSE]))
           cols_env = colnames(env_tmp)
           tmp = switch(process,
                        growth       = model$raw_g[[timeInd]][siteInd, patch,,],

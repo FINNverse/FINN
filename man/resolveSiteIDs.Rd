@@ -4,7 +4,7 @@
 \alias{resolveSiteIDs}
 \title{Resolve site, patch, and year indices for FINN inputs}
 \usage{
-resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = T)
+resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE)
 }
 \arguments{
 \item{tree_dt}{data.table with tree-level data including siteName, patchName, year,

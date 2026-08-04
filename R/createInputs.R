@@ -28,17 +28,17 @@
 #'
 #' @import data.table
 #' @export
-resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
+resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   # browser()
   siteID_dt <- unique(env_dt[,.(siteName, year)])
-  siteID_dt <- merge(siteID_dt, unique(tree_dt[,.(siteName, year)]), by = c("siteName", "year"), all = F)
-  siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = F)
+  siteID_dt <- merge(siteID_dt, unique(tree_dt[,.(siteName, year)]), by = c("siteName", "year"), all = FALSE)
+  siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = FALSE)
 
   siteID_dt[, siteID := as.integer(as.factor(siteName)),]
   siteID_dt[, patchID := as.integer(as.factor(patchName)), by = siteID]
   siteID_dt[, period := as.integer(as.factor(year)), by = .(siteID, patchID)]
 
-  tree_dt <- merge(tree_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = F)
+  tree_dt <- merge(tree_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = FALSE)
 
   species_levels <- sort(unique(tree_dt$species_name))
   species_levels <- c(species_levels[species_levels != "other"], "other")
@@ -50,28 +50,28 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   tree_dt[, year := period-1,]
   tree_dt <- tree_dt[, -"period"]
 
-  env_dt <- merge(env_dt, siteID_dt[,.(siteName, siteID, year, period)], by = c("siteName","year"), all = F)
+  env_dt <- merge(env_dt, siteID_dt[,.(siteName, siteID, year, period)], by = c("siteName","year"), all = FALSE)
   env_dt[, OrigYear := year,]
   env_dt[, year := period-1,]
   env_dt <- env_dt[, -"period"]
 
-  obs_dt <- merge(obs_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = F)
+  obs_dt <- merge(obs_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = FALSE)
   obs_dt[, OrigYear := year,]
   obs_dt[, year := period-1,]
   obs_dt <- obs_dt[, -"period"]
-  obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = T)
+  obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = TRUE)
   out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
 
-  obs_dt_aggr <- obs_dt[,.(ba = mean(ba, na.rm = T),
-                        dbh = mean(dbh, na.rm = T),
-                        trees = mean(trees, na.rm = T),
-                        growth = stats::weighted.mean(growth, growth_n, na.rm = T),
-                        growth_n = sum(growth_n, na.rm = T),
+  obs_dt_aggr <- obs_dt[,.(ba = mean(ba, na.rm = TRUE),
+                        dbh = mean(dbh, na.rm = TRUE),
+                        trees = mean(trees, na.rm = TRUE),
+                        growth = stats::weighted.mean(growth, growth_n, na.rm = TRUE),
+                        growth_n = sum(growth_n, na.rm = TRUE),
                         # mortality counts pool by summing; the rate is derived
                         # from the pooled counts, never averaged from rates.
-                        n_at_risk = sum(n_at_risk, na.rm = T),
-                        n_died = sum(n_died, na.rm = T),
-                        reg = mean(reg, na.rm = T)),
+                        n_at_risk = sum(n_at_risk, na.rm = TRUE),
+                        n_died = sum(n_died, na.rm = TRUE),
+                        reg = mean(reg, na.rm = TRUE)),
                     by = .(siteID, year, species, species_name)]
   obs_dt_aggr[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
   out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
@@ -91,9 +91,9 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = T){
   )
 
   if(createInitCohorts){
-    init_trees <- tree_dt[living == T & year == 1]
+    init_trees <- tree_dt[living == TRUE & year == 1]
     if(!any(colnames(init_trees) %in% "trees")) init_trees[, trees := 1,]
-    out[["initCohorts"]] <- makeInitCohorts(init_trees, Nspecies = uniqueN(obs_dt$species), treeID_table = F)
+    out[["initCohorts"]] <- makeInitCohorts(init_trees, Nspecies = uniqueN(obs_dt$species), treeID_table = FALSE)
     out[["initCohort_dt"]] <- init_trees
   }
   return(out)
@@ -161,7 +161,7 @@ dbh2ba <- function(dbh){
 #'
 #' @import data.table
 #' @export
-makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
+makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
   # browser()
   tree_dt <- copy(as.data.table(tree_dt))
   data.table::setorder(tree_dt, treeName, year)
@@ -179,7 +179,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   tree_dt[, dbh_growth := dbh - dbh_before,]
   tree_dt[status == "alive", rel_growth := dbh/dbh_before - 1,]
   # tree_dt[rel_growth < 0, rel_growth := 0,]
-  tree_dt[living == T,trees := 1,]
+  tree_dt[living == TRUE,trees := 1,]
 
   if(!is.null(fix_period_length)){
     excluded_sites <- unique(tree_dt[period_length != fix_period_length]$siteName)
@@ -215,16 +215,16 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   message(paste0("Combined ", uniqueN(other_species), " unselected species into 'other'\nactuall number of species including 'others' is ", Nspecies))
 
   obs_dt <- tree_dt[,.(
-    ba = sum(dbh2ba(dbh)*(living == T), na.rm = T),
-    growth = mean(rel_growth[living == T], na.rm = T),
+    ba = sum(dbh2ba(dbh)*(living == TRUE), na.rm = TRUE),
+    growth = mean(rel_growth[living == TRUE], na.rm = TRUE),
     # `growth_n` is how many trees the growth mean rests on. 34% of FIA growth
     # observations come from a SINGLE tree while others average 30+, and the
     # variance of a mean is sigma^2/n - so the count has to travel with the
     # response for the loss to weight it (as n_at_risk does for mortality).
-    growth_n = sum(is.finite(rel_growth) & living == T, na.rm = T),
-    dbh = mean(dbh[living == T], na.rm = T),
-    trees = sum(living == T, na.rm = T),
-    reg = sum(status == "new", na.rm = T)/plotsize
+    growth_n = sum(is.finite(rel_growth) & living == TRUE, na.rm = TRUE),
+    dbh = mean(dbh[living == TRUE], na.rm = TRUE),
+    trees = sum(living == TRUE, na.rm = TRUE),
+    reg = sum(status == "new", na.rm = TRUE)/plotsize
   ),by= .(siteName,patchName, year, species_name)]
 
   ## --- mortality: a CLOSED COHORT of the trees alive at the interval start ----
@@ -290,7 +290,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
   if(!is.null(minNyears)){
     obs_dt[, NyearsPerPatch := uniqueN(year), by = .(siteName, patchName)]
     obs_dt[, sameYearsAllPatches := all(NyearsPerPatch == max(NyearsPerPatch)), by = siteName]
-    obs_dt <- obs_dt[sameYearsAllPatches == T & minNyears <= NyearsPerPatch]
+    obs_dt <- obs_dt[sameYearsAllPatches == TRUE & minNyears <= NyearsPerPatch]
     message(paste0("Filtered to sites with at least ", minNyears, " years and all patches having the same number of years:\n", paste0("Sites with ",names(table(obs_dt$NyearsPerPatch)), " Inventories: ",table(obs_dt$NyearsPerPatch), collapse = "\n")))
   }
 
@@ -305,20 +305,20 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
 
   if(aggregate_by_site){
     obs_dt <- obs_dt[,.(
-      ba = mean(ba, na.rm = T),
-      trees = mean(trees, na.rm = T),
-      dbh = mean(dbh, na.rm = T),
+      ba = mean(ba, na.rm = TRUE),
+      trees = mean(trees, na.rm = TRUE),
+      dbh = mean(dbh, na.rm = TRUE),
       # Tree-weighted, NOT a plain mean of patch means: the model predicts
       # sum(g*trees)/sum(trees) over the whole site, so an unweighted mean of
       # patch means is comparing against a different quantity (and lets a
       # 1-tree patch count as much as a 30-tree one).
-      growth = stats::weighted.mean(growth, growth_n, na.rm = T),
-      growth_n = sum(growth_n, na.rm = T),
+      growth = stats::weighted.mean(growth, growth_n, na.rm = TRUE),
+      growth_n = sum(growth_n, na.rm = TRUE),
       # counts SUM across patches; the site rate is then the pooled rate. The
       # old `mean(mort)` weighted a 1-tree patch the same as a 50-tree one.
-      n_at_risk = sum(n_at_risk, na.rm = T),
-      n_died = sum(n_died, na.rm = T),
-      reg = mean(reg, na.rm = T),
+      n_at_risk = sum(n_at_risk, na.rm = TRUE),
+      n_died = sum(n_died, na.rm = TRUE),
+      reg = mean(reg, na.rm = TRUE),
       Npatches = uniqueN(patchName)
     ), by = .(siteName, year, species_name)]
     obs_dt[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
@@ -390,11 +390,11 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = T, minNyears = 2,
 #' @seealso \code{\link[FINN]{CohortMat}}
 #' @import data.table
 #' @export
-makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = F, singleCohortTreeNames = NULL){
+makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = FALSE, singleCohortTreeNames = NULL){
   # browser()
   if(!is.null(dbh_binsize)){
-    if(is.null(min_dbh)) min_dbh = min(init_trees$dbh, na.rm = T)
-    dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = T) + dbh_binsize, by = dbh_binsize)
+    if(is.null(min_dbh)) min_dbh = min(init_trees$dbh, na.rm = TRUE)
+    dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = TRUE) + dbh_binsize, by = dbh_binsize)
     init_trees <- init_trees[!(treeName %in% singleCohortTreeNames),.(
       trees = sum(trees)),
       by = .(siteID, patchID, species,

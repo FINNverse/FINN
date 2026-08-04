@@ -23,11 +23,10 @@ from \code{env}, so calibration and prediction use an identical transformation
 (the usual pitfall of \code{scale()} inside a model formula is avoided).
 }
 \examples{
-\dontrun{
-# reproduce the standardization a fitted model used (e.g. before a manual /
-# DALEX ALE on a model fit with env_autoscale = TRUE):
-env_scaled <- apply_env_scaling(env_dt, model$env_scaling)
-}
+# reproduce the standardization a model fit with env_autoscale = TRUE used:
+env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
+scaling <- compute_env_scaling(env)
+apply_env_scaling(env, scaling)
 }
 \seealso{
 \code{\link{compute_env_scaling}}, \code{\link{fit}}

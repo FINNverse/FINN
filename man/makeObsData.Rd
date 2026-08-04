@@ -7,7 +7,7 @@
 makeObsData(
   tree_dt,
   plotsize,
-  aggregate_by_site = T,
+  aggregate_by_site = TRUE,
   minNyears = 2,
   fix_period_length = NULL,
   dbh_growth_thresh = c(-10, 50),

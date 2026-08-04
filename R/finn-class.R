@@ -1282,7 +1282,12 @@ finn_class = nn_module(
     self$device = device
     self$patch_size_ha = patch_size
 
-    options(na.action='na.pass')
+    # model.matrix() in extract_env() must keep NA rows so the response arrays
+    # stay dimensionally aligned. Set na.pass, and restore the user's prior
+    # na.action via on.exit() (immediately, per CRAN policy) so an error before
+    # the reset below cannot leak the change into the user's session.
+    oldopts <- options(na.action = 'na.pass')
+    on.exit(options(oldopts), add = TRUE)
     sp = self$N_species
     if(!"period_length" %in% colnames(data)) data$period_length = NA_real_
     # Number of trees at risk behind each observed mortality proportion. Weighting
@@ -1307,7 +1312,7 @@ finn_class = nn_module(
       # binomial term is weighted by n_at_risk.
       growth_n = abind::abind(lapply(1:sp, function(i) extract_env(~0+growth_n, data[data$species==i,])), along = 3L)
     )
-    options(na.action='na.omit')
+    # na.action restored on function exit via on.exit() set above.
 
     Y = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
 
@@ -2215,8 +2220,8 @@ finn_class = nn_module(
 # nn2$parameters
 # nn2$optimizer$param_groups
 #
-# torch::torch_save(nn, "T.RDS")
-# nn2 = torch_load("T.RDS")
+# torch::torch_save(nn, "nn.RDS")
+# nn2 = torch_load("nn.RDS")
 # nn2$ff()
 # nn2$par
 #

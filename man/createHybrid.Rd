@@ -107,9 +107,7 @@ or kept fixed at their (random) initial values, and \code{dispersion_parameter}/
 are only used when this object is the regeneration process.
 }
 \examples{
-\dontrun{
 growth_process <- createHybrid(formula = ~temperature + precipitation)
-}
 
 }
 \references{

@@ -23,9 +23,8 @@ The function calls \code{set.seed()} to set the seed for R's random number gener
 for ensuring reproducibility in scripts that rely on both R and Torch for random operations.
 }
 \examples{
-\dontrun{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 FINN.seed(123)
 # Now both R and Torch are seeded with 123, ensuring reproducible results
-}
-
+\dontshow{\}) # examplesIf}
 }
