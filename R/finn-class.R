@@ -1312,7 +1312,11 @@ finn_class = nn_module(
       # binomial term is weighted by n_at_risk.
       growth_n = abind::abind(lapply(1:sp, function(i) extract_env(~0+growth_n, data[data$species==i,])), along = 3L)
     )
-    # na.action restored on function exit via on.exit() set above.
+    # Restore the user's na.action now that the NA-preserving response arrays are
+    # built, so the rest of fit() behaves exactly as in the submitted version
+    # (the env extraction below runs under the user's na.action, not na.pass).
+    # The on.exit() set above is the error-safety net for the block in between.
+    options(oldopts)
 
     Y = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
 
