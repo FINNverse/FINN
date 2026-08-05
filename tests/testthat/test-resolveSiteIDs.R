@@ -14,7 +14,9 @@ test_that("contiguous integer site IDs and 0-indexed time", {
   env  <- data.table(siteName = "s1", year = c(2000, 2010),
                      temp = c(8.0, 8.2), prec = c(900, 950))
 
-  res <- suppressMessages(resolveSiteIDs(tree, env, obs))
+  # createInitCohorts = FALSE keeps this torch-free (we only check the ID tables,
+  # not the torch CohortMat), so it runs on CRAN where libtorch is absent.
+  res <- suppressMessages(resolveSiteIDs(tree, env, obs, createInitCohorts = FALSE))
 
   expect_true(all(c("siteID_dt", "tree_dt", "env_dt", "obs_dt",
                     "obs_dt_patches", "species_dt") %in% names(res)))
@@ -38,7 +40,7 @@ test_that("'other' is always coded as the last species", {
                     temp = c(8.0, 8.2), prec = c(900, 950))
 
   # feed the RECODED tree list (with 'other') back in, as the pipeline does
-  res <- suppressMessages(resolveSiteIDs(mo$tree_dt, env, mo$obs_dt))
+  res <- suppressMessages(resolveSiteIDs(mo$tree_dt, env, mo$obs_dt, createInitCohorts = FALSE))
   sp  <- res$species_dt[order(species)]
   expect_identical(sp$species_name[nrow(sp)], "other")
 })
