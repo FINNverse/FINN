@@ -36,6 +36,11 @@ This is a new submission of FINN, a differentiable forest gap model.
   surnames. The DESCRIPTION also cites the accompanying methods paper as
   Pichler and Käber (2026) <doi:10.1111/2041-210x.70347>, which resolves.
 
+  On win-builder the same NOTE also reported a timeout reaching
+  <https://www.gnu.org/licenses/gpl-3.0> (the "License: GPL v3" badge target in
+  README.md). The URL is valid and reachable; this was a transient network
+  timeout on the check host.
+
 ## Notes for the reviewer
 
 * FINN builds on the 'torch' package, whose backend (libtorch) is downloaded at
