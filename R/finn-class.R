@@ -2020,7 +2020,7 @@ finn_class = nn_module(
         if(!hybrid) {
           nn =
             if(is.null(obj$NN)) build_NN(input_shape = inputs, output_shape = self$N_species, bias = TRUE, activation = "selu", hidden = obj$hidden, dropout = obj$dropout, last_activation = "linear")
-            else nn
+            else obj$NN
 
           if(!is.null(obj$initEnv)) {
             for(i in 1:length(nn$parameters)) nn$parameters[[i]]$set_data( obj$initEnv[[i]] )
@@ -2136,6 +2136,22 @@ finn_class = nn_module(
     setup_species_parameters = function(obj, type, hybrid) {
       self[[paste0(type, "_func")]] = private$set_environment(obj$func)
       self[[paste0(type, "_formula")]] = obj$formula
+
+      # ---- custom (extra) process parameters, declared via createProcess() -----
+      # Registered here (during model construction) so they land in self$parameters
+      # -> optimised by fit(), saved/restored by torch_save/torch_load, and reachable
+      # from the (self-bound) custom func as self[[name]] -- no post-hoc attach or
+      # reload-repair needed. See createProcess(custom_parameters = ...).
+      if(!is.null(obj$custom_parameters)) {
+        for(pname in names(obj$custom_parameters)) {
+          spec = obj$custom_parameters[[pname]]
+          if(!is.null(self[[pname]]))
+            stop(sprintf("custom_parameters name '%s' clashes with an existing model field; choose another.", pname), call. = FALSE)
+          init_t = torch::torch_tensor(as.numeric(spec$init), dtype = torch::torch_float32())
+          if(isTRUE(spec$trainable)) self$register_parameter(pname, torch::nn_parameter(init_t))
+          else                       self$register_buffer(pname, init_t)
+        }
+      }
       self$register_buffer(paste0("par_", type, "_upper"), torch::torch_tensor(get_par_boundary(obj, type, upper = TRUE)))
       self$register_buffer(paste0("par_", type, "_lower"), torch::torch_tensor(get_par_boundary(obj, type, upper = FALSE)))
 

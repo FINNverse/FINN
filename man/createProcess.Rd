@@ -21,7 +21,8 @@ createProcess(
   dropout = 0,
   sample_regeneration = TRUE,
   n_quantiles = 10L,
-  continuous = FALSE
+  continuous = FALSE,
+  custom_parameters = NULL
 )
 }
 \arguments{
@@ -87,6 +88,17 @@ process is the competition process and \code{continuous = FALSE}.}
 of cohorts (\code{TRUE}) instead of binning cohorts into \code{n_quantiles} height
 classes (\code{FALSE}, default). Only used when this process is the competition
 process.}
+
+\item{custom_parameters}{(\verb{named list} or \code{NULL})\cr Extra parameters that a
+custom \code{func} needs, declared here so they are registered on the model by
+\code{\link[=finn]{finn()}}, optimised jointly by \code{\link[=fit]{fit()}} (when trainable), and
+round-tripped by \code{torch_save()}/\code{torch_load()}. Each element is either a
+numeric vector (a trainable parameter with that starting value) or a list with
+\code{init} (numeric, length 1 or \code{N_species}) and optional \code{trainable}
+(\code{logical}, default \code{TRUE}; \code{FALSE} makes it a fixed buffer). The custom
+function accesses each as \code{self[[name]]}. Parameterise in the \emph{unconstrained}
+space and apply any link inside the function (e.g. store \verb{log K} and use
+\code{exp(self$logK)}), mirroring FINN's own \verb{par_*_unconstrained} convention.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and
