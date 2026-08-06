@@ -1,9 +1,10 @@
-# FINN 0.1.0.9000 (development)
+# FINN 0.2.0
 
-Development version integrating the calibration work from the **FIA** (US Forest
-Inventory and Analysis) and **BWI** (German Bundeswaldinventur) projects on top
-of the CRAN 0.1.0 base. The FIA data-preparation pipeline is already part of
-0.1.0; this branch adds the model features those projects needed.
+Integrates the calibration work from the **FIA** (US Forest Inventory and
+Analysis) and **BWI** (German Bundeswaldinventur) projects. The FIA
+data-preparation pipeline shipped in 0.1.0; this release adds the model features
+those projects needed. New arguments default to the previous behaviour, so
+existing 0.1.0 code runs unchanged.
 
 ## New features
 
@@ -18,9 +19,6 @@ of the CRAN 0.1.0 base. The FIA data-preparation pipeline is already part of
 ## Bug fixes
 
 * `createProcess(NN = ...)` is no longer dropped in `create_nn()`.
-
-Note: this development branch is not CRAN-checked; re-run the CRAN checks before
-any submission built from it.
 
 
 # FINN 0.1.0
