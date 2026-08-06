@@ -2,13 +2,32 @@
 % Please edit documentation in R/Processes_utils.R
 \name{compute_env_scaling}
 \alias{compute_env_scaling}
-\title{Learn z-standardization for environmental predictors}
+\title{Compute per-predictor environmental scaling}
 \usage{
-compute_env_scaling(env)
+compute_env_scaling(env, spec = TRUE)
 }
 \arguments{
 \item{env}{A \code{data.frame}/\code{data.table} with \code{siteID}, \code{year}
 and the environmental predictor columns.}
+
+\item{spec}{how to scale each predictor. One of:
+\itemize{
+\item \code{TRUE} -- z-standardise every predictor (\code{center = mean}, \code{scale = sd});
+the default and the historical behaviour.
+\item \code{FALSE} -- handled by the caller (no scaling table computed).
+\item a length-1 string applied to all predictors, or a vector/list with one
+entry per predictor. Entries may be:
+\itemize{
+\item \code{"auto"}     z-standardise (mean / sd),
+\item \code{"identity"} (alias \code{"none"}) leave unchanged (center 0, scale 1),
+\item \code{"0to1"}     min-max to \link{0, 1} (center min, scale range),
+\item a \strong{function} \code{f(x)} returning \code{list(center=, scale=)} -- a custom
+affine scaler (e.g. robust: \code{function(x) list(center=median(x), scale=IQR(x))}). Non-affine transforms are intentionally not supported
+because ALE needs an invertible mapping.
+Unnamed vectors/lists are matched to predictors by position; named ones by
+variable name (predictors not named default to \code{"auto"}).
+}
+}}
 }
 \value{
 A \code{data.frame} with columns \code{variable}, \code{center},
@@ -17,12 +36,14 @@ object stored on a fitted model as \code{model$env_scaling} when it is fit
 with \code{env_autoscale = TRUE}.
 }
 \description{
-Computes the centering and scaling constants (mean and standard deviation) of
-every numeric environmental predictor in \code{env} (all columns except the
-keys \code{siteID} and \code{year}), so they can be re-applied unchanged to new
-data at prediction time. A predictor with (near-)zero standard deviation is
-given \code{scale = 1} (centred only) to avoid division by zero, mirroring
-\code{recipes::step_normalize}.
+Computes the centering and scaling constants of every numeric environmental
+predictor in \code{env} (all columns except the keys \code{siteID} and
+\code{year}), so they can be re-applied unchanged to new data at prediction
+time. Every supported mode is an affine map \code{(x - center) / scale}, so the
+stored \code{(variable, center, scale)} table is applied by
+\code{\link{apply_env_scaling}} and inverted by ALE unchanged, whatever the
+mode. A predictor with (near-)zero standard deviation is given \code{scale = 1}
+(centred only) to avoid division by zero.
 }
 \seealso{
 \code{\link{apply_env_scaling}}

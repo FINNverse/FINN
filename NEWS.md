@@ -9,7 +9,9 @@ existing 0.1.0 code runs unchanged.
 ## New features
 
 * `finn()` gains `recruit_obs_weight`, `growth_period_scale` and
-  `regeneration_saturation` arguments.
+  `regeneration_saturation` arguments. `regeneration_saturation` adds an optional
+  Beverton-Holt cap on regeneration; the new exported `reg_saturation_K()` reads
+  the fitted carrying capacity `K` (stems/ha/step) back out of a fitted model.
 * New `growth_period_scale` option for period-scale growth scoring.
 * `env_autoscale` now supports per-predictor scaling — `"auto"`, `"identity"`,
   `"0to1"`, or user-supplied functions.
