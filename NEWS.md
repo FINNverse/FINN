@@ -1,3 +1,28 @@
+# FINN 0.1.0.9000 (development)
+
+Development version integrating the calibration work from the **FIA** (US Forest
+Inventory and Analysis) and **BWI** (German Bundeswaldinventur) projects on top
+of the CRAN 0.1.0 base. The FIA data-preparation pipeline is already part of
+0.1.0; this branch adds the model features those projects needed.
+
+## New features
+
+* `finn()` gains `recruit_obs_weight`, `growth_period_scale` and
+  `regeneration_saturation` arguments.
+* New `growth_period_scale` option for period-scale growth scoring.
+* `env_autoscale` now supports per-predictor scaling — `"auto"`, `"identity"`,
+  `"0to1"`, or user-supplied functions.
+* New regeneration observation operator (a hook for the inventory simulator).
+* `createProcess()` gains a `custom_parameters` interface.
+
+## Bug fixes
+
+* `createProcess(NN = ...)` is no longer dropped in `create_nn()`.
+
+Note: this development branch is not CRAN-checked; re-run the CRAN checks before
+any submission built from it.
+
+
 # FINN 0.1.0
 
 First public release.
