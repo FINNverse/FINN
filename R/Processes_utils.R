@@ -302,15 +302,66 @@ extract_env = function(formula, env) {
 #'   with \code{env_autoscale = TRUE}.
 #' @seealso \code{\link{apply_env_scaling}}
 #' @export
-compute_env_scaling = function(env) {
+#' Compute per-predictor environmental scaling.
+#'
+#' Every supported mode is an AFFINE map `(x - center) / scale`, so the stored
+#' `(variable, center, scale)` table is applied by [apply_env_scaling()] and
+#' inverted by ALE unchanged, whatever the mode.
+#'
+#' @param spec how to scale each predictor. One of:
+#'   * `TRUE` -- z-standardise every predictor (`center = mean`, `scale = sd`);
+#'     the default and the historical behaviour.
+#'   * `FALSE` -- handled by the caller (no scaling table computed).
+#'   * a length-1 string applied to all predictors, or a vector/list with one
+#'     entry per predictor. Entries may be:
+#'       - `"auto"`     z-standardise (mean / sd),
+#'       - `"identity"` (alias `"none"`) leave unchanged (center 0, scale 1),
+#'       - `"0to1"`     min-max to [0, 1] (center min, scale range),
+#'       - a **function** `f(x)` returning `list(center=, scale=)` -- a custom
+#'         affine scaler (e.g. robust: `function(x) list(center=median(x),
+#'         scale=IQR(x))`). Non-affine transforms are intentionally not supported
+#'         because ALE needs an invertible mapping.
+#'   Unnamed vectors/lists are matched to predictors by position; named ones by
+#'   variable name (predictors not named default to `"auto"`).
+compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))
   cols = cols[vapply(cols, function(cc) is.numeric(env[[cc]]), logical(1))]
   if (!length(cols)) return(NULL)
-  center = vapply(cols, function(cc) mean(env[[cc]], na.rm = TRUE), numeric(1))
-  scale  = vapply(cols, function(cc) stats::sd(env[[cc]], na.rm = TRUE), numeric(1))
-  scale[!is.finite(scale) | scale < .Machine$double.eps] = 1   # constant predictor -> centre only
-  data.frame(variable = cols, center = as.numeric(center), scale = as.numeric(scale),
-             stringsAsFactors = FALSE)
+
+  resolve_mode = function(col, i) {
+    if (is.logical(spec)) return(if (isTRUE(spec)) "auto" else "identity")
+    if (!is.null(names(spec))) {                      # named -> match by variable
+      if (col %in% names(spec)) return(spec[[col]])
+      return("auto")
+    }
+    if (length(spec) == 1L) return(spec[[1L]])        # one mode for all
+    if (i <= length(spec)) return(spec[[i]])          # positional
+    "auto"
+  }
+  affine = function(x, mode) {
+    if (is.function(mode)) {
+      out = mode(x)
+      if (!is.list(out) || !all(c("center", "scale") %in% names(out)))
+        stop("A scaling function must return list(center=, scale=).", call. = FALSE)
+      return(list(center = out$center, scale = out$scale))
+    }
+    switch(as.character(mode),
+      auto     = list(center = mean(x, na.rm = TRUE), scale = stats::sd(x, na.rm = TRUE)),
+      identity = ,
+      none     = list(center = 0, scale = 1),
+      `0to1`   = list(center = min(x, na.rm = TRUE),
+                      scale  = diff(range(x, na.rm = TRUE))),
+      stop("Unknown env scaling mode '", mode,
+           "'. Use 'auto', 'identity'/'none', '0to1', or a function.", call. = FALSE))
+  }
+  rows = lapply(seq_along(cols), function(i) {
+    cs = affine(env[[cols[i]]], resolve_mode(cols[i], i))
+    sc = cs$scale
+    if (!is.finite(sc) || abs(sc) < .Machine$double.eps) sc = 1   # constant -> centre only
+    data.frame(variable = cols[i], center = as.numeric(cs$center),
+               scale = as.numeric(sc), stringsAsFactors = FALSE)
+  })
+  do.call(rbind, rows)
 }
 
 #' Apply stored z-standardization to environmental predictors

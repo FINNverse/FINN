@@ -64,18 +64,54 @@
 #' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
 #'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
 #' @export
+#' @param recruit_obs_weight (`numeric(1)`)\cr Observation-operator inclusion
+#'   weight applied to both predicted and observed regeneration before the loss
+#'   (maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
+#'   space, e.g. `g(recruit_dbh)/BAF` for an angle-count inventory). `1.0` (default)
+#'   is the per-hectare behaviour.
+#' @param growth_period_scale (`logical(1)`)\cr If `TRUE`, growth is scored against
+#'   the COMPOUNDED period increment (`prod(1+g)-1`) rather than the mean of the
+#'   per-year rates, so a de-annualised period target aligns without collapsing
+#'   growth's variance. Default `FALSE` (mean of annual rates).
+#' @param regeneration_saturation (`list` or `NULL`)\cr If non-`NULL`, applies a
+#'   Beverton-Holt density cap `recruits = K*m/(K+m)` to recruitment with a FITTED
+#'   carrying capacity `K`. A named list with elements `K_init` (initial K,
+#'   stems/ha/step), `shared` (`TRUE` = one K for all species, else per-species),
+#'   and `bounds` (`c(lo, hi)` to confine K to a plausible band via a sigmoid, or
+#'   `NULL` for a free `exp` parameterisation). Default `NULL` (no cap).
 finn = function(N_species,
                 mortality_process = NULL,
                 growth_process = NULL,
                 regeneration_process = NULL,
                 competition_process = NULL,
-                recruits_dbh = 1.0) {
+                recruits_dbh = 1.0,
+                recruit_obs_weight = 1.0,
+                growth_period_scale = FALSE,
+                regeneration_saturation = NULL) {
   finn_class(N_species = N_species,
              mortality_process = mortality_process,
              growth_process = growth_process,
              regeneration_process = regeneration_process,
              competition_process = competition_process,
-             recruits_dbh = recruits_dbh)
+             recruits_dbh = recruits_dbh,
+             recruit_obs_weight = recruit_obs_weight,
+             growth_period_scale = growth_period_scale,
+             regeneration_saturation = regeneration_saturation)
+}
+
+#' Fitted regeneration carrying capacity K
+#'
+#' Reads back the fitted Beverton-Holt carrying capacity `K` (stems/ha/step) from a
+#' model built with `finn(regeneration_saturation = ...)`. Returns `NULL` if the
+#' model was fitted without the cap. Length 1 (shared) or `N_species` (per-species).
+#' @param m a fitted `finn_class` model.
+#' @export
+reg_saturation_K = function(m) {
+  if (is.null(m$reg_log_saturation)) return(NULL)
+  if (!is.null(m$reg_k_lo)) {
+    lo <- as.numeric(m$reg_k_lo); hi <- as.numeric(m$reg_k_hi)
+    as.numeric(lo + (hi - lo) / (1 + exp(-as.numeric(m$reg_log_saturation))))
+  } else as.numeric(torch::torch_exp(m$reg_log_saturation))
 }
 
 
@@ -214,16 +250,21 @@ finn = function(N_species,
 #' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
 #' @param shuffle (`logical(1)`)\cr Shuffle data or not.
 #' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
-#' @param env_autoscale (`logical(1)`)\cr If `TRUE`, FINN z-standardizes the
-#'   environmental predictors in `env` internally: the per-variable mean and
-#'   standard deviation are learned from the training `env` and stored on the
-#'   model, then re-applied automatically at every `predict()`/`simulate()` call.
-#'   This lets you pass raw (untransformed) `env` for both calibration and
-#'   prediction; FINN guarantees an identical transformation at both stages.
-#'   Recommended (and the default) for numerical stability when predictors are on
-#'   different scales. Set `FALSE` to use `env` exactly as supplied (e.g. if you
-#'   have already standardized it yourself). The learned constants are available
-#'   as `model$env_scaling`.
+#' @param env_autoscale \cr How to scale the environmental predictors in `env`.
+#'   The learned transformation is stored on the model and re-applied
+#'   automatically at every `predict()`/`simulate()` call, so raw (untransformed)
+#'   `env` can be passed for both calibration and prediction. Accepts:
+#'   * `TRUE` (default) -- z-standardise every predictor (mean / sd);
+#'   * `FALSE` -- use `env` exactly as supplied (no scaling);
+#'   * a **per-predictor spec** for more nuanced scaling: a length-1 string
+#'     applied to all, or a vector/list with one entry per predictor (matched by
+#'     name if named, else by position). Each entry is one of `"auto"`
+#'     (z-standardise), `"identity"`/`"none"` (leave unchanged), `"0to1"`
+#'     (min-max to [0,1]), or a function `f(x)` returning `list(center=, scale=)`
+#'     for a custom affine scaler. Every mode is affine, so ALE stays invertible.
+#'   Example: `env_autoscale = c(mat_c = "auto", management = "identity")` keeps
+#'   an ordinal management forcing on its native 0..3 scale while z-scaling
+#'   climate. The learned constants are available as `model$env_scaling`.
 #' @param clip_norm (`numeric(1)|list()`)\cr Gradient-norm budget passed to
 #'   `torch::nn_utils_clip_grad_norm_()`, applied separately to each of three
 #'   parameter groups (mechanistic per-species rates, env-effect networks,
@@ -438,10 +479,35 @@ finn_class = nn_module(
     growth_process = NULL,
     regeneration_process = NULL,
     competition_process = NULL,
-    recruits_dbh = 1.0
+    recruits_dbh = 1.0,
+    recruit_obs_weight = 1.0,
+    growth_period_scale = FALSE,
+    regeneration_saturation = NULL
   ) {
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
+    self$recruit_obs_weight = recruit_obs_weight
+    self$growth_period_scale = growth_period_scale
+    ## Beverton-Holt recruitment cap (applied in forward()); K is a fitted
+    ## parameter registered here so it is optimised jointly and saved/loaded with
+    ## the model -- no external attach/repair needed.
+    self$reg_saturation = regeneration_saturation
+    if (!is.null(regeneration_saturation)) {
+      spec   <- regeneration_saturation
+      K_init <- if (is.null(spec$K_init)) 800 else as.numeric(spec$K_init)
+      len    <- if (isTRUE(spec$shared)) 1L else N_species
+      if (!is.null(spec$bounds)) {
+        lo <- as.numeric(spec$bounds[1]); hi <- as.numeric(spec$bounds[2])
+        self$register_buffer("reg_k_lo", torch::torch_tensor(lo, dtype = torch::torch_float32()))
+        self$register_buffer("reg_k_hi", torch::torch_tensor(hi, dtype = torch::torch_float32()))
+        p0  <- min(max((K_init - lo) / (hi - lo), 1e-3), 1 - 1e-3)
+        raw <- rep(log(p0 / (1 - p0)), len)
+      } else {
+        raw <- rep(log(K_init), len)
+      }
+      self$register_parameter("reg_log_saturation",
+                              torch::nn_parameter(torch::torch_tensor(raw, dtype = torch::torch_float32())))
+    }
     self$record_raws = FALSE
     self$env_scaling = NULL
     self$train_env           = NULL
@@ -749,6 +815,20 @@ finn_class = nn_module(
                                           pred = pred,
                                           light = AL_reg)
 
+      ## Beverton-Holt recruitment cap (regeneration_saturation in finn()): the
+      ## fitted carrying capacity K bounds the otherwise-unbounded recruitment
+      ## drive, recruits = K*m/(K+m). K is per-species (or shared) and optionally
+      ## confined to a plausible band [lo, hi] via a sigmoid. Applied here so the
+      ## regeneration func stays the standard mechanistic one.
+      if (!is.null(self$reg_saturation)) {
+        K = if (!is.null(self$reg_k_lo))
+              self$reg_k_lo + (self$reg_k_hi - self$reg_k_lo) *
+                torch::torch_sigmoid(self$reg_log_saturation)
+            else torch::torch_exp(self$reg_log_saturation)
+        K = K$reshape(c(1L, -1L, 1L))   # broadcast along the species dim of r_mean_ha
+        r_mean_ha = K * r_mean_ha / (K + r_mean_ha)
+      }
+
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
       if(self$sample_regeneration){
@@ -948,7 +1028,18 @@ finn_class = nn_module(
             # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,(i-period+1):(i),]$mean(2))
 
             #browser()
-            loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,9])
+            ## Growth aggregation over the period. Default: MEAN of the per-year
+            ## rates, matched by an annualised per-year target. With
+            ## `growth_period_scale = TRUE` the per-year rates are COMPOUNDED over
+            ## the window (prod(1+g)-1) to give the cumulative PERIOD increment,
+            ## matched by a de-annualised period target. This keeps env annual (so
+            ## a per-year drought forcing still lands on the right year) while
+            ## scoring growth at full period magnitude -- annualising the target
+            ## instead collapses growth's variance and flattens its env response.
+            g_pred = if (isTRUE(self$growth_period_scale))
+                       (Result[[4]][,(i-period+1):(i),] + 1)$prod(2) - 1
+                     else Result[[4]][,(i-period+1):(i),]$mean(2)
+            loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
             # mort rates
             loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,8])
             # reg rates ha
@@ -1082,6 +1173,8 @@ finn_class = nn_module(
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
+    if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
+    if (is.null(self$growth_period_scale)) self$growth_period_scale = FALSE  # FALSE = mean of annual rates (default); TRUE = compounded period increment
     # browser()
     envs = private$extract_env_method(env)
 
@@ -1239,7 +1332,10 @@ finn_class = nn_module(
     # centre/scale from the (raw) training env now and store them on the model;
     # extract_env_method() re-applies them here and at every predict/simulate
     # call, so raw env can be supplied throughout. See compute_env_scaling().
-    if (isTRUE(env_autoscale)) self$env_scaling = compute_env_scaling(env)
+    # env_autoscale may be TRUE/FALSE, or a per-predictor spec (strings
+    # "auto"/"identity"/"0to1" or functions) -- see compute_env_scaling(). Any
+    # non-FALSE value computes a scaling table; FALSE leaves env untouched.
+    if (!isFALSE(env_autoscale)) self$env_scaling = compute_env_scaling(env, env_autoscale)
 
     if(is.null(data)) {
       print("No data. Switching into simulation modus...")
@@ -1281,6 +1377,8 @@ finn_class = nn_module(
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
+    if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
+    if (is.null(self$growth_period_scale)) self$growth_period_scale = FALSE  # FALSE = mean of annual rates (default); TRUE = compounded period increment
 
     # model.matrix() in extract_env() must keep NA rows so the response arrays
     # stay dimensionally aligned. Set na.pass, and restore the user's prior
@@ -1897,7 +1995,16 @@ finn_class = nn_module(
                     mask = true$isnan()$bitwise_not()
                     theta = self$par_theta_recruits
                     theta = theta$squeeze(1)$`repeat`(c(pred$shape[1], 1))
-                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta[mask])$mean()*local_weights[local_l])
+                    ## Observation operator (inventory simulator): map both the
+                    ## predicted recruitment DENSITY (r_mean_ha) and the observed
+                    ## target into the sampling design's OBSERVATION space by the
+                    ## inclusion weight `recruit_obs_weight` (w) before the nbinom
+                    ## likelihood. For an angle-count design w = g(recruit_dbh)/BAF,
+                    ## so density (0..~9000/ha) becomes a stable tallied-recruit
+                    ## COUNT (0..~9). Default w = 1 reproduces the previous per-ha
+                    ## behaviour exactly (fixed-area inventories, FINN-fia).
+                    w = if (is.null(self$recruit_obs_weight)) 1.0 else self$recruit_obs_weight
+                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]*w+0.001, true[mask]*w, theta[mask])$mean()*local_weights[local_l])
                     else return(0.0)
                   }
                 })
