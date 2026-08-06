@@ -1335,7 +1335,13 @@ finn_class = nn_module(
     # env_autoscale may be TRUE/FALSE, or a per-predictor spec (strings
     # "auto"/"identity"/"0to1" or functions) -- see compute_env_scaling(). Any
     # non-FALSE value computes a scaling table; FALSE leaves env untouched.
-    if (!isFALSE(env_autoscale)) self$env_scaling = compute_env_scaling(env, env_autoscale)
+    # Backward-compatible dispatch: 0.1.0 scaled only when env_autoscale was TRUE
+    # (isTRUE), so FALSE / NULL / NA all skipped scaling. Preserve that exactly,
+    # and additionally accept the 0.2.0 per-predictor spec forms (a character
+    # vector, a list, or a function).
+    scale_env <- isTRUE(env_autoscale) || is.character(env_autoscale) ||
+                 is.list(env_autoscale) || is.function(env_autoscale)
+    if (scale_env) self$env_scaling = compute_env_scaling(env, env_autoscale)
 
     if(is.null(data)) {
       print("No data. Switching into simulation modus...")
