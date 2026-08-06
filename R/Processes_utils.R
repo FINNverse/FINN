@@ -90,6 +90,16 @@
 #'   of cohorts (`TRUE`) instead of binning cohorts into `n_quantiles` height
 #'   classes (`FALSE`, default). Only used when this process is the competition
 #'   process.
+#' @param custom_parameters (`named list` or `NULL`)\cr Extra parameters that a
+#'   custom `func` needs, declared here so they are registered on the model by
+#'   [FINN::finn()], optimised jointly by [FINN::fit()] (when trainable), and
+#'   round-tripped by `torch_save()`/`torch_load()`. Each element is either a
+#'   numeric vector (a trainable parameter with that starting value) or a list with
+#'   `init` (numeric, length 1 or `N_species`) and optional `trainable`
+#'   (`logical`, default `TRUE`; `FALSE` makes it a fixed buffer). The custom
+#'   function accesses each as `self[[name]]`. Parameterise in the *unconstrained*
+#'   space and apply any link inside the function (e.g. store `log K` and use
+#'   `exp(self$logK)`), mirroring FINN's own `par_*_unconstrained` convention.
 #'
 #' @return A list of class `"process"` containing the process definition and
 #'   associated parameters, to be passed as `mortality_process`, `growth_process`,
@@ -106,8 +116,30 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, custom_parameters = NULL) {
   out = list()
+
+  # ---- custom (extra) process parameters -------------------------------------
+  # A named list declaring extra parameters a custom `func` needs. Each element is
+  # either a numeric vector (-> trainable) or a list with `init` (numeric, length 1
+  # or N_species) and optional `trainable` (logical, default TRUE). finn() registers
+  # each on the model (see setup_species_parameters), so fit() optimises the
+  # trainable ones and torch_save/torch_load round-trips them; the custom func reads
+  # it as `self[[name]]`. Parameterise in the unconstrained space and apply any link
+  # inside the func (e.g. store log K, use exp(self$logK)).
+  if(!is.null(custom_parameters)) {
+    if(is.null(names(custom_parameters)) || any(names(custom_parameters) == ""))
+      stop("`custom_parameters` must be a *named* list (one entry per parameter).", call. = FALSE)
+    custom_parameters = lapply(custom_parameters, function(spec) {
+      if(is.numeric(spec)) spec = list(init = spec)
+      if(is.null(spec$init) || !is.numeric(spec$init))
+        stop("each custom parameter needs a numeric `init`.", call. = FALSE)
+      spec$trainable = if(is.null(spec$trainable)) TRUE else isTRUE(spec$trainable)
+      spec
+    })
+  }
+  out$custom_parameters = custom_parameters
+
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
