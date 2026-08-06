@@ -1913,7 +1913,7 @@ finn_class = nn_module(
         if(!hybrid) {
           nn =
             if(is.null(obj$NN)) build_NN(input_shape = inputs, output_shape = self$N_species, bias = TRUE, activation = "selu", hidden = obj$hidden, dropout = obj$dropout, last_activation = "linear")
-            else nn
+            else obj$NN
 
           if(!is.null(obj$initEnv)) {
             for(i in 1:length(nn$parameters)) nn$parameters[[i]]$set_data( obj$initEnv[[i]] )
