@@ -34,8 +34,14 @@ modeling](https://arxiv.org/abs/2508.01228)
 
 ## Installation
 
-You can install the development version of FINN from
-[GitHub](https://github.com/) with:
+Install the released version of FINN from CRAN:
+
+``` r
+install.packages("FINN")
+```
+
+Or the development version from
+[GitHub](https://github.com/FINNverse/FINN):
 
 ``` r
 # install.packages("devtools")

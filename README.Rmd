@@ -30,7 +30,13 @@ You can learn more about FINN in our preprint [Pichler & Käber, 2025 - Inferrin
 
 ## Installation
 
-You can install the development version of FINN from [GitHub](https://github.com/) with:
+Install the released version of FINN from CRAN:
+
+``` r
+install.packages("FINN")
+```
+
+Or the development version from [GitHub](https://github.com/FINNverse/FINN):
 
 ``` r
 # install.packages("devtools")

@@ -60,15 +60,20 @@ right tool and these vignettes will show you how to do it.
 
 # Installation
 
-The development version of FINN can be installed from GitHub. Currently
-we are in an early stage of development and the package is not yet
-available on CRAN. If you encounter problems running the code or
-understanding the documentation, please let us know by opening an issue
-on the [GitHub repository](https://github.com/FINNverse/FINN).
-
+Install the released version of FINN from CRAN:
 
 ``` r
-devtools::install_github("https://github.com/FINNverse/FINN")
+install.packages("FINN")
+```
+
+Or the development version from GitHub. If you encounter problems running
+the code or understanding the documentation, please let us know by
+opening an issue on the
+[GitHub repository](https://github.com/FINNverse/FINN).
+
+``` r
+# install.packages("devtools")
+devtools::install_github("FINNverse/FINN")
 ```
 
 # Run the model
