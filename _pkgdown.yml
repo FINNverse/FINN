@@ -77,7 +77,6 @@ reference:
   - obsDF2arrays
   - array2obsDF
   - pred2DF
-  - extract_env
 
 - title: Environmental scaling
   desc: >
