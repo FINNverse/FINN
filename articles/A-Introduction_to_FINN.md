@@ -37,7 +37,7 @@ demographic rates). The environment feeds growth, mortality and
 regeneration; each of those processes can be a mechanistic function, a
 neural network, or both (gear / network icons), and each is fit with its
 own likelihood (Gaussian for growth, binomial for mortality, negative
-binomial for regeneration). Figure from K\<U+00E4\>ber & Pichler
+binomial for regeneration). Figure from Käber & Pichler
 (2026).](FINN-overview.jpg)
 
 FINN’s structure. Each timestep, the current cohorts (their size,
@@ -48,7 +48,7 @@ demographic rates). The environment feeds growth, mortality and
 regeneration; each of those processes can be a mechanistic function, a
 neural network, or both (gear / network icons), and each is fit with its
 own likelihood (Gaussian for growth, binomial for mortality, negative
-binomial for regeneration). Figure from K\<U+00E4\>ber & Pichler (2026).
+binomial for regeneration). Figure from Käber & Pichler (2026).
 
 This vignette builds a **fully mechanistic** model from known parameters
 and simulates it to showcase a key functionality of FINN: fitting a full
