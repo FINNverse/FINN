@@ -5,8 +5,8 @@ Re-applies the constants learned by
 to `env`. The transformation uses the *stored* mean/sd only and never
 recomputes them from `env`, so calibration and prediction use an
 identical transformation (the usual pitfall of
-[`scale()`](https://rspatial.github.io/terra/reference/scale.html)
-inside a model formula is avoided).
+[`scale()`](https://rdrr.io/r/base/scale.html) inside a model formula is
+avoided).
 
 ## Usage
 
@@ -39,9 +39,13 @@ apply_env_scaling(env, scaling)
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-# reproduce the standardization a fitted model used (e.g. before a manual /
-# DALEX ALE on a model fit with env_autoscale = TRUE):
-env_scaled <- apply_env_scaling(env_dt, model$env_scaling)
-} # }
+# reproduce the standardization a model fit with env_autoscale = TRUE used:
+env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
+scaling <- compute_env_scaling(env)
+apply_env_scaling(env, scaling)
+#>    siteID  year  temp  prec
+#>     <int> <int> <num> <num>
+#> 1:      1     1    -1    -1
+#> 2:      2     1     0     0
+#> 3:      3     1     1     1
 ```

@@ -7,7 +7,7 @@ available light.
 ## Usage
 
 ``` r
-regeneration(species, parReg, pred, light, debug = F)
+regeneration(species, parReg, pred, light, debug = FALSE)
 ```
 
 ## Arguments

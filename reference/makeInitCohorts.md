@@ -21,7 +21,7 @@ makeInitCohorts(
   dbh_binsize = NULL,
   min_dbh = NULL,
   Nspecies,
-  treeID_table = F,
+  treeID_table = FALSE,
   singleCohortTreeNames = NULL
 )
 ```

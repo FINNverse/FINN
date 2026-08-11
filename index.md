@@ -14,14 +14,22 @@ stochastic gradient descent.
 
 ## Internal workings of FINN
 
-You can learn more about FINN in our preprint [Pichler & Käber, 2025 -
-Inferring processes within dynamic forest models using hybrid
-modeling](https://arxiv.org/abs/2508.01228)
+You can learn more about FINN in the accompanying paper [Pichler & Käber
+(2026) - Inferring processes within dynamic forest models using hybrid
+modelling](https://doi.org/10.1111/2041-210x.70347), published in
+*Methods in Ecology and Evolution*.
 
 ## Installation
 
-You can install the development version of FINN from
-[GitHub](https://github.com/) with:
+Install the released version of FINN from CRAN:
+
+``` r
+
+install.packages("FINN")
+```
+
+Or the development version from
+[GitHub](https://github.com/FINNverse/FINN):
 
 ``` r
 

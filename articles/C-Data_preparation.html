@@ -83,34 +83,34 @@ columns names and units, and the helper functions for data preparation
 <p>FINN is calibrated against clearly defined inputs:</p>
 <ul>
 <li>
-<strong><code>obs_dt</code></strong> — demographic responses per
-site × year × species:
+<strong><code>obs_dt</code></strong>: demographic responses per site
+× year × species:
 <code>siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species, species_name</code>.
 Year starts at 1; the initial state (year 0) is <em>not</em> included.
 NAs are allowed in any response. Units: <code>ba</code> m²,
 <code>dbh</code> cm, <code>trees</code> count, <code>growth</code>
 relative growth rate, <code>reg</code> trees ha⁻¹. Mortality comes back
-as a <strong>pair of counts</strong> — <code>n_at_risk</code> (trees
+as a <strong>pair of counts</strong>, <code>n_at_risk</code> (trees
 alive at the start of the interval) and <code>n_died</code> (how many of
-them were dead at the end) — with the rate
+them were dead at the end), with the rate
 <code>mort = n_died / n_at_risk</code> derived for convenience. That
 pair is the <code>cbind(died, survived)</code> response of a binomial
 GLM, and it is what the default <code>mortality = "binomial"</code> loss
 consumes: the counts carry the sample size, so a 60-tree observation
 outweighs a 1-tree one.</li>
 <li>
-<strong><code>env_dt</code></strong> —
+<strong><code>env_dt</code></strong>:
 <code>siteID, year, &lt;env vars…&gt;</code> in <strong>natural
 units</strong>; must cover every site × year in <code>obs_dt</code>. No
 manual scaling is needed: FINN z-standardizes the predictors internally
 when fitting (<code>env_autoscale = TRUE</code>, the default) and reuses
 the same constants at prediction time.</li>
 <li>
-<strong><code>init_trees</code></strong> — the initial state used to
+<strong><code>init_trees</code></strong>: the initial state used to
 build the starting cohorts:
 <code>siteID, patchID, year, species, dbh, trees, living</code>.</li>
 <li>
-<strong><code>dist_dt</code></strong> (optional) —
+<strong><code>dist_dt</code></strong> (optional):
 <code>siteID, year, intensity</code> (fraction of patches disturbed that
 year).</li>
 </ul>
@@ -188,7 +188,7 @@ for each interval it takes the trees that were alive at the
 <em>start</em>, and counts how many of them were dead at the
 <em>end</em>. Both columns are pinned to the tree’s state at the start
 of the interval, which matters because FIA re-identifies a tree’s
-species between visits — a hand-rolled rate can otherwise book a death
+species between visits; a hand-rolled rate can otherwise book a death
 against the species a tree <em>ended</em> as while the denominator
 counted the species it <em>started</em> as, and report more deaths than
 trees.</p>
@@ -211,7 +211,7 @@ filter:</p>
 <span>  minNyears         <span class="op">=</span> <span class="fl">2</span>                <span class="co"># need &gt;= 2 inventories per patch</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">obs_dt</span> <span class="op">&lt;-</span> <span class="va">obs_list</span><span class="op">$</span><span class="va">obs_dt</span></span>
-<span><span class="fu"><a href="https://rspatial.github.io/terra/reference/headtail.html" class="external-link">head</a></span><span class="op">(</span><span class="va">obs_dt</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">obs_dt</span><span class="op">)</span></span>
 <span><span class="co">#&gt;    siteName  patchName  year   species_name    ba   dbh trees growth growth_n</span></span>
 <span><span class="co">#&gt;      &lt;char&gt;     &lt;char&gt; &lt;int&gt;         &lt;char&gt; &lt;num&gt; &lt;num&gt; &lt;int&gt;  &lt;num&gt;    &lt;int&gt;</span></span>
 <span><span class="co">#&gt; 1: 11_66410 11_66410_1  2001 Abies concolor     0    NA     0     NA        0</span></span>
@@ -230,7 +230,7 @@ filter:</p>
 <span><span class="co">#&gt; 6:    NA         0      0     0</span></span></code></pre></div>
 <p>Use <code>Nspecies</code> (a hard cap) or
 <code>NspeciesQuantile</code> (smallest set covering a stem fraction) to
-control how many species you model — everything else becomes
+control how many species you model; everything else becomes
 <code>"other"</code>, which FINN still tracks as a competitor.</p>
 </div>
 <div class="section level2">
@@ -318,7 +318,7 @@ species lumping as <code>obs_dt</code>, so the two stay consistent.</p>
 </h2>
 <p>With <code>createInitCohorts = TRUE</code>,
 <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> returns a ready <code>CohortMat</code>
-describing the starting state — its <code>dims</code> are
+describing the starting state; its <code>dims</code> are
 <code>c(sites, patches, cohorts)</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">init_cohorts</span> <span class="op">&lt;-</span> <span class="va">inputs</span><span class="op">$</span><span class="va">initCohorts</span></span>
@@ -330,7 +330,7 @@ describing the starting state — its <code>dims</code> are
 <span><span class="co">#&gt; * trees: Float [1:8, 1:4, 1:14]</span></span>
 <span><span class="co">#&gt; * species: Long [1:8, 1:4, 1:14]</span></span></code></pre></div>
 <p>To build cohorts yourself from a year-0 tree slice, call
-<code><a href="../reference/makeInitCohorts.html">makeInitCohorts()</a></code> directly — it expects
+<code><a href="../reference/makeInitCohorts.html">makeInitCohorts()</a></code> directly; it expects
 <code>siteID, patchID, species, dbh, treeName</code> (+ optional
 <code>trees</code>):</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
@@ -351,20 +351,20 @@ interval.</li>
 <em>after</em> it.</li>
 <li>
 <strong><code>env_dt</code> covers every
-<code>siteID × year</code></strong> in <code>obs_dt</code> — missing
-rows break the fit.</li>
+<code>siteID × year</code></strong> in <code>obs_dt</code>; missing rows
+break the fit.</li>
 <li>
 <strong>Units</strong>: <code>dbh</code> in cm, <code>ba</code> in
 m², <code>reg</code> in trees ha⁻¹; env predictors in natural units
 (FINN standardizes them internally).</li>
 <li>
 <strong>Species IDs</strong> are contiguous integers
-<code>1..N</code>, aligned across tables — always go through
+<code>1..N</code>, aligned across tables; always go through
 <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> rather than hand-coding them.</li>
 </ul>
 <p>You now have <code>obs_dt</code>, <code>env_dt</code>, and
-<code>init_cohorts</code> — the inputs the <strong>Fitting FINN to
-forest inventory data</strong> vignette consumes.</p>
+<code>init_cohorts</code>, the inputs the <strong>Fitting FINN to forest
+inventory data</strong> vignette consumes.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.0 (2025-04-11)</span></span>

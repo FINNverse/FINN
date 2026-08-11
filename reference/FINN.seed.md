@@ -35,8 +35,6 @@ random operations.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
 FINN.seed(123)
 # Now both R and Torch are seeded with 123, ensuring reproducible results
-} # }
 ```

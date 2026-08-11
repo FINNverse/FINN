@@ -187,7 +187,7 @@ species), against the temperature and precipitation gradients:</p>
 <h2 id="initial-cohorts">Initial cohorts<a class="anchor" aria-label="anchor" href="#initial-cohorts"></a>
 </h2>
 <p>Each simulation starts from the observed first inventory. We build
-the starting state for both samples — the holdout gets its own cohorts,
+the starting state for both samples, the holdout gets its own cohorts,
 from its own sites.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">Nsp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span></span>
@@ -208,17 +208,17 @@ responses. The model is calibrated end-to-end by gradient descent
 through the entire simulation.</p>
 <p>We pass <strong>two</strong> climate drivers rather than all six
 available. <code>~.</code> would use every column, but the six are
-strongly collinear — <code>temp</code> and <code>tempmin</code>
-correlate at r = 0.93, <code>prec</code> and <code>precwarmq</code> at
-0.86, and two principal components carry 90% of the variance. Collinear
-predictors are not a problem for the <em>fit</em> (that is what ALE is
-designed for), but they are a problem for the <em>interpretation</em>
-below: two drivers that correlate at 0.93 have no separately
-identifiable response curves, so calling each one a “niche” would be
-reading structure into an arbitrary split. Two weakly-correlated drivers
-(r = 0.64) give curves that mean what the text says they mean. Measured
-across three seeds, the cost is nothing on growth (0.56 vs 0.55 held
-out) and ~0.02 on basal area, tree numbers and regeneration.</p>
+strongly collinear; <code>temp</code> and <code>tempmin</code> correlate
+at r = 0.93, <code>prec</code> and <code>precwarmq</code> at 0.86, and
+two principal components carry 90% of the variance. Collinear predictors
+are not a problem for the <em>fit</em> (that is what ALE is designed
+for), but they are a problem for the <em>interpretation</em> below: two
+drivers that correlate at 0.93 have no separately identifiable response
+curves, so calling each one a “niche” would be reading structure into an
+arbitrary split. Two weakly-correlated drivers (r = 0.64) give curves
+that mean what the text says they mean. Measured across three seeds, the
+cost is nothing on growth (0.56 vs 0.55 held out) and ~0.02 on basal
+area, tree numbers and regeneration.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/finn.html">finn</a></span><span class="op">(</span></span>
@@ -249,7 +249,7 @@ out) and ~0.02 on basal area, tree numbers and regeneration.</p>
 </h2>
 <p>FINN’s defining feature is that <strong>any single demographic
 process can be swapped from a mechanistic function to a neural
-network</strong>, while the others stay mechanistic — a <em>hybrid</em>
+network</strong>, while the others stay mechanistic, a <em>hybrid</em>
 model. The mechanistic processes keep the system ecologically
 constrained; the network absorbs structure the fixed functional form
 cannot express. Here we replace <strong>growth</strong> with a small
@@ -300,12 +300,12 @@ means that response is predicted better than by its own mean.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="D/D-convergence-1.png" style="display: block; margin: auto;"></p>
 <p>The structural responses drop well below 1 within a few epochs. The
-per-tree rates sit much closer to it — they are only weakly constrained
+per-tree rates sit much closer to it; they are only weakly constrained
 by two inventories, which is the honest picture and the reason for the
 caveat further down.</p>
 </div>
 <div class="section level2">
-<h2 id="what-the-model-learned-summary">What the model learned — <code>summary()</code><a class="anchor" aria-label="anchor" href="#what-the-model-learned-summary"></a>
+<h2 id="what-the-model-learned-summary">What the model learned: <code>summary()</code><a class="anchor" aria-label="anchor" href="#what-the-model-learned-summary"></a>
 </h2>
 <p><code><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary()</a></code> gives a compact overview of the <em>learned
 structure</em>: for each process and species it reports how important
@@ -372,12 +372,12 @@ simulation.</p>
 response <em>curves</em>.</p>
 </div>
 <div class="section level2">
-<h2 id="assess-the-fit-in-sample-and-on-held-out-sites">Assess the fit — in-sample and on held-out sites<a class="anchor" aria-label="anchor" href="#assess-the-fit-in-sample-and-on-held-out-sites"></a>
+<h2 id="assess-the-fit-in-sample-and-on-held-out-sites">Assess the fit: in-sample and on held-out sites<a class="anchor" aria-label="anchor" href="#assess-the-fit-in-sample-and-on-held-out-sites"></a>
 </h2>
 <p>The fit was calibrated on the 200 training sites, so scoring it there
 only tells us how well it <em>reproduces</em> them. The honest question
-is whether it transfers, so we simulate each model twice — once on the
-training sites, once on the 200 held-out sites — and score both with
+is whether it transfers, so we simulate each model twice, once on the
+training sites, once on the 200 held-out sites, and score both with
 <strong>Spearman correlation</strong> (rank agreement) and
 <strong>RMSE</strong> (in each response’s own units), matched on site ×
 year × species.</p>
@@ -436,15 +436,15 @@ year × species.</p>
 <span><span class="co">#&gt; 10:         0.15</span></span>
 <span><span class="co">#&gt; 11:         6.47</span></span>
 <span><span class="co">#&gt; 12:         6.46</span></span></code></pre></div>
-<p>The structural variables — basal area, tree numbers and diameter —
-are reconstructed well, <strong>and hold up on sites the model never
+<p>The structural variables (basal area, tree numbers and diameter) are
+reconstructed well, <strong>and hold up on sites the model never
 saw</strong>: that gap between the train and holdout columns is the part
 that matters, because it is the only evidence that the fitted processes
 generalise rather than memorise. The noisier per-tree rates (growth,
 mortality, regeneration) are harder to constrain from two inventories
 and should be read with that in mind (see the caveat below). The hybrid
-tracks the mechanistic model on the structural variables — with
-<strong>no growth equation specified</strong> — which is what makes
+tracks the mechanistic model on the structural variables, with
+<strong>no growth equation specified</strong>, which is what makes
 hybrids useful when a process’s form is uncertain; the surrounding
 mechanistic processes still anchor the model ecologically.</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
@@ -464,18 +464,18 @@ mechanistic processes still anchor the model ecologically.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"top"</span><span class="op">)</span></span></code></pre></div>
 <p><img src="D/D-assess-plot-1.png" style="display: block; margin: auto;"></p>
 <p>Each panel is on its <strong>own</strong> axes, and the grey line is
-1:1 — so the diagonal is the target in every panel regardless of the
+1:1, so the diagonal is the target in every panel regardless of the
 units on it.</p>
 <blockquote>
 <p><strong>A caveat on the rate variables.</strong> <code>growth</code>,
 <code>mort</code> and <code>reg</code> are per-tree rates and are only
 weakly constrained by two inventories, so their Spearman is a
-<strong>noisy estimate</strong> — refitting with a different random seed
+<strong>noisy estimate</strong>; refitting with a different random seed
 moves it by a few hundredths. Differences of that size between the
 models should not be over-read; the structural variables, estimated from
 far more information, are what carry the comparison. <code>mort</code>
-is the extreme case and gets a vignette of its own — <strong>Mortality:
-a binomial response and a neural-network process</strong> — because rank
+is the extreme case and gets a vignette of its own (<strong>Mortality: a
+binomial response and a neural-network process</strong>) because rank
 correlation is the wrong tool for a response that is mostly zeros.</p>
 </blockquote>
 </div>
@@ -483,7 +483,7 @@ correlation is the wrong tool for a response that is mostly zeros.</p>
 <h2 id="interpreting-the-growth-process-with-ale">Interpreting the growth process with ALE<a class="anchor" aria-label="anchor" href="#interpreting-the-growth-process-with-ale"></a>
 </h2>
 <p><code><a href="../reference/ALE.html">ALE()</a></code> returns the <strong>accumulated local
-effect</strong> of every driver on each process — the effect measure of
+effect</strong> of every driver on each process, the effect measure of
 choice when predictors are correlated, because it accumulates
 <em>local</em> changes within the observed data instead of extrapolating
 to unrealistic combinations. Running it on <strong>both</strong> fitted
@@ -510,7 +510,7 @@ process (<code>growth</code>, <code>mortality</code>,
 <span>  <span class="fu">to_natural</span><span class="op">(</span><span class="va">ale_hyb</span><span class="op">$</span><span class="va">growth</span>,  <span class="va">m_hybrid</span><span class="op">)</span><span class="op">[</span>, <span class="va">model</span> <span class="op">:=</span> <span class="st">"Hybrid (growth = NN)"</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="va">growth</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">growth</span>, <span class="va">species_dt</span>, by <span class="op">=</span> <span class="st">"species"</span><span class="op">)</span></span></code></pre></div>
 <p>One helper plots the growth ALE of both variants for any set of
-drivers — one panel per species × driver, with <strong>independent
+drivers, one panel per species × driver, with <strong>independent
 axes</strong> so responses of very different magnitude stay legible side
 by side:</p>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
@@ -530,13 +530,13 @@ by side:</p>
 <h3 id="environmental-niches">Environmental niches<a class="anchor" aria-label="anchor" href="#environmental-niches"></a>
 </h3>
 <p>Because the environmental responses are learned rather than
-prescribed, each curve is an inferred <strong>niche</strong> — how a
+prescribed, each curve is an inferred <strong>niche</strong>, how a
 species’ growth scales along a climate gradient. Growth generally rises
 with precipitation, and the temperature responses are single-peaked,
 with an optimum in the middle of the sampled range.</p>
 <p>Read these as <em>illustrations of what ALE recovers</em>, not as
 settled ecology. The per-species shapes are noisier than the structural
-responses below — growth is weakly constrained by two inventories (see
+responses below; growth is weakly constrained by two inventories (see
 the caveat above), and the mechanistic and hybrid curves do not always
 agree, even on the sign of a response. That disagreement is itself
 informative: where two models trained on the same data diverge, the data
@@ -547,12 +547,12 @@ are not pinning that response down.</p>
 <p><img src="D/D-ale-environmental-1.png" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
-<h3 id="which-drivers-matter-feature_importance">Which drivers matter — <code>feature_importance()</code><a class="anchor" aria-label="anchor" href="#which-drivers-matter-feature_importance"></a>
+<h3 id="which-drivers-matter-feature_importance">Which drivers matter: <code>feature_importance()</code><a class="anchor" aria-label="anchor" href="#which-drivers-matter-feature_importance"></a>
 </h3>
 <p>The niches show the <em>shape</em> of each response;
 <code><a href="../reference/feature_importance.html">feature_importance()</a></code> gives its <em>magnitude</em>. It
 permutes each environmental predictor and re-simulates, measuring the
-resulting increase in prediction error — a re-simulation counterpart to
+resulting increase in prediction error, a re-simulation counterpart to
 the analytical importance in <code><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary()</a></code>. Below we read off
 the importances for the growth process of the four focal species:</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
@@ -569,11 +569,11 @@ the importances for the growth process of the four focal species:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_viridis.html" class="external-link">scale_fill_viridis_c</a></span><span class="op">(</span>guide <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="cn">NULL</span>, y <span class="op">=</span> <span class="st">"permutation importance (delta error)"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="D/D-featimp-plot-1.png" style="display: block; margin: auto;"></p>
-<p>Each species leans on a different climate driver — the importances
-are learned per species, not shared.</p>
+<p>Each species leans on a different climate driver; the importances are
+learned per species, not shared.</p>
 </div>
 <div class="section level3">
-<h3 id="response-to-size-and-light-did-the-network-recover-the-mechanistic-form">Response to size and light — did the network recover the mechanistic
+<h3 id="response-to-size-and-light-did-the-network-recover-the-mechanistic-form">Response to size and light: did the network recover the mechanistic
 form?<a class="anchor" aria-label="anchor" href="#response-to-size-and-light-did-the-network-recover-the-mechanistic-form"></a>
 </h3>
 <p>The point of a hybrid is to ask which functional form the neural
@@ -582,7 +582,7 @@ it replaced. Here the two agree on the structural responses that are
 well constrained by the data: growth <strong>declines with tree
 size</strong> and <strong>increases with light availability</strong> for
 every species, and the network recovered both shapes without being given
-the functional form. That agreement is the useful result — it says the
+the functional form. That agreement is the useful result; it says the
 mechanistic size-and-light response was a reasonable choice, and that a
 flexible network, free to do anything, reproduces it. The remaining gaps
 between the curves are small next to the noise in the rate itself.</p>
@@ -592,7 +592,7 @@ between the curves are small next to the noise in the rate itself.</p>
 <p><img src="D/D-ale-structural-1.png" style="display: block; margin: auto;"></p>
 <p>Each curve spans only the range its <em>own</em> model actually
 simulates (ALE never extrapolates), so where the process and hybrid
-cover different ranges — as for <em>Abies grandis</em> light — the two
+cover different ranges, as for <em>Abies grandis</em> light, the two
 models simply place that species in different conditions; the mismatch
 is information, not an artefact.</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">

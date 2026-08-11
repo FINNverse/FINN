@@ -101,8 +101,7 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="va">obs_df</span> <span class="op">&lt;-</span> <span class="fu">rweibull_cohorts</span><span class="op">(</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">obs_df</span> <span class="op">&lt;-</span> <span class="fu">rweibull_cohorts</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  trees <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">300</span>, <span class="fl">10</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  dbh_shape <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">3</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  dbh_scale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">50</span><span class="op">)</span>,</span></span>
@@ -111,8 +110,14 @@
 <span class="r-in"><span>  patchID <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  species <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">4</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va"><a href="CohortMat.html">CohortMat</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span>obs_df <span class="op">=</span> <span class="va">obs_df</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">obs_df</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   siteID patchID cohortID species dbh trees</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1      1       1        1       3 0.4     5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2      1       1        2       3 0.5    10</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3      1       1        3       3 0.6    14</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4      1       1        4       3 0.7    21</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5      1       1        5       3 0.8    30</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6      1       1        6       3 0.9    36</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

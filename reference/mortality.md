@@ -13,7 +13,7 @@ mortality(
   pred,
   light,
   base_steepness = 5,
-  debug = F,
+  debug = FALSE,
   growth = NULL
 )
 ```

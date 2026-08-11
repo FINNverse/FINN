@@ -223,7 +223,5 @@ Evolution*.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
 growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
-} # }
 ```

@@ -238,7 +238,7 @@ held-out <code>growth</code> — far more than tuning <code>lr</code> or <code>e
 <dd><p>(<code>logical(1)</code>)<br> If <code>TRUE</code>, FINN z-standardizes the
 environmental predictors in <code>env</code> internally: the per-variable mean and
 standard deviation are learned from the training <code>env</code> and stored on the
-model, then re-applied automatically at every <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code>/<code><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate()</a></code> call.
+model, then re-applied automatically at every <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>/<code><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate()</a></code> call.
 This lets you pass raw (untransformed) <code>env</code> for both calibration and
 prediction; FINN guarantees an identical transformation at both stages.
 Recommended (and the default) for numerical stability when predictors are on

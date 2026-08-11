@@ -74,7 +74,6 @@ cohort data is generated accordingly.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
 obs_df <- rweibull_cohorts(
   trees = c(300, 10),
   dbh_shape = c(3, 3),
@@ -84,6 +83,12 @@ obs_df <- rweibull_cohorts(
   patchID = c(1, 1),
   species = c(3, 4)
 )
-CohortMat$new(obs_df = obs_df)
-} # }
+head(obs_df)
+#>   siteID patchID cohortID species dbh trees
+#> 1      1       1        1       3 0.4     5
+#> 2      1       1        2       3 0.5    10
+#> 3      1       1        3       3 0.6    14
+#> 4      1       1        4       3 0.7    21
+#> 5      1       1        5       3 0.8    30
+#> 6      1       1        6       3 0.9    36
 ```

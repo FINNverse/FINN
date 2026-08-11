@@ -7,7 +7,7 @@ aligned data plus optional initial cohorts.
 ## Usage
 
 ``` r
-resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = T)
+resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE)
 ```
 
 ## Arguments

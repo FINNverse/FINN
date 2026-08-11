@@ -165,7 +165,5 @@ Evolution*.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
 growth_process <- createHybrid(formula = ~temperature + precipitation)
-} # }
 ```

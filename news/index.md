@@ -2,6 +2,8 @@
 
 ## FINN 0.1.0
 
+CRAN release: 2026-08-09
+
 First public release.
 
 FINN is a differentiable forest gap model: a cohort-based dynamic

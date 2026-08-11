@@ -67,12 +67,3 @@ competition(
 ## Value
 
 torch.Tensor Fraction of available light (light) for each cohort.
-
-## Examples
-
-``` r
-if (FALSE) { # \dontrun{
-competition(dbh = torch::torch_tensor(c(10, 15, 20)), species = torch::torch_tensor(c(1, 2, 1)),
-        trees = 100, parComp = torch::torch_tensor(c(0.3, 0.5)), patch_size_ha = 0.1)
-} # }
-```

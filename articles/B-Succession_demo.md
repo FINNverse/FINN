@@ -147,8 +147,8 @@ pars_dt
 
 Reading the rows: the pioneer needs the most light (`shade` 0.60), grows
 fastest (`growth_rate` ≈ 2.7), is the most shade-intolerant
-(`shade_intol` highest, so its mortality climbs steeply once overtopped
-— `mort_shaded` ≈ 0.33) and regenerates most (`seed_rain`); the climax
+(`shade_intol` highest, so its mortality climbs steeply once overtopped,
+to `mort_shaded` ≈ 0.33) and regenerates most (`seed_rain`); the climax
 is shade-tolerant, slow, almost immortal even in deep shade
 (`mort_shaded` ≈ 0.035), sparse but steady, and the tallest, so it
 ultimately overtops.
@@ -217,8 +217,8 @@ Basal area by species over time. The pioneer peaks within the first
 decade and collapses; mid-seral species crest in turn; the
 shade-tolerant climax rises slowly and dominates the mature stand.
 
-The same run, across every state variable FINN tracks — diameter, basal
-area, tree numbers, growth, mortality and regeneration:
+The same run, across every state variable FINN tracks (diameter, basal
+area, tree numbers, growth, mortality and regeneration):
 
 ``` r
 
@@ -261,7 +261,7 @@ a parameter choice we made earlier:
   and it can no longer regenerate because it is shade-intolerant. Its
   mortality increases rapidly once overtopped (visible in the mortality
   panel: from ~0.08 yr⁻¹ in full light to ~0.3 yr⁻¹ in shade), clearing
-  the standing trees. By mid-succession it is essentially gone.
+  the standing trees. By mid-succession it is nearly gone.
 - **Each mid-successional species has its turn.** Lime and hornbeam have
   progressively lower light requirements and lower mortality, so each
   peaks a little later and stays a little longer. Hornbeam holds a
@@ -381,10 +381,9 @@ m_T <- finn(
 )
 ```
 
-Note that first each species’ Ellenberg T is rescaled to an optimum
-position on the axis, then that optimum becomes a bell-shaped climate
-niche. Birch has no optimum and stays flat, the generalist that pioneers
-every site.
+First, each species’ Ellenberg T is rescaled to an optimum position on
+the axis; that optimum then becomes a bell-shaped climate niche. Birch
+has no optimum and stays flat, the generalist that pioneers every site.
 
 ![Left: Ellenberg temperature value T mapped to each species' climate
 optimum. Right: the resulting climate niche along the cold-wet to

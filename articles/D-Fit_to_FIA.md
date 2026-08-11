@@ -128,7 +128,7 @@ ggplot(grad, aes(value, ba)) +
 ## Initial cohorts
 
 Each simulation starts from the observed first inventory. We build the
-starting state for both samples — the holdout gets its own cohorts, from
+starting state for both samples, the holdout gets its own cohorts, from
 its own sites.
 
 ``` r
@@ -154,7 +154,7 @@ model is calibrated end-to-end by gradient descent through the entire
 simulation.
 
 We pass **two** climate drivers rather than all six available. `~.`
-would use every column, but the six are strongly collinear — `temp` and
+would use every column, but the six are strongly collinear; `temp` and
 `tempmin` correlate at r = 0.93, `prec` and `precwarmq` at 0.86, and two
 principal components carry 90% of the variance. Collinear predictors are
 not a problem for the *fit* (that is what ALE is designed for), but they
@@ -200,7 +200,7 @@ fit(m,
 
 FINN’s defining feature is that **any single demographic process can be
 swapped from a mechanistic function to a neural network**, while the
-others stay mechanistic — a *hybrid* model. The mechanistic processes
+others stay mechanistic, a *hybrid* model. The mechanistic processes
 keep the system ecologically constrained; the network absorbs structure
 the fixed functional form cannot express. Here we replace **growth**
 with a small neural network via
@@ -264,11 +264,11 @@ ggplot(melt(hist_dt, id.vars = "epoch", variable.name = "response"),
 ![](D/D-convergence-1.png)
 
 The structural responses drop well below 1 within a few epochs. The
-per-tree rates sit much closer to it — they are only weakly constrained
+per-tree rates sit much closer to it; they are only weakly constrained
 by two inventories, which is the honest picture and the reason for the
 caveat further down.
 
-## What the model learned — `summary()`
+## What the model learned: `summary()`
 
 [`summary()`](https://rspatial.github.io/terra/reference/summary.html)
 gives a compact overview of the *learned structure*: for each process
@@ -340,12 +340,12 @@ Average conditional effects (mean; species in columns):
 The niche and ALE sections below unpack this overview into per-driver
 response *curves*.
 
-## Assess the fit — in-sample and on held-out sites
+## Assess the fit: in-sample and on held-out sites
 
 The fit was calibrated on the 200 training sites, so scoring it there
 only tells us how well it *reproduces* them. The honest question is
-whether it transfers, so we simulate each model twice — once on the
-training sites, once on the 200 held-out sites — and score both with
+whether it transfers, so we simulate each model twice, once on the
+training sites, once on the 200 held-out sites, and score both with
 **Spearman correlation** (rank agreement) and **RMSE** (in each
 response’s own units), matched on site × year × species.
 
@@ -407,17 +407,17 @@ comparison[order(variable, model)]
 #> 12:         6.46
 ```
 
-The structural variables — basal area, tree numbers and diameter — are
+The structural variables (basal area, tree numbers and diameter) are
 reconstructed well, **and hold up on sites the model never saw**: that
 gap between the train and holdout columns is the part that matters,
 because it is the only evidence that the fitted processes generalise
 rather than memorise. The noisier per-tree rates (growth, mortality,
 regeneration) are harder to constrain from two inventories and should be
 read with that in mind (see the caveat below). The hybrid tracks the
-mechanistic model on the structural variables — with **no growth
-equation specified** — which is what makes hybrids useful when a
-process’s form is uncertain; the surrounding mechanistic processes still
-anchor the model ecologically.
+mechanistic model on the structural variables, with **no growth equation
+specified**, which is what makes hybrids useful when a process’s form is
+uncertain; the surrounding mechanistic processes still anchor the model
+ecologically.
 
 ``` r
 
@@ -439,32 +439,32 @@ ggplot(obs_pred[variable %in% c("dbh", "ba", "trees") & is.finite(obs)],
 
 ![](D/D-assess-plot-1.png)
 
-Each panel is on its **own** axes, and the grey line is 1:1 — so the
+Each panel is on its **own** axes, and the grey line is 1:1, so the
 diagonal is the target in every panel regardless of the units on it.
 
 > **A caveat on the rate variables.** `growth`, `mort` and `reg` are
 > per-tree rates and are only weakly constrained by two inventories, so
-> their Spearman is a **noisy estimate** — refitting with a different
+> their Spearman is a **noisy estimate**; refitting with a different
 > random seed moves it by a few hundredths. Differences of that size
 > between the models should not be over-read; the structural variables,
 > estimated from far more information, are what carry the comparison.
-> `mort` is the extreme case and gets a vignette of its own —
-> **Mortality: a binomial response and a neural-network process** —
+> `mort` is the extreme case and gets a vignette of its own
+> (**Mortality: a binomial response and a neural-network process**)
 > because rank correlation is the wrong tool for a response that is
 > mostly zeros.
 
 ## Interpreting the growth process with ALE
 
 [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) returns the
-**accumulated local effect** of every driver on each process — the
-effect measure of choice when predictors are correlated, because it
-accumulates *local* changes within the observed data instead of
-extrapolating to unrealistic combinations. Running it on **both** fitted
-models lets us read what growth responds to *and* compare the
-mechanistic process with the neural-network hybrid, across growth’s
-**structural** inputs (tree size, light) and its **environmental niche**
-(climate). It returns one table per process (`growth`, `mortality`,
-`regeneration`); we use the growth table of each model.
+**accumulated local effect** of every driver on each process, the effect
+measure of choice when predictors are correlated, because it accumulates
+*local* changes within the observed data instead of extrapolating to
+unrealistic combinations. Running it on **both** fitted models lets us
+read what growth responds to *and* compare the mechanistic process with
+the neural-network hybrid, across growth’s **structural** inputs (tree
+size, light) and its **environmental niche** (climate). It returns one
+table per process (`growth`, `mortality`, `regeneration`); we use the
+growth table of each model.
 
 ``` r
 
@@ -485,8 +485,8 @@ growth <- rbind(
 growth <- merge(growth, species_dt, by = "species")
 ```
 
-One helper plots the growth ALE of both variants for any set of drivers
-— one panel per species × driver, with **independent axes** so responses
+One helper plots the growth ALE of both variants for any set of drivers,
+one panel per species × driver, with **independent axes** so responses
 of very different magnitude stay legible side by side:
 
 ``` r
@@ -508,14 +508,14 @@ plot_growth_ale <- function(vars, labs) {
 ### Environmental niches
 
 Because the environmental responses are learned rather than prescribed,
-each curve is an inferred **niche** — how a species’ growth scales along
+each curve is an inferred **niche**, how a species’ growth scales along
 a climate gradient. Growth generally rises with precipitation, and the
 temperature responses are single-peaked, with an optimum in the middle
 of the sampled range.
 
 Read these as *illustrations of what ALE recovers*, not as settled
 ecology. The per-species shapes are noisier than the structural
-responses below — growth is weakly constrained by two inventories (see
+responses below; growth is weakly constrained by two inventories (see
 the caveat above), and the mechanistic and hybrid curves do not always
 agree, even on the sign of a response. That disagreement is itself
 informative: where two models trained on the same data diverge, the data
@@ -529,12 +529,12 @@ plot_growth_ale(c("temp", "prec"),
 
 ![](D/D-ale-environmental-1.png)
 
-### Which drivers matter — `feature_importance()`
+### Which drivers matter: `feature_importance()`
 
 The niches show the *shape* of each response;
 [`feature_importance()`](https://finnverse.github.io/FINN/reference/feature_importance.md)
 gives its *magnitude*. It permutes each environmental predictor and
-re-simulates, measuring the resulting increase in prediction error — a
+re-simulates, measuring the resulting increase in prediction error, a
 re-simulation counterpart to the analytical importance in
 [`summary()`](https://rspatial.github.io/terra/reference/summary.html).
 Below we read off the importances for the growth process of the four
@@ -561,10 +561,10 @@ ggplot(fimp_growth, aes(reorder(variable, importance), importance, fill = import
 
 ![](D/D-featimp-plot-1.png)
 
-Each species leans on a different climate driver — the importances are
+Each species leans on a different climate driver; the importances are
 learned per species, not shared.
 
-### Response to size and light — did the network recover the mechanistic form?
+### Response to size and light: did the network recover the mechanistic form?
 
 The point of a hybrid is to ask which functional form the neural network
 learned and how it *compares* to the mechanistic function it replaced.
@@ -572,7 +572,7 @@ Here the two agree on the structural responses that are well constrained
 by the data: growth **declines with tree size** and **increases with
 light availability** for every species, and the network recovered both
 shapes without being given the functional form. That agreement is the
-useful result — it says the mechanistic size-and-light response was a
+useful result; it says the mechanistic size-and-light response was a
 reasonable choice, and that a flexible network, free to do anything,
 reproduces it. The remaining gaps between the curves are small next to
 the noise in the rate itself.
@@ -587,7 +587,7 @@ plot_growth_ale(c("dbh", "light"),
 
 Each curve spans only the range its *own* model actually simulates (ALE
 never extrapolates), so where the process and hybrid cover different
-ranges — as for *Abies grandis* light — the two models simply place that
+ranges, as for *Abies grandis* light, the two models simply place that
 species in different conditions; the mismatch is information, not an
 artefact.
 

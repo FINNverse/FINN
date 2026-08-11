@@ -69,8 +69,6 @@ Turn a raw tree list and environment table into FINN’s inputs.
   : Transform Arrays to Observation Data Table
 - [`pred2DF()`](https://finnverse.github.io/FINN/reference/pred2DF.md) :
   Convert Prediction Arrays to Data Frames
-- [`extract_env()`](https://finnverse.github.io/FINN/reference/extract_env.md)
-  : Extract Environmental Data for a Process
 
 ## Environmental scaling
 

@@ -3,8 +3,8 @@
 Mortality is the hardest of FINN’s six responses to calibrate, and the
 one where the choice of likelihood matters most. This vignette takes it
 on its own terms: what the observation actually *is*, which likelihood
-belongs to it, how to swap the process for a neural network, and — the
-part that is easy to get wrong — how to score the result.
+belongs to it, how to swap the process for a neural network, and (the
+part that is easy to get wrong) how to score the result.
 
 It follows the same 200-fit / 200-holdout FIA sample as **Fitting FINN
 to forest inventory data**, and like that page it is **precompiled** by
@@ -25,8 +25,8 @@ EPOCHS <- 500L
 [`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
 returns mortality as a **pair of counts** rather than a bare rate:
 
-- **`n_at_risk`** — trees alive at the *start* of an inventory interval,
-- **`n_died`** — how many of those were dead at the *end*,
+- **`n_at_risk`**: trees alive at the *start* of an inventory interval,
+- **`n_died`**: how many of those were dead at the *end*,
 
 with `mort = n_died / n_at_risk` derived for convenience. This is
 exactly the `cbind(died, survived)` response of a binomial GLM, and it
@@ -34,7 +34,7 @@ is deliberate. A bare proportion throws away the sample size: it cannot
 tell a site where 1 of 1 trees died from one where 60 of 60 did, even
 though the second carries sixty times the information.
 
-The pair is a **closed cohort** — both columns are pinned to the tree’s
+The pair is a **closed cohort**; both columns are pinned to the tree’s
 state at the start of the interval. That matters more than it sounds.
 FIA re-identifies a tree’s species between visits, so a rate built by
 dividing “deaths this year” by “survivors last year” can book a death
@@ -92,7 +92,7 @@ cat(sprintf("pooled mortality rate              : %.3f per inventory interval\n"
 
 A few hundred deaths, and roughly two-thirds of the observations at
 exactly zero. No likelihood can manufacture information that is not
-there — but the wrong one can waste what is.
+there, but the wrong one can waste what is.
 
 ## Why `binomial` and not `mse`
 
@@ -102,7 +102,7 @@ variance; mortality is neither. A proportion lives on
 ``` math
 0, 1
 ```
-and its variance *shrinks* as the rate approaches either end — so on a
+and its variance *shrinks* as the rate approaches either end, so on a
 response that is ~69% zeros, MSE puts almost no gradient where the data
 actually are.
 
@@ -150,7 +150,7 @@ fit(m,
 )
 ```
 
-Now the same model with **mortality replaced by a neural network** —
+Now the same model with **mortality replaced by a neural network**,
 every other process, and the entire
 [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) call,
 unchanged.
@@ -224,7 +224,7 @@ obs_pred[is.finite(obs) & is.finite(value),
 give a higher death probability to a tree that died than to one that
 survived? Each observation stands for `n_at_risk` Bernoulli trials of
 which `n_died` are deaths, all sharing that observation’s predicted
-probability — so rather than expand the trials we weight them, with tied
+probability, so rather than expand the trials we weight them, with tied
 predictions taking half credit (the standard Mann-Whitney treatment).
 
 ``` r
@@ -260,7 +260,7 @@ auc_tab[order(split, -AUC)]
 
 Read the two splits **together**, because the gap between them is the
 result. On the training sites the model ranks deaths above survivors
-better than chance — so there *is* a learnable mortality signal, and the
+better than chance, so there *is* a learnable mortality signal, and the
 model finds it. On the held-out sites that skill collapses to ~0.5. The
 model is not failing to fit mortality; it is fitting it and **not
 generalising**.
@@ -279,7 +279,7 @@ manufactures information the two inventories do not contain. Treat
 differences between the two models as noise; the signal worth reading is
 train-vs-holdout, not model-vs-model.
 
-## What the network learned — ALE
+## What the network learned: ALE
 
 [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) returns one
 table per process, so the same tool reads a mechanistic mortality
@@ -320,8 +320,8 @@ ggplot(d, aes(x, ale, colour = model)) +
 
 ![](E/E-ale-plot-1.png)
 
-Each curve spans only the range its own model actually simulates — ALE
-never extrapolates — so where the two cover different ranges they are
+Each curve spans only the range its own model actually simulates (ALE
+never extrapolates) so where the two cover different ranges they are
 simply placing a species in different conditions.
 
 Read these as a demonstration of the *mechanism*: a process can be
@@ -351,16 +351,17 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] torch_0.15.1      ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
+#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
-#>  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     coro_1.1.0        
-#>  [9] labeling_0.4.3     glue_1.8.0         bit_4.6.0          ps_1.9.1          
-#> [13] scales_1.4.0       grid_4.5.0         abind_1.4-8        evaluate_1.0.5    
-#> [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       
-#> [21] RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3    farver_2.1.2      
-#> [25] viridisLite_0.4.2  R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
-#> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
-#> [33] bit64_4.6.0-1      gtable_0.3.6
+#>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       
+#>  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.0         callr_3.7.6       
+#>  [9] splines_4.5.0      scales_1.4.0       lattice_0.22-6     R6_2.6.1          
+#> [13] labeling_0.4.3     generics_0.1.4     knitr_1.50         tibble_3.3.0      
+#> [17] pillar_1.11.0      RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57         
+#> [21] bit64_4.6.0-1      viridisLite_0.4.2  cli_3.6.6          withr_3.0.2       
+#> [25] magrittr_2.0.3     mgcv_1.9-1         ps_1.9.1           grid_4.5.0        
+#> [29] processx_3.8.6     lifecycle_1.0.5    nlme_3.1-168       coro_1.1.0        
+#> [33] vctrs_0.6.5        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      
+#> [37] abind_1.4-8        tools_4.5.0        pkgconfig_2.0.3
 ```
