@@ -1,0 +1,170 @@
+---
+title: "Representing the WET2024 forest development types in FINN"
+subtitle: "A parametric catalogue --- one common parameter set, one point per WET"
+author: "FINN management module (branch `profound-management`)"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: true
+    toc: false
+geometry: margin=2cm
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{pdflscape}
+  - \usepackage{makecell}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(knitr)
+library(kableExtra)
+```
+
+```{r data}
+# =============================================================================
+# The common parameter set ("management genome"). Every WET2024 type is ONE row
+# = one point in this space. Nothing is a discrete category in the code; the WET
+# codes are just names for parameter combinations. Per-species parameters
+# (Zielstaerke, Mischungsregulierung) are shown for the LEADING species; the real
+# WET specifies them per admixed species (see limitations).
+#
+# Parameter ranges / meaning:
+#   zielstaerke_cm          target_diameter_cm       (Zielstaerke)            cm
+#   nutzungsstaerke         target_harvest_fraction  (Nutzungsstaerke)        0..1 of >=target stems removed per entry
+#   streubreite_cm          target_diameter_spread   (Zielstaerken-Streubreite) cm, sharpness of the target threshold
+#   durchf_staerke          thinning_intensity       (Durchforstungsstaerke)  0..1 of basal area per entry (sub-target)
+#   durchf_art              thinning_size_bias       (Durchforstungsart)      -1 Nieder .. 0 neutral .. +1 Hochdurchforstung
+#   mischungsreg            species_removal_pref     (Mischungsregulierung)   0 keep leading .. 1 convert away from it
+#   verjuengung             planting_rate            (Verjuengung / Vorbau)   0 natural regen .. 1 active planting
+#   turnus_a                entry_interval_years     (Eingriffsturnus)        years between interventions
+#   risikostufe             risk_level               (Risikostufe)            0 gering .. ~0.4 mittel .. ~0.8 hoch
+# =============================================================================
+
+wet <- data.frame(stringsAsFactors = FALSE,
+  code  = c("b","bx","e","h","j","p","f","fx","m","t","tx","d","k","kx"),
+  name  = c("Buchen-Mischwald","Buchen-Mischwald (hohes Risiko)","Eichen-Mischwald",
+            "Buntlaubbaum-Mischwald frisch","Buntlaubbaum-Mischwald trocken","Pappel-Mischwald",
+            "Fichten-Mischwald","Fichten-Mischwald (hohes Risiko)","Fichten-Kiefern-Moorwald",
+            "Tannen-Mischwald","Tannen-Mischwald (hohes Risiko)","Douglasien-Mischwald",
+            "Kiefern-Mischwald","Kiefern-Mischwald (hohes Risiko)"),
+  lead  = c("Bu","Bu","Ei","Es/BAh","Es/BAh","Pa","Fi","Fi","Fi/Kie","Ta","Ta","Dgl","Kie","Kie"),
+  zielstaerke_cm  = c(60,50,70,50,50,60,50,45,NA,55,50,65,50,45),
+  nutzungsstaerke = c(0.5,0.7,0.4,0.5,0.5,0.5,0.6,0.8,0.0,0.5,0.7,0.5,0.5,0.7),
+  streubreite_cm  = c(15,10,15,10,10,8,8,5,NA,12,8,15,10,8),
+  durchf_staerke  = c(0.15,0.15,0.20,0.20,0.15,0.20,0.20,0.20,0.0,0.15,0.15,0.25,0.20,0.20),
+  durchf_art      = c(0.3,0.2,0.4,0.4,0.3,0.3,0.2,0.0,0.0,0.2,0.1,0.5,0.3,0.2),
+  mischungsreg    = c(0.15,0.35,0.20,0.20,0.25,0.10,0.15,0.40,0.0,0.15,0.35,0.15,0.20,0.40),
+  verjuengung     = c(0.0,0.2,0.3,0.2,0.2,0.6,0.1,0.3,0.0,0.0,0.2,0.3,0.3,0.3),
+  turnus_a        = c(7,5,7,7,7,5,7,5,NA,7,5,7,7,5),
+  risikostufe     = c(0.3,0.8,0.3,0.3,0.5,0.4,0.4,0.8,NA,0.4,0.8,0.4,0.4,0.8),
+  comment = c(
+    "Zielstaerke qualitaetsgestaffelt (B 60 / C 50 cm) -- ein Wert mittelt. Dauerwald oder Hochwald mit Phasenwechsel waehlbar; hier Dauerwald-Lesart.",
+    "Hohe Risikostufe: verkuerzte Zieldurchmesserernte, kein flaechiger Schirm; Umbau zu trockentoleranteren Begleitern.",
+    "Lichtbaumart: Etablierung braucht aktive Freistellung/Vorbau, von reinen Entnahme-Parametern nicht erfasst. Zielstaerke gestaffelt bis 80 cm.",
+    "Sammeltyp vieler Edellaubbaeume mit sehr unterschiedlichen Zielstaerken (40-60 cm); ein Zielstaerkenwert ist grob.",
+    "Wie (h), trockener Standort; standortabhaengige Artenwahl hier nicht differenziert.",
+    "Schnellwuechsige Pionierart, kurzer Umtrieb; Pflanzung dominiert die Verjuengung. Ernte in >=2 Durchgaengen.",
+    "Zielstaerkennutzung/Dauerwald ersetzt den frueheren Kahlschlag-Umtrieb; klassische Niederdurchforstung nur naeherungsweise als leichte Auslese.",
+    "Kernfall Klimaanpassung: Zielstaerke gesenkt (45 cm), schnellere Ernte, aktiver Umbau.",
+    "Sonderstandort Moor: Schutz/Prozessschutz, i. d. R. keine regulaere Nutzung -- Parameter weitgehend inaktiv (0/NA).",
+    "Schattbaumart, Naturverjuengung; Zielstaerke gestaffelt (B 50 / geaestet bis 80 cm).",
+    "Hohe Risikostufe der Tanne: verkuerzte Erntephase, Beimischung sichern.",
+    "Anbaubaumart, oft gepflanzt; ausgepraegte Z-Baum-orientierte Hochdurchforstung. Zielstaerke stark qualitaets-/aestungsabhaengig (50-80 cm).",
+    "Lichtbaumart; Licht-/Strukturhaltung nur ueber Hochdurchforstung angenaehert. Umbau kiefern-dominierter Bestaende relevant.",
+    "Hohe Risikostufe: Zielstaerke gesenkt, Umbau/Beimischung verstaerkt."
+  )
+)
+
+# Persist the machine-readable source of truth alongside the catalogue.
+utils::write.csv(wet, file.path(dirname(knitr::current_input(dir = TRUE) %||% "."),
+                                "wet2024_parameters.csv"),
+                 row.names = FALSE, fileEncoding = "UTF-8")
+```
+
+\begin{landscape}
+
+```{r overview-table}
+tab <- wet[, c("code","name","lead","zielstaerke_cm","nutzungsstaerke","streubreite_cm",
+               "durchf_staerke","durchf_art","mischungsreg","verjuengung","turnus_a",
+               "risikostufe","comment")]
+
+col_labels <- c("Code","Waldentwicklungstyp","Leit-\nBA",
+                "Ziel-\nstaerke\n(cm)","Nutzungs-\nstaerke","Streu-\nbreite\n(cm)",
+                "Durchf.-\nstaerke","Durchf.-\nart","Mischungs-\nregul.",
+                "Verjuen-\ngung","Turnus\n(a)","Risiko-\nstufe","Anmerkungen / Grenzen der Abbildung")
+
+kbl(tab, format = "latex", booktabs = TRUE, longtable = FALSE, escape = TRUE,
+    col.names = linebreak(col_labels, align = "c"),
+    align = c("l","l","l", rep("r", 9), "p{7.2cm}"),
+    caption = "WET2024 als Punkte im gemeinsamen Parameterraum. Pro-Baumart-Parameter (Zielstaerke, Mischungsregulierung) sind fuer die Leitbaumart angegeben.") |>
+  kable_styling(latex_options = c("hold_position"), font_size = 7) |>
+  column_spec(13, width = "7.2cm") |>
+  row_spec(0, bold = TRUE)
+```
+
+\end{landscape}
+
+\newpage
+
+# The common parameter set
+
+Each WET2024 type is represented by the **same** parameters --- it is a *point in
+this space*, never a hard-coded case. The operator turns them into a per-cohort,
+per-entry **removal fraction**
+
+\[
+r(\text{dbh}, s) = \mathrm{clamp}\Big(
+\underbrace{\text{nutzungsstaerke}\cdot\sigma\!\big((\text{dbh}-\text{zielstaerke}_s)/\text{streubreite}\big)}_{\text{Zielstaerkennutzung}}
++ \underbrace{\text{durchf\_staerke}\cdot g(\text{dbh};\text{durchf\_art})\cdot f(\text{mischungsreg}_s)}_{\text{Durchforstung}}
+,\,0,\,1\Big),
+\]
+
+applied on entry years (spacing `turnus_a`), while `verjuengung` acts on the
+regeneration side (bringing target species *in*). `risikostufe` is a single dial
+that lowers `zielstaerke` and shifts the tending --- it reproduces the WET risk
+levels continuously.
+
+| code parameter | WET-Begriff (deutsch) | Bedeutung | Bereich |
+|---|---|---|---|
+| `target_diameter_cm` | **Zielstärke** (Zieldurchmesser) | DBH at which a tree is harvested | cm |
+| `target_harvest_fraction` | **Nutzungsstärke** | share of $\ge$ target stems taken per entry | 0–1 |
+| `target_diameter_spread` | **Zielstärken-Streubreite** | sharp vs. gradual target threshold | cm |
+| `thinning_intensity` | **Durchforstungsstärke** | basal-area share removed per entry (sub-target) | 0–1 |
+| `thinning_size_bias` | **Durchforstungsart** | $-1$ Niederdurchf. … $+1$ Hochdurchf. | $[-1,1]$ |
+| `species_removal_pref` | **Mischungsregulierung / Baumartenwahl** | keep leading (0) … convert away (1) | 0–1 |
+| `planting_rate` | **Verjüngung / Vorbau** | natural regen (0) … active planting (1) | 0–1 |
+| `entry_interval_years` | **Eingriffsturnus** | years between interventions | a |
+| `risk_level` | **Risikostufe** | gering (0) … mittel (~0.4) … hoch (~0.8) | 0–1 |
+
+## Limitations shared by all types
+
+- **Per-species parameters shown for the leading species only.** A real WET sets
+  `Zielstärke` and `Mischungsregulierung` per admixed species; the full vector is
+  the intended representation, the table shows the lead value.
+- **Z-Baum selection is approximated by a size bias.** WET tending is a
+  crop-tree-*targeted* Auslesedurchforstung around marked Z-Bäume;
+  `thinning_size_bias` reproduces its size signature, not the individual/spatial
+  selection.
+- **Structural/retention rules are outside the demography** (Habitatbäume, Totholz,
+  Rückegassen, site and soil constraints, protected biotopes).
+- **Risk maps are an external input.** `risk_level` sets the strategy dial; which
+  stand sits at which risk level comes from the WET risk maps, not from FINN.
+
+# The WET2024 types
+
+*Skeleton --- each type will get a worked example of how the parameters drive its
+stand development. Examples are intentionally not filled in yet.*
+
+```{r sections, results = "asis"}
+for (i in seq_len(nrow(wet))) {
+  w <- wet[i, ]
+  cat(sprintf("\n## %s (`%s`)\n\n", w$name, w$code))
+  cat(sprintf("*Leitbaumart:* %s  \n", w$lead))
+  cat(sprintf("*Parameter:* Zielstärke %s cm | Nutzungsstärke %s | Streubreite %s cm | Durchforstungsstärke %s | Durchforstungsart %s | Mischungsregulierung %s | Verjüngung %s | Turnus %s a | Risikostufe %s\n\n",
+              w$zielstaerke_cm, w$nutzungsstaerke, w$streubreite_cm, w$durchf_staerke,
+              w$durchf_art, w$mischungsreg, w$verjuengung, w$turnus_a, w$risikostufe))
+  cat("**Grenzen der Abbildung.** ", w$comment, "\n\n", sep = "")
+  cat("**Beispiel.** _(folgt)_\n\n")
+}
+```
