@@ -1,0 +1,151 @@
+---
+title: "Fitting FINN to PROFOUND data and simulating management"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Fitting FINN to PROFOUND data and simulating management}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<!--
+  PRECOMPILED VIGNETTE. Edit THIS .Rmd.orig, then knit it to F-Profound_management.Rmd
+  under a UTF-8 locale (LC_ALL=en_US.UTF-8) so German site names and umlauts survive.
+  The heavy chunks (database read, model fit) are run once here and their results are
+  baked into the shipped .Rmd; the shipped file re-runs nothing.
+
+  Data source: the PROFOUND database (Reyer et al. 2020, ESSD), accessed with the
+  ProfoundData R package. It is NOT a package dependency and NOT redistributed here;
+  this vignette documents the workflow and ships the small fitted-object / summary
+  needed to render the figures.
+-->
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7, fig.height = 4.5)
+library(FINN)
+```
+
+## What this vignette shows
+
+Two things, end to end, on a single well-observed forest:
+
+1. **FINN can be calibrated to PROFOUND data.** We take one PROFOUND site, turn its
+   repeated tree census and local climate into FINN's input tables, and fit the
+   model's demographic processes to the observed stand development.
+
+2. **The fitted model can then be run under concrete management.** FINN's built-in
+   `disturbance` argument only clearfells whole patches, so it cannot express
+   thinning or target-diameter harvest. This vignette uses the prescriptive
+   management layer (`thin_from_below()`, `target_diameter_harvest()`,
+   `species_removal()`, `clearfell()`, driven by `simulate_managed()`) to impose
+   real silvicultural regimes on the calibrated demography and compare their
+   trajectories.
+
+> **Read this before interpreting the scenarios.** A model fitted to a stand's
+> observed history has not learned how the forest responds to a *new* silvicultural
+> regime (altered light after thinning, planting, changed regeneration). A
+> prescriptive run answers "given this fitted demography, what does removing these
+> trees on this schedule do?" — a legitimate scenario, not a trained management
+> response.
+
+## The PROFOUND database
+
+PROFOUND assembles long-term observations at European forest sites — tree censuses,
+stand summaries, local and reanalysis climate — for benchmarking forest models. We
+use the `ProfoundData` package to pull one site; here, the Norway spruce stand at
+**Bílý Kříž** (Czech Republic).
+
+```{r profound-pull, eval = FALSE}
+library(ProfoundData)
+setDB(path.expand("raw-data/ProfoundData.sqlite"))
+
+trees   <- getData(dataset = "TREE",          site = "bily_kriz")
+climate <- getData(dataset = "CLIMATE_LOCAL", site = "bily_kriz")
+sites   <- getData(dataset = "SITES")
+```
+
+## From PROFOUND tables to FINN inputs
+
+FINN needs an initial cohort table, an observed-state table, and an environment
+(climate) array. The data-preparation helpers turn the PROFOUND tree list and
+climate series into exactly those (see the *Preparing your data for FINN* vignette
+for the general path).
+
+```{r prep, eval = FALSE}
+# tree list  -> cohorts + observed state ; climate -> env array
+obs   <- makeObsData(trees, ...)          # observed dbh / trees per census
+init  <- makeInitCohorts(trees, ...)      # starting cohorts at t0
+envdf <- climateDF2array(climate, ...)    # temperature / precipitation drivers
+```
+
+## Fitting FINN
+
+We assemble the processes and calibrate them jointly against the observed census.
+
+```{r fit, eval = FALSE}
+model <- finn(
+  growth       = createProcess(~ temp + prec, FINN::growth),
+  mortality    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration = createProcess(~ temp + prec, FINN::regeneration),
+  ...
+)
+fit(model, obs = obs, env = envdf, init = init, epochs = ...)
+```
+
+```{r fit-check, eval = FALSE}
+# calibration quality: predicted vs observed basal area on held-out years
+```
+
+## Simulating management scenarios
+
+With a calibrated model we impose four regimes over a common horizon and compare
+standing basal area and harvest removals. Each prescription is size- and/or
+species-selective — none of them is expressible through FINN's clearfell-only
+`disturbance`.
+
+```{r scenarios, eval = FALSE}
+schedule_thin <- data.frame(
+  year = seq(10, 100, by = 10),
+  prescription = I(list(thin_from_below(residual_ba = 30)))   # tend to 30 m2/ha
+)
+
+schedule_zsn <- data.frame(
+  year = seq(5, 100, by = 5),
+  prescription = I(list(target_diameter_harvest(dbh_target = 45, p = 1)))
+)
+
+schedule_convert <- data.frame(
+  year = seq(10, 60, by = 10),
+  prescription = I(list(species_removal(species = SPRUCE, p = 0.3)))
+)
+
+run_baseline <- simulateForest(model, env = envdf, patches = 20)                 # no intervention
+run_thin     <- simulate_managed(model, envdf, 20, schedule_thin)
+run_zsn      <- simulate_managed(model, envdf, 20, schedule_zsn)
+run_convert  <- simulate_managed(model, envdf, 20, schedule_convert)
+```
+
+```{r scenarios-plot, eval = FALSE}
+# standing basal area over time, one line per regime + cumulative harvest
+```
+
+## Takeaways
+
+- PROFOUND's repeated census plus local climate is enough to calibrate FINN at a
+  site.
+- Concrete silviculture — thinning to a residual basal area, target-diameter
+  harvest, gradual species conversion — runs on the fitted model through the
+  prescriptive management layer, which FINN's clearfell `disturbance` cannot
+  express on its own.
+- The scenarios are conditional on demography learned from the observed (largely
+  unmanaged) record; treat them as "what if we cut like this", not as a learned
+  management response.
+
+## References
+
+Reyer, C. P. O., et al. (2020). The PROFOUND Database for evaluating vegetation
+models and simulating climate impacts on European forests. *Earth System Science
+Data*, 12, 1295–1320. <https://doi.org/10.5194/essd-12-1295-2020>
+
+Pichler & Käber (2026). Inferring processes within dynamic forest models using
+hybrid modelling. *Methods in Ecology and Evolution*.
+<https://doi.org/10.1111/2041-210x.70347>
