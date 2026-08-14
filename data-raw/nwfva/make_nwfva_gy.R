@@ -55,10 +55,9 @@ gy$Dg_aus_rel  <- gy$Dg_aus / gy$Dg
 #   N_aus G_aus Dg_aus V_aus       = removed (thinning) stand this period
 #   iV increment, GWL total yield performance, dGZ mean annual increment
 
-utils::write.csv(gy, "data-raw/nwfva/nwfva_gy_tables.csv", row.names = FALSE)
-
-# When promoted to a shipped dataset:
-#   nwfva_gy <- gy; usethis::use_data(nwfva_gy, overwrite = TRUE)  # -> data/nwfva_gy.rda
+# Ship as an OPEN, non-binary CSV in inst/extdata (loaded via nwfva_yield_tables()).
+# Attribution/license notice lives beside it in nwfva_gy_tables_SOURCE.md.
+utils::write.csv(gy, "inst/extdata/nwfva_gy_tables.csv", row.names = FALSE)
 message(sprintf("wrote %d rows, %d species, Ekl %s, age %d-%d",
                 nrow(gy), length(unique(gy$Art)),
                 paste(range(gy$Ekl), collapse = ".."),

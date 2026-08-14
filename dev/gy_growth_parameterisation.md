@@ -119,13 +119,52 @@ FINN processes, and neither covers all four. Stating this plainly is the point:
 4. **Mortality/regeneration** — mortality from PROFOUND (weighted where observed);
    regeneration fixed/prescriptive with the assumption documented.
 
-## Open decisions for Yannek
+## Decisions (locked 2026-08-14)
 
-- **Ship the tables as package data** (`data/nwfva_gy.rda`, ~kB) vs. keep in
-  `data-raw` and depend on `et.nwfva`? (Leaning: ship the derived table + attribution.)
-- **`thinning_size_bias` scalar → function of size**: adopt now (the data clearly
-  needs it) or keep scalar for v1 and note the loss of the below→above swing?
-- **Site index as env**: feed absolute H100-bonität, or relative Ertragsklasse, as
-  the growth environment predictor?
-- Fetch the **FVA-BW Durchforstungshilfe** (BW h/d + Z-Baum targets) to set the BW
-  thinning schedule, or stay with the NW-FVA `*_aus` schedule?
+1. **Ship the tables in the package as an open, non-binary CSV** —
+   `inst/extdata/nwfva_gy_tables.csv`, loaded via `nwfva_yield_tables()`. Not an
+   `.rda`. Provenance/license beside it in `nwfva_gy_tables_SOURCE.md`.
+2. **`thinning_size_bias` becomes a function of size, not a scalar** — required to
+   capture the below→above swing (§3). v1 fits `bias(relative size)` to `Dg_aus_rel`.
+3. **Site index enters as relative Ertragsklasse (Ekl) for v1.** *Flagged limitation:*
+   Ekl is a productivity index, **not** a climatic response — using it as the growth
+   "environment" conflates site quality with climate. A later version must replace/augment
+   it with actual climate drivers and **critically assess the climatic response** of the
+   fitted growth (this is a known v1 shortcut, not the end state).
+4. **Use both thinning schedules** — the NW-FVA `*_aus` outcome *and* the FVA-BW
+   Durchforstungshilfe decision rule (see §3).
+
+## Licensing & citation (done)
+
+- **Data:** Albert, M., Nagel, J., Schmidt, M., Nagel, R.-V., Spellmann, H. (2021)
+  *Eine neue Generation von Ertragstafeln …* \[Dataset\], Zenodo,
+  doi:10.5281/zenodo.6343906 (concept doi:10.5281/zenodo.14228056). **CC-BY-4.0**,
+  © NW-FVA. Redistributable in a GPL package with attribution + "indicate changes";
+  both satisfied in `nwfva_gy_tables_SOURCE.md` and the `nwfva_yield_tables()` docs.
+  The data keeps its CC-BY-4.0 license, separate from FINN's GPL-3.
+- **Extraction tool:** Nuske, Staupendahl, Albert (2022) *et.nwfva* 0.1.0, Zenodo
+  doi:10.5281/zenodo.7207597, GPL(>=2). A `Suggests`, used only to regenerate the CSV.
+- **Durchforstungshilfe:** Klädtke, J. (2024) *Durchforstungshilfe 2024*, FVA
+  PRAXISNAH Heft 2. Used as design input (rule + numbers below), not redistributed.
+- **TODO before any release:** add a data-source note to `DESCRIPTION` so the CC-BY-4.0
+  provenance is visible in package metadata.
+
+## Appendix: FVA-BW Durchforstungshilfe 2024 (Df-24) — the decision rule
+
+Z-Baum-oriented Auslesedurchforstung, steered by **Oberhöhe** and the **h/d of the
+Z-Bäume**:
+- Below ~12 m Oberhöhe: select and mark Z-Bäume. 12–25 m: the release phase. Above
+  25 m: thinning ends.
+- **Stability target `h/d ≤ 75`** for Z-Bäume; if `h/d > 75`, remove at least one
+  competitor (Bedränger) per Z-Baum.
+- **Turnus is height-growth-driven:** re-decide after ~**3 m** Oberhöhen-Zuwachs (not a
+  fixed number of years) — maps to `entry_interval_years` via the height curve.
+- Hold Z-Bäume on a **Z-Baum-Norm** diameter trajectory by removing their strongest
+  competitors → selective **from above** among non-crop trees; lagging diameter
+  (red curves) ⇒ higher `thinning_intensity`.
+- Max Z-Baum count per ha decreases with target diameter (Tab. 1; a graphic — exact
+  NZB/Ziel-BHD numbers to be transcribed if we adopt the BW crop-tree densities).
+
+This is the *rule* that produces the NW-FVA `*_aus` *outcome*: the two are
+complementary — Df-24 for the prescriptive crop-tree logic, the yield tables for the
+empirical stand-level removal to calibrate against.
