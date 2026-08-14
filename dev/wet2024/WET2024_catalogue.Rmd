@@ -1,8 +1,4 @@
 ---
-title: "Representing the WET2024 forest development types in FINN"
-subtitle: "A parametric catalogue --- one common parameter set, one point per WET"
-author: "FINN management module (branch `profound-management`)"
-date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output:
   pdf_document:
     latex_engine: pdflatex
@@ -13,6 +9,7 @@ header-includes:
   - \usepackage{booktabs}
   - \usepackage{pdflscape}
   - \usepackage{makecell}
+  - \pagestyle{plain}
 ---
 
 ```{r setup, include = FALSE}
@@ -64,7 +61,7 @@ wet <- data.frame(stringsAsFactors = FALSE,
     "Lichtbaumart: Etablierung braucht aktive Freistellung/Vorbau, von reinen Entnahme-Parametern nicht erfasst. Zielstaerke gestaffelt bis 80 cm.",
     "Sammeltyp vieler Edellaubbaeume mit sehr unterschiedlichen Zielstaerken (40-60 cm); ein Zielstaerkenwert ist grob.",
     "Wie (h), trockener Standort; standortabhaengige Artenwahl hier nicht differenziert.",
-    "Schnellwuechsige Pionierart, kurzer Umtrieb; Pflanzung dominiert die Verjuengung. Ernte in >=2 Durchgaengen.",
+    "Schnellwuechsige Pionierart, kurzer Umtrieb; Pflanzung dominiert die Verjuengung. Ernte in mind. 2 Durchgaengen.",
     "Zielstaerkennutzung/Dauerwald ersetzt den frueheren Kahlschlag-Umtrieb; klassische Niederdurchforstung nur naeherungsweise als leichte Auslese.",
     "Kernfall Klimaanpassung: Zielstaerke gesenkt (45 cm), schnellere Ernte, aktiver Umbau.",
     "Sonderstandort Moor: Schutz/Prozessschutz, i. d. R. keine regulaere Nutzung -- Parameter weitgehend inaktiv (0/NA).",
@@ -76,13 +73,23 @@ wet <- data.frame(stringsAsFactors = FALSE,
   )
 )
 
-# Persist the machine-readable source of truth alongside the catalogue.
-utils::write.csv(wet, file.path(dirname(knitr::current_input(dir = TRUE) %||% "."),
-                                "wet2024_parameters.csv"),
+# Persist the machine-readable source of truth alongside the catalogue. knitr sets
+# the working directory to the document's folder during render, so a bare filename
+# lands next to this .Rmd (dev/wet2024/).
+utils::write.csv(wet, "wet2024_parameters.csv",
                  row.names = FALSE, fileEncoding = "UTF-8")
 ```
 
 \begin{landscape}
+\thispagestyle{plain}
+
+{\large\bfseries Representing the WET2024 forest development types in FINN}\\
+{\itshape A parametric catalogue --- one common parameter set, one point per WET.}
+FINN management module (branch \texttt{profound-management}).
+
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{0.95}
 
 ```{r overview-table}
 tab <- wet[, c("code","name","lead","zielstaerke_cm","nutzungsstaerke","streubreite_cm",
@@ -94,15 +101,15 @@ col_labels <- c("Code","Waldentwicklungstyp","Leit-\nBA",
                 "Durchf.-\nstaerke","Durchf.-\nart","Mischungs-\nregul.",
                 "Verjuen-\ngung","Turnus\n(a)","Risiko-\nstufe","Anmerkungen / Grenzen der Abbildung")
 
-kbl(tab, format = "latex", booktabs = TRUE, longtable = FALSE, escape = TRUE,
+kbl(tab, format = "latex", booktabs = TRUE, longtable = TRUE, escape = FALSE,
     col.names = linebreak(col_labels, align = "c"),
-    align = c("l","l","l", rep("r", 9), "p{7.2cm}"),
+    align = c("l","p{3.0cm}","l", rep("r", 9), "p{7.4cm}"),
     caption = "WET2024 als Punkte im gemeinsamen Parameterraum. Pro-Baumart-Parameter (Zielstaerke, Mischungsregulierung) sind fuer die Leitbaumart angegeben.") |>
-  kable_styling(latex_options = c("hold_position"), font_size = 7) |>
-  column_spec(13, width = "7.2cm") |>
+  kable_styling(latex_options = c("repeat_header")) |>
   row_spec(0, bold = TRUE)
 ```
 
+\normalsize
 \end{landscape}
 
 \newpage
@@ -114,10 +121,12 @@ this space*, never a hard-coded case. The operator turns them into a per-cohort,
 per-entry **removal fraction**
 
 \[
-r(\text{dbh}, s) = \mathrm{clamp}\Big(
-\underbrace{\text{nutzungsstaerke}\cdot\sigma\!\big((\text{dbh}-\text{zielstaerke}_s)/\text{streubreite}\big)}_{\text{Zielstaerkennutzung}}
-+ \underbrace{\text{durchf\_staerke}\cdot g(\text{dbh};\text{durchf\_art})\cdot f(\text{mischungsreg}_s)}_{\text{Durchforstung}}
-,\,0,\,1\Big),
+\begin{aligned}
+r(\text{dbh}, s) = \mathrm{clamp}\Big(\;
+& \underbrace{\text{nutzungsstaerke}\cdot\sigma\!\big((\text{dbh}-\text{zielstaerke}_s)/\text{streubreite}\big)}_{\text{Zielstaerkennutzung}} \\
+&{}+ \underbrace{\text{durchf\_staerke}\cdot g(\text{dbh};\text{durchf\_art})\cdot f(\text{mischungsreg}_s)}_{\text{Durchforstung}}
+\;,\,0,\,1\Big)
+\end{aligned}
 \]
 
 applied on entry years (spacing `turnus_a`), while `verjuengung` acts on the
