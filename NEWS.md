@@ -31,6 +31,15 @@ Adds a **prescriptive management layer** and a worked **PROFOUND** example.
 * NW-FVA growth-and-yield reference tables now ship with FINN as an open CSV,
   loaded via `nwfva_yield_tables()` (5 species, yield classes -1..4; source Albert
   et al. 2021, CC-BY-4.0; see `inst/extdata/nwfva_gy_tables_SOURCE.md`).
+* `simulate_managed()` threads a management schedule through a fitted model
+  (simulate a segment, apply the operator per patch, re-initialise from the thinned
+  state, continue) and returns the stitched trajectory plus a per-site harvest log
+  (removed stems/basal area per ha and the mean diameter of removed trees, `Dg_aus`).
+* New vignette *FINN as a forest-management tool: combining data sources*, showing
+  FINN fitted to the NW-FVA yield tables, management expressed in the WET/
+  Durchforstungshilfe vocabulary, a managed-vs-unmanaged simulation, and the
+  multi-source calibration with explicit handling of the processes no single source
+  constrains.
 
 
 # FINN 0.2.0

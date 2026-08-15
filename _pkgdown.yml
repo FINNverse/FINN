@@ -21,6 +21,8 @@ navbar:
         href: articles/D-Fit_to_FIA.html
       - text: Mortality - binomial response and NN process
         href: articles/E-Mortality.html
+      - text: FINN as a forest-management tool
+        href: articles/G-Management_tool.html
 
 # CRAN metadata allows exactly ONE person to hold the creator/maintainer role
 # ("cre"), so DESCRIPTION names Yannek there and Max as an author. That is a
