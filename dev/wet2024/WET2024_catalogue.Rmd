@@ -163,13 +163,21 @@ levels continuously.
 # The WET2024 types
 
 Each type below is a **worked example**: the *same* illustrative stand (a single,
-fast-growing species — hand-set, not fitted) run under that WET's management
-parameters, so the figure isolates what the treatment does. The orange line is the
-stand under the WET; grey is the same stand left unmanaged. Species-composition
-effects (different Leitbaumarten, Mischungsregulierung) are not shown by a
-single-species stand — they are documented in the table above. The point of these
-examples is that FINN turns the parameter table into stand development you can *see*
-and compare — a way to learn what each WET's programme actually does.
+productive species — hand-set, not fitted) run under that WET's management
+parameters, so the figure isolates what the treatment does. The **y-axis is standing
+volume (Vorrat, Vfm/ha)** — the German-forestry stocking measure; German forests
+average ~335 Vfm/ha (BWI4 2022), and the illustrative stand holds ~430–500, a
+realistic productive-stand range. The orange line is the stand under the WET; grey is
+the same stand left unmanaged.
+
+> *Two honest caveats.* Species-composition effects (different Leitbaumarten,
+> Mischungsregulierung) are not shown by a single-species stand — see the table
+> above. And the **hand-set** illustrative demography has a weak thinning-release
+> response, so managed and unmanaged standing volume stay close; a stand with growth
+> *fitted* to a yield table (see the growth-fit results) sustains a clearer managed
+> equilibrium. What each figure does show faithfully is the WET's **harvest regime** —
+> the timing of entries and the size of the trees removed (`Dg_aus`), which is where
+> the types genuinely differ.
 
 ```{r sections, results = "asis"}
 ex <- read.csv("examples/summary.csv", stringsAsFactors = FALSE)
@@ -182,8 +190,8 @@ for (i in seq_len(nrow(wet))) {
               w$durchf_art, w$mischungsreg, w$verjuengung, w$turnus_a, w$risikostufe))
   cat(sprintf("![](examples/%s.png){width=70%%}\n\n", w$code))
   if (e$entries > 0)
-    cat(sprintf("**Beispiel.** Held near **%.0f m2/ha** (unmanaged ~34) via %d entries; removed trees average **%.0f cm** BHD -- %s.\n\n",
-                e$residual_ba, e$entries, e$mean_Dg_aus,
+    cat(sprintf("**Beispiel.** Standing volume held near **%.0f Vfm/ha** (unmanaged ~434) via %d entries; removed trees average **%.0f cm** BHD -- %s.\n\n",
+                e$residual_vfm, e$entries, e$mean_Dg_aus,
                 if (isTRUE(w$risikostufe >= 0.7)) "the lower Zielstaerke and shorter Turnus of the high-risk variant take more, smaller stems" else "a graduated thinning working toward the target diameter"))
   else
     cat("**Beispiel.** No regular utilisation (Prozessschutz); the stand follows the unmanaged trajectory.\n\n")
