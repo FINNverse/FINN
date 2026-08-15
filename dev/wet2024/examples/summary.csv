@@ -1,0 +1,15 @@
+code,name,residual_ba,mean_Dg_aus,entries
+b,Buchen-Mischwald,12.5,45,15
+bx,Buchen-Mischwald (hohes Risiko),6.8,33,21
+e,Eichen-Mischwald,12,45,15
+h,Buntlaubbaum-Mischwald frisch,7.8,38,15
+j,Buntlaubbaum-Mischwald trocken,8.6,41,15
+p,Pappel-Mischwald,9.2,38,21
+f,Fichten-Mischwald,9.2,37,15
+fx,Fichten-Mischwald (hohes Risiko),6,30,21
+m,Fichten-Kiefern-Moorwald,33.9,,0
+t,Tannen-Mischwald,10.7,43,15
+tx,Tannen-Mischwald (hohes Risiko),7.6,35,21
+d,Douglasien-Mischwald,7.1,34,15
+k,Kiefern-Mischwald,9.3,36,15
+kx,Kiefern-Mischwald (hohes Risiko),7,28,21

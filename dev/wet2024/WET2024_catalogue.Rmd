@@ -162,18 +162,31 @@ levels continuously.
 
 # The WET2024 types
 
-*Skeleton --- each type will get a worked example of how the parameters drive its
-stand development. Examples are intentionally not filled in yet.*
+Each type below is a **worked example**: the *same* illustrative stand (a single,
+fast-growing species — hand-set, not fitted) run under that WET's management
+parameters, so the figure isolates what the treatment does. The orange line is the
+stand under the WET; grey is the same stand left unmanaged. Species-composition
+effects (different Leitbaumarten, Mischungsregulierung) are not shown by a
+single-species stand — they are documented in the table above. The point of these
+examples is that FINN turns the parameter table into stand development you can *see*
+and compare — a way to learn what each WET's programme actually does.
 
 ```{r sections, results = "asis"}
+ex <- read.csv("examples/summary.csv", stringsAsFactors = FALSE)
 for (i in seq_len(nrow(wet))) {
-  w <- wet[i, ]
+  w <- wet[i, ]; e <- ex[ex$code == w$code, ]
   cat(sprintf("\n## %s (`%s`)\n\n", w$name, w$code))
   cat(sprintf("*Leitbaumart:* %s  \n", w$lead))
   cat(sprintf("*Parameter:* Zielstärke %s cm | Nutzungsstärke %s | Streubreite %s cm | Durchforstungsstärke %s | Durchforstungsart %s | Mischungsregulierung %s | Verjüngung %s | Turnus %s a | Risikostufe %s\n\n",
               w$zielstaerke_cm, w$nutzungsstaerke, w$streubreite_cm, w$durchf_staerke,
               w$durchf_art, w$mischungsreg, w$verjuengung, w$turnus_a, w$risikostufe))
+  cat(sprintf("![](examples/%s.png){width=70%%}\n\n", w$code))
+  if (e$entries > 0)
+    cat(sprintf("**Beispiel.** Held near **%.0f m2/ha** (unmanaged ~34) via %d entries; removed trees average **%.0f cm** BHD -- %s.\n\n",
+                e$residual_ba, e$entries, e$mean_Dg_aus,
+                if (isTRUE(w$risikostufe >= 0.7)) "the lower Zielstaerke and shorter Turnus of the high-risk variant take more, smaller stems" else "a graduated thinning working toward the target diameter"))
+  else
+    cat("**Beispiel.** No regular utilisation (Prozessschutz); the stand follows the unmanaged trajectory.\n\n")
   cat("**Grenzen der Abbildung.** ", w$comment, "\n\n", sep = "")
-  cat("**Beispiel.** _(folgt)_\n\n")
 }
 ```
