@@ -180,7 +180,31 @@ management_removal <- function(cohorts, params) {
   r_harv <- params$target_harvest_fraction *
     stats::plogis((dbh - target) / params$target_diameter_spread)
 
-  pmin(pmax(r_thin + r_harv, 0), 1)
+  r <- pmin(pmax(r_thin + r_harv, 0), 1)
+  r[!is.finite(r) | dbh <= 0 | trees <= 0] <- 0     # inert / empty cohorts: no removal
+  r
+}
+
+
+# Pad a (ragged / patch-incomplete) thinned cohort snapshot back to a full
+# sites x patches x maxcohorts rectangular grid, so CohortMat/obsDF2arrays can
+# rebuild it. Missing slots are filled with inert trees = 0 cohorts. Internal to
+# simulate_managed().
+.rectangularize_cohorts <- function(snap, sites, patches) {
+  snap <- snap[is.finite(snap$dbh) & snap$dbh > 0 & snap$trees >= 0.5, , drop = FALSE]
+  maxk <- max(c(1L, table(paste(snap$siteID, snap$patchID))))
+  rows <- vector("list", length(sites) * length(patches)); idx <- 1L
+  for (s in sites) for (pa in patches) {
+    p <- snap[snap$siteID == s & snap$patchID == pa, , drop = FALSE]
+    k <- nrow(p)
+    rows[[idx]] <- data.frame(
+      siteID = s, patchID = pa, cohortID = seq_len(maxk),
+      species = c(p$species, rep(1L, maxk - k)),
+      dbh     = c(p$dbh,     rep(1,  maxk - k)),
+      trees   = c(p$trees,   rep(0,  maxk - k)))
+    idx <- idx + 1L
+  }
+  do.call(rbind, rows)
 }
 
 
@@ -315,27 +339,128 @@ clearfell <- function(...)
 
 
 # -----------------------------------------------------------------------------
-# Stepwise driver -- contract fixed, implementation still pending
+# Stepwise driver
 # -----------------------------------------------------------------------------
 #' Simulate a fitted FINN model under a management schedule
 #'
 #' Threads a management schedule through a fitted model by simulating in segments:
-#' run to the next scheduled entry with `simulateForest(return_cohorts = TRUE)`,
-#' apply the prescription to the final cohort snapshot with [apply_management()],
+#' run to the next scheduled entry with `predict(return_cohorts = TRUE)`, apply the
+#' prescription to the final cohort snapshot (per patch) with [apply_management()],
 #' re-initialise from the thinned state, and continue. The post-thinning light
-#' release and growth response are then produced by the fitted demography itself.
+#' release and growth response are then produced by the fitted demography itself --
+#' no core change and no refit.
 #'
 #' @param model a fitted `finn_class` model.
-#' @param env the environment table (as for `simulateForest`).
-#' @param patches number of patches per site.
-#' @param schedule a data.frame with `year` and a list-column `prescription`
-#'   ([management_params] objects or functions).
-#' @param ... passed to `simulateForest()`.
-#' @return a list with the stitched `$trajectory` and a `$harvest` log.
+#' @param env the environment table (as for `predict`/`simulateForest`); its
+#'   `year` column defines the horizon.
+#' @param patches number of patches (replicate stands) per site.
+#' @param schedule a data.frame with a `year` column (entry years) and a
+#'   list-column `prescription` of [management_params] objects (or functions).
+#' @param patch_size patch size in ha (default 0.1), as for the fit.
+#' @param device torch device.
+#' @param ... passed to `predict()`.
+#' @return a list with `$trajectory` (the stitched site-level output with absolute
+#'   years) and `$harvest` (one row per site per entry: `removed_trees_ha`,
+#'   `removed_ba_ha`, and `Dg_aus`, the mean diameter of the removed trees, for
+#'   comparison with a yield table's thinning).
+#' @note A single-site run is executed internally with a duplicated second site (an
+#'   independent realisation), because FINN squeezes the site dimension for one
+#'   site; only the requested site is returned.
+#' @seealso [management_params()], [apply_management()]
 #' @export
-simulate_managed <- function(model, env, patches, schedule, ...) {
-  stop("simulate_managed(): segmented driver not yet implemented on this branch. ",
-       "The parametric operator (management_params/management_removal/apply_management) ",
-       "is ready; this driver is the next build (segment the horizon at schedule$year, ",
-       "re-init from the thinned cohort snapshot between segments).", call. = FALSE)
+simulate_managed <- function(model, env, patches, schedule, patch_size = 0.1,
+                             device = "cpu", ...) {
+  stopifnot(all(c("siteID", "year") %in% names(env)),
+            all(c("year", "prescription") %in% names(schedule)))
+  env <- data.table::as.data.table(data.table::copy(env))
+
+  # Single-site workaround: FINN squeezes the site dimension for one site, which
+  # breaks re-initialising from a provided init_cohort. Run with a duplicated
+  # second site (an independent realisation) and return only the requested one.
+  orig_sites <- sort(unique(env$siteID))
+  padded <- length(orig_sites) == 1L
+  if (padded) {
+    dup <- data.table::copy(env); dup$siteID <- orig_sites + 1L
+    env <- rbind(env, dup)
+  }
+
+  years <- sort(unique(env$year))
+  entries <- sort(unique(schedule$year))
+  entries <- entries[entries >= min(years) & entries < max(years)]  # need room to run on after
+  bounds  <- unique(c(entries, max(years)))
+  Nsp <- model$N_species
+
+  traj <- list(); harvest <- list(); init <- NULL; seg_start <- min(years)
+
+  for (b in bounds) {
+    seg_years <- years[years >= seg_start & years <= b]
+    env_seg <- env[env$year %in% seg_years]
+    sim <- predict(model, init_cohort = init, env = env_seg, patches = patches,
+                   patch_size = patch_size, device = device,
+                   return_cohorts = TRUE, ...)
+
+    site <- as.data.frame(sim$long$site)                 # map positional years -> absolute
+    site$year <- seg_years[match(site$year, sort(unique(site$year)))]
+    traj[[length(traj) + 1L]] <- site
+
+    if (b %in% entries) {
+      co <- data.table::as.data.table(sim$long$cohort)
+      snap <- as.data.frame(data.table::dcast(
+        co[co$year == max(co$year)],
+        siteID + patchID + cohortID + species ~ variable, value.var = "value"))
+      snap <- snap[is.finite(snap$trees) & snap$trees > 0, , drop = FALSE]
+
+      pres_list <- schedule$prescription[schedule$year == b]
+      keys <- unique(snap[c("siteID", "patchID")])
+      thinned <- vector("list", nrow(keys))
+      acc <- list()                              # per-site removal accumulators
+      for (k in seq_len(nrow(keys))) {           # each patch is one stand
+        s <- keys$siteID[k]
+        p <- snap[snap$siteID == s & snap$patchID == keys$patchID[k], , drop = FALSE]
+        rt <- 0; rb <- 0; dw <- 0; dn <- 0
+        for (pr in pres_list) {                  # apply each scheduled prescription in turn
+          res <- apply_management(p, pr)
+          p <- res$cohorts
+          rt <- rt + res$removed_trees; rb <- rb + res$removed_ba
+          if (is.finite(res$Dg_removed) && res$removed_trees > 0) {
+            dw <- dw + res$Dg_removed * res$removed_trees; dn <- dn + res$removed_trees
+          }
+        }
+        thinned[[k]] <- p
+        key <- as.character(s)
+        a <- acc[[key]]; if (is.null(a)) a <- list(rt = 0, rb = 0, dw = 0, dn = 0, np = 0)
+        a$rt <- a$rt + rt; a$rb <- a$rb + rb; a$dw <- a$dw + dw; a$dn <- a$dn + dn; a$np <- a$np + 1
+        acc[[key]] <- a
+      }
+      snap_thinned <- do.call(rbind, thinned)
+      for (key in names(acc)) {                   # one harvest row per site per entry
+        a <- acc[[key]]
+        harvest[[length(harvest) + 1L]] <- data.frame(
+          year             = b,
+          siteID           = as.integer(key),
+          removed_trees_ha = a$rt / (a$np * patch_size),
+          removed_ba_ha    = a$rb / (a$np * patch_size),
+          Dg_aus           = if (a$dn > 0) a$dw / a$dn else NA_real_)
+      }
+
+      # re-initialise from the thinned state, rectangularised to a full grid
+      keep <- .rectangularize_cohorts(snap_thinned,
+                                      sites = sort(unique(env$siteID)),
+                                      patches = seq_len(patches))
+      init <- CohortMat$new(
+        obs_df = keep[, c("siteID", "patchID", "cohortID", "species", "dbh", "trees")],
+        sp = Nsp)
+      seg_start <- b + 1L
+    }
+  }
+
+  traj <- do.call(rbind, traj)
+  harvest <- if (length(harvest)) do.call(rbind, harvest) else
+    data.frame(year = integer(0), siteID = integer(0), removed_trees_ha = numeric(0),
+               removed_ba_ha = numeric(0), Dg_aus = numeric(0))
+  if (padded) {                                   # drop the duplicated helper site
+    traj <- traj[traj$siteID %in% orig_sites, , drop = FALSE]
+    harvest <- harvest[harvest$siteID %in% orig_sites, , drop = FALSE]
+  }
+  list(trajectory = traj, harvest = harvest)
 }

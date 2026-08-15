@@ -4,27 +4,52 @@
 \alias{simulate_managed}
 \title{Simulate a fitted FINN model under a management schedule}
 \usage{
-simulate_managed(model, env, patches, schedule, ...)
+simulate_managed(
+  model,
+  env,
+  patches,
+  schedule,
+  patch_size = 0.1,
+  device = "cpu",
+  ...
+)
 }
 \arguments{
 \item{model}{a fitted \code{finn_class} model.}
 
-\item{env}{the environment table (as for \code{simulateForest}).}
+\item{env}{the environment table (as for \code{predict}/\code{simulateForest}); its
+\code{year} column defines the horizon.}
 
-\item{patches}{number of patches per site.}
+\item{patches}{number of patches (replicate stands) per site.}
 
-\item{schedule}{a data.frame with \code{year} and a list-column \code{prescription}
-(\link{management_params} objects or functions).}
+\item{schedule}{a data.frame with a \code{year} column (entry years) and a
+list-column \code{prescription} of \link{management_params} objects (or functions).}
 
-\item{...}{passed to \code{simulateForest()}.}
+\item{patch_size}{patch size in ha (default 0.1), as for the fit.}
+
+\item{device}{torch device.}
+
+\item{...}{passed to \code{predict()}.}
 }
 \value{
-a list with the stitched \verb{$trajectory} and a \verb{$harvest} log.
+a list with \verb{$trajectory} (the stitched site-level output with absolute
+years) and \verb{$harvest} (one row per site per entry: \code{removed_trees_ha},
+\code{removed_ba_ha}, and \code{Dg_aus}, the mean diameter of the removed trees, for
+comparison with a yield table's thinning).
 }
 \description{
 Threads a management schedule through a fitted model by simulating in segments:
-run to the next scheduled entry with \code{simulateForest(return_cohorts = TRUE)},
-apply the prescription to the final cohort snapshot with \code{\link[=apply_management]{apply_management()}},
+run to the next scheduled entry with \code{predict(return_cohorts = TRUE)}, apply the
+prescription to the final cohort snapshot (per patch) with \code{\link[=apply_management]{apply_management()}},
 re-initialise from the thinned state, and continue. The post-thinning light
-release and growth response are then produced by the fitted demography itself.
+release and growth response are then produced by the fitted demography itself --
+no core change and no refit.
+}
+\note{
+A single-site run is executed internally with a duplicated second site (an
+independent realisation), because FINN squeezes the site dimension for one
+site; only the requested site is returned.
+}
+\seealso{
+\code{\link[=management_params]{management_params()}}, \code{\link[=apply_management]{apply_management()}}
 }
