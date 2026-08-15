@@ -345,6 +345,69 @@ growth_env = function(dbh, species, parGrowth, pred, light, light_steepness = 10
 }
 
 
+#' Calculate growth with a flexible polynomial size response
+#'
+#' A growth process whose dependence on diameter is an arbitrary-degree polynomial
+#' rather than the fixed exponential decline of [growth()]. Where [growth()] uses
+#' `g = shade * exp(pred) * exp(-k * dbh)` (a single decline rate `k`),
+#' `growth_poly()` uses
+#' \deqn{g = shade * exp\\big(pred + \\sum_{d=1}^{D} a_d\\,(dbh/s)^d\\big),}
+#' a polynomial of degree `D` in the (scaled) diameter inside the exponent, so the
+#' growth-vs-size curve can bend to whatever shape the data require — useful when a
+#' single exponential cannot reproduce a yield-table trajectory exactly.
+#'
+#' The coefficients are supplied through
+#' `createProcess(custom_parameters = list(poly_coef = rep(0, D)))` and read here as
+#' `self$poly_coef`; the degree is simply the length of that vector, and `fit()`
+#' estimates them. Diameter is scaled by `poly_scale` (default 50 cm, read from
+#' `self$poly_scale` if set) to keep the powers well-conditioned. With
+#' `poly_coef = c(-k*s)` (degree 1) this is exactly [growth()]; with no `poly_coef`
+#' it falls back to the mechanistic linear decline `parGrowth[,2]`.
+#'
+#' For a fit whose *shape* should differ by site, either combine this with an
+#' environmental term in `pred` (the level), use [growth_env()] (an
+#' environment-controlled decline), or replace growth with a neural network via
+#' [createHybrid()].
+#'
+#' @inheritParams growth
+#' @return torch.Tensor A tensor of relative diameter growth per timestep.
+#' @examples
+#' \dontrun{
+#' m <- finn(N_species = Nsp,
+#'   growth_process = createProcess(~ env1, FINN::growth_poly,
+#'                                  optimizeSpecies = TRUE, optimizeEnv = TRUE,
+#'                                  custom_parameters = list(poly_coef = rep(0, 4))))
+#' }
+#' @import torch
+#' @export
+growth_poly = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = FALSE, trees = NULL){
+
+  if(self$record_raws) {
+    self$raw_g = c(self$raw_g,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
+                                                                     light$unsqueeze(4),
+                                                                     trees$unsqueeze(4),
+                                                                     species$unsqueeze(4)$float()), dim = 4)) ))
+  }
+
+  shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
+         (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
+
+  # Polynomial size response inside the exponent (degree = length(self$poly_coef)).
+  scale = if(!is.null(self$poly_scale)) self$poly_scale else 50
+  x = dbh / scale
+  if(!is.null(self$poly_coef)) {
+    size = torch::torch_zeros_like(dbh)
+    for(d in seq_len(length(self$poly_coef))) size = size + self$poly_coef[d] * x$pow(d)
+  } else {
+    size = -parGrowth[,2][species] * dbh    # fallback = mechanistic linear decline
+  }
+
+  growth = shade * torch::torch_exp(pred + size)
+  if(debug == TRUE) out = list(shade = shade, size = size, growth = growth) else out = growth
+  return(out)
+}
+
+
 growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = FALSE, trees = NULL) {
 
   if(self$record_raws) {

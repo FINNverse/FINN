@@ -20,6 +20,11 @@ Adds a **prescriptive management layer** and a worked **PROFOUND** example.
   FINN core change and no refit.
 * New vignette *Fitting FINN to PROFOUND data and simulating management*, calibrating
   FINN to one PROFOUND site and running the regimes above on the fitted model.
+* New growth process `growth_poly()`: the diameter dependence of growth is an
+  arbitrary-degree polynomial inside the exponent, `g = shade * exp(pred + sum a_d
+  (dbh/s)^d)`, so the growth-vs-size curve can take whatever shape the data need
+  (degree 1 recovers `growth()`). Coefficients via
+  `createProcess(custom_parameters = list(poly_coef = rep(0, D)))`.
 * New growth process `growth_env()`: an environment-controlled size-decline. Where
   `growth()` slows diameter growth with a fixed per-species constant
   (`k = parGrowth[,2]`), `growth_env()` uses `k_eff = k_base * exp(-k_env * pred)`
