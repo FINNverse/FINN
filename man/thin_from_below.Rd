@@ -2,21 +2,18 @@
 % Please edit documentation in R/management.R
 \name{thin_from_below}
 \alias{thin_from_below}
-\title{Thinning from below (Niederdurchforstung)}
+\title{Thinning from below (Niederdurchforstung) -- a parameter preset}
 \usage{
-thin_from_below(residual_ba, min_dbh = 0)
+thin_from_below(intensity = 0.2, ...)
 }
 \arguments{
-\item{residual_ba}{target basal area to leave standing, m2 ha-1.}
+\item{intensity}{\verb{Durchforstungsstärke} (0-1) removed per entry.}
 
-\item{min_dbh}{only stems at or above this dbh (cm) are eligible; smaller
-regeneration is left. Default \code{0} (all eligible).}
+\item{...}{further \link{management_params} overrides (e.g. \code{entry_interval_years}).}
 }
 \value{
-a management prescription (a function of a cohort snapshot).
+a \link{management_params} object.
 }
 \description{
-Removes the smallest-diameter stems first until the residual basal area is at
-most \code{residual_ba} (m2 ha-1), applied within each patch. The classic even-aged
-tending cut: it releases the dominant crop trees by taking the suppressed ones.
+Thinning from below (Niederdurchforstung) -- a parameter preset
 }

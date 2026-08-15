@@ -2,21 +2,18 @@
 % Please edit documentation in R/management.R
 \name{thin_from_above}
 \alias{thin_from_above}
-\title{Thinning from above (Hochdurchforstung)}
+\title{Thinning from above (Hochdurchforstung) -- a parameter preset}
 \usage{
-thin_from_above(residual_ba, min_dbh = 0)
+thin_from_above(intensity = 0.2, ...)
 }
 \arguments{
-\item{residual_ba}{target basal area to leave standing, m2 ha-1.}
+\item{intensity}{\verb{Durchforstungsstärke} (0-1) removed per entry.}
 
-\item{min_dbh}{only stems at or above this dbh (cm) are eligible; smaller
-regeneration is left. Default \code{0} (all eligible).}
+\item{...}{further \link{management_params} overrides (e.g. \code{entry_interval_years}).}
 }
 \value{
-a management prescription.
+a \link{management_params} object.
 }
 \description{
-Removes the largest-diameter stems first until the residual basal area is at
-most \code{residual_ba}. Favours the mid-storey; used to harvest value early or to
-break up a closing canopy.
+Thinning from above (Hochdurchforstung) -- a parameter preset
 }

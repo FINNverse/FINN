@@ -4,12 +4,17 @@ Adds a **prescriptive management layer** and a worked **PROFOUND** example.
 
 ## New features
 
-* New management prescriptions for size- and species-selective harvest, none of
-  which FINN's clearfell-only `disturbance` can express: `thin_from_below()`,
-  `thin_from_above()` (thinning to a residual basal area), `target_diameter_harvest()`
-  (Zielstärkennutzung), `species_removal()` (conversion/sanitation) and
-  `clearfell()`. `apply_management()` runs a prescription on a cohort snapshot and
-  reports the removed stems and basal area.
+* New **parametric management operator**: every strategy — thinning, target-diameter
+  harvest, species conversion, and each WET2024 forest development type — is one point
+  in a single continuous parameter set (`management_params()`, the "management
+  genome"), never a discrete case. `management_removal()` evaluates the per-cohort
+  removal-fraction field (Zielstärkennutzung + Durchforstung); `apply_management()`
+  applies it and reports removed stems, basal area, and the mean diameter of the
+  removed trees (`Dg_aus`) for validation against yield tables. `thinning_size_bias`
+  (Durchforstungsart) may be size-dependent via `graduated_bias()`, reproducing the
+  NW-FVA graduated thinning (from below when young, from above near the target).
+  Presets `thin_from_below()`, `thin_from_above()`, `target_diameter_harvest()`,
+  `species_removal()` and `clearfell()` return parameter points over this operator.
 * `simulate_managed()` (in progress) threads a management schedule through a fitted
   model by simulating in segments and re-initialising from the thinned state — no
   FINN core change and no refit.

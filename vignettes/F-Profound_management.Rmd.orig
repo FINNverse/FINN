@@ -35,10 +35,10 @@ Two things, end to end, on a single well-observed forest:
 2. **The fitted model can then be run under concrete management.** FINN's built-in
    `disturbance` argument only clearfells whole patches, so it cannot express
    thinning or target-diameter harvest. This vignette uses the prescriptive
-   management layer (`thin_from_below()`, `target_diameter_harvest()`,
-   `species_removal()`, `clearfell()`, driven by `simulate_managed()`) to impose
-   real silvicultural regimes on the calibrated demography and compare their
-   trajectories.
+   management layer — one continuous parameter set (`management_params()`, with
+   presets `thin_from_below()`, `target_diameter_harvest()`, `species_removal()`,
+   `clearfell()`), driven by `simulate_managed()` — to impose real silvicultural
+   regimes on the calibrated demography and compare their trajectories.
 
 > **Read this before interpreting the scenarios.** A model fitted to a stand's
 > observed history has not learned how the forest responds to a *new* silvicultural
@@ -103,19 +103,23 @@ species-selective — none of them is expressible through FINN's clearfell-only
 `disturbance`.
 
 ```{r scenarios, eval = FALSE}
+# Graduated tending: a size-dependent Durchforstungsart that swings from below
+# (young) to above (mature) as the stand approaches the target diameter.
 schedule_thin <- data.frame(
   year = seq(10, 100, by = 10),
-  prescription = I(list(thin_from_below(residual_ba = 30)))   # tend to 30 m2/ha
+  prescription = I(list(management_params(
+    thinning_intensity = 0.2,
+    thinning_size_bias = graduated_bias(from = -0.6, to = 0.8, ref = 45))))
 )
 
 schedule_zsn <- data.frame(
   year = seq(5, 100, by = 5),
-  prescription = I(list(target_diameter_harvest(dbh_target = 45, p = 1)))
+  prescription = I(list(target_diameter_harvest(target_diameter = 45, fraction = 1)))
 )
 
 schedule_convert <- data.frame(
   year = seq(10, 60, by = 10),
-  prescription = I(list(species_removal(species = SPRUCE, p = 0.3)))
+  prescription = I(list(species_removal(species = SPRUCE, n_species = Nsp, fraction = 0.3)))
 )
 
 run_baseline <- simulateForest(model, env = envdf, patches = 20)                 # no intervention

@@ -1,275 +1,341 @@
 # =============================================================================
 # FINN | R/management.R
 #
-# Prescriptive forest management for FINN simulations.
+# Prescriptive forest management for FINN simulations, as ONE continuous
+# parametric operator.
 #
 # -----------------------------------------------------------------------------
 # Why this module exists
 # -----------------------------------------------------------------------------
-# FINN already accepts a `disturbance` argument in fit()/predict()/simulateForest().
-# Internally that is a per-patch, per-year Bernoulli event that, when it fires,
-# multiplies *every* tree in the patch by zero -- an all-or-nothing, STAND-REPLACING
-# kill. It can represent clearfelling on a fixed rotation, or catastrophic natural
-# disturbance (windthrow, bark beetle), but it *cannot* represent the size-selective
-# partial removals that make up most silviculture:
+# FINN's `disturbance` argument is a per-patch Bernoulli event that kills every
+# tree in the patch -- an all-or-nothing, stand-replacing clearfell. It cannot
+# express the size- and species-selective partial removals that make up most
+# silviculture (thinning from below/above, Zielstärkennutzung, continuous-cover
+# selection, species conversion). This module supplies that, but NOT as a set of
+# discrete named regimes: every strategy -- including all the WET2024 forest
+# development types -- is a POINT in one common, continuous parameter set (the
+# "management genome"). See dev/wet2024/ for the catalogue and
+# dev/gy_growth_parameterisation.md for how it is calibrated to the NW-FVA yield
+# tables and the FVA-BW Durchforstungshilfe.
 #
-#   * thinning from below / from above (Nieder- / Hochdurchforstung)
-#   * target-diameter harvest           (Zielstärkennutzung)
-#   * continuous-cover / selection cuts (Plenterung, Dauerwald)
-#   * species conversion                (Umbau, e.g. spruce -> mixed)
-#
-# These act on the cohort state -- which trees, of which size and species, are
-# removed -- so they need a size-selective operator, not a scalar probability.
-# This module supplies that operator layer as a *prescriptive* (rule-based, not
-# fitted) intervention applied to the cohort snapshot between simulation steps.
+# The operator turns a parameter set into a per-cohort, per-entry REMOVAL FRACTION
+#   r(dbh, s) = clamp(
+#       target_harvest_fraction * logistic((dbh - target_diameter_s)/spread)  # Zielstärkennutzung
+#     + thinning_intensity * size_weight(dbh; thinning_size_bias) * species_factor(s)  # Durchforstung
+#     , 0, 1)
+# and applies it to the cohort snapshot. `planting_rate` acts on regeneration, not
+# removal. `risk_level` is a single dial that lowers the target diameter.
 #
 # -----------------------------------------------------------------------------
 # Interpretation caveat -- state this whenever managed runs are reported
 # -----------------------------------------------------------------------------
 # A FINN model fitted to unmanaged (or observationally managed) demography has not
-# "seen" the altered light regime, planting, or regeneration response that follow a
-# real thinning. A prescriptive removal answers "given this fitted demography, what
-# happens to the stand if we take out these trees on this schedule" -- a legitimate
-# scenario, but not a claim that the model has learned managed-stand behaviour.
-# See docs/harvest_process_design.md in the FINN-bwi project for the alternative
-# (harvest as a *fitted* process / env covariate) and when to prefer it.
-#
-# Design status: the prescription constructors and `apply_management()` below are
-# complete and unit-testable (pure functions on a cohort data.frame). The stepwise
-# driver `simulate_managed()` that threads them through a fitted model is the piece
-# under construction on this branch -- its contract is fixed here.
+# "seen" the altered light regime, planting or regeneration that follow a real
+# thinning. A prescriptive removal answers "given this fitted demography, what
+# happens if we take out these trees on this schedule" -- a legitimate scenario,
+# not a claim that the model has learned managed-stand behaviour.
 # =============================================================================
 
+# Cohort snapshot contract: a data.frame with at least `siteID, patchID, species,
+# cohortID, dbh, trees`, matching simulateForest(..., return_cohorts = TRUE). dbh
+# in cm, trees in stems ha-1. Per-species parameters are indexed by `species`.
 
-# -----------------------------------------------------------------------------
-# Cohort snapshot contract
-# -----------------------------------------------------------------------------
-# A "cohort snapshot" is a data.frame with (at least) these columns, matching the
-# cohort table returned by `simulateForest(..., return_cohorts = TRUE)`:
-#
-#   siteID   integer   site identifier
-#   patchID  integer   patch (replicate stand) within the site
-#   species  integer   species index (1..n_species)
-#   cohortID integer   cohort identifier within the patch
-#   dbh      numeric   cohort mean diameter at breast height (cm)
-#   trees    numeric   stems per hectare represented by the cohort
-#
-# A management prescription is a function
-#     f(cohorts) -> cohorts
-# that returns the snapshot with `trees` reduced by whatever it removed (a cohort
-# thinned to zero stems is kept as a zero row, not dropped, so downstream indexing
-# is stable). It must not change dbh/species/identity columns.
+# Risk dial: at risk_level = 1 the target diameter is lowered by this fraction
+# (WET2024 lowers Zielstärke under higher risk, e.g. Fichte 50 -> 45 cm ~ 10%).
+.RISK_ZIELSTAERKE_DROP <- 0.15
 
 
-#' Basal area of a cohort snapshot
-#'
-#' Cross-sectional area at breast height, m2 ha-1, summed over the snapshot (or
-#' over the grouping given by `by`). `dbh` is in cm, `trees` in stems ha-1.
-#'
-#' @param cohorts a cohort snapshot (see the module contract).
-#' @param by optional character vector of grouping columns; `NULL` totals everything.
-#' @return a numeric total, or a data.frame with one `ba` value per group.
+#' Basal area of a cohort snapshot (m2 ha-1)
 #' @keywords internal
 #' @noRd
 cohort_basal_area <- function(cohorts, by = NULL) {
-  ba_stem <- pi * (cohorts$dbh / 200)^2          # m2 per stem (dbh cm -> m radius)
-  ba <- ba_stem * cohorts$trees                  # m2 ha-1 per cohort
+  ba <- pi * (cohorts$dbh / 200)^2 * cohorts$trees      # dbh cm -> m radius
   if (is.null(by)) return(sum(ba, na.rm = TRUE))
   stats::aggregate(list(ba = ba), by = cohorts[by], FUN = sum, na.rm = TRUE)
 }
 
+# Quadratic mean diameter (Dg, cm) of a snapshot.
+.cohort_qmd <- function(cohorts) {
+  w <- cohorts$trees
+  if (sum(w, na.rm = TRUE) <= 0) return(NA_real_)
+  sqrt(sum(w * cohorts$dbh^2, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
 
-#' Thinning from below (Niederdurchforstung)
+# Resolve a scalar-or-per-species parameter to one value per cohort.
+.per_species <- function(x, species) {
+  if (length(x) == 1L) return(rep(x, length(species)))
+  x[species]
+}
+
+
+#' Management parameters (the common "genome")
 #'
-#' Removes the smallest-diameter stems first until the residual basal area is at
-#' most `residual_ba` (m2 ha-1), applied within each patch. The classic even-aged
-#' tending cut: it releases the dominant crop trees by taking the suppressed ones.
+#' Builds one point in FINN's continuous management parameter space. Every
+#' strategy -- thinning, target-diameter harvest, species conversion, and each of
+#' the WET2024 forest development types -- is expressed as a value of these
+#' parameters, never a discrete case. Names carry the WET vocabulary.
 #'
-#' @param residual_ba target basal area to leave standing, m2 ha-1.
-#' @param min_dbh only stems at or above this dbh (cm) are eligible; smaller
-#'   regeneration is left. Default `0` (all eligible).
-#' @return a management prescription (a function of a cohort snapshot).
+#' @param target_diameter `Zielstärke` (cm): the dbh at which a tree is harvested.
+#'   Scalar or a per-species vector. `Inf` (default) means no target-diameter
+#'   harvest.
+#' @param target_harvest_fraction `Nutzungsstärke` (0-1): share of at/above-target
+#'   stems removed per entry.
+#' @param target_diameter_spread `Zielstärken-Streubreite` (cm, > 0): how sharp
+#'   (small) vs. gradual (large) the target-diameter threshold is.
+#' @param thinning_intensity `Durchforstungsstärke` (0-1): mean fraction removed
+#'   per entry among the tended (sub-target) trees.
+#' @param thinning_size_bias `Durchforstungsart`: which sizes the thinning takes.
+#'   `< 0` from below (Niederdurchforstung), `> 0` from above (Hochdurchforstung),
+#'   `0` neutral. Either a scalar OR a `function(stand)` returning a scalar, where
+#'   `stand` is a list with `Dg` (quadratic mean dbh) and `target` (per-cohort
+#'   target diameter) -- use a function to let the bias swing from below to above
+#'   as the stand matures (the NW-FVA graduated regime; see [graduated_bias()]).
+#' @param species_removal_pref `Mischungsregulierung / Baumartenwahl`: scalar or
+#'   per-species. `0` neutral, `> 0` removed preferentially (convert away, e.g.
+#'   spruce), `< 0` retained/favoured. Enters as a factor `1 + pref`.
+#' @param planting_rate `Verjüngung / Vorbau` (0-1): advance-planting rate of
+#'   target species. Acts on regeneration, not removal (used by the driver).
+#' @param entry_interval_years `Eingriffsturnus`: years between interventions.
+#' @param risk_level `Risikostufe` (0-1): a single dial that lowers
+#'   `target_diameter` (by up to 15% at `risk_level = 1`).
+#' @return An object of class `management_params`.
+#' @seealso [apply_management()], [graduated_bias()], [thin_from_below()],
+#'   [target_diameter_harvest()]
 #' @export
-thin_from_below <- function(residual_ba, min_dbh = 0) {
-  stopifnot(residual_ba >= 0, min_dbh >= 0)
-  .thin_directional(residual_ba, min_dbh, from = "below")
+management_params <- function(target_diameter = Inf,
+                              target_harvest_fraction = 0,
+                              target_diameter_spread = 5,
+                              thinning_intensity = 0,
+                              thinning_size_bias = 0,
+                              species_removal_pref = 0,
+                              planting_rate = 0,
+                              entry_interval_years = 5,
+                              risk_level = 0) {
+  stopifnot(all(target_diameter > 0), target_diameter_spread > 0,
+            target_harvest_fraction >= 0, target_harvest_fraction <= 1,
+            thinning_intensity >= 0, thinning_intensity <= 1,
+            risk_level >= 0, risk_level <= 1, entry_interval_years > 0,
+            planting_rate >= 0, planting_rate <= 1)
+  if (!is.function(thinning_size_bias) && length(thinning_size_bias) != 1L)
+    stop("thinning_size_bias must be a scalar or a function(stand).", call. = FALSE)
+  structure(list(target_diameter = target_diameter,
+                 target_harvest_fraction = target_harvest_fraction,
+                 target_diameter_spread = target_diameter_spread,
+                 thinning_intensity = thinning_intensity,
+                 thinning_size_bias = thinning_size_bias,
+                 species_removal_pref = species_removal_pref,
+                 planting_rate = planting_rate,
+                 entry_interval_years = entry_interval_years,
+                 risk_level = risk_level),
+            class = "management_params")
 }
 
-
-#' Thinning from above (Hochdurchforstung)
-#'
-#' Removes the largest-diameter stems first until the residual basal area is at
-#' most `residual_ba`. Favours the mid-storey; used to harvest value early or to
-#' break up a closing canopy.
-#'
-#' @inheritParams thin_from_below
-#' @return a management prescription.
 #' @export
-thin_from_above <- function(residual_ba, min_dbh = 0) {
-  stopifnot(residual_ba >= 0, min_dbh >= 0)
-  .thin_directional(residual_ba, min_dbh, from = "above")
+print.management_params <- function(x, ...) {
+  bias <- if (is.function(x$thinning_size_bias)) "<function of stand>" else x$thinning_size_bias
+  cat("<management_params>  (one point in FINN's management genome)\n")
+  cat(sprintf("  Zielstärke (target_diameter)      : %s cm\n", paste(x$target_diameter, collapse = ", ")))
+  cat(sprintf("  Nutzungsstärke (target_harvest)   : %s\n", x$target_harvest_fraction))
+  cat(sprintf("  Zielstärken-Streubreite (spread)  : %s cm\n", x$target_diameter_spread))
+  cat(sprintf("  Durchforstungsstärke (intensity)  : %s\n", x$thinning_intensity))
+  cat(sprintf("  Durchforstungsart (size_bias)     : %s\n", bias))
+  cat(sprintf("  Mischungsregulierung (species)    : %s\n", paste(x$species_removal_pref, collapse = ", ")))
+  cat(sprintf("  Verjüngung (planting_rate)        : %s\n", x$planting_rate))
+  cat(sprintf("  Eingriffsturnus (interval, yr)    : %s\n", x$entry_interval_years))
+  cat(sprintf("  Risikostufe (risk_level)          : %s\n", x$risk_level))
+  invisible(x)
 }
 
 
-# Shared engine for directional thinning to a residual basal area, per patch.
-.thin_directional <- function(residual_ba, min_dbh, from = c("below", "above")) {
-  from <- match.arg(from)
-  function(cohorts) {
-    parts <- split(cohorts, list(cohorts$siteID, cohorts$patchID), drop = TRUE)
-    out <- lapply(parts, function(p) {
-      elig <- p$dbh >= min_dbh & p$trees > 0
-      if (!any(elig)) return(p)
-      # cumulative BA walking from the removal end inwards
-      ord <- order(p$dbh[elig], decreasing = (from == "above"))
-      idx <- which(elig)[ord]
-      ba_stem <- pi * (p$dbh[idx] / 200)^2
-      ba_here <- ba_stem * p$trees[idx]
-      total <- sum(ba_stem * p$trees)            # eligible BA only
-      to_remove <- max(0, total - residual_ba)
-      keep_frac <- .partial_removal(ba_here, to_remove)
-      p$trees[idx] <- p$trees[idx] * keep_frac
-      p
-    })
-    do.call(rbind, unname(out))[order(cohorts$siteID, cohorts$patchID), , drop = FALSE]
-  }
-}
-
-
-# Given per-cohort removable BA (in removal order) and a BA amount to remove,
-# return the per-cohort *surviving* fraction. The cohort that straddles the target
-# is thinned proportionally; everything past it is untouched.
-.partial_removal <- function(ba_here, to_remove) {
-  keep <- rep(1, length(ba_here))
-  remaining <- to_remove
-  for (i in seq_along(ba_here)) {
-    if (remaining <= 0) break
-    if (ba_here[i] <= remaining) {
-      keep[i] <- 0
-      remaining <- remaining - ba_here[i]
-    } else {
-      keep[i] <- 1 - remaining / ba_here[i]
-      remaining <- 0
-    }
-  }
-  keep
-}
-
-
-#' Target-diameter harvest (Zielstärkennutzung)
+#' Per-cohort removal fraction for a management parameter set
 #'
-#' Removes a fraction `p` of the stems in every cohort whose diameter has reached
-#' or exceeded a species-specific target. The backbone of continuous-cover
-#' forestry: trees are harvested individually once they are big enough, and the
-#' stand is never cleared.
+#' Evaluates the operator's removal-fraction field on a cohort snapshot: the
+#' Zielstärkennutzung (logistic ramp above the target diameter) plus the
+#' Durchforstung (size- and species-weighted tending), clamped to \[0, 1\].
 #'
-#' @param dbh_target target diameter (cm). Either a single number applied to all
-#'   species, or a named/indexed numeric vector giving a target per species.
-#' @param p fraction of the at-or-above-target stems removed per entry (0-1).
-#'   Default `1` (take all mature stems this step).
-#' @return a management prescription.
+#' @param cohorts a cohort snapshot (see the module contract).
+#' @param params a [management_params] object.
+#' @return numeric vector, one removal fraction per cohort row.
 #' @export
-target_diameter_harvest <- function(dbh_target, p = 1) {
-  stopifnot(p >= 0, p <= 1, all(dbh_target > 0))
-  function(cohorts) {
-    tgt <- if (length(dbh_target) == 1L) rep(dbh_target, nrow(cohorts))
-           else dbh_target[cohorts$species]
-    mature <- cohorts$dbh >= tgt
-    cohorts$trees[mature] <- cohorts$trees[mature] * (1 - p)
-    cohorts
-  }
-}
+management_removal <- function(cohorts, params) {
+  stopifnot(inherits(params, "management_params"))
+  dbh <- cohorts$dbh; trees <- cohorts$trees; sp <- cohorts$species
+  n <- length(dbh)
+  target <- .per_species(params$target_diameter, sp)
+  pref   <- .per_species(params$species_removal_pref, sp)
+  target <- target * (1 - params$risk_level * .RISK_ZIELSTAERKE_DROP)   # Risikostufe
 
+  Dg <- .cohort_qmd(cohorts)
 
-#' Species-selective removal (conversion / sanitation)
-#'
-#' Removes a fraction `p` of the stems of the named species, optionally only above
-#' a diameter. Represents species conversion (e.g. taking spruce out of a
-#' vulnerable stand to favour broadleaves) or sanitation felling.
-#'
-#' @param species integer species index or vector of indices to target.
-#' @param p fraction removed per entry (0-1). Default `1`.
-#' @param min_dbh only stems at or above this dbh (cm) are taken. Default `0`.
-#' @return a management prescription.
-#' @export
-species_removal <- function(species, p = 1, min_dbh = 0) {
-  stopifnot(p >= 0, p <= 1, min_dbh >= 0)
-  function(cohorts) {
-    hit <- cohorts$species %in% species & cohorts$dbh >= min_dbh
-    cohorts$trees[hit] <- cohorts$trees[hit] * (1 - p)
-    cohorts
-  }
-}
+  # Durchforstung: size-weighted, normalised so the trees-weighted mean weight is
+  # 1 (=> average tended removal ~ thinning_intensity), times the species factor.
+  bias <- if (is.function(params$thinning_size_bias))
+    params$thinning_size_bias(list(Dg = Dg, target = target, dbh = dbh)) else params$thinning_size_bias
+  sw <- if (is.finite(Dg) && Dg > 0) (dbh / Dg)^bias else rep(1, n)
+  wbar <- sum(trees * sw, na.rm = TRUE) / sum(trees, na.rm = TRUE)
+  if (is.finite(wbar) && wbar > 0) sw <- sw / wbar
+  r_thin <- params$thinning_intensity * sw * (1 + pref)
 
+  # Zielstärkennutzung: harvest ramps up as dbh crosses the target diameter.
+  r_harv <- params$target_harvest_fraction *
+    stats::plogis((dbh - target) / params$target_diameter_spread)
 
-#' Prescribed clearfell
-#'
-#' Removes every stem (optionally only of some species). A deterministic,
-#' scheduled counterpart to FINN's stochastic `disturbance` clearfell -- use this
-#' when the *timing* is a decision (a rotation-end cut on chosen years) rather than
-#' a random hazard.
-#'
-#' @param species optional integer indices; `NULL` (default) fells all species.
-#' @return a management prescription.
-#' @export
-clearfell <- function(species = NULL) {
-  function(cohorts) {
-    hit <- if (is.null(species)) rep(TRUE, nrow(cohorts))
-           else cohorts$species %in% species
-    cohorts$trees[hit] <- 0
-    cohorts
-  }
+  pmin(pmax(r_thin + r_harv, 0), 1)
 }
 
 
 #' Apply a management prescription to a cohort snapshot
 #'
-#' Runs the prescription and returns both the thinned snapshot and the removal it
-#' implied (stems and basal area, so a run can report its harvest). This is the
-#' single point where a prescription touches state; the stepwise driver calls it
-#' once per scheduled entry.
+#' Runs a prescription and returns the thinned snapshot plus the removal it
+#' implied (stems, basal area, and the mean diameter of the removed trees, so a
+#' run can be reported and validated against a yield table's `Dg_aus`). A
+#' prescription is either a [management_params] object (the parametric operator)
+#' or, for full control, a `function(cohorts)` returning a modified snapshot.
 #'
 #' @param cohorts a cohort snapshot (see the module contract).
-#' @param prescription a function returned by one of the constructors above.
-#' @return a list with `cohorts` (after), `removed_trees`, `removed_ba`.
+#' @param prescription a [management_params] object or a `function(cohorts)`.
+#' @return a list with `cohorts` (after), `removed_trees`, `removed_ba`,
+#'   `Dg_removed` (mean dbh of removed trees, cm) and `Dg_aus_rel`
+#'   (`Dg_removed / Dg_before`, < 1 from below, > 1 from above).
 #' @export
 apply_management <- function(cohorts, prescription) {
-  stopifnot(is.function(prescription))
   before_trees <- sum(cohorts$trees, na.rm = TRUE)
   before_ba <- cohort_basal_area(cohorts)
-  after <- prescription(cohorts)
-  if (!identical(dim(after), dim(cohorts)))
-    stop("a prescription must not add or drop cohort rows", call. = FALSE)
+  Dg_before <- .cohort_qmd(cohorts)
+
+  if (inherits(prescription, "management_params")) {
+    r <- management_removal(cohorts, prescription)
+    removed_n_i <- cohorts$trees * r
+    after <- cohorts
+    after$trees <- cohorts$trees - removed_n_i
+  } else if (is.function(prescription)) {
+    after <- prescription(cohorts)
+    if (!identical(dim(after), dim(cohorts)))
+      stop("a prescription function must not add or drop cohort rows.", call. = FALSE)
+    removed_n_i <- cohorts$trees - after$trees
+  } else {
+    stop("prescription must be a management_params object or a function(cohorts).",
+         call. = FALSE)
+  }
+
+  rem_tot <- sum(removed_n_i, na.rm = TRUE)
+  Dg_removed <- if (rem_tot > 0)
+    sqrt(sum(removed_n_i * cohorts$dbh^2, na.rm = TRUE) / rem_tot) else NA_real_
   list(cohorts = after,
-       removed_trees = before_trees - sum(after$trees, na.rm = TRUE),
-       removed_ba = before_ba - cohort_basal_area(after))
+       removed_trees = rem_tot,
+       removed_ba = before_ba - cohort_basal_area(after),
+       Dg_removed = Dg_removed,
+       Dg_aus_rel = Dg_removed / Dg_before)
+}
+
+
+#' A size-dependent thinning bias (graduated Durchforstungsart)
+#'
+#' Returns a `function(stand)` for `management_params(thinning_size_bias = ...)`
+#' that swings the thinning from below to above as the stand matures -- the NW-FVA
+#' "gestaffelte Durchforstung" / FVA-BW Durchforstungshilfe pattern, where young
+#' stands are tended from below and, as the mean diameter approaches the target,
+#' harvesting shifts to the strong (from above). The bias interpolates smoothly
+#' from `from` (at `Dg = 0`) to `to` (at `Dg >= target`).
+#'
+#' @param from bias at the start of stand development (default -0.6, from below).
+#' @param to bias near the target diameter (default 0.8, from above).
+#' @param ref reference diameter for the swing; defaults to the target diameter.
+#' @return a `function(stand)` returning a scalar bias.
+#' @export
+graduated_bias <- function(from = -0.6, to = 0.8, ref = NULL) {
+  function(stand) {
+    r <- if (is.null(ref)) stand$target else ref
+    r <- suppressWarnings(min(r[is.finite(r)], na.rm = TRUE))
+    if (!is.finite(r) || r <= 0) return(from)
+    x <- max(0, min(1, stand$Dg / r))       # 0 (young) .. 1 (at target)
+    from + (to - from) * (3 * x^2 - 2 * x^3) # smoothstep
+  }
 }
 
 
 # -----------------------------------------------------------------------------
-# Stepwise driver -- contract fixed here, implementation in progress
+# Presets: each returns a management_params (a point in the genome), not a case.
+# -----------------------------------------------------------------------------
+
+#' Thinning from below (Niederdurchforstung) -- a parameter preset
+#' @param intensity `Durchforstungsstärke` (0-1) removed per entry.
+#' @param ... further [management_params] overrides (e.g. `entry_interval_years`).
+#' @return a [management_params] object.
+#' @export
+thin_from_below <- function(intensity = 0.2, ...)
+  management_params(thinning_intensity = intensity, thinning_size_bias = -1, ...)
+
+#' Thinning from above (Hochdurchforstung) -- a parameter preset
+#' @inheritParams thin_from_below
+#' @return a [management_params] object.
+#' @export
+thin_from_above <- function(intensity = 0.2, ...)
+  management_params(thinning_intensity = intensity, thinning_size_bias = 1, ...)
+
+#' Target-diameter harvest (Zielstärkennutzung) -- a parameter preset
+#' @param target_diameter `Zielstärke` (cm), scalar or per-species.
+#' @param fraction `Nutzungsstärke` (0-1) of at/above-target stems taken per entry.
+#' @param spread `Zielstärken-Streubreite` (cm).
+#' @param ... further [management_params] overrides.
+#' @return a [management_params] object.
+#' @export
+target_diameter_harvest <- function(target_diameter, fraction = 1, spread = 5, ...)
+  management_params(target_diameter = target_diameter,
+                    target_harvest_fraction = fraction,
+                    target_diameter_spread = spread, ...)
+
+#' Species-selective removal (conversion / sanitation) -- a parameter preset
+#'
+#' Removes a fraction of the named species and protects the rest, via
+#' `Mischungsregulierung`. Requires the total number of species so the per-species
+#' preference vector can be built.
+#' @param species integer index/indices to remove.
+#' @param n_species total number of species in the model.
+#' @param fraction fraction of the targeted species removed per entry (0-1).
+#' @param ... further [management_params] overrides.
+#' @return a [management_params] object.
+#' @export
+species_removal <- function(species, n_species, fraction = 1, ...) {
+  pref <- rep(-1, n_species)     # protect others (factor 1 + (-1) = 0)
+  pref[species] <- 0             # neutral on the targeted species (factor 1)
+  management_params(thinning_intensity = fraction, species_removal_pref = pref,
+                    thinning_size_bias = 0, ...)
+}
+
+#' Prescribed clearfell -- a parameter preset
+#'
+#' Removes (nearly) all stems in one entry. A deterministic, scheduled counterpart
+#' to FINN's stochastic `disturbance` clearfell.
+#' @param ... further [management_params] overrides.
+#' @return a [management_params] object.
+#' @export
+clearfell <- function(...)
+  management_params(thinning_intensity = 1, thinning_size_bias = 0, ...)
+
+
+# -----------------------------------------------------------------------------
+# Stepwise driver -- contract fixed, implementation still pending
 # -----------------------------------------------------------------------------
 #' Simulate a fitted FINN model under a management schedule
 #'
-#' Threads prescriptive management through a fitted model by simulating in
-#' segments: run the model to the next scheduled entry with
-#' `simulateForest(return_cohorts = TRUE)`, apply the prescription to the final
-#' cohort snapshot with [apply_management()], re-initialise from the thinned state,
-#' and continue. Because the removal enters the state the model then propagates,
-#' the post-thinning light release and growth response are produced by the fitted
-#' demography itself -- no core change and no refit.
+#' Threads a management schedule through a fitted model by simulating in segments:
+#' run to the next scheduled entry with `simulateForest(return_cohorts = TRUE)`,
+#' apply the prescription to the final cohort snapshot with [apply_management()],
+#' re-initialise from the thinned state, and continue. The post-thinning light
+#' release and growth response are then produced by the fitted demography itself.
 #'
 #' @param model a fitted `finn_class` model.
-#' @param env the environment table to simulate over (as for `simulateForest`).
-#' @param patches number of patches (replicate stands) per site.
-#' @param schedule a data.frame with columns `year` and `prescription` (a
-#'   list-column of prescription functions), giving what to do and when.
-#' @param ... passed to `simulateForest()` (e.g. `device`).
-#' @return a list with the stitched `$trajectory` (per-year stand state) and a
-#'   `$harvest` log (removed stems/BA per entry).
+#' @param env the environment table (as for `simulateForest`).
+#' @param patches number of patches per site.
+#' @param schedule a data.frame with `year` and a list-column `prescription`
+#'   ([management_params] objects or functions).
+#' @param ... passed to `simulateForest()`.
+#' @return a list with the stitched `$trajectory` and a `$harvest` log.
 #' @export
 simulate_managed <- function(model, env, patches, schedule, ...) {
   stop("simulate_managed(): segmented driver not yet implemented on this branch. ",
-       "The prescription operators and apply_management() are ready; this driver ",
-       "is the next build (segment the horizon at schedule$year, re-init from the ",
-       "thinned cohort snapshot between segments).", call. = FALSE)
+       "The parametric operator (management_params/management_removal/apply_management) ",
+       "is ready; this driver is the next build (segment the horizon at schedule$year, ",
+       "re-init from the thinned cohort snapshot between segments).", call. = FALSE)
 }

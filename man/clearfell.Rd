@@ -2,19 +2,17 @@
 % Please edit documentation in R/management.R
 \name{clearfell}
 \alias{clearfell}
-\title{Prescribed clearfell}
+\title{Prescribed clearfell -- a parameter preset}
 \usage{
-clearfell(species = NULL)
+clearfell(...)
 }
 \arguments{
-\item{species}{optional integer indices; \code{NULL} (default) fells all species.}
+\item{...}{further \link{management_params} overrides.}
 }
 \value{
-a management prescription.
+a \link{management_params} object.
 }
 \description{
-Removes every stem (optionally only of some species). A deterministic,
-scheduled counterpart to FINN's stochastic \code{disturbance} clearfell -- use this
-when the \emph{timing} is a decision (a rotation-end cut on chosen years) rather than
-a random hazard.
+Removes (nearly) all stems in one entry. A deterministic, scheduled counterpart
+to FINN's stochastic \code{disturbance} clearfell.
 }

@@ -2,23 +2,22 @@
 % Please edit documentation in R/management.R
 \name{target_diameter_harvest}
 \alias{target_diameter_harvest}
-\title{Target-diameter harvest (Zielstärkennutzung)}
+\title{Target-diameter harvest (Zielstärkennutzung) -- a parameter preset}
 \usage{
-target_diameter_harvest(dbh_target, p = 1)
+target_diameter_harvest(target_diameter, fraction = 1, spread = 5, ...)
 }
 \arguments{
-\item{dbh_target}{target diameter (cm). Either a single number applied to all
-species, or a named/indexed numeric vector giving a target per species.}
+\item{target_diameter}{\verb{Zielstärke} (cm), scalar or per-species.}
 
-\item{p}{fraction of the at-or-above-target stems removed per entry (0-1).
-Default \code{1} (take all mature stems this step).}
+\item{fraction}{\verb{Nutzungsstärke} (0-1) of at/above-target stems taken per entry.}
+
+\item{spread}{\verb{Zielstärken-Streubreite} (cm).}
+
+\item{...}{further \link{management_params} overrides.}
 }
 \value{
-a management prescription.
+a \link{management_params} object.
 }
 \description{
-Removes a fraction \code{p} of the stems in every cohort whose diameter has reached
-or exceeded a species-specific target. The backbone of continuous-cover
-forestry: trees are harvested individually once they are big enough, and the
-stand is never cleared.
+Target-diameter harvest (Zielstärkennutzung) -- a parameter preset
 }

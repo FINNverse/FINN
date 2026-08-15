@@ -9,25 +9,22 @@ simulate_managed(model, env, patches, schedule, ...)
 \arguments{
 \item{model}{a fitted \code{finn_class} model.}
 
-\item{env}{the environment table to simulate over (as for \code{simulateForest}).}
+\item{env}{the environment table (as for \code{simulateForest}).}
 
-\item{patches}{number of patches (replicate stands) per site.}
+\item{patches}{number of patches per site.}
 
-\item{schedule}{a data.frame with columns \code{year} and \code{prescription} (a
-list-column of prescription functions), giving what to do and when.}
+\item{schedule}{a data.frame with \code{year} and a list-column \code{prescription}
+(\link{management_params} objects or functions).}
 
-\item{...}{passed to \code{simulateForest()} (e.g. \code{device}).}
+\item{...}{passed to \code{simulateForest()}.}
 }
 \value{
-a list with the stitched \verb{$trajectory} (per-year stand state) and a
-\verb{$harvest} log (removed stems/BA per entry).
+a list with the stitched \verb{$trajectory} and a \verb{$harvest} log.
 }
 \description{
-Threads prescriptive management through a fitted model by simulating in
-segments: run the model to the next scheduled entry with
-\code{simulateForest(return_cohorts = TRUE)}, apply the prescription to the final
-cohort snapshot with \code{\link[=apply_management]{apply_management()}}, re-initialise from the thinned state,
-and continue. Because the removal enters the state the model then propagates,
-the post-thinning light release and growth response are produced by the fitted
-demography itself -- no core change and no refit.
+Threads a management schedule through a fitted model by simulating in segments:
+run to the next scheduled entry with \code{simulateForest(return_cohorts = TRUE)},
+apply the prescription to the final cohort snapshot with \code{\link[=apply_management]{apply_management()}},
+re-initialise from the thinned state, and continue. The post-thinning light
+release and growth response are then produced by the fitted demography itself.
 }

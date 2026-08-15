@@ -9,14 +9,17 @@ apply_management(cohorts, prescription)
 \arguments{
 \item{cohorts}{a cohort snapshot (see the module contract).}
 
-\item{prescription}{a function returned by one of the constructors above.}
+\item{prescription}{a \link{management_params} object or a \verb{function(cohorts)}.}
 }
 \value{
-a list with \code{cohorts} (after), \code{removed_trees}, \code{removed_ba}.
+a list with \code{cohorts} (after), \code{removed_trees}, \code{removed_ba},
+\code{Dg_removed} (mean dbh of removed trees, cm) and \code{Dg_aus_rel}
+(\code{Dg_removed / Dg_before}, < 1 from below, > 1 from above).
 }
 \description{
-Runs the prescription and returns both the thinned snapshot and the removal it
-implied (stems and basal area, so a run can report its harvest). This is the
-single point where a prescription touches state; the stepwise driver calls it
-once per scheduled entry.
+Runs a prescription and returns the thinned snapshot plus the removal it
+implied (stems, basal area, and the mean diameter of the removed trees, so a
+run can be reported and validated against a yield table's \code{Dg_aus}). A
+prescription is either a \link{management_params} object (the parametric operator)
+or, for full control, a \verb{function(cohorts)} returning a modified snapshot.
 }

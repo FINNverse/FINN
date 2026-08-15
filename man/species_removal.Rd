@@ -2,22 +2,24 @@
 % Please edit documentation in R/management.R
 \name{species_removal}
 \alias{species_removal}
-\title{Species-selective removal (conversion / sanitation)}
+\title{Species-selective removal (conversion / sanitation) -- a parameter preset}
 \usage{
-species_removal(species, p = 1, min_dbh = 0)
+species_removal(species, n_species, fraction = 1, ...)
 }
 \arguments{
-\item{species}{integer species index or vector of indices to target.}
+\item{species}{integer index/indices to remove.}
 
-\item{p}{fraction removed per entry (0-1). Default \code{1}.}
+\item{n_species}{total number of species in the model.}
 
-\item{min_dbh}{only stems at or above this dbh (cm) are taken. Default \code{0}.}
+\item{fraction}{fraction of the targeted species removed per entry (0-1).}
+
+\item{...}{further \link{management_params} overrides.}
 }
 \value{
-a management prescription.
+a \link{management_params} object.
 }
 \description{
-Removes a fraction \code{p} of the stems of the named species, optionally only above
-a diameter. Represents species conversion (e.g. taking spruce out of a
-vulnerable stand to favour broadleaves) or sanitation felling.
+Removes a fraction of the named species and protects the rest, via
+\code{Mischungsregulierung}. Requires the total number of species so the per-species
+preference vector can be built.
 }
