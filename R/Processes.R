@@ -283,6 +283,68 @@ growth = function(dbh, species, parGrowth, pred, light, light_steepness = 10, de
 }
 
 
+#' Calculate growth with an environment-controlled size-decline
+#'
+#' A variant of [growth()] in which the rate at which diameter growth slows with
+#' size is not a fixed per-species constant but responds to the environment. The
+#' built-in [growth()] uses `g = shade * exp(pred) * exp(-k * dbh)` with a
+#' species-only decline `k = parGrowth[,2]`; here the decline is
+#' `k_eff = k_base * exp(-k_env * pred)`, i.e. a **species baseline** `k_base`
+#' (still `parGrowth[,2]`) **combined with the environment** through the same
+#' growth predictor `pred`. A positive `k_env` lets productive environments
+#' (higher `pred`) both grow faster *and* sustain diameter growth longer (smaller
+#' decline) — the pattern seen when fitting the NW-FVA yield tables, where a single
+#' species `k` over- and under-shoots the best and poorest site classes.
+#'
+#' `k_env` is supplied as a per-species (or scalar) trainable parameter through
+#' `createProcess(custom_parameters = list(k_env = ...))`; it is read here as
+#' `self$k_env`. With `k_env = 0` (or absent) this reduces **exactly** to
+#' [growth()], so it is a strict, opt-in extension.
+#'
+#' @inheritParams growth
+#' @return torch.Tensor A tensor of relative diameter growth per timestep.
+#' @examples
+#' \dontrun{
+#' m <- finn(
+#'   N_species      = Nsp,
+#'   growth_process = createProcess(~ temp + prec, FINN::growth_env,
+#'                                  optimizeSpecies = TRUE, optimizeEnv = TRUE,
+#'                                  custom_parameters = list(k_env = rep(0, Nsp))),
+#'   ...
+#' )
+#' }
+#' @import torch
+#' @export
+growth_env = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = FALSE, trees = NULL){
+
+  if(self$record_raws) {
+    self$raw_g = c(self$raw_g,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
+                                                                     light$unsqueeze(4),
+                                                                     trees$unsqueeze(4),
+                                                                     species$unsqueeze(4)$float()), dim = 4)) ))
+  }
+
+  shade = ((1 / (1 + torch::torch_exp(-light_steepness * (light - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))) /
+         (1 / (1 + torch::torch_exp(-light_steepness * (1 - parGrowth[,1][species]))) - 1 / (1 + torch::torch_exp(light_steepness * parGrowth[,1][species]))))
+
+  environment = torch::torch_exp(pred) # inverse link function (level)
+
+  # Size-decline: species baseline, combined with the environment. k_env is an
+  # optional trainable coupling (createProcess(custom_parameters = list(k_env=))).
+  # k_env = 0 (or absent) -> exactly the built-in growth().
+  k_base = parGrowth[,2][species]
+  if(!is.null(self$k_env)) {
+    k_eff = k_base * torch::torch_exp(-self$k_env[species] * pred)
+  } else {
+    k_eff = k_base
+  }
+
+  growth = shade * environment * (torch::torch_exp(-k_eff * dbh))
+  if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, k_eff = k_eff, growth = growth) else out = growth
+  return(out)
+}
+
+
 growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = FALSE, trees = NULL) {
 
   if(self$record_raws) {

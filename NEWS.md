@@ -15,6 +15,17 @@ Adds a **prescriptive management layer** and a worked **PROFOUND** example.
   FINN core change and no refit.
 * New vignette *Fitting FINN to PROFOUND data and simulating management*, calibrating
   FINN to one PROFOUND site and running the regimes above on the fitted model.
+* New growth process `growth_env()`: an environment-controlled size-decline. Where
+  `growth()` slows diameter growth with a fixed per-species constant
+  (`k = parGrowth[,2]`), `growth_env()` uses `k_eff = k_base * exp(-k_env * pred)`
+  — a species baseline combined with the environment via the growth predictor, so
+  productive sites both grow faster and sustain growth longer. Supplied opt-in via
+  `createProcess(custom_parameters = list(k_env = ...))`; `k_env = 0` reduces
+  exactly to `growth()`. Motivated by fitting the NW-FVA yield tables, where a
+  single species `k` over-/under-shoots the best/poorest site classes.
+* NW-FVA growth-and-yield reference tables now ship with FINN as an open CSV,
+  loaded via `nwfva_yield_tables()` (5 species, yield classes -1..4; source Albert
+  et al. 2021, CC-BY-4.0; see `inst/extdata/nwfva_gy_tables_SOURCE.md`).
 
 
 # FINN 0.2.0
