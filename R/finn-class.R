@@ -825,7 +825,7 @@ finn_class = nn_module(
               self$reg_k_lo + (self$reg_k_hi - self$reg_k_lo) *
                 torch::torch_sigmoid(self$reg_log_saturation)
             else torch::torch_exp(self$reg_log_saturation)
-        K = K$reshape(c(1L, -1L, 1L))   # broadcast along the species dim of r_mean_ha
+        K = K$reshape(c(1L, 1L, -1L))   # broadcast along the species dim (last) of r_mean_ha
         r_mean_ha = K * r_mean_ha / (K + r_mean_ha)
       }
 
