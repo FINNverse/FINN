@@ -74,8 +74,23 @@ obs <- obs[year != 1][, year := year - 1L]                  # drop initial year,
 
 env <- fread(file.path(FE, "data/BCI/noSplits/pft-period35-25patches/env_dt.csv"))
 
+# ---- initial cohorts (1985 alive trees) at species resolution --------------
+# same species remap as obs; dbh binned to 0.1 cm as in create_init_cohorts().
+tr[, species2 := ifelse(species %in% rare_sp, 0L, species)]
+tr[, sp_code  := match(species2, lvl)]
+trg <- merge(tr, grid[, .(siteID, patch, uniquePatch)], by = "uniquePatch")
+coh <- trg[census == 1985 & status == "A" & !is.na(dbh_cm),
+           .(trees = sum(nostems, na.rm = TRUE)),
+           by = .(dbh = as.numeric(as.character(cut(dbh_cm,
+                    breaks = seq(1, 351, 0.1),
+                    labels = seq(1, 351 - 0.1, 0.1), include.lowest = TRUE))),
+                  species = sp_code, siteID, patchID = patch, census)]
+setorder(coh, siteID, patchID)
+coh[, cohortID := seq_len(.N), by = .(siteID, patchID, census)]
+
 fwrite(obs, file.path(OUT, "obs_species.csv"))
 fwrite(env, file.path(OUT, "env.csv"))
+fwrite(coh, file.path(OUT, "initial_cohorts1985.csv"))
 fwrite(final_pft[order(species)], file.path(OUT, "species_pft.csv"))
 
 # ---- diagnostics -----------------------------------------------------------

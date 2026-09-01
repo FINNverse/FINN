@@ -50,8 +50,15 @@ finn_membership <- torch::nn_module(
   classname = "finn_membership",
   inherit   = .FINN_finn_class,
 
-  initialize = function(..., mm_K = 5L) {
-    self$mm_K <- as.integer(mm_K)
+  # mm_K         : number of prototypes (ignored if mm_membership is given).
+  # mm_membership: NULL -> membership A is LEARNED (soft). An integer vector of
+  #                length N_species -> A is FROZEN to that hard assignment
+  #                (one-hot), so only the prototypes are learned. This emulates a
+  #                fixed PFT scheme (e.g. Rueger) at species resolution, as a
+  #                control for the learned grouping.
+  initialize = function(..., mm_K = 5L, mm_membership = NULL) {
+    self$mm_membership <- mm_membership
+    self$mm_K <- if (is.null(mm_membership)) as.integer(mm_K) else length(unique(mm_membership))
     super$initialize(...)          # runs the full finn_class setup (captures inits)
     private$install_membership()   # then build shared membership + prototypes
   },
@@ -67,7 +74,15 @@ finn_membership <- torch::nn_module(
   private = list(
     install_membership = function() {
       K <- self$mm_K; N <- self$N_species
-      self$register_parameter("mm_logits", torch::nn_parameter(torch::torch_randn(N, K) * 0.01))
+      if (is.null(self$mm_membership)) {
+        # learned soft membership: near-uniform init
+        self$register_parameter("mm_logits", torch::nn_parameter(torch::torch_randn(N, K) * 0.01))
+      } else {
+        # frozen hard membership: one-hot logits as a buffer (not optimized)
+        grp  <- as.integer(as.factor(self$mm_membership))     # 1..K
+        oneh <- matrix(-10, N, K); oneh[cbind(seq_len(N), grp)] <- 10
+        self$register_buffer("mm_logits", torch::torch_tensor(oneh, dtype = torch::torch_float32()))
+      }
       for (type in c("growth", "mortality", "regeneration", "competition")) {
         init  <- self[[paste0(".mm_init_", type)]]                 # [N, n_par], bounded
         upper <- as.numeric(self[[paste0("par_", type, "_upper")]])
