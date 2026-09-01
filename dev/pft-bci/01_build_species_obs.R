@@ -71,6 +71,10 @@ full <- CJ(siteID = sort(unique(obs$siteID)), year = sort(unique(obs$year)),
 obs <- merge(full, obs, by = c("siteID","year","species"), all.x = TRUE)
 obs[is.na(ba), ba := 0][is.na(trees), trees := 0][is.na(reg) & year != 1, reg := 0]
 obs <- obs[year != 1][, year := year - 1L]                  # drop initial year, reindex
+# ANNUAL timestep (period35): censuses are 5 yr apart but FINN steps yearly, so
+# each observation spans period_length=5 sub-steps. Required so 0.2.0 sums
+# regeneration over the 5 steps (else 5x over-count -> the annual blow-up).
+obs[, period_length := 5L]
 
 env <- fread(file.path(FE, "data/BCI/noSplits/pft-period35-25patches/env_dt.csv"))
 

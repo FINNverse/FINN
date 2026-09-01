@@ -8,6 +8,7 @@
 # Run locally after the cluster fits (results/ synced back).
 # ============================================================================
 
+local({ l <- file.path(path.expand("~"), "Rlib-finn020"); if (dir.exists(l)) .libPaths(c(l, .libPaths())) })
 suppressMessages({ library(data.table); library(ggplot2) })
 D <- "dev/pft-bci"; RES <- file.path(D, "results")
 TAG <- if (length(commandArgs(TRUE))) commandArgs(TRUE)[1] else ""   # e.g. "" or "_smoke"

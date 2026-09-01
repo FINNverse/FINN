@@ -5,12 +5,12 @@
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --partition=gpu_4,gpu_8,gpu_4_a100,gpu_4_h100   # adjust to your uc3 allocation
+#SBATCH --partition=gpu_h100
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de
 #SBATCH --mem=50G
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-4
+#SBATCH --array=1-6
 ################################################################################
 # Path B: four BCI conditions, one per array task.
 #   1 = free (per-species baseline)      3 = learned (soft K=5)
@@ -27,20 +27,27 @@
 ################################################################################
 export LANG=C.UTF-8; export LC_ALL=C.UTF-8; export R_PROFILE_USER=/dev/null
 
-# --- your cluster R/torch environment (uncomment/adjust as needed) -----------
-# module load devel/miniconda   ;  conda activate finn
-# module load math/R/4.5.0
+# --- cluster R/torch environment (uc3: FINN 0.2.0 in ~/Rlib-finn020) ---------
+module load math/R/4.4.2-mkl-2025.0-gnu-14.2
+export R_LIBS_USER=$HOME/Rlib-finn020        # scripts also prepend this in-R
+cd "$HOME/bci-pft" || exit 1                 # run root containing dev/pft-bci/
 # -----------------------------------------------------------------------------
 
-CONDS=(_ free ruger learned pft5)            # 1-indexed for SLURM_ARRAY_TASK_ID
+# conditions (1-indexed). Tasks 1-4: annual timestep WITH regeneration_saturation
+# (the correct 0.2.0 config) across the four groupings. Tasks 5-6: saturation OFF,
+# to isolate the effect of the annual-timestep regeneration fix.
+CONDS=(_ free ruger learned pft5 learned pft5)
+SATS=( _ 1    1     1       1    0       0)
 export COND=${CONDS[$SLURM_ARRAY_TASK_ID]}
+export SAT=${SATS[$SLURM_ARRAY_TASK_ID]}
+export TAG=$([ "$SAT" = "0" ] && echo "_nosat" || echo "")
 export EPOCHS=8000
 export PATCHES=25
-export DEVICE=cuda
+export DEVICE=gpu
 export BATCH=15
 export LR=0.01
 export SEED=42
 
-echo "Path B condition: $COND  ($(date))"
+echo "Path B: COND=$COND SAT=$SAT TAG=$TAG  ($(date))"
 Rscript dev/pft-bci/03_pathB_fit.R
-echo "done: $COND  ($(date))"
+echo "done: $COND SAT=$SAT  ($(date))"

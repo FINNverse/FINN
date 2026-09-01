@@ -16,6 +16,8 @@
 # Config via env vars (cluster overrides): COND, EPOCHS, DEVICE, PATCHES, TAG.
 # ============================================================================
 
+# prefer the cluster's FINN 0.2.0 lib if present (no-op on other machines)
+local({ l <- file.path(path.expand("~"), "Rlib-finn020"); if (dir.exists(l)) .libPaths(c(l, .libPaths())) })
 suppressMessages({ library(FINN); library(torch); library(data.table) })
 source("dev/pft-bci/finn_membership.R")
 
@@ -25,6 +27,7 @@ DEVICE  <- Sys.getenv("DEVICE",  "cpu")
 PATCHES <- as.integer(Sys.getenv("PATCHES", "25"))
 LR      <- as.numeric(Sys.getenv("LR", "0.01"))
 BATCH   <- as.integer(Sys.getenv("BATCH", "250"))
+SAT     <- as.integer(Sys.getenv("SAT", "1"))            # 1 = regeneration_saturation ON (annual-timestep fix)
 TAG     <- Sys.getenv("TAG", "")
 SEED    <- as.integer(Sys.getenv("SEED", "42"))
 D       <- "dev/pft-bci"; RES <- file.path(D, "results"); dir.create(RES, showWarnings = FALSE)
@@ -33,7 +36,7 @@ set.seed(SEED); FINN.seed(SEED)
 # pft5 = the PUBLISHED approach (data aggregated to 5 Rueger PFTs), refit with the
 # CURRENT FINN as a same-version anchor. All other conditions use species-resolution.
 if (COND == "pft5") {
-  FE <- "/Users/yannekkaber/working-directory/FINNetAl/data/BCI/noSplits/pft-period35-25patches"
+  FE   <- file.path(D, "data/pft5")               # bundled published 5-PFT data
   obs  <- fread(file.path(FE, "obs_dt.csv"))
   env  <- fread(file.path(FE, "env_dt.csv"))
   coh  <- fread(file.path(FE, "initial_cohorts1985.csv"))
@@ -61,8 +64,10 @@ ruger <- rep(max(pftm$PFT_2axes) + 1L, Nsp)
 ruger[pftm$species] <- pftm$PFT_2axes
 
 # ---- build the model for this condition ------------------------------------
+reg_sat <- if (SAT) list(K_init = 200, shared = TRUE, bounds = c(1, 3000)) else NULL
 mk <- function(membership = NULL, K = 5L) finn_membership(
   mm_K = K, mm_membership = membership, N_species = Nsp, recruits_dbh = 1.0,
+  regeneration_saturation = reg_sat,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~., FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
   regeneration_process = createProcess(~., FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
@@ -84,7 +89,10 @@ BATCH <- min(BATCH, length(train_sites))
 t0 <- proc.time()[3]
 fit(m, data = obs_tr, env = env_tr, init_cohort = cohort_tr, device = DEVICE,
     epochs = EPOCHS, batchsize = BATCH, patches = PATCHES, lr = LR,
-    env_autoscale = TRUE, plot_progress = FALSE)
+    optimizer = torch::optim_adam,                      # cluster torch lacks optim_ignite_adam
+    env_autoscale = TRUE, plot_progress = FALSE,
+    weights = c(0.1, 10, 1.0, 1, 1, 1),                 # annual-timestep working config
+    loss = c(dbh="mse", ba="mse", trees="nbinom", growth="mse", mortality="mse", regeneration="nbinom"))
 cat("fit done in", round(proc.time()[3] - t0, 1), "s\n")
 
 # ---- held-out prediction on test sites -------------------------------------
