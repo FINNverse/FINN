@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=bci-pft-softmem
 #SBATCH --output=bci-pft-softmem_%A_%a.out
 #SBATCH --error=bci-pft-softmem_%A_%a.err
@@ -8,7 +8,7 @@
 #SBATCH --partition=cpu
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de
-#SBATCH --mem=24G
+#SBATCH --mem=50G
 #SBATCH --array=1-6
 ################################################################################
 # Path B: four BCI conditions, one per array task.
@@ -27,10 +27,14 @@
 export LANG=C.UTF-8; export LC_ALL=C.UTF-8; export R_PROFILE_USER=/dev/null
 
 # --- cluster R/torch environment (uc3: FINN 0.2.0 in ~/Rlib-finn020) ---------
-module load math/R/4.4.2-mkl-2025.0-gnu-14.2
-export R_LIBS_USER=$HOME/Rlib-finn020
-export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-16}        # scripts also prepend this in-R
+# hierarchical module: math/R/4.4.2 needs the compiler + mkl loaded first. The
+# batch shell is not the login shell, so load them explicitly (the -l shebang
+# also sources the profile as a fallback).
+module load compiler/gnu/14.2 numlib/mkl/2025.0 math/R/4.4.2
+export R_LIBS_USER=$HOME/Rlib-finn020        # scripts also prepend this in-R (wins over site-library)
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-16}
 cd "$HOME/bci-pft" || exit 1                 # run root containing dev/pft-bci/
+command -v Rscript >/dev/null || { echo "FATAL: Rscript not on PATH after module load"; exit 1; }
 # -----------------------------------------------------------------------------
 
 # conditions (1-indexed). Tasks 1-4: annual timestep WITH regeneration_saturation
@@ -49,5 +53,5 @@ export LR=0.01
 export SEED=42
 
 echo "Path B: COND=$COND SAT=$SAT TAG=$TAG  ($(date))"
-Rscript dev/pft-bci/03_pathB_fit.R
+Rscript dev/pft-bci/03_pathB_fit.R || { echo "FATAL: Rscript exited $? for COND=$COND"; exit 1; }
 echo "done: $COND SAT=$SAT  ($(date))"
