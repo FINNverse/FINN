@@ -1,0 +1,204 @@
+---
+title: "'FINN' an R-Package for inference of processes within dynamic forest models"
+author:
+  - Yannek Käber (Biometry and Environmental System Analysis, University of Freiburg; ORCID 0000-0002-7041-9849)
+  - Maximilian Pichler (Theoretical Ecology, University of Regensburg; ORCID 0000-0003-2252-8327)
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+<!--
+================================================================================
+SOFTWARE-NOTE SCAFFOLD (structure only). Yannek writes the prose.
+
+- The section structure is taken verbatim from FINN-true-software-note.md.
+- The CODE chunks are the actual worked examples from the package vignettes
+  (C-Data_preparation and D-Fit_to_FIA), reused directly.
+- PROSE IS INTENTIONALLY NOT WRITTEN. Each `<!-- PROSE ... -->` marks where text
+  from FINN-true-software-note.md belongs. Nothing here was auto-generated as
+  manuscript text.
+
+PRECOMPILE (like the vignettes / cito note): a torch backend is required to run
+the fits. Chunks are `eval = FALSE` by default so the scaffold knits for a
+structure check without training. Set eval = TRUE (below) and precompile once,
+committing the knitted output + figures (see vignettes/build.R for the pattern).
+
+Style references (for Yannek's writing): r3PG software note
+(doi:10.1111/2041-210X.13474) and cito software note (doi:10.1111/ecog.07143).
+================================================================================
+-->
+
+```{r setup, include = FALSE}
+# Flip to eval = TRUE and precompile with a torch backend to run the analysis.
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE, message = FALSE, warning = FALSE,
+                      fig.path = "figures/", fig.width = 7)
+library(FINN)
+library(torch)
+library(data.table)
+library(ggplot2)
+EPOCHS <- 500L
+```
+
+# Abstract
+
+<!-- PROSE — Abstract. Source: FINN-true-software-note.md § Abstract (points 1–4). -->
+
+# Introduction
+
+<!-- PROSE — Introduction. Source: FINN-true-software-note.md § Introduction. -->
+
+# The FINN Workflow
+
+<!-- PROSE — short lead-in to the workflow. Source: FINN-true-software-note.md § The FINN Workflow. -->
+
+## Data interface / Preparation
+
+<!-- PROSE — Data interface / Preparation. Source: FINN-true-software-note.md § Data interface / Preparation. -->
+
+```{r prep-make-obs}
+# from vignette C-Data_preparation (chunk: make-obs)
+obs_list <- makeObsData(
+  tree_dt           = tree_dt[complete == TRUE],
+  plotsize          = 0.06,
+  aggregate_by_site = FALSE,
+  fix_period_length = 10,
+  dbh_growth_thresh = c(-10, 50),
+  NspeciesQuantile  = 0.98,
+  minNyears         = 2
+)
+obs_dt <- obs_list$obs_dt
+```
+
+```{r prep-resolve-ids}
+# from vignette C-Data_preparation (chunks: resolve-ids, init-cohorts)
+inputs <- resolveSiteIDs(
+  tree_dt = obs_list$tree_dt,
+  obs_dt  = obs_dt,
+  env_dt  = env_dt,
+  createInitCohorts = TRUE
+)
+init_cohorts <- inputs$initCohorts
+```
+
+## Case study: Oregon FIA
+
+<!-- PROSE — case-study framing (200 train / 200 holdout Oregon FIA sites).
+     Source: FINN-true-software-note.md § Case study: Oregon FIA. -->
+
+```{r case-load-data}
+# from vignette D-Fit_to_FIA (chunk: load-data)
+ext <- function(f) system.file("extdata", f, package = "FINN")
+obs_dt     <- fread(ext("fia_obs_dt.csv"))
+env_dt     <- fread(ext("fia_env_dt.csv"))
+init_trees <- fread(ext("fia_init_trees.csv"))
+species_dt <- fread(ext("fia_species_dt.csv"))
+obs_test   <- fread(ext("fia_obs_test.csv"))
+env_test   <- fread(ext("fia_env_test.csv"))
+init_test  <- fread(ext("fia_init_test.csv"))
+
+Nsp               <- max(obs_dt$species)
+init_cohorts      <- makeInitCohorts(init_trees, Nspecies = Nsp)
+init_cohorts_test <- makeInitCohorts(init_test,  Nspecies = Nsp)
+```
+
+### Fitting a Process-FINN
+
+<!-- PROSE — the fully-mechanistic configuration.
+     Source: FINN-true-software-note.md § Fitting a Process-FINN. -->
+
+```{r fit-process-build}
+# from vignette D-Fit_to_FIA (chunks: build-process, fit-process)
+FINN.seed(42)
+m <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m, env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+    epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06, lr = 0.01,
+    env_autoscale = TRUE, plot_progress = FALSE)
+```
+
+### Replacing a process with a neural network
+
+<!-- PROSE — swapping growth for a DNN (Hybrid-FINN), same fit() call.
+     Source: FINN-true-software-note.md § Replacing a process with a neural network. -->
+
+```{r fit-hybrid-build}
+# from vignette D-Fit_to_FIA (chunks: hybrid-build, hybrid-fit)
+FINN.seed(42)
+m_hybrid <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_hybrid, env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+    epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06, lr = 0.01,
+    env_autoscale = TRUE, plot_progress = FALSE)
+```
+
+### Assessing the fit
+
+<!-- PROSE — in-sample vs held-out assessment (Spearman / RMSE), and that the
+     hybrid tracks the mechanistic model with no growth equation specified.
+     Source: FINN-true-software-note.md § Assessing the fit. -->
+
+```{r assess}
+# from vignette D-Fit_to_FIA (chunks: assess-code, assess-plot)
+pred_of <- function(model, label, env, init, obs_l, split) {
+  model$eval()
+  sim <- predict(model, env = env, init_cohort = init,
+                 patches = 4, patch_size = 0.06, device = "cpu")
+  merge(obs_l, sim$long$site, by = c("siteID", "year", "species", "variable"))[
+    , `:=`(model = label, split = split)][]
+}
+FINN.seed(1)
+obs_pred <- rbind(
+  pred_of(m,        "Process (mechanistic)", env_dt,   init_cohorts,      obs_long,  "train"),
+  pred_of(m,        "Process (mechanistic)", env_test, init_cohorts_test, test_long, "holdout"),
+  pred_of(m_hybrid, "Hybrid (growth = NN)",  env_dt,   init_cohorts,      obs_long,  "train"),
+  pred_of(m_hybrid, "Hybrid (growth = NN)",  env_test, init_cohorts_test, test_long, "holdout"))
+
+ggplot(obs_pred[variable %in% c("dbh", "ba", "trees") & is.finite(obs)],
+       aes(obs, value, colour = model)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
+  geom_point(alpha = 0.3, size = 0.7) +
+  facet_wrap(~variable, scales = "free") +
+  theme_minimal()
+```
+
+### Process Inference with FINN
+
+<!-- PROSE — recovering the learned growth response from the NN with ALE, and
+     feature importance. Source: FINN-true-software-note.md § Process Inference with FINN. -->
+
+```{r inference-ale}
+# from vignette D-Fit_to_FIA (chunks: ale-code, ale-environmental)
+FINN.seed(1)
+ale_proc <- ALE(m,        env_dt, init_cohorts, plot = FALSE)   # mechanistic growth
+ale_hyb  <- ALE(m_hybrid, env_dt, init_cohorts, plot = FALSE)   # growth = NN
+# (see vignette D for the back-transform + facetted growth-ALE plot comparing the two)
+```
+
+```{r inference-featimp}
+# from vignette D-Fit_to_FIA (chunk: featimp-code)
+fi <- feature_importance(m, env_dt, init_cohorts, nperm = 20L, seed = 1L)
+```
+
+# Conclusion
+
+<!-- PROSE — Conclusion. Source: FINN-true-software-note.md § Conclusion. -->
+
+# References
+
+<!-- Bibliography. Reuse FINN-true-software-note.md references; consider a .bib +
+     csl for the target journal (MEE / Ecography). -->
