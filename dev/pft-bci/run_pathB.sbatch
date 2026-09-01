@@ -2,14 +2,13 @@
 #SBATCH --job-name=bci-pft-softmem
 #SBATCH --output=bci-pft-softmem_%A_%a.out
 #SBATCH --error=bci-pft-softmem_%A_%a.err
-#SBATCH --time=12:00:00
+#SBATCH --time=09:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --partition=gpu_h100
+#SBATCH --partition=cpu
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de
-#SBATCH --mem=50G
-#SBATCH --gres=gpu:1
+#SBATCH --mem=24G
 #SBATCH --array=1-6
 ################################################################################
 # Path B: four BCI conditions, one per array task.
@@ -29,7 +28,8 @@ export LANG=C.UTF-8; export LC_ALL=C.UTF-8; export R_PROFILE_USER=/dev/null
 
 # --- cluster R/torch environment (uc3: FINN 0.2.0 in ~/Rlib-finn020) ---------
 module load math/R/4.4.2-mkl-2025.0-gnu-14.2
-export R_LIBS_USER=$HOME/Rlib-finn020        # scripts also prepend this in-R
+export R_LIBS_USER=$HOME/Rlib-finn020
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-16}        # scripts also prepend this in-R
 cd "$HOME/bci-pft" || exit 1                 # run root containing dev/pft-bci/
 # -----------------------------------------------------------------------------
 
@@ -41,9 +41,9 @@ SATS=( _ 1    1     1       1    0       0)
 export COND=${CONDS[$SLURM_ARRAY_TASK_ID]}
 export SAT=${SATS[$SLURM_ARRAY_TASK_ID]}
 export TAG=$([ "$SAT" = "0" ] && echo "_nosat" || echo "")
-export EPOCHS=8000
+export EPOCHS=4000
 export PATCHES=25
-export DEVICE=gpu
+export DEVICE=cpu
 export BATCH=15
 export LR=0.01
 export SEED=42

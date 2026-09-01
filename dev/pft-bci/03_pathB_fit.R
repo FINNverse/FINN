@@ -90,6 +90,7 @@ t0 <- proc.time()[3]
 fit(m, data = obs_tr, env = env_tr, init_cohort = cohort_tr, device = DEVICE,
     epochs = EPOCHS, batchsize = BATCH, patches = PATCHES, lr = LR,
     optimizer = torch::optim_adam,                      # cluster torch lacks optim_ignite_adam
+    checkpoints = 1000L, folder = file.path(RES, paste0("ckpt_", COND, TAG)),  # survive walltime kills
     env_autoscale = TRUE, plot_progress = FALSE,
     weights = c(0.1, 10, 1.0, 1, 1, 1),                 # annual-timestep working config
     loss = c(dbh="mse", ba="mse", trees="nbinom", growth="mse", mortality="mse", regeneration="nbinom"))
