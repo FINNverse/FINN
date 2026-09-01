@@ -24,14 +24,17 @@
 #
 # Submit from the FINN repo root:  sbatch dev/pft-bci/run_pathB.sbatch
 ################################################################################
-export LANG=C.UTF-8; export LC_ALL=C.UTF-8; export R_PROFILE_USER=/dev/null
+export LANG=C.UTF-8; export LC_ALL=C.UTF-8
+# NOTE: do NOT set R_PROFILE_USER=/dev/null or R_LIBS_USER here -- the user's
+# ~/.Rprofile adds ~/R/site-library (where data.table lives), and R_LIBS_USER
+# would override it. FINN 0.2.0 is picked up by the in-R .libPaths() prepend
+# (~/Rlib-finn020) inside 03_pathB_fit.R.
 
 # --- cluster R/torch environment (uc3: FINN 0.2.0 in ~/Rlib-finn020) ---------
 # hierarchical module: math/R/4.4.2 needs the compiler + mkl loaded first. The
 # batch shell is not the login shell, so load them explicitly (the -l shebang
 # also sources the profile as a fallback).
 module load compiler/gnu/14.2 numlib/mkl/2025.0 math/R/4.4.2
-export R_LIBS_USER=$HOME/Rlib-finn020        # scripts also prepend this in-R (wins over site-library)
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-16}
 cd "$HOME/bci-pft" || exit 1                 # run root containing dev/pft-bci/
 command -v Rscript >/dev/null || { echo "FATAL: Rscript not on PATH after module load"; exit 1; }
