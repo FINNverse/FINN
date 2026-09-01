@@ -1,22 +1,19 @@
-## Resubmission
-
-This is a resubmission addressing the points raised by Konstanze Lauseker:
-
-* Replaced all `T`/`F` with `TRUE`/`FALSE` in the R code (and thus in the
-  generated `\usage`), and confirmed `T`/`F` are not used as names.
-* Removed the example from the unexported `extract_env()` (now internal, `@noRd`).
-* Replaced `\dontrun{}`: examples that run in < 5 s are now unwrapped and
-  executable; examples that require the (optional, runtime-downloaded) 'torch'
-  backend use `@examplesIf torch::torch_is_installed()`.
-* No function writes to the user's home/package/working directory by default:
-  the internal figure-generation helper that wrote to `man/figures/` has been
-  moved out of the package (to `data-raw/`, which is build-ignored).
-* `options(na.action=)` in `R/finn-class.R` is now restored with an immediate
-  `on.exit()` (the earlier graphical-parameter capture already used `on.exit()`).
-
 ## Submission
 
-This is a new submission of FINN, a differentiable forest gap model.
+This is a minor-version update of FINN (0.1.0 -> 0.2.0). It adds model features
+developed for two forest-inventory calibration projects. All new arguments
+default to the previous behaviour, so existing 0.1.0 code runs unchanged.
+
+New in 0.2.0 (see NEWS.md for details):
+
+* `env_autoscale` gains per-predictor scaling ("auto"/"identity"/"0to1" or a
+  user function); the previous TRUE/FALSE/NULL forms are unchanged.
+* `finn()` gains `regeneration_saturation` (a Beverton-Holt cap on recruitment,
+  read back with the new exported `reg_saturation_K()`), `recruit_obs_weight`
+  and `growth_period_scale`.
+* `createProcess()` gains a `custom_parameters` interface.
+* A regeneration observation operator (internal hook).
+* Bug fix: `createProcess(NN = ...)` is no longer dropped in `create_nn()`.
 
 ## Test environments
 
@@ -33,13 +30,8 @@ This is a new submission of FINN, a differentiable forest gap model.
 
   These are correct: 'DNNs' (deep neural networks), 'FINN' (the package /
   method acronym), 'torch' (the R package FINN is built on), and the two author
-  surnames. The DESCRIPTION also cites the accompanying methods paper as
-  Pichler and Käber (2026) <doi:10.1111/2041-210x.70347>, which resolves.
-
-  On win-builder the same NOTE also reported a timeout reaching
-  <https://www.gnu.org/licenses/gpl-3.0> (the "License: GPL v3" badge target in
-  README.md). The URL is valid and reachable; this was a transient network
-  timeout on the check host.
+  surnames. The DESCRIPTION cites the accompanying methods paper as Pichler and
+  Käber (2026) <doi:10.1111/2041-210x.70347>, which resolves.
 
 ## Notes for the reviewer
 
@@ -53,4 +45,4 @@ This is a new submission of FINN, a differentiable forest gap model.
 
 ## Downstream dependencies
 
-There are none, as this is a new submission.
+There are no reverse dependencies on CRAN at this time.
