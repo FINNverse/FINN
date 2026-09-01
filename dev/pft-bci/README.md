@@ -28,12 +28,14 @@ active bindings — the whole FINN forward/`fit`/`predict` is reused unchanged.
 `FINNetAl` checkout.
 
 ## Path B — the experiment
-Three species-resolution models, identical except for the grouping of the
-per-species demographic parameters (all via `finn_membership`):
+Four models, identical except for the grouping of the per-species demographic
+parameters (the first three via `finn_membership` at species resolution):
 
 - **free** — frozen identity membership → free per-species (baseline).
 - **ruger** — frozen Rüger PFT one-hot → parameters tied by the 5 PFTs.
 - **learned** — soft membership, `K = 5`, discovered by the fit.
+- **pft5** — the *published* approach: data aggregated to 5 Rüger PFTs, refit
+  with the current FINN as a same-version anchor.
 
 A fixed 5-of-20 site hold-out measures prediction where training data is scarce.
 **Primary** result: held-out error by rare vs common species (`04`).
@@ -44,13 +46,13 @@ Local (fast smoke): `COND=learned EPOCHS=20 PATCHES=4 Rscript dev/pft-bci/03_pat
 
 Cluster (real, ~overnight), from the FINN repo root:
 1. `Rscript dev/pft-bci/01_build_species_obs.R`  (or copy `data/` over)
-2. `sbatch dev/pft-bci/run_pathB.sbatch`   (array 1-3: free / ruger / learned)
+2. `sbatch dev/pft-bci/run_pathB.sbatch`   (array 1-4: free / ruger / learned / pft5)
 3. back home: `Rscript dev/pft-bci/04_pathB_analyze.R`
 
-**Container caveat:** `finn_membership` uses `FINN:::finn_class` internals, so the
-FINN installed in `~/finn-r-torch.sif` must be **this branch's** FINN (≥0.2.0),
-not the older version FINNetAl was built against. Rebuild/​install FINN from
-`soft-membership-pft` into the container before submitting.
+**FINN version:** runs FINN directly (no container). The cluster R env must have
+FINN installed from **this branch** (`finn_membership` uses `FINN:::finn_class`).
+Current FINN is compatible with the FINNetAl setup — verified locally by refitting
+both the 5-PFT and species data.
 
 ## Config notes
 - `batchsize` is clamped to the number of training sites (FINN drops the last

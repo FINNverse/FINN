@@ -30,10 +30,20 @@ SEED    <- as.integer(Sys.getenv("SEED", "42"))
 D       <- "dev/pft-bci"; RES <- file.path(D, "results"); dir.create(RES, showWarnings = FALSE)
 set.seed(SEED); FINN.seed(SEED)
 
-obs  <- fread(file.path(D, "data/obs_species.csv"))
-env  <- fread(file.path(D, "data/env.csv"))
-coh  <- fread(file.path(D, "data/initial_cohorts1985.csv"))
-pftm <- fread(file.path(D, "data/species_pft.csv"))
+# pft5 = the PUBLISHED approach (data aggregated to 5 Rueger PFTs), refit with the
+# CURRENT FINN as a same-version anchor. All other conditions use species-resolution.
+if (COND == "pft5") {
+  FE <- "/Users/yannekkaber/working-directory/FINNetAl/data/BCI/noSplits/pft-period35-25patches"
+  obs  <- fread(file.path(FE, "obs_dt.csv"))
+  env  <- fread(file.path(FE, "env_dt.csv"))
+  coh  <- fread(file.path(FE, "initial_cohorts1985.csv"))
+  pftm <- data.table(species = 1:5, PFT_2axes = 1:5)
+} else {
+  obs  <- fread(file.path(D, "data/obs_species.csv"))
+  env  <- fread(file.path(D, "data/env.csv"))
+  coh  <- fread(file.path(D, "data/initial_cohorts1985.csv"))
+  pftm <- fread(file.path(D, "data/species_pft.csv"))
+}
 Nsp  <- max(obs$species)
 predictors <- c("Prec","SR_kW_m2","RH_prc","T_max","T_min","swp")
 
@@ -61,6 +71,7 @@ m <- switch(COND,
   free    = mk(membership = seq_len(Nsp)),          # frozen identity -> free per-species
   ruger   = mk(membership = ruger),                 # frozen Rueger PFT one-hot
   learned = mk(K = 5L),                             # learned soft membership
+  pft5    = mk(membership = seq_len(Nsp)),          # 5 PFT-units, free (published anchor)
   stop("unknown COND: ", COND))
 cat("condition:", COND, " | N_species:", Nsp, " | K:", m$mm_K,
     " | train sites:", length(train_sites), " test:", length(test_sites),
