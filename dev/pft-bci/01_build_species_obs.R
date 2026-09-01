@@ -32,16 +32,18 @@ sd1 <- tr[, .(
   trees    = sum((status=="A" & !is.na(dbh_cm))*nostems, na.rm = TRUE),
   dbh_mean = sum(dbh_cm*(status=="A" & !is.na(dbh_cm))*nostems, na.rm = TRUE) /
              sum((status=="A" & !is.na(dbh_cm))*nostems, na.rm = TRUE),
-  g          = mean(relative_growth, na.rm = TRUE),
+  g          = mean(relative_growth, na.rm = TRUE),          # annual rel. growth (period35)
+  g_5yr      = mean(relative_growth_5yr, na.rm = TRUE),       # 5-yr rel. growth (period7)
   fresh_dead = sum(status=="D" & status_before=="A", na.rm = TRUE),
   r          = sum(census != 1985 & status=="A" & status_before=="P", na.rm = TRUE)/area_of_square_ha
 ), by = .(census, uniquePatch, species, period_length)]
 
-sd1[census == 1985, c("r","g") := NA]
+sd1[census == 1985, c("r","g","g_5yr") := NA]
 setorder(sd1, uniquePatch, species, census)
 sd1[, trees_before := shift(trees, 1, type = "lag"), by = .(uniquePatch, species)]
-sd1[, m := 1 - ((trees_before - fresh_dead)/trees_before)^(1/period_length)]
-sd1[is.infinite(m), m := 1]
+sd1[, m     := 1 - ((trees_before - fresh_dead)/trees_before)^(1/period_length)]  # annualised (period35)
+sd1[, m_5yr := 1 - ((trees_before - fresh_dead)/trees_before)^(1/1)]              # per-interval (period7)
+sd1[is.infinite(m), m := 1]; sd1[is.infinite(m_5yr), m_5yr := 1]
 
 # ---- rare-species lumping (<=5 growth&mort obs -> "other" = code 0) ----------
 Nobs <- sd1[census > 1985, .(growth_mort_N = sum(!is.na(g) & !is.na(m))), by = species]
@@ -76,7 +78,23 @@ obs <- obs[year != 1][, year := year - 1L]                  # drop initial year,
 # regeneration over the 5 steps (else 5x over-count -> the annual blow-up).
 obs[, period_length := 5L]
 
-env <- fread(file.path(FE, "data/BCI/noSplits/pft-period35-25patches/env_dt.csv"))
+# ---- package obs_dt: PERIOD7 (5-yr step; the published cadence) -------------
+# one FINN step per census interval; 5-yr rates (g_5yr, m_5yr); period_length=1.
+o1_7 <- sd2[, .(year = as.integer(as.factor(census)), siteID, patch, species,
+                ba, dbh = dbh_mean, trees, growth = g_5yr, mort = m_5yr, reg = r)]
+obs7 <- o1_7[, .(ba = sum(ba, na.rm=TRUE)/Npatches, dbh = sum(dbh, na.rm=TRUE)/Npatches,
+                 trees = sum(trees, na.rm=TRUE)/Npatches, growth = sum(growth, na.rm=TRUE)/Npatches,
+                 mort = sum(mort, na.rm=TRUE)/Npatches, reg = sum(reg, na.rm=TRUE)/Npatches),
+             by = .(siteID, year, species)]
+full7 <- CJ(siteID = sort(unique(obs7$siteID)), year = sort(unique(obs7$year)),
+            species = sort(unique(obs7$species)))
+obs7 <- merge(full7, obs7, by = c("siteID","year","species"), all.x = TRUE)
+obs7[is.na(ba), ba := 0][is.na(trees), trees := 0][is.na(reg) & year != 1, reg := 0]
+obs7 <- obs7[year != 1][, year := year - 1L]
+obs7[, period_length := 1L]
+
+env  <- fread(file.path(FE, "data/BCI/noSplits/pft-period35-25patches/env_dt.csv"))
+env7 <- fread(file.path(FE, "data/BCI/noSplits/pft-period7-25patches/env_dt.csv"))
 
 # ---- initial cohorts (1985 alive trees) at species resolution --------------
 # same species remap as obs; dbh binned to 0.1 cm as in create_init_cohorts().
@@ -92,10 +110,20 @@ coh <- trg[census == 1985 & status == "A" & !is.na(dbh_cm),
 setorder(coh, siteID, patchID)
 coh[, cohortID := seq_len(.N), by = .(siteID, patchID, census)]
 
-fwrite(obs, file.path(OUT, "obs_species.csv"))
-fwrite(env, file.path(OUT, "env.csv"))
-fwrite(coh, file.path(OUT, "initial_cohorts1985.csv"))
+fwrite(obs,  file.path(OUT, "obs_species.csv"))       # period35 (annual)
+fwrite(env,  file.path(OUT, "env.csv"))
+fwrite(obs7, file.path(OUT, "obs_species_p7.csv"))    # period7 (5-yr, published cadence)
+fwrite(env7, file.path(OUT, "env_p7.csv"))
+fwrite(coh, file.path(OUT, "initial_cohorts1985.csv"))  # same initial state for both
 fwrite(final_pft[order(species)], file.path(OUT, "species_pft.csv"))
+
+# bundle the published 5-PFT data for both cadences (pft5 = annual, pft5_p7 = 5-yr)
+for (pp in c("pft-period35-25patches", "pft-period7-25patches")) {
+  dst <- file.path(OUT, if (grepl("period7", pp)) "pft5_p7" else "pft5")
+  dir.create(dst, showWarnings = FALSE)
+  for (f in c("obs_dt.csv","env_dt.csv","initial_cohorts1985.csv"))
+    file.copy(file.path(FE, "data/BCI/noSplits", pp, f), file.path(dst, f), overwrite = TRUE)
+}
 
 # ---- diagnostics -----------------------------------------------------------
 present <- obs[trees > 0 | growth != 0]

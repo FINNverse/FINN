@@ -28,6 +28,7 @@ PATCHES <- as.integer(Sys.getenv("PATCHES", "25"))
 LR      <- as.numeric(Sys.getenv("LR", "0.01"))
 BATCH   <- as.integer(Sys.getenv("BATCH", "250"))
 SAT     <- as.integer(Sys.getenv("SAT", "1"))            # 1 = regeneration_saturation ON (annual-timestep fix)
+PERIOD  <- as.integer(Sys.getenv("PERIOD", "35"))        # 35 = annual timestep; 7 = 5-yr step (published cadence)
 TAG     <- Sys.getenv("TAG", "")
 SEED    <- as.integer(Sys.getenv("SEED", "42"))
 D       <- "dev/pft-bci"; RES <- file.path(D, "results"); dir.create(RES, showWarnings = FALSE)
@@ -35,15 +36,16 @@ set.seed(SEED); FINN.seed(SEED)
 
 # pft5 = the PUBLISHED approach (data aggregated to 5 Rueger PFTs), refit with the
 # CURRENT FINN as a same-version anchor. All other conditions use species-resolution.
+p7 <- PERIOD == 7L
 if (COND == "pft5") {
-  FE   <- file.path(D, "data/pft5")               # bundled published 5-PFT data
+  FE   <- file.path(D, if (p7) "data/pft5_p7" else "data/pft5")   # bundled published 5-PFT data
   obs  <- fread(file.path(FE, "obs_dt.csv"))
   env  <- fread(file.path(FE, "env_dt.csv"))
   coh  <- fread(file.path(FE, "initial_cohorts1985.csv"))
   pftm <- data.table(species = 1:5, PFT_2axes = 1:5)
 } else {
-  obs  <- fread(file.path(D, "data/obs_species.csv"))
-  env  <- fread(file.path(D, "data/env.csv"))
+  obs  <- fread(file.path(D, if (p7) "data/obs_species_p7.csv" else "data/obs_species.csv"))
+  env  <- fread(file.path(D, if (p7) "data/env_p7.csv" else "data/env.csv"))
   coh  <- fread(file.path(D, "data/initial_cohorts1985.csv"))
   pftm <- fread(file.path(D, "data/species_pft.csv"))
 }
