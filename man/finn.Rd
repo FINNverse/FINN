@@ -10,7 +10,10 @@ finn(
   growth_process = NULL,
   regeneration_process = NULL,
   competition_process = NULL,
-  recruits_dbh = 1
+  recruits_dbh = 1,
+  recruit_obs_weight = 1,
+  growth_period_scale = FALSE,
+  regeneration_saturation = NULL
 )
 }
 \arguments{
@@ -33,6 +36,24 @@ process, created by \link{createProcess}. If \code{NULL} (default), the default
 mechanistic competition process is used.}
 
 \item{recruits_dbh}{(\code{numeric(1)})\cr Starting dbh for recruits. Has value 1.0 as default.}
+
+\item{recruit_obs_weight}{(\code{numeric(1)})\cr Observation-operator inclusion
+weight applied to both predicted and observed regeneration before the loss
+(maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
+space, e.g. \code{g(recruit_dbh)/BAF} for an angle-count inventory). \code{1.0} (default)
+is the per-hectare behaviour.}
+
+\item{growth_period_scale}{(\code{logical(1)})\cr If \code{TRUE}, growth is scored against
+the COMPOUNDED period increment (\code{prod(1+g)-1}) rather than the mean of the
+per-year rates, so a de-annualised period target aligns without collapsing
+growth's variance. Default \code{FALSE} (mean of annual rates).}
+
+\item{regeneration_saturation}{(\code{list} or \code{NULL})\cr If non-\code{NULL}, applies a
+Beverton-Holt density cap \code{recruits = K*m/(K+m)} to recruitment with a FITTED
+carrying capacity \code{K}. A named list with elements \code{K_init} (initial K,
+stems/ha/step), \code{shared} (\code{TRUE} = one K for all species, else per-species),
+and \code{bounds} (\code{c(lo, hi)} to confine K to a plausible band via a sigmoid, or
+\code{NULL} for a free \code{exp} parameterisation). Default \code{NULL} (no cap).}
 }
 \value{
 An object of class \code{finn_class} (a \link[torch:nn_module]{torch::nn_module}): an assembled

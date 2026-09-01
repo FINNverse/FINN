@@ -317,29 +317,19 @@ extract_env = function(formula, env) {
   return(env_array)
 }
 
-#' Learn z-standardization for environmental predictors
+#' Compute per-predictor environmental scaling
 #'
-#' Computes the centering and scaling constants (mean and standard deviation) of
-#' every numeric environmental predictor in \code{env} (all columns except the
-#' keys \code{siteID} and \code{year}), so they can be re-applied unchanged to new
-#' data at prediction time. A predictor with (near-)zero standard deviation is
-#' given \code{scale = 1} (centred only) to avoid division by zero, mirroring
-#' \code{recipes::step_normalize}.
+#' Computes the centering and scaling constants of every numeric environmental
+#' predictor in \code{env} (all columns except the keys \code{siteID} and
+#' \code{year}), so they can be re-applied unchanged to new data at prediction
+#' time. Every supported mode is an affine map \code{(x - center) / scale}, so the
+#' stored \code{(variable, center, scale)} table is applied by
+#' \code{\link{apply_env_scaling}} and inverted by ALE unchanged, whatever the
+#' mode. A predictor with (near-)zero standard deviation is given \code{scale = 1}
+#' (centred only) to avoid division by zero.
 #'
 #' @param env A \code{data.frame}/\code{data.table} with \code{siteID}, \code{year}
 #'   and the environmental predictor columns.
-#' @return A \code{data.frame} with columns \code{variable}, \code{center},
-#'   \code{scale}; or \code{NULL} if there are no numeric predictors. This is the
-#'   object stored on a fitted model as \code{model$env_scaling} when it is fit
-#'   with \code{env_autoscale = TRUE}.
-#' @seealso \code{\link{apply_env_scaling}}
-#' @export
-#' Compute per-predictor environmental scaling.
-#'
-#' Every supported mode is an AFFINE map `(x - center) / scale`, so the stored
-#' `(variable, center, scale)` table is applied by [apply_env_scaling()] and
-#' inverted by ALE unchanged, whatever the mode.
-#'
 #' @param spec how to scale each predictor. One of:
 #'   * `TRUE` -- z-standardise every predictor (`center = mean`, `scale = sd`);
 #'     the default and the historical behaviour.
@@ -348,13 +338,19 @@ extract_env = function(formula, env) {
 #'     entry per predictor. Entries may be:
 #'       - `"auto"`     z-standardise (mean / sd),
 #'       - `"identity"` (alias `"none"`) leave unchanged (center 0, scale 1),
-#'       - `"0to1"`     min-max to [0, 1] (center min, scale range),
+#'       - `"0to1"`     min-max to `[0, 1]` (center min, scale range),
 #'       - a **function** `f(x)` returning `list(center=, scale=)` -- a custom
 #'         affine scaler (e.g. robust: `function(x) list(center=median(x),
 #'         scale=IQR(x))`). Non-affine transforms are intentionally not supported
 #'         because ALE needs an invertible mapping.
 #'   Unnamed vectors/lists are matched to predictors by position; named ones by
 #'   variable name (predictors not named default to `"auto"`).
+#' @return A \code{data.frame} with columns \code{variable}, \code{center},
+#'   \code{scale}; or \code{NULL} if there are no numeric predictors. This is the
+#'   object stored on a fitted model as \code{model$env_scaling} when it is fit
+#'   with \code{env_autoscale = TRUE}.
+#' @seealso \code{\link{apply_env_scaling}}
+#' @export
 compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))
   cols = cols[vapply(cols, function(cc) is.numeric(env[[cc]]), logical(1))]

@@ -139,16 +139,23 @@ held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See 
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
 
-\item{env_autoscale}{(\code{logical(1)})\cr If \code{TRUE}, FINN z-standardizes the
-environmental predictors in \code{env} internally: the per-variable mean and
-standard deviation are learned from the training \code{env} and stored on the
-model, then re-applied automatically at every \code{predict()}/\code{simulate()} call.
-This lets you pass raw (untransformed) \code{env} for both calibration and
-prediction; FINN guarantees an identical transformation at both stages.
-Recommended (and the default) for numerical stability when predictors are on
-different scales. Set \code{FALSE} to use \code{env} exactly as supplied (e.g. if you
-have already standardized it yourself). The learned constants are available
-as \code{model$env_scaling}.}
+\item{env_autoscale}{\cr How to scale the environmental predictors in \code{env}.
+The learned transformation is stored on the model and re-applied
+automatically at every \code{predict()}/\code{simulate()} call, so raw (untransformed)
+\code{env} can be passed for both calibration and prediction. Accepts:
+\itemize{
+\item \code{TRUE} (default) -- z-standardise every predictor (mean / sd);
+\item \code{FALSE} -- use \code{env} exactly as supplied (no scaling);
+\item a \strong{per-predictor spec} for more nuanced scaling: a length-1 string
+applied to all, or a vector/list with one entry per predictor (matched by
+name if named, else by position). Each entry is one of \code{"auto"}
+(z-standardise), \code{"identity"}/\code{"none"} (leave unchanged), \code{"0to1"}
+(min-max to \verb{[0,1]}), or a function \code{f(x)} returning \code{list(center=, scale=)}
+for a custom affine scaler. Every mode is affine, so ALE stays invertible.
+Example: \code{env_autoscale = c(mat_c = "auto", management = "identity")} keeps
+an ordinal management forcing on its native 0..3 scale while z-scaling
+climate. The learned constants are available as \code{model$env_scaling}.
+}}
 
 \item{clip_norm}{(\code{numeric(1)|list()})\cr Gradient-norm budget passed to
 \code{torch::nn_utils_clip_grad_norm_()}, applied separately to each of three

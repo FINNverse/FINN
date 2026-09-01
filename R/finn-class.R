@@ -260,7 +260,7 @@ reg_saturation_K = function(m) {
 #'     applied to all, or a vector/list with one entry per predictor (matched by
 #'     name if named, else by position). Each entry is one of `"auto"`
 #'     (z-standardise), `"identity"`/`"none"` (leave unchanged), `"0to1"`
-#'     (min-max to [0,1]), or a function `f(x)` returning `list(center=, scale=)`
+#'     (min-max to `[0,1]`), or a function `f(x)` returning `list(center=, scale=)`
 #'     for a custom affine scaler. Every mode is affine, so ALE stays invertible.
 #'   Example: `env_autoscale = c(mat_c = "auto", management = "identity")` keeps
 #'   an ordinal management forcing on its native 0..3 scale while z-scaling
