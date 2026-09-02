@@ -744,6 +744,7 @@ finn_class = nn_module(
           trees = trees
         )
         self$g = g
+        if (!is.null(self$growth_scale)) g = g * self$growth_scale
         dbh_growth = dbh*g
         dbh = dbh + dbh_growth
 
@@ -777,7 +778,7 @@ finn_class = nn_module(
           growth = g
         )
 
-        trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
+        trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, if (is.null(self$mort_cap)) 0.99 else self$mort_cap))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
         # trees_dead = (trees*m)*trees$ge(0.5)$float()
@@ -1640,6 +1641,19 @@ finn_class = nn_module(
           # budget and can over-clip the others. Clip each group against its own
           # budget (private$clip_grad_norm_grouped()) instead.
           private$clip_grad_norm_grouped(self$parameters, clip_norm)
+          # env-coefficient regularization (self$env_l2): L2 weight decay applied
+          # ONLY to the env-effect networks (nn_growth/mortality/regeneration), so
+          # env responses shrink toward no-effect unless the data supports them.
+          # Leaves the mechanistic per-species baseline (par_*) untouched.
+          if (!is.null(self$env_l2) && self$env_l2 > 0) {
+            torch::with_no_grad({
+              for (nm in c("nn_growth", "nn_mortality", "nn_regeneration")) {
+                nn <- self[[nm]]
+                if (!is.null(nn)) for (p in nn$parameters)
+                  if (!is.null(p$grad)) p$grad$add_(self$env_l2 * p)
+              }
+            })
+          }
           self$optimizer$step()
         }
 

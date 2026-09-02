@@ -84,6 +84,9 @@ cat("condition:", COND, " | N_species:", Nsp, " | K:", m$mm_K,
     " | train sites:", length(train_sites), " test:", length(test_sites),
     " | epochs:", EPOCHS, " | device:", DEVICE, "\n")
 
+ENV_L2 <- as.numeric(Sys.getenv("ENV_L2", "0"))          # >0 = L2 weight decay on env-effect networks
+if (ENV_L2 > 0) m$env_l2 <- ENV_L2
+
 cohort_tr <- FINN::CohortMat$new(obs_df = coh_tr, sp = Nsp)
 # FINN's dataloader batches over SITES and drops the last incomplete batch, so
 # batchsize must not exceed the number of training sites (else zero batches).
