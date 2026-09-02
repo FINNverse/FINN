@@ -55,3 +55,8 @@ README.html
 # testthat failure snapshots (local only)
 tests/testthat/_problems/
 tests/testthat/testthat-problems.rds
+
+# Personal Claude Code overrides (shared config is committed: CLAUDE.md,
+# .claude/settings.json, .claude/hooks/). These stay local to each collaborator.
+CLAUDE.local.md
+.claude/settings.local.json
