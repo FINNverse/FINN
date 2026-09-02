@@ -10,8 +10,11 @@ For Yannek, Max, and their Claude sessions. Machine-facing rules live in
 - One branch per feature/fix, named `topic-short-desc` (e.g. `pft-soft-membership`,
   `fix-reg-saturation`). Keep branches short-lived and PRs small — AI generates
   large diffs fast, and long-lived branches make merges painful.
-- A PR merges only when **CI (`R CMD check`) is green** and the other person has
-  reviewed. Enable branch protection on GitHub requiring both.
+- We do **not** use branch protection, so this is convention, not enforcement:
+  merge a PR only after **CI (`R CMD check`) is green** and, ideally, the other
+  person has glanced at it. Run `/finn-check` (or `R CMD check`) locally before
+  merging — with no protection, that local discipline is the only guard against
+  either of us pushing a broken `main`.
 - Coordinate ownership via GitHub Issues so you are not editing the same files at
   once. Rough split: assign each feature an issue and an owner before starting.
 
