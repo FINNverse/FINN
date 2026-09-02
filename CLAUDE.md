@@ -63,24 +63,17 @@ generated `.Rmd`. Do not rely on vignettes knitting during `R CMD check`.
 - `dev/` — scratch and tooling; **personal work goes in `dev/<name>/`**. Shared
   dev tooling (`make_extdata.R`, plans) stays at `dev/` top level.
 
-## Key API facts (verify against source before relying on them)
+## Where to find things (don't restate these here — they drift)
 
-- `finn(N_species, growth_process=, mortality_process=, regeneration_process=,
-  competition_process=, recruits_dbh=, recruit_obs_weight=, growth_period_scale=)`.
-- `createProcess(formula, func, optimizeSpecies=, optimizeEnv=, initSpecies=,
-  initEnv=, custom_parameters=, ...)`. A custom `func` is bound to `self` and can
-  declare extra trainable parameters via `custom_parameters` (registered,
-  optimized by `fit()`, saved/loaded).
-- `createHybrid(...)` replaces a whole process with a DNN.
-- Density-dependent recruitment is the `FINN::regeneration_saturation` process
-  (Beverton-Holt, `K = exp(reg_logK)` declared via `custom_parameters`), a drop-in
-  alternative to `FINN::regeneration` — **not** a `finn()` option.
-
-## Release state
-
-- **CRAN: 0.1.0** (published; maintainer Yannek Käber). **`main` is 0.2.0,
-  pushed to GitHub but not yet submitted to CRAN.** 0.2.0 changes are additive/backward-compatible
-  (per-predictor `env_autoscale`, `custom_parameters`, saturating regeneration,
-  `recruit_obs_weight`, `growth_period_scale`). See `NEWS.md`.
+- **Current version / what changed** → `DESCRIPTION` (`Version:`) and `NEWS.md`.
+  CRAN maintainer is Yannek Käber. Don't hard-code version/release status in this
+  file; read it from those.
+- **Process API & how to add one** → the `finn-process` skill (`createProcess`,
+  custom processes, `custom_parameters`, the extend-never-mutate rule).
+- **Data prep** → the `finn-dataprep` skill. **Validation/comparison** → the
+  `finn-evaluation` skill. **Vignettes** → the `finn-vignettes` skill.
+- **Per-project progress history** → `claude-config/projects/FINN/progress.md`
+  (maintained by the `project-progress` skill). **Who contributed what** →
+  `CONTRIBUTING.md` (also skill-maintained). Do not hand-maintain these.
 - Anything you want the *other* collaborator's Claude to know must live in this
-  file (or a committed doc) — personal Claude memory does not travel.
+  file or another committed doc — personal Claude memory does not travel.

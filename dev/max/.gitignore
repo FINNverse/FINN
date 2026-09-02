@@ -1,0 +1,6 @@
+# Personal scratch — nothing here is committed except the README and this file.
+# Keeps experiments from ever being swept into a commit; promote reusable work
+# into R/ tests/ etc. via a normal staged change instead.
+*
+!.gitignore
+!README.md

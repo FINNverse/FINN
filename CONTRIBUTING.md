@@ -1,55 +1,29 @@
 # Contributing to FINN
 
-For Yannek, Max, and their Claude sessions. Machine-facing rules live in
-[CLAUDE.md](CLAUDE.md); this is the human-facing workflow.
+**Workflow rules** (branch/PR, `git add` discipline, roxygenise-before-commit,
+`dev/` layout, commit style) live in [CLAUDE.md](CLAUDE.md) — the single source of
+truth. This file records **who contributed what**, and is maintained
+automatically (see below), not by hand.
 
-## Branch & PR model
+<!-- AUTO-MAINTAINED: the `project-progress` skill refreshes the table below from
+     git history. Do not hand-edit; if something looks wrong, fix it in a session
+     and it will be kept current. Last refreshed: 2026-09-02. -->
 
-- `main` is the integration branch and is protected. **Never commit directly to
-  it** once it is on `origin`; open a pull request.
-- One branch per feature/fix, named `topic-short-desc` (e.g. `pft-soft-membership`,
-  `fix-reg-saturation`). Keep branches short-lived and PRs small — AI generates
-  large diffs fast, and long-lived branches make merges painful.
-- We do **not** use branch protection, so this is convention, not enforcement:
-  merge a PR only after **CI (`R CMD check`) is green** and, ideally, the other
-  person has glanced at it. Run `/finn-check` (or `R CMD check`) locally before
-  merging — with no protection, that local discipline is the only guard against
-  either of us pushing a broken `main`.
-- Coordinate ownership via GitHub Issues so you are not editing the same files at
-  once. Rough split: assign each feature an issue and an owner before starting.
+## Contributors
 
-## Before every commit
+- **Yannek Käber** — `y.kaeber@posteo.de` (CRAN maintainer). git aliases: `ykaeber`, `Yannek Kaeber`.
+- **Maximilian Pichler** — `maximilian.pichler@biologie.uni-regensburg.de`. git aliases: `MaximilianPi`, `dwjak123lkdmaKOP`, `Maximilian Pichler`.
 
-1. If you touched roxygen/exports: `Rscript -e 'roxygen2::roxygenise()'` and stage
-   the regenerated `man/*.Rd` + `NAMESPACE` **in the same commit**.
-2. `Rscript -e 'devtools::test()'` passes locally (or you know why a torch test skips).
-3. Stage **specific paths** — never `git add -A` (a hook blocks it anyway).
-4. Commit as yourself, imperative subject, body explains *why*, no AI co-author trailer.
+## Contributions by theme
 
-## Generated / conflict-prone files
+Best-effort attribution from git history; refined over time by the skill.
 
-`man/*.Rd`, `NAMESPACE`, and precompiled vignette `.Rmd` are generated. **Do not
-hand-merge them** — on a conflict, take either side, then re-run
-`roxygenise()` / the vignette build and commit the regenerated result. `NEWS.md`
-uses `merge=union` (see `.gitattributes`) so both entries survive a merge.
-
-## The `dev/` directory
-
-`dev/` is shared but namespaced. **Put your own scratch in `dev/<yourname>/`**
-(`dev/yannek/`, `dev/max/`). Shared tooling (data builders, plans) stays at the
-`dev/` top level. Nothing in `dev/` ships in the package — it is listed in
-`.Rbuildignore`. Never let `dev/` content into an `R/`, `man/`, or release commit.
-
-## Releases (maintainer only)
-
-CRAN submission and pushing release tags are the maintainer's (Yannek's) call.
-Checklist for a release PR: bump `DESCRIPTION` Version, update `NEWS.md` and
-`cran-comments.md`, `roxygenise()`, `R CMD check --as-cran` clean, then the
-maintainer submits.
-
-## Claude Code setup
-
-The committed `CLAUDE.md` and `.claude/settings.json` configure both our Claude
-sessions identically. Personal overrides go in gitignored `CLAUDE.local.md` /
-`.claude/settings.local.json`. Cross-project templates and shared slash commands
-live in the separate `claude-config` repo (symlink its `shared/` into `~/.claude/`).
+| theme / aspect | primarily | notes |
+|---|---|---|
+| Hybrid / neural-network processes (Level-1 & Level-2, transformer/DNN) | Maximilian | core of the MEE 2026 method paper |
+| Core model & mechanistic processes (`finn-class`, `Processes`) | both | growth/mortality/regeneration/competition + forward pass |
+| Calibration features (`env_autoscale`, `custom_parameters`, saturating regeneration, `recruit_obs_weight`, `growth_period_scale`) | Yannek | the 0.2.0 additions |
+| CRAN packaging & release (DESCRIPTION, NEWS, cran-comments, review fixes) | Yannek | maintainer |
+| Data interface (`makeObsData`/`resolveSiteIDs`/`makeInitCohorts`, extdata) | both | |
+| Vignettes & docs | both | precompiled vignettes, pkgdown, README |
+| Collaboration / Claude Code setup | Yannek | shared CLAUDE.md, skills, hooks, claude-config |
