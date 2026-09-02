@@ -9,6 +9,26 @@ FINN's demographic processes are plain R functions in `R/Processes.R`, exported
 with roxygen `@export`. They are the mechanistic core; `createProcess()` wires one
 into a model. Follow these rules — several are non-obvious and have caused bugs.
 
+## Core principle: extend, never mutate
+
+FINN must stay fully configurable through the R package, via `createProcess()`. So:
+
+- **A new process, or any change that fundamentally alters how a process behaves,
+  is added as a NEW process definition alongside the existing ones — never by
+  editing an existing process or adding a `finn()`-level option.** The existing
+  processes keep behaving exactly as before; the new behaviour is a new choice.
+- Realise it through the package's **custom-process functionality**: a process
+  `func` passed to `createProcess(func = ..., custom_parameters = ...)`. FINN binds
+  it to the model (`self`) and registers/optimises/saves its custom parameters.
+  This is the same mechanism whether the function is shipped in the package
+  (exported from `R/Processes.R`, e.g. `FINN::regeneration_saturation`) or supplied
+  by a user at runtime — both are "custom processes" to the engine.
+- This keeps every variant composable (works with mechanistic *and* hybrid
+  siblings), self-contained, and backward compatible, and it means users can add
+  their own process without forking the package. When in doubt, ask "can this be a
+  new `createProcess` func with its own `custom_parameters`?" — the answer is
+  almost always yes, and that is the way to do it.
+
 ## Signatures (match the existing ones exactly)
 
 - `growth(dbh, species, parGrowth, pred, light, ...)`
@@ -56,13 +76,6 @@ vector against such a tensor, reshape it to `c(1L, 1L, -1L)` — **not**
 `c(1L, -1L, 1L)`. Putting it on the wrong axis works by accident for length-1
 (shared) values and crashes for per-species ones (this was the
 `regeneration_saturation(shared=FALSE)` bug: `11 vs 4` tensor mismatch).
-
-## Design principle
-
-Prefer a **new process function** over a `finn()`-level option. Density dependence,
-alternative links, etc. should compose like any other process
-(`FINN::regeneration_saturation` is a process, not a `finn()` argument), so they
-work with mechanistic *and* hybrid variants and stay self-contained.
 
 ## After editing — always
 
