@@ -79,7 +79,7 @@ generated `.Rmd`. Do not rely on vignettes knitting during `R CMD check`.
 ## Release state
 
 - **CRAN: 0.1.0** (published; maintainer Yannek Käber). **`main` is 0.2.0,
-  unreleased** and not yet pushed. 0.2.0 changes are additive/backward-compatible
+  pushed to GitHub but not yet submitted to CRAN.** 0.2.0 changes are additive/backward-compatible
   (per-predictor `env_autoscale`, `custom_parameters`, saturating regeneration,
   `recruit_obs_weight`, `growth_period_scale`). See `NEWS.md`.
 - Anything you want the *other* collaborator's Claude to know must live in this
