@@ -341,5 +341,75 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
   r = self$nn_regeneration(light = light, species = species, env = pred)$clamp(max = 10)$exp()
 }
 
+#' Regeneration with Beverton-Holt density saturation
+#'
+#' A drop-in alternative to [FINN::regeneration] that caps the otherwise
+#' unbounded mean recruitment with a Beverton-Holt density dependence,
+#' `recruits = K * m / (K + m)`, where `m` is the mechanistic mean recruitment
+#' (identical to [FINN::regeneration]) and `K` is a fitted carrying capacity
+#' (stems ha^-1 step^-1). As `m` grows, recruitment saturates towards `K`.
+#'
+#' Unlike the other process functions, whose species parameters come from the
+#' built-in `par_regeneration` table, this function needs one extra parameter,
+#' the log carrying capacity `reg_logK` (`K = exp(reg_logK)`). Declare it with
+#' `createProcess(custom_parameters = list(reg_logK = ...))`; FINN then registers
+#' it as a trainable parameter, optimises it in [FINN::fit()] and round-trips it
+#' through `torch_save`/`torch_load`. The **length of the init decides the
+#' resolution**: a length-1 init gives one shared `K` for all species; a
+#' length-`N_species` init gives a per-species `K`. Read the fitted value back
+#' with `exp(as.numeric(m$reg_logK))`.
+#'
+#' @param species torch.Tensor species information.
+#' @param parReg torch.Tensor Regeneration parameters. 0 <= parReg <= 1
+#' This parameter denotes the fraction of light needed for a species to regenerate.
+#' In general low values for high regeneration and high values for low regeneration.
+#' @param pred torch.Tensor Prediction values.
+#' @param light torch.Tensor Available light variable for calculation.
+#' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
+#'
+#' @return torch.Tensor Saturated regeneration values for forest patches.
+#'
+#' @seealso [FINN::regeneration], [FINN::createProcess()]
+#'
+#' @examples
+#' \dontrun{
+#' m <- finn(
+#'   N_species = Nsp,
+#'   regeneration_process = createProcess(
+#'     ~ temp + prec, FINN::regeneration_saturation,
+#'     custom_parameters = list(reg_logK = rep(log(800), Nsp)), # per-species K
+#'     optimizeSpecies = TRUE, optimizeEnv = TRUE)
+#' )
+#' }
+#'
+#' @import torch
+#' @importFrom torch torch_sigmoid
+#' @export
+regeneration_saturation = function(species, parReg, pred, light, debug = FALSE) {
+  if(is.null(self$reg_logK))
+    stop("`regeneration_saturation` needs a `reg_logK` parameter. Add it in ",
+         "createProcess(custom_parameters = list(reg_logK = rep(log(800), N_species))) ",
+         "-- length 1 for a shared K, length N_species for a per-species K.",
+         call. = FALSE)
+
+  if(self$record_raws) {
+    self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))
+  }
+
+  if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
+  environment = torch::torch_exp(pred) # Environmental inverse link function
+  regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
+  mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
+
+  # Beverton-Holt cap: K = exp(reg_logK), reshaped to broadcast along the species
+  # (last) dimension of `mean`. A length-1 reg_logK -> (1,1,1) -> shared K; a
+  # length-N_species reg_logK -> (1,1,N_species) -> per-species K.
+  K = torch::torch_exp(self$reg_logK)$reshape(c(1L, 1L, -1L))
+  mean = K * mean / (K + mean)
+
+  if(debug == TRUE) out = list(regP = regP, mean = mean) else out = mean
+  return(out)
+}
+
 
 

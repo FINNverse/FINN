@@ -12,8 +12,7 @@ finn(
   competition_process = NULL,
   recruits_dbh = 1,
   recruit_obs_weight = 1,
-  growth_period_scale = FALSE,
-  regeneration_saturation = NULL
+  growth_period_scale = FALSE
 )
 }
 \arguments{
@@ -47,13 +46,6 @@ is the per-hectare behaviour.}
 the COMPOUNDED period increment (\code{prod(1+g)-1}) rather than the mean of the
 per-year rates, so a de-annualised period target aligns without collapsing
 growth's variance. Default \code{FALSE} (mean of annual rates).}
-
-\item{regeneration_saturation}{(\code{list} or \code{NULL})\cr If non-\code{NULL}, applies a
-Beverton-Holt density cap \code{recruits = K*m/(K+m)} to recruitment with a FITTED
-carrying capacity \code{K}. A named list with elements \code{K_init} (initial K,
-stems/ha/step), \code{shared} (\code{TRUE} = one K for all species, else per-species),
-and \code{bounds} (\code{c(lo, hi)} to confine K to a plausible band via a sigmoid, or
-\code{NULL} for a free \code{exp} parameterisation). Default \code{NULL} (no cap).}
 }
 \value{
 An object of class \code{finn_class} (a \link[torch:nn_module]{torch::nn_module}): an assembled

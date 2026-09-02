@@ -17,10 +17,17 @@ for 0.1.0 runs unchanged.
   `compute_env_scaling()` / `apply_env_scaling()`. Dispatch is fully backward
   compatible: the previous `TRUE` / `FALSE` / `NULL` forms behave exactly as before.
 
-* **Regeneration saturation (`finn(regeneration_saturation = )`).** An optional
-  Beverton-Holt cap on recruitment that keeps regeneration bounded at high
-  propagule pressure. The fitted carrying capacity `K` (stems ha⁻¹ step⁻¹) is read
-  back with the new exported `reg_saturation_K()`. Off by default.
+* **Saturating regeneration process (`FINN::regeneration_saturation`).** A new,
+  exported regeneration process function that adds a Beverton-Holt density cap
+  `recruits = K*m/(K+m)` on top of the standard mechanistic recruitment, keeping
+  regeneration bounded at high propagule pressure. It is a drop-in alternative to
+  `FINN::regeneration`, used as the `regeneration_process` in `finn()`. The fitted
+  carrying capacity is a normal process parameter, declared through
+  `createProcess(custom_parameters = list(reg_logK = ...))`: a length-1 init gives
+  one shared `K`, a length-`N_species` init a per-species `K` (`K = exp(reg_logK)`,
+  read back with `exp(as.numeric(m$reg_logK))`). This replaces the earlier
+  (unreleased) `finn(regeneration_saturation = )` model-level option, so the cap
+  now composes like any other process rather than as a special case.
 
 * **Recruitment observation weight (`finn(recruit_obs_weight = )`).** Scales the
   regeneration term in the loss so recruitment observations can be up- or
