@@ -21,16 +21,20 @@ discovers it automatically:
   `/finn-release-check`) and `.claude/skills/` (`finn-process`, `finn-dataprep`,
   `finn-evaluation`, `finn-vignettes`), and `CONTRIBUTING.md` (skill-maintained
   record of who contributed what).
-- **Shared config repo `FINNverse/claude-config`**, cloned at
-  `~/working-directory/claude-config`. It holds cross-project **skills** symlinked
-  into `~/.claude/skills/` — `project-progress` (auto-logs progress + refreshes
+- **Shared config repo `FINNverse/claude-config`**, cloned wherever you keep your
+  project repos — **the path differs per machine**, so nothing here hardcodes it
+  and the skills resolve it themselves (`$CLAUDE_CONFIG_REPO`, their own symlink
+  target, or a sibling of this repo). It holds cross-project **skills**
+  — `project-progress` (auto-logs progress + refreshes
   `CONTRIBUTING.md`) and `doc-freshness` (periodically flags stale docs and asks
   you) — plus new-project templates and this project's **progress history** at
   `claude-config/projects/FINN/progress.md`.
 - **First-time setup on a new machine** (each of us, once): clone `claude-config`
-  next to your projects and symlink its `shared/commands/*` and `shared/skills/*`
-  into `~/.claude/` (see the claude-config README). Without that symlink the
-  cross-project skills won't load, but this repo's own commands/skills still do.
+  next to your projects, then link the two shared skills either into
+  `~/.claude/skills/` (available in every repo on the machine) or into this repo's
+  `.claude/skills/` (scoped to this project; hide them with `.git/info/exclude`,
+  not the tracked `.gitignore`). See the claude-config README. Without either link
+  the cross-project skills won't load, but this repo's own commands/skills still do.
 - **Do not hand-maintain** the progress history or `CONTRIBUTING.md` — the skills
   do. Volatile facts (versions, release status) are NOT stored here; read them
   from `DESCRIPTION`/`NEWS.md`.
