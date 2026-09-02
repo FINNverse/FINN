@@ -9,6 +9,32 @@ Claude session in this repo, so it is the shared brain for all collaborators
 how each person's Claude stays in sync. Personal, private notes go in
 `~/.claude/` or a gitignored `CLAUDE.local.md`, never here.
 
+## Shared collaboration setup (how the pieces fit — read this first)
+
+Yannek and Max collaborate on this and related projects with Claude Code. The
+setup spans this repo plus a shared config repo, all committed so a fresh session
+discovers it automatically:
+
+- **This repo** carries the auto-loaded brain: this `CLAUDE.md` (rules + map),
+  `.claude/settings.json` + `.claude/hooks/` (shared permissions + a hook that
+  blocks `git add -A`), repo-specific `.claude/commands/` (`/finn-check`,
+  `/finn-release-check`) and `.claude/skills/` (`finn-process`, `finn-dataprep`,
+  `finn-evaluation`, `finn-vignettes`), and `CONTRIBUTING.md` (skill-maintained
+  record of who contributed what).
+- **Shared config repo `FINNverse/claude-config`**, cloned at
+  `~/working-directory/claude-config`. It holds cross-project **skills** symlinked
+  into `~/.claude/skills/` — `project-progress` (auto-logs progress + refreshes
+  `CONTRIBUTING.md`) and `doc-freshness` (periodically flags stale docs and asks
+  you) — plus new-project templates and this project's **progress history** at
+  `claude-config/projects/FINN/progress.md`.
+- **First-time setup on a new machine** (each of us, once): clone `claude-config`
+  next to your projects and symlink its `shared/commands/*` and `shared/skills/*`
+  into `~/.claude/` (see the claude-config README). Without that symlink the
+  cross-project skills won't load, but this repo's own commands/skills still do.
+- **Do not hand-maintain** the progress history or `CONTRIBUTING.md` — the skills
+  do. Volatile facts (versions, release status) are NOT stored here; read them
+  from `DESCRIPTION`/`NEWS.md`.
+
 ## Golden rules (do not violate)
 
 1. **Never `git add -A`, `git add --all`, or `git add .`** in this repo. It has
