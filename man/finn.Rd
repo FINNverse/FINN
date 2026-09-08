@@ -12,7 +12,8 @@ finn(
   competition_process = NULL,
   recruits_dbh = 1,
   recruit_obs_weight = 1,
-  growth_period_scale = FALSE
+  growth_period_scale = FALSE,
+  reg_floor = 0.001
 )
 }
 \arguments{
@@ -46,6 +47,15 @@ is the per-hectare behaviour.}
 the COMPOUNDED period increment (\code{prod(1+g)-1}) rather than the mean of the
 per-year rates, so a de-annualised period target aligns without collapsing
 growth's variance. Default \code{FALSE} (mean of annual rates).}
+
+\item{reg_floor}{(\code{numeric(1)})\cr Additive floor on the expected recruitment of
+every species in every patch, in stems ha^-1 per time step, used by
+\code{\link[=regeneration]{regeneration()}} and \code{\link[=regeneration_saturation]{regeneration_saturation()}}:
+\code{mean = regP * exp(env) + reg_floor}. It keeps the negative-binomial
+likelihood finite where the light gate closes. Default \code{1e-3}. Earlier versions
+hard-coded \code{0.2}, which with many species adds a large climate-independent
+recruitment (65 species x 0.2 = 13 stems ha^-1 yr^-1); models saved before this
+argument existed keep that value when reloaded.}
 }
 \value{
 An object of class \code{finn_class} (a \link[torch:nn_module]{torch::nn_module}): an assembled

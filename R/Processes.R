@@ -323,7 +323,10 @@ regeneration = function(species, parReg, pred, light, debug = FALSE) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = torch::torch_exp(pred) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
-  mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
+  ## additive floor: finn(reg_floor = ); models saved before the argument existed
+  ## carry no field and keep the historical 0.2
+  reg_floor = if(is.null(self$reg_floor)) 0.2 else self$reg_floor
+  mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1)) + reg_floor)
   #regP = torch_sigmoid((light + (1-parReg) - 1)/1e-3) # TODO masking? better https://pytorch.org/docs/stable/generated/torch.masked_select.html
   if(debug == TRUE) out = list(regP = regP, mean = mean) else out = mean
   return(out)
@@ -399,7 +402,8 @@ regeneration_saturation = function(species, parReg, pred, light, debug = FALSE) 
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = torch::torch_exp(pred) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
-  mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))+0.2)
+  reg_floor = if(is.null(self$reg_floor)) 0.2 else self$reg_floor
+  mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1)) + reg_floor)
 
   # Beverton-Holt cap: K = exp(reg_logK), reshaped to broadcast along the species
   # (last) dimension of `mean`. A length-1 reg_logK -> (1,1,1) -> shared K; a

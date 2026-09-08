@@ -64,6 +64,14 @@
 #' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
 #'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
 #' @export
+#' @param reg_floor (`numeric(1)`)\cr Additive floor on the expected recruitment of
+#'   every species in every patch, in stems ha^-1 per time step, used by
+#'   [regeneration()] and [regeneration_saturation()]:
+#'   `mean = regP * exp(env) + reg_floor`. It keeps the negative-binomial
+#'   likelihood finite where the light gate closes. Default `1e-3`. Earlier versions
+#'   hard-coded `0.2`, which with many species adds a large climate-independent
+#'   recruitment (65 species x 0.2 = 13 stems ha^-1 yr^-1); models saved before this
+#'   argument existed keep that value when reloaded.
 #' @param recruit_obs_weight (`numeric(1)`)\cr Observation-operator inclusion
 #'   weight applied to both predicted and observed regeneration before the loss
 #'   (maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
@@ -80,7 +88,8 @@ finn = function(N_species,
                 competition_process = NULL,
                 recruits_dbh = 1.0,
                 recruit_obs_weight = 1.0,
-                growth_period_scale = FALSE) {
+                growth_period_scale = FALSE,
+                reg_floor = 1e-3) {
   finn_class(N_species = N_species,
              mortality_process = mortality_process,
              growth_process = growth_process,
@@ -88,7 +97,8 @@ finn = function(N_species,
              competition_process = competition_process,
              recruits_dbh = recruits_dbh,
              recruit_obs_weight = recruit_obs_weight,
-             growth_period_scale = growth_period_scale)
+             growth_period_scale = growth_period_scale,
+             reg_floor = reg_floor)
 }
 
 
@@ -458,11 +468,15 @@ finn_class = nn_module(
     competition_process = NULL,
     recruits_dbh = 1.0,
     recruit_obs_weight = 1.0,
-    growth_period_scale = FALSE
+    growth_period_scale = FALSE,
+    reg_floor = 1e-3
   ) {
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
     self$recruit_obs_weight = recruit_obs_weight
+    ## additive recruitment floor (stems ha^-1 step^-1 per species) used by the
+    ## mechanistic regeneration functions; see finn() docs
+    self$reg_floor = reg_floor
     self$growth_period_scale = growth_period_scale
     self$record_raws = FALSE
     self$env_scaling = NULL
