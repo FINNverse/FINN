@@ -592,6 +592,16 @@ finn_class = nn_module(
     loss_total = torch::torch_zeros(7L, device = self$device)
     loss_count = 0L
 
+    # Per-site aggregation windows (set by fit() when `period_length` differs
+    # between sites observed in the same data-year, or when sites are observed
+    # in different years). Each site's growth/mortality/regeneration prediction
+    # is then aggregated over ITS OWN window (i - period_s + 1):i, and because
+    # the windows of different sites overlap across steps the backward is
+    # deferred to the end of the time loop instead of running at every
+    # observation step (which would free the graph other sites still need).
+    per_site_mode = !is.null(y) && isTRUE(self$per_site_period)
+    loss_deferred = torch::torch_zeros(1L, device = self$device)
+
     # storage for the raw per-timestep state. Cohort snapshots are kept only for
     # the requested timesteps (`record_cohorts`); patch snapshots stay tied to the
     # legacy `debug` path. Entries are indexed by their true timestep, so skipped
@@ -963,10 +973,42 @@ finn_class = nn_module(
 
 
           # growth rates - check for NA in period_length, if not, then accumulate gradients?
-          # currently we assume that they are constant over sites
+          # constant-period path below assumes the same period on every site
           accumulate_gradients = y[,tmp_index,,7] |> as.matrix()
           period = unique(accumulate_gradients[,1])
-          if(!is.na(period)) {
+          if(per_site_mode) {
+            # ---- per-site windows: mask M[s, t] = 1 for t in (i - p_s, i] ----
+            p_site = accumulate_gradients[,1]
+            p_t = torch_tensor(ifelse(is.na(p_site), 0, p_site), dtype = self$dtype, device = self$device)
+            if(any(!is.na(p_site))) {
+              tt = torch_arange(1, i, dtype = self$dtype, device = self$device)
+              M  = tt$unsqueeze(1)$gt((i - p_t)$unsqueeze(2))$to(dtype = self$dtype) *
+                   p_t$gt(0.5)$to(dtype = self$dtype)$unsqueeze(2)
+              M3 = M$unsqueeze(3)
+              denom = p_t$clamp(min = 1)$unsqueeze(2)
+              G = Result[[4]][,1:i,,drop = FALSE]
+              g_pred = if (isTRUE(self$growth_period_scale)) (G*M3 + 1)$prod(2) - 1 else (G*M3)$sum(2)/denom
+              m_pred = (Result[[5]][,1:i,,drop = FALSE]*M3)$sum(2)/denom
+              r_pred = (Result[[7]][,1:i,,drop = FALSE]*M3)$sum(2)
+              loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
+              loss[5] = self$loss_mortality_func(y[,tmp_index,,5], m_pred, y[,tmp_index,,8])
+              loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], r_pred)
+              self$obs_rec = y[,tmp_index,,6] |> as.matrix()
+              self$pred_rec = r_pred |> as.matrix()
+              self$loss_raw = as.numeric(loss)
+              if (!as.logical(loss$isfinite()$all()$item())) {
+                cat("\n>>> Non-finite (per-site window) loss detected at time step", i, "\n")
+                for (k in 1:length(loss)) {
+                  cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
+                      " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
+                }
+              } else {
+                loss_deferred = loss_deferred + loss$sum()
+                loss_total = loss_total + loss$detach()
+                loss_count = loss_count + 1L
+              }
+            }
+          } else if(!is.na(period)) {
             # loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,(i-period+1):(i),]$mean(2) )
             # # ba
             # loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,(i-period+1):(i),]$mean(2) )
@@ -1003,7 +1045,9 @@ finn_class = nn_module(
                 cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
                     " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
               }
-            } else {
+            } else if (isTRUE(loss$requires_grad)) {
+              # (a loss with no graph - every response NA at this step - has
+              # nothing to backpropagate; calling backward() on it is a hard error)
               loss$sum()$backward()
               for(j in 1:7) Result[[j]] = Result[[j]]$detach()
               loss_total = loss_total + loss$detach()
@@ -1037,7 +1081,7 @@ finn_class = nn_module(
 
               # You can choose to skip backward() and continue:
               # next
-            } else {
+            } else if (isTRUE(loss$requires_grad)) {
               loss$sum()$backward()
               for(j in 1:7) Result[[j]] = Result[[j]]$detach()
               loss_total = loss_total + loss$detach()
@@ -1071,13 +1115,19 @@ finn_class = nn_module(
         if(as.numeric(y[,,,7]$isnan()$bitwise_not()$sum()) < 0.5) for(j in 1:7) Result[[j]] = Result[[j]]$detach()
 
       }
-      loss$detach_()
+      if(!per_site_mode) loss$detach_()
 
       if(verbose) cli::cli_progress_update()
 
     }
 
     # browser()
+
+    # per-site windows: one backward over every observation scored in this call
+    if(per_site_mode && isTRUE(loss_deferred$requires_grad)) {
+      loss_deferred$backward()
+      for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+    }
 
     # report the mean loss over every update_step boundary that was actually scored
     # during this forward() call, rather than whichever timestep happened to be last
@@ -1369,6 +1419,23 @@ finn_class = nn_module(
     options(oldopts)
 
     Y = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+    # ---- constant vs per-site aggregation windows ----
+    # The original path takes ONE period_length per data-year across all sites.
+    # If sites observed in the same data-year carry different period_length
+    # values, or if some sites have no observation in a year others do (NA
+    # period next to a finite one), each site needs its own window: switch
+    # forward() to the per-site path. `self$period_mode` ("auto" / "constant" /
+    # "per_site") overrides the detection.
+    pl = array(response$period_length[,,1], dim = dim(response$period_length)[1:2])
+    per_site = FALSE
+    for(k in seq_len(ncol(pl))) {
+      v = pl[,k]; nn = v[!is.na(v)]
+      if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) { per_site = TRUE; break }
+    }
+    if(identical(self$period_mode, "per_site")) per_site = TRUE
+    if(identical(self$period_mode, "constant")) per_site = FALSE
+    self$per_site_period = per_site
+    if(per_site) cli::cli_alert_info("period_length varies between sites: using per-site aggregation windows (one backward per batch)")
 
     # ---- weights = "auto": scale each loss by its intercept-only baseline ----
     # The six losses are summed, and their raw magnitudes differ by orders of
