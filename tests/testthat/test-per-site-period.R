@@ -22,11 +22,13 @@ init_trees <- data.table(siteID = rep(1:Nsites, each = 8), patchID = rep(rep(1:2
 ic  <- makeInitCohorts(init_trees, Nspecies = Nsp)
 env <- data.table(expand.grid(siteID = 1:Nsites, year = 1:Tmax)); env[, env1 := (siteID - 2) * 0.5]
 LOSS <- c(dbh = "mse", ba = "mse", trees = "mse", growth = "mse", mortality = "mse", regeneration = "mse")
+## fit()'s default optimizer needs torch >= 0.14 (optim_ignite_adam); fall back on older torch
+OPT  <- if (exists("optim_ignite_adam", envir = asNamespace("torch"))) torch::optim_ignite_adam else torch::optim_adam
 run_fit <- function(obs, mode = "auto") {
   FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
   fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
       loss = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
-      plot_progress = FALSE, device = "cpu")
+      optimizer = OPT, plot_progress = FALSE, device = "cpu")
   mm
 }
 sched_rows <- function(sched) rbindlist(lapply(seq_along(sched), function(s) {
@@ -81,7 +83,8 @@ test_that("mixed periods: gradients flow through the deferred backward", {
     regeneration_process = createProcess(~1 + env1, func = FINN::regeneration, optimizeSpecies = TRUE))
   p0 <- as.numeric(torch::as_array(mm$par_growth))
   fit(mm, env = env, data = obsm, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-      loss = LOSS, epochs = 2L, lr = 0.01, weights = rep(1, 6), batchsize = Nsites, plot_progress = FALSE, device = "cpu")
+      loss = LOSS, epochs = 2L, lr = 0.01, weights = rep(1, 6), batchsize = Nsites, optimizer = OPT,
+      plot_progress = FALSE, device = "cpu")
   expect_true(mm$per_site_period)
   expect_gt(max(abs(as.numeric(torch::as_array(mm$par_growth)) - p0)), 1e-6)
 })
