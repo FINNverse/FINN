@@ -1354,6 +1354,10 @@ finn_class = nn_module(
     obs_years = sort(unique(d$year)); site_ids = sort(unique(d$siteID))
     tobs = private$build_tree_obs(d, site_ids, obs_years, patches)
     envs = private$extract_env_method(env)
+    # the environment networks are built lazily, on the first fit() or predict();
+    # build them here too so this works on a model that has never been run
+    private$create_nn(self$process_growth, "growth", dim(envs$growth_env)[3])
+    private$create_nn(self$process_mortality, "mortality", dim(envs$mortality_env)[3])
     envt = list(growth = torch::torch_tensor(envs$growth_env, dtype = self$dtype, device = self$device),
                 mort   = torch::torch_tensor(envs$mortality_env, dtype = self$dtype, device = self$device))
     year_sequence = which(levels(as.factor(env$year)) %in% levels(as.factor(d$year)))

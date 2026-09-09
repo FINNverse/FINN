@@ -29,9 +29,11 @@ predictTrees(
 \item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}.}
 }
 \value{
-\code{tree_data}'s identifying columns with \code{growth_pred} (mean annual
-relative growth over the interval) and \code{mort_pred} (probability of dying
-during the interval).
+One row per row of \code{tree_data}, in the same order (\code{.row} records the
+original position), with \code{growth_pred} (mean annual relative growth over
+the interval) and \code{mort_pred} (probability of dying during the interval).
+Bind these onto \code{tree_data} directly rather than joining on
+siteID/year/patchID, which would be many-to-many.
 }
 \description{
 Predict growth and mortality for individual observed trees
