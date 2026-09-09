@@ -186,7 +186,72 @@ finn = function(N_species,
 #'   `"step"`, `list(T_max = 200)` for `"cosine"`, `list(factor = 0.5, patience =
 #'   20)` for `"plateau"`. Unset entries fall back to defaults scaled off
 #'   `epochs`/`lr`.
-#' @param loss (`character(6)`)\cr Named vector of the different losses. Names should be `dbh`, `ba`, `trees`, `growth`, `mortality`, and `regeneration`. Supported losses are `mse`, `poisson`, `nbinom`, `gaussian`, and `binomial`. `binomial` is a Bernoulli/binomial negative log-likelihood intended for `mortality`; it expects both the prediction and the observation to be proportions in \[0, 1\].
+#' @param loss (deprecated)\cr Former name of `loss_family`. Still accepted, with
+#'   a warning; it will be removed in a future release.
+#' @param loss_family (`character(6)`)\cr Named vector giving the **likelihood**
+#'   used for each response. Names should be `dbh`, `ba`, `trees`, `growth`,
+#'   `mortality`, and `regeneration`. Supported families are `mse`, `poisson`,
+#'   `nbinom`, `gaussian`, `binomial`, and `none`.
+#'
+#'   `binomial` is a Bernoulli/binomial negative log-likelihood intended for
+#'   `mortality`; it expects both the prediction and the observation to be
+#'   proportions in \[0, 1\]. `nbinom` is implemented for `trees` and
+#'   `regeneration` only. `none` switches a response off entirely — it
+#'   contributes a constant zero and no gradient. Use it to retire a response
+#'   whose information now enters through another term, for example setting
+#'   `dbh = "none"` and `ba = "none"` when the size distribution is fitted
+#'   through size-classed stem counts (see `loss_aggregation`).
+#' @param loss_aggregation (`character`|`list`)\cr How the model's per-cohort
+#'   quantities are reduced before they meet the observation, given per response
+#'   as a named character vector or, when a type needs arguments, a named list.
+#'   Anything not named keeps the default, so the argument only ever states what
+#'   departs from it. Supported types:
+#'   \itemize{
+#'     \item `"mean"` — one value per site, year and species, the abundance-weighted
+#'       mean over cohorts. The default for `dbh`, `growth` and `mortality`.
+#'     \item `"sum"` — summed over cohorts. The default for `ba`, `trees` and
+#'       `regeneration`.
+#'     \item `"size_classes"` — stem counts binned by diameter, requiring
+#'       `breaks` (the class boundaries in cm) and optionally `tau` (the
+#'       softness of the bin edges in cm, default 1). `K` breaks give `K + 1`
+#'       classes, and the observation is read from columns `n_class_1` …
+#'       `n_class_K+1` of `data`. Only meaningful for `trees`.
+#'
+#'       This is the size-distribution counterpart of the mean diameter: with a
+#'       `poisson` family it scores total abundance and size composition at
+#'       once, since independent Poisson class counts factorise into
+#'       `Poisson(N | Λ) × Multinomial(n | N, p)`. Class membership uses a
+#'       difference of sigmoids rather than a hard cut so the term stays
+#'       differentiable with respect to diameter; `tau` controls that softness
+#'       and small values approach hard binning.
+#'     \item `"tree"` — no aggregation: the growth and mortality kernels are
+#'       evaluated on the **observed** trees at their observed diameters, with
+#'       light computed from the observed stand, and compared tree by tree. Only
+#'       available for `growth` and `mortality`, and requires `tree_data`. This
+#'       removes the compositional confound in a stand mean (relative growth
+#'       falls several-fold from the smallest to the largest trees, so a mean
+#'       moves when the size distribution moves), at the cost of teacher-forcing
+#'       those two responses onto observed stands rather than simulated ones.
+#'   }
+#'
+#'   Example — score the size distribution through stem counts and the two rates
+#'   per tree:
+#'
+#'   ```r
+#'   fit(m, data = obs_dt, env = env, tree_data = tree_obs_dt,
+#'       loss_family      = c(dbh = "none", ba = "none", trees = "poisson",
+#'                            growth = "mse", mortality = "binomial",
+#'                            regeneration = "nbinom"),
+#'       loss_aggregation = list(trees  = list(type = "size_classes",
+#'                                            breaks = seq(20, 60, by = 10)),
+#'                               growth = "tree", mortality = "tree"))
+#'   ```
+#' @param tree_data (`data.table|data.frame`)\cr Individual observed trees,
+#'   required when any response uses `loss_aggregation = "tree"`. One row per
+#'   tree and observation year, with columns `siteID`, `year`, `patchID`,
+#'   `species`, `dbh` (diameter at the START of the interval, cm), `growth` (the
+#'   observed relative growth rate per timestep) and `died` (0/1 over the
+#'   interval). Missing `growth` or `died` may be `NA` and are skipped.
 #' @details
 #' `growth` is compared as a **relative** rate (`dbh/dbh_before - 1`), which is
 #' the model's native parameter (`dbh_new = dbh * (1 + g)`). Training against the
@@ -276,7 +341,10 @@ fit = function(model,
                lr = 0.01,
                lr_scheduler = "none",
                lr_scheduler_params = list(),
-               loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
+               loss = NULL,
+               loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"),
+               loss_aggregation = NULL,
+               tree_data = NULL,
                weights = "auto",
                optimizer = optim_ignite_adam,
                batchsize = NULL,
@@ -302,6 +370,9 @@ fit = function(model,
                       lr_scheduler = lr_scheduler,
                       lr_scheduler_params = lr_scheduler_params,
                       loss = loss,
+                      loss_family = loss_family,
+                      loss_aggregation = loss_aggregation,
+                      tree_data = tree_data,
                       weights = weights,
                       optimizer = optimizer,
                       batchsize = batchsize,
@@ -478,6 +549,18 @@ finn_class = nn_module(
     ## mechanistic regeneration functions; see finn() docs
     self$reg_floor = reg_floor
     self$growth_period_scale = growth_period_scale
+    ## How each response is reduced from cohorts to the observed quantity. Filled
+    ## by fit() from `loss_aggregation`; every entry defaults to the historical
+    ## rule, so a model built and fitted without the argument behaves as before.
+    self$loss_agg = NULL
+    ## Observation tensors for the non-scalar aggregations, built once in fit():
+    ##   class_obs  [sites, obs_years, species, K]  stem counts per diameter class
+    ##   tree_obs   list of [sites, obs_years, patches, max_trees] tensors
+    ## They are kept whole and sliced by the batch index, like init_cohort.
+    self$class_obs = NULL
+    self$tree_obs = NULL
+    self$class_breaks = NULL
+    self$class_tau = 1.0
     self$record_raws = FALSE
     self$env_scaling = NULL
     self$train_env           = NULL
@@ -520,6 +603,13 @@ finn_class = nn_module(
   #' @param update_step integer. Backpropagation step length.
   #' @param verbose logical. Print progress if TRUE.
   #' @param year_sequence at which year indices should the predictions compared with the observed values
+  #' @param class_obs torch.Tensor (Optional). Observed size-class stem counts,
+  #'   `[sites, observed years, species, K + 1]`, used when `trees` is scored
+  #'   with `loss_aggregation = "size_classes"`. Built by `fit()`.
+  #' @param tree_obs list (Optional). Observed individual trees as padded tensors
+  #'   (`dbh`, `species`, `trees`, `growth`, `died`), each
+  #'   `[sites, observed years, patches, max trees]`, used when `growth` or
+  #'   `mortality` is scored with `loss_aggregation = "tree"`. Built by `fit()`.
   #' @return list. A list of predicted values for dbh, number of trees, and other recorded time points. If `debug` is TRUE, raw results and cohorts are also returned.
   forward = function(dbh = NULL,
                      trees = NULL,
@@ -536,7 +626,9 @@ finn_class = nn_module(
                      return_cohorts = FALSE,
                      update_step = 1L,
                      verbose = TRUE,
-                     year_sequence = NULL){
+                     year_sequence = NULL,
+                     class_obs = NULL,
+                     tree_obs = NULL){
 
 
     # if no cohorts exist initialize empty cohort array
@@ -985,6 +1077,16 @@ finn_class = nn_module(
           # counts
           loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
 
+          # ---- size-classed stem counts replace the scalar `trees` term ------
+          # The prediction is a PLOT total per species and diameter class, which
+          # is what the observed integer counts are, so the Poisson applies
+          # directly. Contains both abundance and size composition, because
+          # independent Poisson class counts factorise into Poisson(total) x
+          # Multinomial(shape).
+          if (!is.null(class_obs) && identical(self$loss_agg$trees$type, "size_classes")) {
+            cls_pred = private$class_counts(dbh, trees, species, self$class_breaks, self$class_tau)
+            loss[3] = self$loss_trees_func(class_obs[, tmp_index, , ], cls_pred)
+          }
 
           # growth rates - check for NA in period_length, if not, then accumulate gradients?
           # constant-period path below assumes the same period on every site
@@ -1007,6 +1109,25 @@ finn_class = nn_module(
               loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
               loss[5] = self$loss_mortality_func(y[,tmp_index,,5], m_pred, y[,tmp_index,,8])
               loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], r_pred)
+
+              # ---- per-tree growth / mortality on the OBSERVED stand ---------
+              # No correspondence is sought between model cohorts and observed
+              # trees; the observed stand replaces the simulated one for these
+              # terms, so light and the kernels are evaluated on the real trees
+              # at their real diameters. The mse and binomial closures already
+              # mask NaN, so padding slots and non-survivors drop out.
+              if (!is.null(tree_obs)) {
+                tp = private$tree_predictions(tree_obs, tmp_index, env[["growth"]][,i,], env[["mort"]][,i,])
+                if (identical(self$loss_agg$growth$type, "tree"))
+                  loss[4] = self$loss_growth_func(tree_obs$growth[, tmp_index, , ], tp$growth)
+                if (identical(self$loss_agg$mortality$type, "tree")) {
+                  # the kernel gives an ANNUAL rate; the observed 0/1 is over the
+                  # whole interval, so compound it over that site's period length
+                  pl    = p_t$reshape(c(-1, 1, 1))$clamp(min = 1)
+                  p_int = 1 - (1 - tp$mortality$clamp(1e-6, 1 - 1e-6))$pow(pl)
+                  loss[5] = self$loss_mortality_func(tree_obs$died[, tmp_index, , ], p_int)
+                }
+              }
               self$obs_rec = y[,tmp_index,,6] |> as.matrix()
               self$pred_rec = r_pred |> as.matrix()
               self$loss_raw = as.numeric(loss)
@@ -1306,7 +1427,16 @@ finn_class = nn_module(
                  # entries fall back to defaults scaled off `epochs`/`lr`.
                  lr_scheduler_params = list(),
                  # # 1 -> dbh, 2 -> ba, 3 -> trees, 4 -> growth rates, 5 -> mort rates, 6 -> reg rates
-                 loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"), #
+                 # `loss` is the old name for `loss_family`; kept as a deprecated alias.
+                 loss = NULL,
+                 loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"),
+                 # How the model's per-cohort quantities are reduced to the observed
+                 # quantity, one entry per response. Character when no parameters are
+                 # needed, a list when they are. See the argument docs.
+                 loss_aggregation = NULL,
+                 # Per-tree observations for aggregation "tree" (growth / mortality):
+                 # siteID, year, patchID, species, dbh, growth, died.
+                 tree_data = NULL,
                  weights = "auto",
                    optimizer = optim_ignite_adam,
                  batchsize = NULL,
@@ -1336,7 +1466,9 @@ finn_class = nn_module(
       old_par = par(no.readonly = TRUE)
       on.exit(do.call(par, old_par), add = TRUE)
     }
-    if(!any(loss %in% c("mse", "gaussian", "poisson", "nbinom"))) stop("Loss not supported")
+    # (The families are validated per response in create_loss_functions(), which
+    # knows the full supported set and which families a given response allows;
+    # the blanket any()-check that used to sit here predates `binomial`/`none`.)
 
     # Internal z-standardization of environmental predictors. Learn the
     # centre/scale from the (raw) training env now and store them on the model;
@@ -1374,7 +1506,14 @@ finn_class = nn_module(
     # below reuses the name `loss` for a torch tensor of the current losses,
     # which shadows this argument - so snapshot the spec now, and use the
     # snapshot anywhere the families are needed later (e.g. the "auto" rescale).
-    loss_spec = loss
+    if(!is.null(loss)) {
+      warning("`loss` is deprecated; use `loss_family`. Using the value of `loss` for now.", call. = FALSE)
+      loss_family = loss
+    }
+    loss_spec = loss_family
+    # Resolve how each response is reduced from cohorts to the observed quantity.
+    # Stored on the model because it fixes tensor widths used inside forward().
+    self$loss_agg = private$resolve_loss_aggregation(loss_aggregation, names(loss_spec))
     auto_weights = is.character(weights) && length(weights) == 1L && identical(weights, "auto")
     if (auto_weights) {
       weights = rep(1, 6)
@@ -1451,6 +1590,27 @@ finn_class = nn_module(
     self$per_site_period = per_site
     if(per_site) cli::cli_alert_info("period_length varies between sites: using per-site aggregation windows (one backward per batch)")
 
+    # Observation tensors for the non-scalar aggregations. Built once, kept whole
+    # on the model, and sliced by the batch index in the epoch loop (like
+    # init_cohort), so the batching stays exactly as it was. This has to happen
+    # before the baseline weights below, which need these observations for the
+    # responses that no longer live in `Y`.
+    obs_years = sort(unique(data$year))
+    site_ids  = sort(unique(data$siteID))
+    agg_types = vapply(self$loss_agg, function(a) a$type, character(1))
+    if (any(agg_types == "size_classes")) {
+      r = names(agg_types)[agg_types == "size_classes"][1]
+      self$class_breaks = self$loss_agg[[r]]$args$breaks
+      self$class_tau    = if (!is.null(self$loss_agg[[r]]$args$tau)) self$loss_agg[[r]]$args$tau else 1.0
+      self$class_obs    = private$build_class_obs(data, K = length(self$class_breaks) + 1L)
+      message(sprintf("[loss] '%s' aggregated into %d diameter classes at %s (tau = %g)",
+                      r, length(self$class_breaks) + 1L, paste(self$class_breaks, collapse = ", "), self$class_tau))
+    }
+    if (any(agg_types == "tree")) {
+      if (is.null(tree_data)) stop("loss_aggregation 'tree' needs `tree_data`.", call. = FALSE)
+      self$tree_obs = private$build_tree_obs(tree_data, site_ids, obs_years, patches)
+    }
+
     # ---- weights = "auto": scale each loss by its intercept-only baseline ----
     # The six losses are summed, and their raw magnitudes differ by orders of
     # magnitude (on FIA: dbh is an MSE in cm^2 ~ 1e2; growth an MSE on a ratio
@@ -1467,7 +1627,7 @@ finn_class = nn_module(
     # binomial and binomial terms, where sd() is not the right scale.
     private$create_loss_functions(loss_spec, weights)   # unweighted for now
     if (auto_weights) {
-      base = private$compute_baseline_losses(Y, loss_spec)
+      base = private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs)
       w = 1/base
       w[!is.finite(w) | w <= 0] = 1        # no data / degenerate -> leave alone
       names(w) = names(loss_spec)
@@ -1593,6 +1753,12 @@ finn_class = nn_module(
           dbh = self$init_cohort$dbh$to(device = self$device, non_blocking=TRUE)[ind,]
         }
 
+        # Slice the extra observation tensors to this batch of sites, exactly as
+        # init_cohort is sliced above.
+        class_obs_b = if (!is.null(self$class_obs)) self$class_obs$to(device = self$device, non_blocking = TRUE)[ind, , , ] else NULL
+        tree_obs_b  = if (!is.null(self$tree_obs))
+          lapply(self$tree_obs, function(t) t$to(device = self$device, non_blocking = TRUE)[ind, , , ]) else NULL
+
         pred_tmp = self$forward(dbh = dbh,
                                 trees = trees,
                                 species = species,
@@ -1600,6 +1766,8 @@ finn_class = nn_module(
                                 disturbance = dist,
                                 start_time = start_time,
                                 y = y,
+                                class_obs = class_obs_b,
+                                tree_obs = tree_obs_b,
                                 update_step = update_step,
                                 verbose = FALSE,
                                 year_sequence = year_sequence)
@@ -1764,6 +1932,140 @@ finn_class = nn_module(
   },
 
   private = list(
+
+    #=# Loss aggregation: how a response is reduced from cohorts to the observation #=#
+    # Returns one entry per response: list(type =, args =). Unnamed responses keep
+    # the historical rule, so omitting `loss_aggregation` changes nothing.
+    resolve_loss_aggregation = function(spec, responses) {
+      default_type = c(dbh = "mean", ba = "sum", trees = "sum",
+                       growth = "mean", mortality = "mean", regeneration = "sum")
+      supported = c("mean", "sum", "size_classes", "tree")
+      out = lapply(responses, function(r) {
+        d = if (r %in% names(default_type)) unname(default_type[r]) else "sum"
+        list(type = d, args = list())
+      })
+      names(out) = responses
+      if (is.null(spec)) return(out)
+      if (is.character(spec)) spec = as.list(spec)
+      if (!is.list(spec) || is.null(names(spec)))
+        stop("`loss_aggregation` must be a NAMED character vector or list, one entry per response.", call. = FALSE)
+      for (r in names(spec)) {
+        if (!r %in% responses)
+          stop(sprintf("`loss_aggregation` names '%s', which is not a response in `loss_family` (%s).",
+                       r, paste(responses, collapse = ", ")), call. = FALSE)
+        s = spec[[r]]
+        if (is.character(s) && length(s) == 1L) {
+          out[[r]] = list(type = s, args = list())
+        } else if (is.list(s)) {
+          # accepts list(type = "size_classes", breaks = ...) and list("size_classes", breaks = ...)
+          nm = names(s)
+          if (!is.null(nm) && "type" %in% nm) { type = s$type; args = s[setdiff(nm, "type")] }
+          else                                { type = s[[1]];  args = s[-1] }
+          out[[r]] = list(type = as.character(type), args = args)
+        } else {
+          stop(sprintf("`loss_aggregation$%s` must be a string or a list.", r), call. = FALSE)
+        }
+        if (!out[[r]]$type %in% supported)
+          stop(sprintf("Unsupported loss_aggregation '%s' for '%s'. Supported: %s.",
+                       out[[r]]$type, r, paste(supported, collapse = ", ")), call. = FALSE)
+        if (out[[r]]$type == "size_classes" && is.null(out[[r]]$args$breaks))
+          stop(sprintf("loss_aggregation '%s' = size_classes needs `breaks`, e.g. list(type = \"size_classes\", breaks = seq(20, 60, by = 10)).", r),
+               call. = FALSE)
+        if (out[[r]]$type == "tree" && !r %in% c("growth", "mortality"))
+          stop("loss_aggregation 'tree' is implemented for 'growth' and 'mortality' only.", call. = FALSE)
+      }
+      out
+    },
+
+    # Model side of "size_classes": tree-weighted stem counts per diameter class,
+    # summed over cohorts AND patches, so the result is a PLOT total per species,
+    # matching an integer observed count. Class membership is a difference of two
+    # sigmoids rather than a hard bucket, so a cohort straddling a break
+    # contributes to both and gradients reach dbh. Reuses aggregate_results()
+    # once per class, which already scatters by species and sums over patches.
+    class_counts = function(dbh, trees, species, breaks, tau) {
+      lower = c(-Inf, breaks); upper = c(breaks, Inf)
+      per_class = lapply(seq_along(lower), function(k) {
+        w = if (is.infinite(lower[k]))      ((upper[k] - dbh) / tau)$sigmoid()
+            else if (is.infinite(upper[k])) 1 - ((lower[k] - dbh) / tau)$sigmoid()
+            else ((upper[k] - dbh) / tau)$sigmoid() - ((lower[k] - dbh) / tau)$sigmoid()
+        zero = torch::torch_zeros(list(dbh$shape[1], self$N_species), dtype = dbh$dtype, device = dbh$device)
+        aggregate_results(species, list(trees * w), list(zero))[[1]]
+      })
+      torch::torch_stack(per_class, dim = 3)          # [sites, species, K+1]
+    },
+
+    # Model side of "tree": evaluate the growth and mortality kernels on the
+    # OBSERVED trees of one observation year. There is no correspondence between
+    # model cohorts and observed trees, so none is attempted: the observed stand
+    # replaces the simulated one for this term. Light comes from the observed
+    # stand, and mortality uses the growth this same call predicts, exactly as
+    # the simulation does. `obs` holds padded [sites, patches, max_trees] tensors.
+    tree_predictions = function(obs, k, env_growth_i, env_mort_i) {
+      dbh = obs$dbh[, k, , ]; sp = obs$species[, k, , ]; n = obs$trees[, k, , ]
+      light = self$competition_func(dbh = dbh, species = sp, trees = n,
+                                    parComp = self$par_competition, h = NULL,
+                                    patch_size_ha = self$patch_size_ha, ba = NULL,
+                                    cohortHeights = NULL,
+                                    n_quantiles = self$n_quantiles, continuous = self$continuous)
+      pred_g = if (inherits(self$process_growth, "hybrid")) env_growth_i
+               else index_species(self$nn_growth(env_growth_i), sp)
+      g = self$growth_func(dbh = dbh, species = sp, parGrowth = self$par_growth,
+                           pred = pred_g, light = light, trees = n)
+      pred_m = if (inherits(self$process_mortality, "hybrid")) env_mort_i
+               else index_species(self$nn_mortality(env_mort_i), sp)
+      m = self$mortality_func(dbh = dbh, species = sp, trees = n, parMort = self$par_mortality,
+                              pred = pred_m, light = light, growth = g)
+      list(growth = g, mortality = m)
+    },
+
+    # Observed stem counts per diameter class -> [sites, obs_years, species, K+1].
+    # Columns are expected in `data` as <prefix>1 ... <prefix>K+1, one row per
+    # site x year x species, holding PLOT totals so the counts are integers.
+    build_class_obs = function(data, K, prefix = "n_class_") {
+      cols = paste0(prefix, seq_len(K))
+      missing = setdiff(cols, colnames(data))
+      if (length(missing))
+        stop(sprintf("loss_aggregation size_classes needs columns %s in `data`; missing: %s.",
+                     paste(cols, collapse = ", "), paste(missing, collapse = ", ")), call. = FALSE)
+      per_class = lapply(cols, function(cc) {
+        f = stats::as.formula(paste0("~0+", cc))
+        abind::abind(lapply(1:self$N_species, function(i) extract_env(f, data[data$species == i, ])), along = 3L)
+      })
+      torch::torch_tensor(abind::abind(per_class, along = 4L), dtype = torch::torch_float32())
+    },
+
+    # Observed trees -> padded [sites, obs_years, patches, max_trees] tensors.
+    # Padding slots carry trees = 0 (no weight in competition) and NaN responses,
+    # which the loss functions already mask out.
+    build_tree_obs = function(tree_data, site_ids, obs_years, n_patches) {
+      d = data.table::as.data.table(tree_data)
+      need = c("siteID", "year", "patchID", "species", "dbh")
+      missing = setdiff(need, colnames(d))
+      if (length(missing))
+        stop(sprintf("`tree_data` needs columns %s; missing: %s.",
+                     paste(need, collapse = ", "), paste(missing, collapse = ", ")), call. = FALSE)
+      if (!"trees"  %in% colnames(d)) d[, trees  := 1]
+      if (!"growth" %in% colnames(d)) d[, growth := NA_real_]
+      if (!"died"   %in% colnames(d)) d[, died   := NA_real_]
+      d[, s := match(siteID, site_ids)]
+      d[, y := match(year, obs_years)]
+      d[, p := match(patchID, sort(unique(patchID)))]
+      d = d[!is.na(s) & !is.na(y) & !is.na(p)]
+      if (!nrow(d)) stop("`tree_data` has no rows matching the sites and observation years of `data`.", call. = FALSE)
+      data.table::setorder(d, s, y, p)
+      d[, slot := seq_len(.N), by = .(s, y, p)]
+      dims = c(length(site_ids), length(obs_years), n_patches, max(d$slot))
+      idx  = cbind(d$s, d$y, d$p, d$slot)
+      fill_arr = function(col, fill) { a = array(fill, dim = dims); a[idx] = d[[col]]; a }
+      message(sprintf("[tree_data] %d trees, up to %d per patch and observation year", nrow(d), dims[4]))
+      list(dbh     = torch::torch_tensor(fill_arr("dbh", 0), dtype = torch::torch_float32()),
+           trees   = torch::torch_tensor(fill_arr("trees", 0), dtype = torch::torch_float32()),
+           species = torch::torch_tensor(fill_arr("species", 1L), dtype = torch::torch_int64()),
+           growth  = torch::torch_tensor(fill_arr("growth", NaN), dtype = torch::torch_float32()),
+           died    = torch::torch_tensor(fill_arr("died", NaN), dtype = torch::torch_float32()))
+    },
+
     # Splits a (named) list of parameters into three groups by name prefix:
     #   - "loss":        par_loss_*_scale / par_loss_*_theta (loss-distribution
     #                    nuisance parameters; never touched by the forward
@@ -1863,17 +2165,31 @@ finn_class = nn_module(
     # called with 2D [sites, species] tensors during fitting (the reg/nbinom one
     # sizes theta off pred$shape[1]), so Y's [sites, years, species] slices are
     # flattened to match.
-    compute_baseline_losses = function(Y, loss_spec) {
+    compute_baseline_losses = function(Y, loss_spec, class_obs = NULL, tree_obs = NULL) {
       nm  = names(loss_spec)
       out = stats::setNames(rep(NA_real_, 6), nm)
+      # Responses whose observation does not live in Y need their own
+      # intercept-only baseline, otherwise weights = "auto" silently falls back
+      # to 1 for them and unbalances every other term.
+      alt = list()
+      if (!is.null(class_obs) && identical(self$loss_agg$trees$type, "size_classes"))
+        alt$trees = list(obs = class_obs, f = self$loss_trees_func)
+      if (!is.null(tree_obs) && identical(self$loss_agg$growth$type, "tree"))
+        alt$growth = list(obs = tree_obs$growth, f = self$loss_growth_func)
+      if (!is.null(tree_obs) && identical(self$loss_agg$mortality$type, "tree"))
+        alt$mortality = list(obs = tree_obs$died, f = self$loss_mortality_func)
       torch::with_no_grad({
         for (i in 1:6) {
           out[i] = tryCatch({
             flat = function(t) t$reshape(c(-1, t$shape[length(t$shape)]))
-            true = flat(Y[,,,i])
+            a    = alt[[nm[i]]]
+            true = if (is.null(a)) flat(Y[,,,i]) else a$obs
             # slice 8 = n_at_risk (binomial), slice 9 = growth_n (weighted MSE).
             # The baseline must use the SAME weighting as the loss it scales.
-            n = if (identical(nm[i], "mortality")) flat(Y[,,,8])
+            # The alternative observations are already unaggregated (one entry
+            # per tree, or per size class), so they carry no n.
+            n = if (!is.null(a)) NULL
+                else if (identical(nm[i], "mortality")) flat(Y[,,,8])
                 else if (identical(nm[i], "growth")) flat(Y[,,,9])
                 else NULL
             mask = true$isnan()$bitwise_not()
@@ -1887,7 +2203,7 @@ finn_class = nn_module(
             }
             if (!is.finite(mu)) stop("non-finite intercept")
             pred = torch::torch_full_like(true, mu)
-            f = self[[paste0("loss_", nm[i], "_func")]]
+            f = if (is.null(a)) self[[paste0("loss_", nm[i], "_func")]] else a$f
             v = if (is.null(n)) f(true, pred) else f(true, pred, n)
             as.numeric(v)
           }, error = function(e) {
@@ -1910,10 +2226,17 @@ finn_class = nn_module(
           # the end of the iteration. An unrecognised name would leave `func`
           # holding the PREVIOUS variable's closure and silently fit the wrong
           # likelihood, so reject it here instead.
-          supported = c("mse", "gaussian", "poisson", "binomial", "nbinom")
+          # "none" switches a response off entirely, which is how a response is
+          # retired without changing the six-slot layout (e.g. dbh and ba once
+          # diameter information enters through size-classed stem counts).
+          supported = c("mse", "gaussian", "poisson", "binomial", "nbinom", "none")
           if(!tmp_loss %in% supported) {
             stop(sprintf("Unsupported loss '%s' for '%s'. Supported: %s.",
                          tmp_loss, tmp_loss_name, paste(supported, collapse = ", ")))
+          }
+          if(tmp_loss == "none") {
+            self[[paste0("loss_", tmp_loss_name, "_func")]] = function(true, pred, n = NULL) 0.0
+            next
           }
           # "nbinom" only has an implementation for these two responses.
           if(tmp_loss == "nbinom" && !tmp_loss_name %in% c("trees", "regeneration")) {

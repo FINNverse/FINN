@@ -16,8 +16,11 @@ fit(
   lr = 0.01,
   lr_scheduler = "none",
   lr_scheduler_params = list(),
-  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
+  loss = NULL,
+  loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
     "binomial", regeneration = "nbinom"),
+  loss_aggregation = NULL,
+  tree_data = NULL,
   weights = "auto",
   optimizer = optim_ignite_adam,
   batchsize = NULL,
@@ -84,7 +87,76 @@ chosen via \code{lr_scheduler}, e.g. \code{list(step_size = 50, gamma = 0.5)} fo
 \code{"step"}, \code{list(T_max = 200)} for \code{"cosine"}, \code{list(factor = 0.5, patience = 20)} for \code{"plateau"}. Unset entries fall back to defaults scaled off
 \code{epochs}/\code{lr}.}
 
-\item{loss}{(\code{character(6)})\cr Named vector of the different losses. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, and \code{regeneration}. Supported losses are \code{mse}, \code{poisson}, \code{nbinom}, \code{gaussian}, and \code{binomial}. \code{binomial} is a Bernoulli/binomial negative log-likelihood intended for \code{mortality}; it expects both the prediction and the observation to be proportions in [0, 1].}
+\item{loss}{(deprecated)\cr Former name of \code{loss_family}. Still accepted, with
+a warning; it will be removed in a future release.}
+
+\item{loss_family}{(\code{character(6)})\cr Named vector giving the \strong{likelihood}
+used for each response. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth},
+\code{mortality}, and \code{regeneration}. Supported families are \code{mse}, \code{poisson},
+\code{nbinom}, \code{gaussian}, \code{binomial}, and \code{none}.
+
+\code{binomial} is a Bernoulli/binomial negative log-likelihood intended for
+\code{mortality}; it expects both the prediction and the observation to be
+proportions in [0, 1]. \code{nbinom} is implemented for \code{trees} and
+\code{regeneration} only. \code{none} switches a response off entirely — it
+contributes a constant zero and no gradient. Use it to retire a response
+whose information now enters through another term, for example setting
+\code{dbh = "none"} and \code{ba = "none"} when the size distribution is fitted
+through size-classed stem counts (see \code{loss_aggregation}).}
+
+\item{loss_aggregation}{(\code{character}|\code{list})\cr How the model's per-cohort
+quantities are reduced before they meet the observation, given per response
+as a named character vector or, when a type needs arguments, a named list.
+Anything not named keeps the default, so the argument only ever states what
+departs from it. Supported types:
+\itemize{
+\item \code{"mean"} — one value per site, year and species, the abundance-weighted
+mean over cohorts. The default for \code{dbh}, \code{growth} and \code{mortality}.
+\item \code{"sum"} — summed over cohorts. The default for \code{ba}, \code{trees} and
+\code{regeneration}.
+\item \code{"size_classes"} — stem counts binned by diameter, requiring
+\code{breaks} (the class boundaries in cm) and optionally \code{tau} (the
+softness of the bin edges in cm, default 1). \code{K} breaks give \code{K + 1}
+classes, and the observation is read from columns \code{n_class_1} …
+\code{n_class_K+1} of \code{data}. Only meaningful for \code{trees}.
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{  This is the size-distribution counterpart of the mean diameter: with a
+  `poisson` family it scores total abundance and size composition at
+  once, since independent Poisson class counts factorise into
+  `Poisson(N | Λ) × Multinomial(n | N, p)`. Class membership uses a
+  difference of sigmoids rather than a hard cut so the term stays
+  differentiable with respect to diameter; `tau` controls that softness
+  and small values approach hard binning.
+\\item `"tree"` — no aggregation: the growth and mortality kernels are
+  evaluated on the **observed** trees at their observed diameters, with
+  light computed from the observed stand, and compared tree by tree. Only
+  available for `growth` and `mortality`, and requires `tree_data`. This
+  removes the compositional confound in a stand mean (relative growth
+  falls several-fold from the smallest to the largest trees, so a mean
+  moves when the size distribution moves), at the cost of teacher-forcing
+  those two responses onto observed stands rather than simulated ones.
+}\if{html}{\out{</div>}}
+
+}
+
+Example — score the size distribution through stem counts and the two rates
+per tree:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{fit(m, data = obs_dt, env = env, tree_data = tree_obs_dt,
+    loss_family      = c(dbh = "none", ba = "none", trees = "poisson",
+                         growth = "mse", mortality = "binomial",
+                         regeneration = "nbinom"),
+    loss_aggregation = list(trees  = list(type = "size_classes",
+                                         breaks = seq(20, 60, by = 10)),
+                            growth = "tree", mortality = "tree"))
+}\if{html}{\out{</div>}}}
+
+\item{tree_data}{(\code{data.table|data.frame})\cr Individual observed trees,
+required when any response uses \code{loss_aggregation = "tree"}. One row per
+tree and observation year, with columns \code{siteID}, \code{year}, \code{patchID},
+\code{species}, \code{dbh} (diameter at the START of the interval, cm), \code{growth} (the
+observed relative growth rate per timestep) and \code{died} (0/1 over the
+interval). Missing \code{growth} or \code{died} may be \code{NA} and are skipped.}
 
 \item{weights}{(\code{"auto"} or \code{numeric(6)})\cr Weights of the six losses, in the
 order \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
