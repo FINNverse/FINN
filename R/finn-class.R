@@ -413,9 +413,11 @@ fit = function(model,
 #' @param patches (`integer(1)`)\cr Number of patches, as in the fit.
 #' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
 #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
-#' @return `tree_data`'s identifying columns with `growth_pred` (mean annual
-#'   relative growth over the interval) and `mort_pred` (probability of dying
-#'   during the interval).
+#' @return One row per row of `tree_data`, in the same order (`.row` records the
+#'   original position), with `growth_pred` (mean annual relative growth over
+#'   the interval) and `mort_pred` (probability of dying during the interval).
+#'   Bind these onto `tree_data` directly rather than joining on
+#'   siteID/year/patchID, which would be many-to-many.
 #' @export
 predictTrees = function(model, tree_data, env, patches = 100L, patch_size = 0.1, device = c("cpu", "gpu")) {
   model$predict_trees(tree_data = tree_data, env = env, patches = patches,
@@ -1336,9 +1338,12 @@ finn_class = nn_module(
   #' @param patches (`integer(1)`)\cr Number of patches, as in the fit.
   #' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
   #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
-  #' @return The rows of `tree_data`, with `growth_pred` (mean annual relative
-  #'   growth over the interval) and `mort_pred` (probability of dying during
-  #'   the interval) added.
+  #' @return One row per row of `tree_data`, IN THE SAME ORDER (`.row` records
+  #'   the original position), with `growth_pred` (mean annual relative growth
+  #'   over the interval) and `mort_pred` (probability of dying during the
+  #'   interval). Bind these onto `tree_data` directly; joining on
+  #'   siteID/year/patchID would be many-to-many, since a patch holds many trees
+  #'   in the same year.
   predict_trees = function(tree_data, env, patches = 100L, patch_size = 0.1, device = c("cpu", "gpu")) {
     device = match.arg(device)
     self$device = if (identical(device, "gpu")) "cuda" else "cpu"
@@ -1370,6 +1375,10 @@ finn_class = nn_module(
         out[sel, `:=`(growth_pred = g[ix], mort_pred = m[ix])]
       }
     })
+    # back in the caller's own row order, so the predictions can simply be
+    # cbind()ed onto `tree_data` (a join on siteID/year/patchID would be
+    # many-to-many: a patch holds many trees in the same year)
+    data.table::setorder(out, .row)
     out[, c("s", "y", "p", "slot") := NULL][]
   },
 
@@ -2179,7 +2188,10 @@ finn_class = nn_module(
     # Padding slots carry trees = 0 (no weight in competition) and NaN responses,
     # which the loss functions already mask out.
     build_tree_obs = function(tree_data, site_ids, obs_years, n_patches) {
-      d = data.table::as.data.table(tree_data)
+      # copy(): as.data.table() returns the caller's own object when it already
+      # is a data.table, and everything below adds columns by reference
+      d = data.table::copy(data.table::as.data.table(tree_data))
+      d[, .row := .I]          # so a prediction can be handed back on the caller's rows
       need = c("siteID", "year", "patchID", "species", "dbh")
       missing = setdiff(need, colnames(d))
       if (length(missing))
@@ -2202,7 +2214,7 @@ finn_class = nn_module(
       # `idx` and `rows` say which tensor slot each input row went into, so a
       # prediction can be handed back on the caller's own rows (predict_trees).
       list(idx     = idx,
-           rows    = d[, .(siteID, year, patchID, s, y, p, slot)],
+           rows    = d[, .(.row, siteID, year, patchID, s, y, p, slot)],
            dbh     = torch::torch_tensor(fill_arr("dbh", 0), dtype = torch::torch_float32()),
            trees   = torch::torch_tensor(fill_arr("trees", 0), dtype = torch::torch_float32()),
            species = torch::torch_tensor(fill_arr("species", 1L), dtype = torch::torch_int64()),
