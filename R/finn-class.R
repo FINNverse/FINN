@@ -390,6 +390,39 @@ fit = function(model,
 }
 
 
+#' Predict growth and mortality for individual observed trees
+#'
+#' @details
+#' The tree-level counterpart of [FINN::predict.finn_class]. Where `predict()`
+#' simulates a stand forward and reports site-level states, this evaluates the
+#' growth and mortality kernels on trees you observed: light is computed from
+#' the observed stand, the kernels run on those trees at their observed
+#' diameters, and the annual rates are accumulated over each site's
+#' remeasurement interval — growth as the mean of the annual rates, mortality as
+#' the complement of the product of annual survivals.
+#'
+#' It is the same code path `fit(..., loss_aggregation = c(growth = "tree",
+#' mortality = "tree"))` scores, so a validation report cannot drift from the
+#' objective it is validating.
+#'
+#' @param model (`finn_class`)\cr A (fitted) model.
+#' @param tree_data (`data.table|data.frame`)\cr Observed trees: `siteID`,
+#'   `year`, `patchID`, `species`, `dbh` (at the interval start) and
+#'   `period_length` (the interval, in timesteps).
+#' @param env (`data.table|data.frame`)\cr Environment, as for [FINN::fit].
+#' @param patches (`integer(1)`)\cr Number of patches, as in the fit.
+#' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
+#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
+#' @return `tree_data`'s identifying columns with `growth_pred` (mean annual
+#'   relative growth over the interval) and `mort_pred` (probability of dying
+#'   during the interval).
+#' @export
+predictTrees = function(model, tree_data, env, patches = 100L, patch_size = 0.1, device = c("cpu", "gpu")) {
+  model$predict_trees(tree_data = tree_data, env = env, patches = patches,
+                      patch_size = patch_size, device = match.arg(device))
+}
+
+
 #' Predict from a FINN model
 #'
 #' @details
@@ -574,6 +607,9 @@ finn_class = nn_module(
     # `history` reads as a fraction of its own baseline.
     self$loss_weights        = NULL
     self$loss_baseline       = NULL
+    # How often each response produced a non-finite loss during the last fit()
+    # and was therefore left out of that timestep's gradient (see finite_terms).
+    self$nonfinite_counts    = NULL
     private$add_process(mortality_process, "mortality")
     private$add_process(growth_process, "growth")
     private$add_process(regeneration_process, "regeneration")
@@ -1117,29 +1153,22 @@ finn_class = nn_module(
               # at their real diameters. The mse and binomial closures already
               # mask NaN, so padding slots and non-survivors drop out.
               if (!is.null(tree_obs)) {
-                tp = private$tree_predictions(tree_obs, tmp_index, env[["growth"]][,i,], env[["mort"]][,i,])
+                # tp$growth is the window MEAN of the annual rates (matching the
+                # annualised observation) and tp$mortality the interval death
+                # probability (matching the observed 0/1 over the interval).
+                tp = private$tree_predictions(tree_obs, tmp_index, env, i, M, p_t)
                 if (identical(self$loss_agg$growth$type, "tree"))
                   loss[4] = self$loss_growth_func(tree_obs$growth[, tmp_index, , ], tp$growth)
-                if (identical(self$loss_agg$mortality$type, "tree")) {
-                  # the kernel gives an ANNUAL rate; the observed 0/1 is over the
-                  # whole interval, so compound it over that site's period length
-                  pl    = p_t$reshape(c(-1, 1, 1))$clamp(min = 1)
-                  p_int = 1 - (1 - tp$mortality$clamp(1e-6, 1 - 1e-6))$pow(pl)
-                  loss[5] = self$loss_mortality_func(tree_obs$died[, tmp_index, , ], p_int)
-                }
+                if (identical(self$loss_agg$mortality$type, "tree"))
+                  loss[5] = self$loss_mortality_func(tree_obs$died[, tmp_index, , ], tp$mortality)
               }
               self$obs_rec = y[,tmp_index,,6] |> as.matrix()
               self$pred_rec = r_pred |> as.matrix()
               self$loss_raw = as.numeric(loss)
-              if (!as.logical(loss$isfinite()$all()$item())) {
-                cat("\n>>> Non-finite (per-site window) loss detected at time step", i, "\n")
-                for (k in 1:length(loss)) {
-                  cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
-                      " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
-                }
-              } else {
-                loss_deferred = loss_deferred + loss$sum()
-                loss_total = loss_total + loss$detach()
+              keep = private$finite_terms(loss)
+              if (length(keep)) {
+                loss_deferred = loss_deferred + loss[keep]$sum()
+                loss_total = loss_total + loss$detach()$nan_to_num(nan = 0, posinf = 0, neginf = 0)
                 loss_count = loss_count + 1L
               }
             }
@@ -1174,18 +1203,13 @@ finn_class = nn_module(
             # (this branch used to backward() unconditionally, unlike the per-step
             # branch below; a non-finite period-averaged loss would otherwise inject
             # NaN gradients into every parameter with no diagnostic at all)
-            if (!as.logical(loss$isfinite()$all()$item())) {
-              cat("\n>>> Non-finite (period-averaged) loss detected at time step", i, "\n")
-              for (k in 1:length(loss)) {
-                cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
-                    " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
-              }
-            } else if (isTRUE(loss$requires_grad)) {
+            keep = private$finite_terms(loss)
+            if (length(keep) && isTRUE(loss$requires_grad)) {
               # (a loss with no graph - every response NA at this step - has
               # nothing to backpropagate; calling backward() on it is a hard error)
-              loss$sum()$backward()
+              loss[keep]$sum()$backward()
               for(j in 1:7) Result[[j]] = Result[[j]]$detach()
-              loss_total = loss_total + loss$detach()
+              loss_total = loss_total + loss$detach()$nan_to_num(nan = 0, posinf = 0, neginf = 0)
               loss_count = loss_count + 1L
             }
           } else {
@@ -1203,23 +1227,11 @@ finn_class = nn_module(
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,i,])
             self$loss_raw = as.numeric(loss)
             # ---- Check loss before backward ----
-            if (!as.logical(loss$isfinite()$all()$item())) {
-              cat("\n>>> Non-finite loss detected at time step", i, "\n")
-
-              # Inspect each component
-              for (k in 1:length(loss)) {
-                cat("loss[", k, "] = ", as.numeric(loss[k]$item()),
-                    " finite=", as.logical(loss[k]$isfinite()$item()), "\n")
-              }
-
-              # Drop into debug mode
-
-              # You can choose to skip backward() and continue:
-              # next
-            } else if (isTRUE(loss$requires_grad)) {
-              loss$sum()$backward()
+            keep = private$finite_terms(loss)
+            if (length(keep) && isTRUE(loss$requires_grad)) {
+              loss[keep]$sum()$backward()
               for(j in 1:7) Result[[j]] = Result[[j]]$detach()
-              loss_total = loss_total + loss$detach()
+              loss_total = loss_total + loss$detach()$nan_to_num(nan = 0, posinf = 0, neginf = 0)
               loss_count = loss_count + 1L
             }
           }
@@ -1288,6 +1300,62 @@ finn_class = nn_module(
     # function exits early due to an error)
 
     return(Result_out)
+  },
+
+  #' @description
+  #' Predict growth and mortality for INDIVIDUAL observed trees, the way
+  #' `loss_aggregation = "tree"` scores them during fitting.
+  #'
+  #' The observed stand replaces the simulated one: light is computed from the
+  #' observed trees at their observed diameters, the growth and mortality
+  #' kernels are evaluated on those trees, and the annual rates are accumulated
+  #' over each site's remeasurement interval (growth as the mean, mortality as
+  #' the complement of the product of annual survivals). This is what validating
+  #' a tree-level fit needs, and it is deliberately the same code path the loss
+  #' uses, so a report cannot drift from the objective.
+  #'
+  #' @param tree_data (`data.table|data.frame`)\cr Observed trees, as for
+  #'   [FINN::fit]'s `tree_data`: `siteID`, `year`, `patchID`, `species`, `dbh`
+  #'   (at the interval start) and `period_length` (the interval, in timesteps).
+  #' @param env (`data.table|data.frame`)\cr Environment, as for [FINN::fit].
+  #' @param patches (`integer(1)`)\cr Number of patches, as in the fit.
+  #' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
+  #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
+  #' @return The rows of `tree_data`, with `growth_pred` (mean annual relative
+  #'   growth over the interval) and `mort_pred` (probability of dying during
+  #'   the interval) added.
+  predict_trees = function(tree_data, env, patches = 100L, patch_size = 0.1, device = c("cpu", "gpu")) {
+    device = match.arg(device)
+    self$device = if (identical(device, "gpu")) "cuda" else "cpu"
+    self$patch_size_ha = patch_size
+    d = data.table::as.data.table(tree_data)
+    if (!"period_length" %in% colnames(d))
+      stop("`tree_data` needs a `period_length` column: the rates are interval quantities.", call. = FALSE)
+    obs_years = sort(unique(d$year)); site_ids = sort(unique(d$siteID))
+    tobs = private$build_tree_obs(d, site_ids, obs_years, patches)
+    envs = private$extract_env_method(env)
+    envt = list(growth = torch::torch_tensor(envs$growth_env, dtype = self$dtype, device = self$device),
+                mort   = torch::torch_tensor(envs$mortality_env, dtype = self$dtype, device = self$device))
+    year_sequence = which(levels(as.factor(env$year)) %in% levels(as.factor(d$year)))
+    out = data.table::copy(tobs$rows)[, `:=`(growth_pred = NA_real_, mort_pred = NA_real_)]
+    torch::with_no_grad({
+      for (k in seq_along(obs_years)) {
+        i = year_sequence[k]
+        pl = merge(data.table::data.table(siteID = site_ids),
+                   unique(d[year == obs_years[k], .(siteID, period_length)]), by = "siteID", all.x = TRUE)
+        p_t = torch::torch_tensor(ifelse(is.na(pl$period_length), 0, pl$period_length),
+                                  dtype = self$dtype, device = self$device)
+        tt = torch::torch_arange(1, i, dtype = self$dtype, device = self$device)
+        M  = tt$unsqueeze(1)$gt((i - p_t)$unsqueeze(2))$to(dtype = self$dtype) *
+             p_t$gt(0.5)$to(dtype = self$dtype)$unsqueeze(2)
+        tp = private$tree_predictions(tobs, k, envt, i, M, p_t)
+        g  = as.array(tp$growth$cpu()); m = as.array(tp$mortality$cpu())
+        sel = out$y == k
+        ix  = cbind(out$s[sel], out$p[sel], out$slot[sel])
+        out[sel, `:=`(growth_pred = g[ix], mort_pred = m[ix])]
+      }
+    })
+    out[, c("s", "y", "p", "slot") := NULL][]
   },
 
   simulate = function(env,
@@ -1757,7 +1825,8 @@ finn_class = nn_module(
         # init_cohort is sliced above.
         class_obs_b = if (!is.null(self$class_obs)) self$class_obs$to(device = self$device, non_blocking = TRUE)[ind, , , ] else NULL
         tree_obs_b  = if (!is.null(self$tree_obs))
-          lapply(self$tree_obs, function(t) t$to(device = self$device, non_blocking = TRUE)[ind, , , ]) else NULL
+          lapply(self$tree_obs[private$TREE_OBS_TENSORS],
+                 function(t) t$to(device = self$device, non_blocking = TRUE)[ind, , , ]) else NULL
 
         pred_tmp = self$forward(dbh = dbh,
                                 trees = trees,
@@ -1925,6 +1994,16 @@ finn_class = nn_module(
 
     if(torch::cuda_is_available()) torch::cuda_empty_cache()
 
+    # Say it plainly if a response kept overflowing: those timesteps still
+    # trained every other response, but that one contributed nothing there.
+    if (!is.null(self$nonfinite_counts) && any(self$nonfinite_counts > 0)) {
+      nz = self$nonfinite_counts[seq_along(loss_spec)] > 0
+      warning(sprintf("Non-finite loss skipped for %s (the other responses at those timesteps were still used).",
+                      paste(sprintf("%s (%d timesteps)", names(loss_spec)[nz],
+                                    self$nonfinite_counts[seq_along(loss_spec)][nz]), collapse = ", ")),
+              call. = FALSE)
+    }
+
     # ignore debugging method
     self$pred = list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))
     # par is restored via on.exit() (set above, only when plot_progress = TRUE)
@@ -1932,6 +2011,28 @@ finn_class = nn_module(
   },
 
   private = list(
+
+    # The tensor entries of build_tree_obs()'s result (the rest is bookkeeping).
+    TREE_OBS_TENSORS = c("dbh", "trees", "species", "growth", "died"),
+
+    # Which loss components can be backpropagated at this timestep.
+    #
+    # A single non-finite response used to discard the WHOLE timestep, which
+    # meant one overflowing term removed every OTHER response's signal there
+    # too: on the FIA fits the nbinom recruitment term overflowed at the
+    # dominant 10-year interval and took most of the training signal with it.
+    # Indexing the finite components (rather than masking or zeroing them) keeps
+    # the offending term out of the graph entirely, so no NaN gradient can reach
+    # a parameter through it. The occurrences are counted and reported by fit().
+    finite_terms = function(loss) {
+      ok = as.logical(as.numeric(loss$isfinite()$to(dtype = torch::torch_float32())$cpu()))
+      ok[is.na(ok)] = FALSE
+      if (!all(ok)) {
+        cnt = as.numeric(!ok)
+        self$nonfinite_counts = if (is.null(self$nonfinite_counts)) cnt else self$nonfinite_counts + cnt
+      }
+      which(ok)
+    },
 
     #=# Loss aggregation: how a response is reduced from cohorts to the observation #=#
     # Returns one entry per response: list(type =, args =). Unnamed responses keep
@@ -2001,22 +2102,46 @@ finn_class = nn_module(
     # replaces the simulated one for this term. Light comes from the observed
     # stand, and mortality uses the growth this same call predicts, exactly as
     # the simulation does. `obs` holds padded [sites, patches, max_trees] tensors.
-    tree_predictions = function(obs, k, env_growth_i, env_mort_i) {
+    #
+    # The rates are accumulated over the SAME per-site window the aggregated path
+    # uses (mask `M`, one column per simulated year), because the observation is
+    # an interval quantity: growth is the mean of the annual rates, mortality the
+    # complement of the product of annual survivals. Evaluating a single year
+    # instead would compare one year's climate - including its drought anomaly -
+    # against a decade's mean. The stand is held at its state at the interval
+    # start, so light and the diameters are computed once and only the
+    # environment moves across the window.
+    tree_predictions = function(obs, k, env, i, M, p_t) {
       dbh = obs$dbh[, k, , ]; sp = obs$species[, k, , ]; n = obs$trees[, k, , ]
       light = self$competition_func(dbh = dbh, species = sp, trees = n,
                                     parComp = self$par_competition, h = NULL,
                                     patch_size_ha = self$patch_size_ha, ba = NULL,
                                     cohortHeights = NULL,
                                     n_quantiles = self$n_quantiles, continuous = self$continuous)
-      pred_g = if (inherits(self$process_growth, "hybrid")) env_growth_i
-               else index_species(self$nn_growth(env_growth_i), sp)
-      g = self$growth_func(dbh = dbh, species = sp, parGrowth = self$par_growth,
-                           pred = pred_g, light = light, trees = n)
-      pred_m = if (inherits(self$process_mortality, "hybrid")) env_mort_i
-               else index_species(self$nn_mortality(env_mort_i), sp)
-      m = self$mortality_func(dbh = dbh, species = sp, trees = n, parMort = self$par_mortality,
-                              pred = pred_m, light = light, growth = g)
-      list(growth = g, mortality = m)
+      # only the years some site actually has in its window
+      p_max  = as.numeric(p_t$max()$item())
+      j_from = max(1L, i - as.integer(ceiling(p_max)) + 1L)
+      g_sum = NULL; lsurv = NULL
+      for (j in j_from:i) {
+        w3 = M[, j]$reshape(c(-1, 1, 1))
+        pred_g = if (inherits(self$process_growth, "hybrid")) env[["growth"]][, j, ]
+                 else index_species(self$nn_growth(env[["growth"]][, j, ]), sp)
+        g = self$growth_func(dbh = dbh, species = sp, parGrowth = self$par_growth,
+                             pred = pred_g, light = light, trees = n)
+        pred_m = if (inherits(self$process_mortality, "hybrid")) env[["mort"]][, j, ]
+                 else index_species(self$nn_mortality(env[["mort"]][, j, ]), sp)
+        m = self$mortality_func(dbh = dbh, species = sp, trees = n, parMort = self$par_mortality,
+                                pred = pred_m, light = light, growth = g)
+        # Out-of-window years contribute 0 to the growth sum and a survival of 1.
+        # The survival product is accumulated in LOG space: the direct form,
+        # prod (1 - m_j)^w_j, needs a tensor exponent, and torch's backward for
+        # that is not defined for the mask's dtype.
+        g_sum = if (is.null(g_sum)) g * w3 else g_sum + g * w3
+        ls_j  = (1 - m$clamp(1e-6, 1 - 1e-6))$log() * w3
+        lsurv = if (is.null(lsurv)) ls_j else lsurv + ls_j
+      }
+      denom = p_t$clamp(min = 1)$reshape(c(-1, 1, 1))
+      list(growth = g_sum / denom, mortality = 1 - lsurv$exp())
     },
 
     # Observed stem counts per diameter class -> [sites, obs_years, species, K+1].
@@ -2059,7 +2184,11 @@ finn_class = nn_module(
       idx  = cbind(d$s, d$y, d$p, d$slot)
       fill_arr = function(col, fill) { a = array(fill, dim = dims); a[idx] = d[[col]]; a }
       message(sprintf("[tree_data] %d trees, up to %d per patch and observation year", nrow(d), dims[4]))
-      list(dbh     = torch::torch_tensor(fill_arr("dbh", 0), dtype = torch::torch_float32()),
+      # `idx` and `rows` say which tensor slot each input row went into, so a
+      # prediction can be handed back on the caller's own rows (predict_trees).
+      list(idx     = idx,
+           rows    = d[, .(siteID, year, patchID, s, y, p, slot)],
+           dbh     = torch::torch_tensor(fill_arr("dbh", 0), dtype = torch::torch_float32()),
            trees   = torch::torch_tensor(fill_arr("trees", 0), dtype = torch::torch_float32()),
            species = torch::torch_tensor(fill_arr("species", 1L), dtype = torch::torch_int64()),
            growth  = torch::torch_tensor(fill_arr("growth", NaN), dtype = torch::torch_float32()),

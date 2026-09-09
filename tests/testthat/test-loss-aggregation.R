@@ -1,9 +1,12 @@
 ## loss_family / loss_aggregation: the declarative loss API.
 ##
-## Three things are checked: the old `loss` argument still works and gives the
-## identical objective (so nothing that exists today changes), the size-class
-## operator converges on hard diameter binning as tau -> 0, and the tree-level
-## operator runs and scores the observed trees.
+## Checked here: the old `loss` argument still works and gives the identical
+## objective (so nothing that exists today changes), "none" switches a response
+## off cleanly, the size-class operator converges on hard diameter binning as
+## tau -> 0 while staying differentiable at a break, the tree-level operator
+## runs, is scored on the observed trees and averages over the interval window,
+## weights = "auto" gives the new aggregations their own baseline, and a single
+## non-finite response no longer discards the whole timestep.
 skip_if_not_installed("torch")
 skip_if_not(torch::torch_is_installed())
 library(data.table)
@@ -28,7 +31,11 @@ init_trees <- data.table(siteID = rep(1:Nsites, each = 8), patchID = rep(rep(1:2
 ic  <- makeInitCohorts(init_trees, Nspecies = Nsp)
 env <- data.table(expand.grid(siteID = 1:Nsites, year = 1:Tmax)); env[, env1 := (siteID - 2) * 0.5]
 obs <- data.table(expand.grid(siteID = 1:Nsites, year = c(3L, 6L), species = 1:Nsp))
+## period_length differs between sites, which puts fit() on the per-site
+## aggregation-window path -- the branch the tree-level overrides live in. With a
+## constant period they would never be exercised at all.
 obs[, `:=`(dbh = 20, ba = 10, trees = 300, growth = 0.02, mort = 0.02, reg = 5,
+           period_length = fifelse(siteID == 1L, 3L, 2L),
            species_name = paste0("sp", species))]
 setorder(obs, siteID, year, species)
 
@@ -137,4 +144,64 @@ test_that("weights = 'auto' gives the new aggregations their own baseline", {
   # would be NA and silently fall back to a weight of 1.
   expect_true(all(is.finite(b[c("trees", "growth", "mortality")])))
   expect_true(all(b[c("trees", "growth", "mortality")] > 0))
+})
+
+test_that("the tree operator averages over the interval window", {
+  tree_dt <- data.table(expand.grid(siteID = 1:Nsites, year = c(3L, 6L), patchID = 1:2, slot = 1:4))
+  tree_dt[, `:=`(species = rep_len(1:Nsp, .N), dbh = rep_len(c(8, 16, 24, 32), .N),
+                 trees = 3, growth = 0.02, died = rep_len(c(0, 0, 1, 0), .N))]
+  tree_dt[, slot := NULL]
+  obs_cls <- copy(obs); for (k in 1:4) obs_cls[[paste0("n_class_", k)]] <- 50
+  m <- run_fit(loss_family = replace(LOSS, c("dbh", "ba"), c("none", "none")),
+               loss_aggregation = list(trees = list(type = "size_classes", breaks = c(10, 20, 30)),
+                                       growth = "tree", mortality = "tree"),
+               tree_data = tree_dt, data = obs_cls)
+  tp   <- m$.__enclos_env__$private$tree_predictions
+  envt <- list(growth = torch::torch_randn(c(Nsites, 6, 2)), mort = torch::torch_randn(c(Nsites, 6, 2)))
+  # make year 5 and 6 identical, so a 2-year window must return the same growth
+  # rate as a 1-year window ending at 6 -- the mean of two identical values
+  envt$growth[, 5, ] <- envt$growth[, 6, ]; envt$mort[, 5, ] <- envt$mort[, 6, ]
+  mk_M <- function(p) {
+    M <- torch::torch_zeros(c(Nsites, 6)); for (j in (6 - p + 1):6) M[, j] <- 1; M
+  }
+  torch::with_no_grad({
+    a <- tp(m$tree_obs, 2L, envt, 6L, mk_M(1), torch::torch_ones(Nsites))
+    b <- tp(m$tree_obs, 2L, envt, 6L, mk_M(2), torch::torch_ones(Nsites) * 2)
+  })
+  expect_equal(as.array(a$growth), as.array(b$growth), tolerance = 1e-5)
+  # mortality is a survival PRODUCT over the window, so two identical years give
+  # a strictly higher interval death probability than one
+  expect_true(all(as.array(b$mortality) >= as.array(a$mortality) - 1e-6))
+  expect_true(mean(as.array(b$mortality)) > mean(as.array(a$mortality)))
+})
+
+test_that("one non-finite response no longer discards the other five", {
+  bad <- copy(obs)[, trees := -1]      # a negative count makes the Poisson term NaN
+  expect_warning(m <- run_fit(loss_family = replace(LOSS, "trees", "poisson"), data = bad),
+                 "Non-finite loss skipped for trees")
+  h <- as.numeric(m$history[[1]])
+  expect_true(m$nonfinite_counts[3] > 0)
+  expect_true(all(is.finite(h[c(1, 2, 4, 5, 6)])))
+  expect_true(all(h[c(1, 2, 4, 5, 6)] > 0))   # the other responses still scored
+})
+
+test_that("predictTrees returns one prediction per observed tree", {
+  tree_dt <- data.table(expand.grid(siteID = 1:Nsites, year = c(3L, 6L), patchID = 1:2, slot = 1:4))
+  tree_dt[, `:=`(species = rep_len(1:Nsp, .N), dbh = rep_len(c(8, 16, 24, 32), .N),
+                 trees = 3, growth = 0.02, died = rep_len(c(0, 0, 1, 0), .N),
+                 period_length = 3L)]
+  tree_dt[, slot := NULL]
+  obs_cls <- copy(obs); for (k in 1:4) obs_cls[[paste0("n_class_", k)]] <- 50
+  m <- run_fit(loss_family = replace(LOSS, c("dbh", "ba"), c("none", "none")),
+               loss_aggregation = list(trees = list(type = "size_classes", breaks = c(10, 20, 30)),
+                                       growth = "tree", mortality = "tree"),
+               tree_data = tree_dt, data = obs_cls)
+  P <- predictTrees(m, tree_dt, env, patches = 2L, patch_size = 0.1)
+  expect_equal(nrow(P), nrow(tree_dt))
+  expect_true(all(is.finite(P$growth_pred)) && all(is.finite(P$mort_pred)))
+  expect_true(all(P$mort_pred >= 0 & P$mort_pred <= 1))
+  expect_true(all(c("siteID", "year", "patchID") %in% names(P)))
+  # larger trees grow relatively less: the kernel's exp(-b * dbh) term
+  D <- merge(P, tree_dt[, .(siteID, year, patchID, dbh)], by = c("siteID", "year", "patchID"), allow.cartesian = TRUE)
+  expect_lt(cor(D$dbh, D$growth_pred), 0)
 })
