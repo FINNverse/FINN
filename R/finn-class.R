@@ -718,11 +718,25 @@ finn_class = nn_module(
     trees = torch_tensor(trees, dtype=self$dtype, device=self$device)
     species = torch_tensor(species, dtype=torch_int64(), device=self$device)
 
-    # create cohort ids
+    # Cohort ids, unique within a (site, patch): a cohort is traced by the triple
+    # (siteID, patchID, cohortID).
+    #
+    # At t = 0 a cohort's id IS its position along the cohort dimension, which is
+    # the `cohortID` obsDF2arrays() placed it at. So an initial cohort keeps the
+    # identity `makeInitCohorts()` gave it -- and since makeInitCohorts() called
+    # WITHOUT `dbh_binsize` does not bin (one row in, one cohort out), that is
+    # the identity of the observed tree the row came from. The trace back to a
+    # tagged inventory tree is then just a join on (siteID, patchID, cohortID),
+    # with no assumption about how the arrays happen to be laid out.
     cohort_ids = torch_tensor(array(
-      1:(prod(species$shape)+1),
+      rep(seq_len(species$shape[3]), each = prod(species$shape[1:2])),
       dim = species$shape), dtype=torch_int32(), device = self$device
     )
+    # Ids of new cohorts come from a counter that only ever goes up. Taking
+    # max(cohort_ids) instead would re-issue the id of a cohort that has died and
+    # been pruned, and a trace would then silently follow a recruit that inherited
+    # a dead tree's id.
+    next_cohort_id = as.integer(max(c(0L, species$shape[3])))
 
     # init Result tensors
     Result = lapply(1:7,function(tmp) torch::torch_zeros(list(sites, time, self$N_species), device=self$device))
@@ -942,12 +956,13 @@ finn_class = nn_module(
       trees_new = r
       species_new = torch_arange(1, sp, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
-      # assign cohortIDs
-      max_id = max(c(1,as_array(cohort_ids), na.rm = TRUE))
+      # assign cohortIDs from the monotone counter (see where it is initialised)
+      n_new = prod(r$shape)
       new_cohort_id = torch_tensor(array(
-        (max_id+1):(max_id+prod(r$shape)+1),
+        next_cohort_id + seq_len(n_new),
         dim = r$shape), dtype=torch_int32(), device = self$device
-      ) #TODO check for performance
+      )
+      next_cohort_id = next_cohort_id + n_new
 
       #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
       ## Aggregation of rates####
