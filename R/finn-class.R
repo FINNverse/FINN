@@ -224,6 +224,21 @@ finn = function(N_species,
 #'       difference of sigmoids rather than a hard cut so the term stays
 #'       differentiable with respect to diameter; `tau` controls that softness
 #'       and small values approach hard binning.
+#'     \item `"quantiles"` — the abundance-weighted diameter quantiles of each
+#'       site and species instead of their mean, requiring `probs` (e.g.
+#'       `c(0.1, 0.5, 0.9)`) and optionally `tau` (the softness of the quantile
+#'       on the cumulative-abundance scale, default 0.05). The observation is
+#'       read from columns `dbh_q10`, `dbh_q50`, `dbh_q90` of `data`
+#'       (`<response>_q<100*p>`). Only meaningful for `dbh`.
+#'
+#'       Where `"size_classes"` asks how many stems fall in a diameter
+#'       interval, this asks how thick the stem at a given position of the
+#'       distribution is, which keeps the statement on the diameter scale: the
+#'       upper quantile speaks directly about the big trees that carry the
+#'       basal area, where a count likelihood weighs them the same as saplings.
+#'       The quantile is a soft selection along the cumulative abundance, so it
+#'       stays differentiable with respect to diameter; `tau` controls that
+#'       softness and small values approach the exact weighted quantile.
 #'     \item `"tree"` — no aggregation: the growth and mortality kernels are
 #'       evaluated on the **observed** trees at their observed diameters, with
 #'       light computed from the observed stand, and compared tree by tree. Only
@@ -592,10 +607,14 @@ finn_class = nn_module(
     ##   class_obs  [sites, obs_years, species, K]  stem counts per diameter class
     ##   tree_obs   list of [sites, obs_years, patches, max_trees] tensors
     ## They are kept whole and sliced by the batch index, like init_cohort.
+    ##   quant_obs  [sites, obs_years, species, n_probs]  observed dbh quantiles
     self$class_obs = NULL
     self$tree_obs = NULL
+    self$quant_obs = NULL
     self$class_breaks = NULL
     self$class_tau = 1.0
+    self$quant_probs = NULL
+    self$quant_tau = 0.05
     self$record_raws = FALSE
     self$env_scaling = NULL
     self$train_env           = NULL
@@ -666,6 +685,7 @@ finn_class = nn_module(
                      verbose = TRUE,
                      year_sequence = NULL,
                      class_obs = NULL,
+                     quant_obs = NULL,
                      tree_obs = NULL){
 
 
@@ -1125,6 +1145,17 @@ finn_class = nn_module(
           # browser()
           # #dbh
           loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
+
+          # ---- diameter quantiles replace the scalar mean diameter ----------
+          # A mean cannot separate one exceptional tree from a shift of the whole
+          # distribution; three quantiles state where the thin, the typical and
+          # the thick stems of each species actually are. Unlike a count in a
+          # size class this stays on the diameter scale, so the upper quantile
+          # is a direct statement about the big trees.
+          if (!is.null(quant_obs) && identical(self$loss_agg$dbh$type, "quantiles")) {
+            q_pred = private$quantile_values(dbh, trees, species, self$quant_probs, self$quant_tau)
+            loss[1] = self$loss_dbh_func(quant_obs[, tmp_index, , ], q_pred)
+          }
           # ba
           loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
           # counts
@@ -1702,6 +1733,14 @@ finn_class = nn_module(
       message(sprintf("[loss] '%s' aggregated into %d diameter classes at %s (tau = %g)",
                       r, length(self$class_breaks) + 1L, paste(self$class_breaks, collapse = ", "), self$class_tau))
     }
+    if (any(agg_types == "quantiles")) {
+      r = names(agg_types)[agg_types == "quantiles"][1]
+      self$quant_probs = self$loss_agg[[r]]$args$probs
+      self$quant_tau   = if (!is.null(self$loss_agg[[r]]$args$tau)) self$loss_agg[[r]]$args$tau else 0.05
+      self$quant_obs   = private$build_quantile_obs(data, self$quant_probs, r)
+      message(sprintf("[loss] '%s' aggregated into the %s quantiles (tau = %g)",
+                      r, paste(self$quant_probs, collapse = ", "), self$quant_tau))
+    }
     if (any(agg_types == "tree")) {
       if (is.null(tree_data)) stop("loss_aggregation 'tree' needs `tree_data`.", call. = FALSE)
       self$tree_obs = private$build_tree_obs(tree_data, site_ids, obs_years, patches)
@@ -1723,7 +1762,7 @@ finn_class = nn_module(
     # binomial and binomial terms, where sd() is not the right scale.
     private$create_loss_functions(loss_spec, weights)   # unweighted for now
     if (auto_weights) {
-      base = private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs)
+      base = private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs, self$quant_obs)
       w = 1/base
       w[!is.finite(w) | w <= 0] = 1        # no data / degenerate -> leave alone
       names(w) = names(loss_spec)
@@ -1852,6 +1891,7 @@ finn_class = nn_module(
         # Slice the extra observation tensors to this batch of sites, exactly as
         # init_cohort is sliced above.
         class_obs_b = if (!is.null(self$class_obs)) self$class_obs$to(device = self$device, non_blocking = TRUE)[ind, , , ] else NULL
+        quant_obs_b = if (!is.null(self$quant_obs)) self$quant_obs$to(device = self$device, non_blocking = TRUE)[ind, , , ] else NULL
         tree_obs_b  = if (!is.null(self$tree_obs))
           lapply(self$tree_obs[private$TREE_OBS_TENSORS],
                  function(t) t$to(device = self$device, non_blocking = TRUE)[ind, , , ]) else NULL
@@ -1864,6 +1904,7 @@ finn_class = nn_module(
                                 start_time = start_time,
                                 y = y,
                                 class_obs = class_obs_b,
+                                quant_obs = quant_obs_b,
                                 tree_obs = tree_obs_b,
                                 update_step = update_step,
                                 verbose = FALSE,
@@ -2068,7 +2109,7 @@ finn_class = nn_module(
     resolve_loss_aggregation = function(spec, responses) {
       default_type = c(dbh = "mean", ba = "sum", trees = "sum",
                        growth = "mean", mortality = "mean", regeneration = "sum")
-      supported = c("mean", "sum", "size_classes", "tree")
+      supported = c("mean", "sum", "size_classes", "quantiles", "tree")
       out = lapply(responses, function(r) {
         d = if (r %in% names(default_type)) unname(default_type[r]) else "sum"
         list(type = d, args = list())
@@ -2100,6 +2141,16 @@ finn_class = nn_module(
         if (out[[r]]$type == "size_classes" && is.null(out[[r]]$args$breaks))
           stop(sprintf("loss_aggregation '%s' = size_classes needs `breaks`, e.g. list(type = \"size_classes\", breaks = seq(20, 60, by = 10)).", r),
                call. = FALSE)
+        if (out[[r]]$type == "quantiles") {
+          if (!identical(r, "dbh"))
+            stop("loss_aggregation 'quantiles' is implemented for 'dbh' only.", call. = FALSE)
+          p = out[[r]]$args$probs
+          if (is.null(p))
+            stop("loss_aggregation 'dbh' = quantiles needs `probs`, e.g. list(type = \"quantiles\", probs = c(0.1, 0.5, 0.9)).",
+                 call. = FALSE)
+          if (any(p <= 0 | p >= 1))
+            stop("`probs` must lie strictly between 0 and 1.", call. = FALSE)
+        }
         if (out[[r]]$type == "tree" && !r %in% c("growth", "mortality"))
           stop("loss_aggregation 'tree' is implemented for 'growth' and 'mortality' only.", call. = FALSE)
       }
@@ -2122,6 +2173,68 @@ finn_class = nn_module(
         aggregate_results(species, list(trees * w), list(zero))[[1]]
       })
       torch::torch_stack(per_class, dim = 3)          # [sites, species, K+1]
+    },
+
+    # Model side of "quantiles": the abundance-weighted diameter quantiles of
+    # each site x species, over cohorts AND patches.
+    #
+    # Where "size_classes" asks how MANY stems sit in a diameter interval, this
+    # asks how THICK the stem at a given position of the distribution is. The
+    # difference matters: a count likelihood weighs the smallest stem exactly as
+    # much as the largest, so it says almost nothing about the rare big trees
+    # that carry the basal area, whereas the 0.9 quantile is a statement about
+    # those trees on the diameter scale itself.
+    #
+    # Differentiable by construction. Sorting by diameter passes gradients
+    # through the sorted VALUES, and the quantile is then a soft selection along
+    # that order: with the per-species cumulative abundance F running 0 -> 1, the
+    # weight of cohort i for probability p is
+    #     a_i = sigmoid((F_i - p)/tau) - sigmoid((F_{i-1} - p)/tau),
+    # a smooth bump on whichever cohort the crossing falls in, which collapses on
+    # the exact weighted quantile as tau -> 0. One sort serves every species,
+    # because a per-species cumulative sum taken along a globally diameter-sorted
+    # order is still ordered by diameter.
+    quantile_values = function(dbh, trees, species, probs, tau) {
+      d = dbh$flatten(start_dim = 2)                       # [sites, patches*cohorts]
+      n = trees$flatten(start_dim = 2)
+      s = species$flatten(start_dim = 2)
+      # The ORDER carries no gradient, only the values do, so the sort is taken
+      # without one and the values are then gathered: gather's backward scatters
+      # each gradient back to the cohort it came from, which is exactly right,
+      # and it keeps sort's saved indices out of the graph (R's gather shifts a
+      # 1-based index tensor in place, which the sort backward then refuses).
+      idx = torch::with_no_grad(torch::torch_sort(d$detach(), dim = 2)[[2]])
+      d_s = d$gather(2, idx$clone())
+      n_s = n$gather(2, idx$clone())
+      s_s = s$gather(2, idx$clone())
+      per_species = lapply(seq_len(self$N_species), function(j) {
+        w   = n_s * s_s$eq(j)$to(dtype = d_s$dtype)
+        tot = w$sum(dim = 2, keepdim = TRUE)$clamp(min = 1e-8)
+        F   = w$cumsum(dim = 2) / tot
+        Fp  = F - w / tot                                   # F_{i-1}
+        q = lapply(probs, function(p) {
+          a = ((F - p) / tau)$sigmoid() - ((Fp - p) / tau)$sigmoid()
+          (a * d_s)$sum(dim = 2) / a$sum(dim = 2)$clamp(min = 1e-8)
+        })
+        torch::torch_stack(q, dim = 2)                      # [sites, n_probs]
+      })
+      torch::torch_stack(per_species, dim = 2)              # [sites, species, n_probs]
+    },
+
+    # Observed diameter quantiles -> [sites, obs_years, species, n_probs].
+    # Columns are expected in `data` as <response>_q<100*p>, e.g. dbh_q10,
+    # dbh_q50, dbh_q90 for probs = c(0.1, 0.5, 0.9).
+    build_quantile_obs = function(data, probs, response = "dbh") {
+      cols = sprintf("%s_q%g", response, 100 * probs)
+      missing = setdiff(cols, colnames(data))
+      if (length(missing))
+        stop(sprintf("loss_aggregation quantiles needs columns %s in `data`; missing: %s.",
+                     paste(cols, collapse = ", "), paste(missing, collapse = ", ")), call. = FALSE)
+      per_prob = lapply(cols, function(cc) {
+        f = stats::as.formula(paste0("~0+", cc))
+        abind::abind(lapply(1:self$N_species, function(i) extract_env(f, data[data$species == i, ])), along = 3L)
+      })
+      torch::torch_tensor(abind::abind(per_prob, along = 4L), dtype = torch::torch_float32())
     },
 
     # Model side of "tree": evaluate the growth and mortality kernels on the
@@ -2325,7 +2438,7 @@ finn_class = nn_module(
     # called with 2D [sites, species] tensors during fitting (the reg/nbinom one
     # sizes theta off pred$shape[1]), so Y's [sites, years, species] slices are
     # flattened to match.
-    compute_baseline_losses = function(Y, loss_spec, class_obs = NULL, tree_obs = NULL) {
+    compute_baseline_losses = function(Y, loss_spec, class_obs = NULL, tree_obs = NULL, quant_obs = NULL) {
       nm  = names(loss_spec)
       out = stats::setNames(rep(NA_real_, 6), nm)
       # Responses whose observation does not live in Y need their own
@@ -2334,6 +2447,8 @@ finn_class = nn_module(
       alt = list()
       if (!is.null(class_obs) && identical(self$loss_agg$trees$type, "size_classes"))
         alt$trees = list(obs = class_obs, f = self$loss_trees_func)
+      if (!is.null(quant_obs) && identical(self$loss_agg$dbh$type, "quantiles"))
+        alt$dbh = list(obs = quant_obs, f = self$loss_dbh_func)
       if (!is.null(tree_obs) && identical(self$loss_agg$growth$type, "tree"))
         alt$growth = list(obs = tree_obs$growth, f = self$loss_growth_func)
       if (!is.null(tree_obs) && identical(self$loss_agg$mortality$type, "tree"))

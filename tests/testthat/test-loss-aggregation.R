@@ -205,3 +205,63 @@ test_that("predictTrees returns one prediction per observed tree", {
   D <- merge(P, tree_dt[, .(siteID, year, patchID, dbh)], by = c("siteID", "year", "patchID"), allow.cartesian = TRUE)
   expect_lt(cor(D$dbh, D$growth_pred), 0)
 })
+
+test_that("the quantile operator reproduces weighted diameter quantiles", {
+  m  <- mk_model()
+  qv <- m$.__enclos_env__$private$quantile_values
+  ## one site, one patch, five cohorts of species 1 with known abundances
+  d  <- c(10, 20, 30, 40, 50); w <- c(1, 1, 1, 1, 1)
+  dbh     <- torch::torch_tensor(array(d, dim = c(1, 1, 5)))
+  trees   <- torch::torch_tensor(array(w, dim = c(1, 1, 5)))
+  species <- torch::torch_tensor(array(rep(1L, 5), dim = c(1, 1, 5)), dtype = torch::torch_int64())
+  probs <- c(0.1, 0.5, 0.9)
+  got <- as.array(qv(dbh, trees, species, probs, tau = 1e-3))[1, 1, ]
+  ## with equal weights the exact weighted quantiles are the 1st, 3rd and 5th stem
+  expect_equal(got, c(10, 30, 50), tolerance = 1e-2)
+})
+
+test_that("the quantile operator follows the abundance weights, not the values", {
+  m  <- mk_model()
+  qv <- m$.__enclos_env__$private$quantile_values
+  ## the same diameters, but almost all stems are thin: the median must move down
+  dbh     <- torch::torch_tensor(array(c(10, 20, 30, 40, 50), dim = c(1, 1, 5)))
+  species <- torch::torch_tensor(array(rep(1L, 5), dim = c(1, 1, 5)), dtype = torch::torch_int64())
+  even <- as.array(qv(dbh, torch::torch_tensor(array(rep(1, 5), dim = c(1, 1, 5))),
+                      species, 0.5, tau = 1e-3))[1, 1, 1]
+  thin <- as.array(qv(dbh, torch::torch_tensor(array(c(50, 1, 1, 1, 1), dim = c(1, 1, 5))),
+                      species, 0.5, tau = 1e-3))[1, 1, 1]
+  expect_equal(even, 30, tolerance = 1e-2)
+  expect_equal(thin, 10, tolerance = 1e-2)
+})
+
+test_that("the quantile operator is differentiable and species-separated", {
+  m  <- mk_model()
+  qv <- m$.__enclos_env__$private$quantile_values
+  dbh <- torch::torch_tensor(array(c(10, 20, 30, 40), dim = c(1, 1, 4)), requires_grad = TRUE)
+  out <- qv(dbh, torch::torch_tensor(array(rep(1, 4), dim = c(1, 1, 4))),
+            torch::torch_tensor(array(c(1L, 1L, 2L, 2L), dim = c(1, 1, 4)), dtype = torch::torch_int64()),
+            probs = 0.5, tau = 1e-2)
+  v <- as.array(out)[1, , 1]
+  expect_true(v[1] < 25 && v[2] > 25)     # species 1 is the thin pair, species 2 the thick one
+  out[1, 1, 1]$backward()
+  expect_true(any(as.array(dbh$grad) != 0))
+})
+
+test_that("dbh quantiles run end to end and validate their input", {
+  expect_error(run_fit(loss_family = LOSS, loss_aggregation = list(dbh = list(type = "quantiles"))),
+               "needs `probs`")
+  expect_error(run_fit(loss_family = LOSS,
+                       loss_aggregation = list(dbh = list(type = "quantiles", probs = c(0, 0.5)))),
+               "strictly between 0 and 1")
+  expect_error(run_fit(loss_family = LOSS,
+                       loss_aggregation = list(ba = list(type = "quantiles", probs = 0.5))),
+               "'dbh' only")
+  obs_q <- copy(obs)
+  for (p in c(10, 50, 90)) obs_q[[sprintf("dbh_q%g", p)]] <- 15 + p / 10
+  mm <- run_fit(loss_family = LOSS, data = obs_q,
+                loss_aggregation = list(dbh = list(type = "quantiles", probs = c(0.1, 0.5, 0.9))))
+  h <- as.numeric(mm$history[[1]])
+  expect_true(all(is.finite(h)))
+  expect_gt(h[1], 0)
+  expect_equal(dim(as.array(mm$quant_obs)), c(Nsites, 2L, Nsp, 3L))
+})

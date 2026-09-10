@@ -127,6 +127,21 @@ classes, and the observation is read from columns \code{n_class_1} …
   difference of sigmoids rather than a hard cut so the term stays
   differentiable with respect to diameter; `tau` controls that softness
   and small values approach hard binning.
+\\item `"quantiles"` — the abundance-weighted diameter quantiles of each
+  site and species instead of their mean, requiring `probs` (e.g.
+  `c(0.1, 0.5, 0.9)`) and optionally `tau` (the softness of the quantile
+  on the cumulative-abundance scale, default 0.05). The observation is
+  read from columns `dbh_q10`, `dbh_q50`, `dbh_q90` of `data`
+  (`<response>_q<100*p>`). Only meaningful for `dbh`.
+
+  Where `"size_classes"` asks how many stems fall in a diameter
+  interval, this asks how thick the stem at a given position of the
+  distribution is, which keeps the statement on the diameter scale: the
+  upper quantile speaks directly about the big trees that carry the
+  basal area, where a count likelihood weighs them the same as saplings.
+  The quantile is a soft selection along the cumulative abundance, so it
+  stays differentiable with respect to diameter; `tau` controls that
+  softness and small values approach the exact weighted quantile.
 \\item `"tree"` — no aggregation: the growth and mortality kernels are
   evaluated on the **observed** trees at their observed diameters, with
   light computed from the observed stand, and compared tree by tree. Only
