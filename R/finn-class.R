@@ -958,10 +958,15 @@ finn_class = nn_module(
       ## of the regeneration process function itself -- see FINN::regeneration
       ## (unbounded) vs FINN::regeneration_saturation (capped, with its own
       ## reg_logK parameter declared via createProcess(custom_parameters=)).
-      r_mean_ha = self$regeneration_func(species = species,
-                                          parReg = self$par_regeneration[,1],
-                                          pred = pred,
-                                          light = AL_reg)
+      ## The stand itself (dbh, trees) goes only to functions that ask for it,
+      ## e.g. FINN::regeneration_adult (seed source = conspecific adults).
+      reg_args = list(species = species,
+                      parReg = self$par_regeneration[,1],
+                      pred = pred,
+                      light = AL_reg)
+      if(all(c("dbh", "trees") %in% names(formals(self$regeneration_func))))
+        reg_args = c(reg_args, list(dbh = dbh, trees = trees))
+      r_mean_ha = do.call(self$regeneration_func, reg_args)
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
