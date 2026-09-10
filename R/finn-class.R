@@ -1844,7 +1844,16 @@ finn_class = nn_module(
     # `lr` silently kept training at the old rate. Calling fit() again with the *same*
     # lr still reuses the existing optimizer instance (preserving e.g. Adam's momentum
     # state) so that resuming training for more epochs behaves as before.
-    if(is.null(self$optimizer) || !isTRUE(all.equal(self$optimizer_lr, lr))) {
+    #
+    # The existing optimizer is reused only if it still drives THIS model's
+    # parameter tensors. After torch_save()/torch_load() it does not: the
+    # optim_ignite_* optimizers come back as a dead external pointer (any access
+    # errors), and the pure-R ones (optim_adam, ...) come back holding copies of
+    # the old tensors, so step() would update orphans and the model would
+    # silently not train. Adam's moment estimates are lost in both cases; a
+    # resumed fit starts a fresh optimizer.
+    if(is.null(self$optimizer) || !isTRUE(all.equal(self$optimizer_lr, lr)) ||
+       !private$optimizer_owns_parameters(self$optimizer)) {
       self$optimizer = optimizer(self$parameters, lr = lr, ...)
       self$optimizer_lr = lr
     }
@@ -2088,6 +2097,21 @@ finn_class = nn_module(
 
     # The tensor entries of build_tree_obs()'s result (the rest is bookkeeping).
     TREE_OBS_TENSORS = c("dbh", "trees", "species", "growth", "died"),
+
+    # Does `opt` still step on this model's own parameter tensors? FALSE for an
+    # optimizer restored by torch_load(): an ignite optimizer is then a dead
+    # external pointer (reading param_groups errors), a pure-R one holds copies
+    # of the old tensors. identical() on two tensors compares their external
+    # pointers, i.e. whether they are the same tensor.
+    optimizer_owns_parameters = function(opt) {
+      if (is.null(opt)) return(FALSE)
+      tryCatch({
+        held = unlist(lapply(opt$param_groups, function(g) g$params), recursive = FALSE)
+        own = self$parameters
+        length(held) == length(own) &&
+          all(vapply(seq_along(own), function(i) identical(held[[i]], own[[i]]), logical(1)))
+      }, error = function(e) FALSE)
+    },
 
     # Which loss components can be backpropagated at this timestep.
     #
