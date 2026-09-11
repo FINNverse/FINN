@@ -7,7 +7,7 @@ automatically (see below), not by hand.
 
 <!-- AUTO-MAINTAINED: the `project-progress` skill refreshes the table below from
      git history. Do not hand-edit; if something looks wrong, fix it in a session
-     and it will be kept current. Last refreshed: 2026-09-11. -->
+     and it will be kept current. Last refreshed: 2026-09-12. -->
 
 ## Contributors
 
@@ -24,6 +24,7 @@ Best-effort attribution from git history; refined over time by the skill.
 | Core model & mechanistic processes (`finn-class`, `Processes`) | both | growth/mortality/regeneration/competition + forward pass |
 | Calibration features (`env_autoscale`, `custom_parameters`, saturating regeneration, `recruit_obs_weight`, `growth_period_scale`, per-site aggregation windows for mixed remeasurement intervals) | Yannek | the 0.2.0 additions; per-site windows PR #17 |
 | Observation/loss API (`loss_family`, `loss_aggregation`: per-tree growth & mortality, size classes, dbh quantiles; `predictTrees`; persistent cohort ids) and `regeneration_adult` | Yannek | branch `loss-aggregation`, not yet merged |
+| Training regimes: `fit(shooting = "multiple")` (re-anchoring to the observed tree list at every census, interval-long gradient, tracked per-tree terms) | Yannek (design study of the four regimes: Max) | branch `loss-aggregation`, 7e99d52 |
 | CRAN packaging & release (DESCRIPTION, NEWS, cran-comments, review fixes) | Yannek | maintainer |
 | Data interface (`makeObsData`/`resolveSiteIDs`/`makeInitCohorts`, extdata) | both | |
 | Vignettes & docs | both | precompiled vignettes, pkgdown, README |
