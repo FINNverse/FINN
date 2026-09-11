@@ -26,6 +26,7 @@ fit(
   batchsize = NULL,
   device = c("cpu", "gpu"),
   update_step = 1L,
+  shooting = c("single", "multiple"),
   start_time = 1L,
   plot_progress = TRUE,
   folder = NULL,
@@ -213,6 +214,34 @@ held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See 
 \item{device}{(\code{character(1)})\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.}
 
 \item{update_step}{(\code{integer(1)})\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.}
+
+\item{shooting}{(\code{character(1)})\cr How the simulated stand relates to the
+censuses during fitting.
+\itemize{
+\item \code{"single"} (default): the stand is simulated once from \code{init_cohort}
+over the whole horizon and scored against every census it passes; the
+recurrent state is truncated every \code{update_step} years.
+\item \code{"multiple"}: at the start of every remeasurement interval the stand is
+RESET to the observed tree list of that census (from \code{tree_data}, which
+is then required), simulated freely to the interval's end, and scored
+there. The recurrent state is not truncated inside an interval, so the
+gradient of the end-of-interval mismatch reaches every transition of the
+interval -- the simulated drift over an interval is what is learned,
+rather than one-year transitions from a state the model itself
+produced. \code{dbh}, \code{ba} and \code{trees} at the census then act as the
+continuity penalty between the simulated end state and the observed
+start of the next interval. With \code{loss_aggregation = "tree"} for
+\code{growth}/\code{mortality} the anchored trees are TRACKED through the
+interval by cohort id: their annual growth rates are averaged and their
+annual survival probabilities compounded along the simulated
+trajectory (a tree the simulation kills is kept, unweighted, so that
+its full-interval death probability is still defined), instead of being
+evaluated on the observed stand held at the interval start.
+\code{update_step} is ignored, and the per-site aggregation windows are
+used so that intervals of different length can start at different
+years. \code{init_cohort} only matters for years before a site's first
+interval.
+}}
 
 \item{start_time}{(\code{integer(1)})\cr Starting from which year should the model be fitted. Can be used to use on burn-in.}
 

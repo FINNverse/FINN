@@ -311,6 +311,31 @@ finn = function(N_species,
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
 #' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
 #' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
+#' @param shooting (`character(1)`)\cr How the simulated stand relates to the
+#'   censuses during fitting.
+#'   * `"single"` (default): the stand is simulated once from `init_cohort`
+#'     over the whole horizon and scored against every census it passes; the
+#'     recurrent state is truncated every `update_step` years.
+#'   * `"multiple"`: at the start of every remeasurement interval the stand is
+#'     RESET to the observed tree list of that census (from `tree_data`, which
+#'     is then required), simulated freely to the interval's end, and scored
+#'     there. The recurrent state is not truncated inside an interval, so the
+#'     gradient of the end-of-interval mismatch reaches every transition of the
+#'     interval -- the simulated drift over an interval is what is learned,
+#'     rather than one-year transitions from a state the model itself
+#'     produced. `dbh`, `ba` and `trees` at the census then act as the
+#'     continuity penalty between the simulated end state and the observed
+#'     start of the next interval. With `loss_aggregation = "tree"` for
+#'     `growth`/`mortality` the anchored trees are TRACKED through the
+#'     interval by cohort id: their annual growth rates are averaged and their
+#'     annual survival probabilities compounded along the simulated
+#'     trajectory (a tree the simulation kills is kept, unweighted, so that
+#'     its full-interval death probability is still defined), instead of being
+#'     evaluated on the observed stand held at the interval start.
+#'     `update_step` is ignored, and the per-site aggregation windows are
+#'     used so that intervals of different length can start at different
+#'     years. `init_cohort` only matters for years before a site's first
+#'     interval.
 #' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
 #' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
 #' @param folder (`character(1)`)\cr Path to folder for saving checkpoint models. If `NULL`, no models will be saved during the training.
@@ -365,6 +390,7 @@ fit = function(model,
                batchsize = NULL,
                device = c("cpu", "gpu"),
                update_step = 1L,
+               shooting = c("single", "multiple"),
                start_time = 1L,
                plot_progress = TRUE,
                folder = NULL,
@@ -393,6 +419,7 @@ fit = function(model,
                       batchsize = batchsize,
                       device = device,
                       update_step = update_step,
+                      shooting = shooting,
                       start_time = start_time,
                       plot_progress = plot_progress,
                       folder = folder,
@@ -667,6 +694,7 @@ finn_class = nn_module(
   #'   (`dbh`, `species`, `trees`, `growth`, `died`), each
   #'   `[sites, observed years, patches, max trees]`, used when `growth` or
   #'   `mortality` is scored with `loss_aggregation = "tree"`. Built by `fit()`.
+  #' @param shooting `"single"` (default) or `"multiple"`; see `fit()`.
   #' @return list. A list of predicted values for dbh, number of trees, and other recorded time points. If `debug` is TRUE, raw results and cohorts are also returned.
   forward = function(dbh = NULL,
                      trees = NULL,
@@ -686,7 +714,8 @@ finn_class = nn_module(
                      year_sequence = NULL,
                      class_obs = NULL,
                      quant_obs = NULL,
-                     tree_obs = NULL){
+                     tree_obs = NULL,
+                     shooting = "single"){
 
 
     # if no cohorts exist initialize empty cohort array
@@ -760,6 +789,29 @@ finn_class = nn_module(
     # a dead tree's id.
     next_cohort_id = as.integer(max(c(0L, species$shape[3])))
 
+    # ---- multiple shooting (fit only): where each site's intervals begin -----
+    # The observation at year_sequence[k] covers the p_s steps before it, so the
+    # census that OPENED the interval is the state at the top of step
+    # year_sequence[k] - p_s + 1. At that step the site's stand is replaced by
+    # the observed tree list of that census (tree_obs[, k]), whose slots become
+    # cohort ids 1..n_track; recruits take ids above n_track, so "id <= n_track"
+    # identifies an anchored tree for the rest of the interval. Two accumulators
+    # follow those trees along the simulated trajectory: the sum of their annual
+    # growth rates and of their log annual survival probabilities.
+    multiple = !is.null(y) && identical(shooting, "multiple")
+    if (multiple) {
+      if (is.null(tree_obs))
+        stop("shooting = 'multiple' needs the observed tree list of every census (`tree_data`).", call. = FALSE)
+      p_all = torch::as_array(y[, , 1, 7]$cpu())
+      p_all = matrix(p_all, nrow = sites)                       # [sites, obs_years]
+      seg_start = p_all
+      for (k in seq_len(ncol(p_all))) seg_start[, k] = year_sequence[k] - p_all[, k] + 1
+      n_track = tree_obs$dbh$shape[4]
+      next_cohort_id = max(next_cohort_id, n_track)
+      acc_g = torch::torch_zeros(c(sites, patches, n_track), dtype = self$dtype, device = self$device)
+      acc_s = torch::torch_zeros_like(acc_g)
+    }
+
     # init Result tensors
     Result = lapply(1:7,function(tmp) torch::torch_zeros(list(sites, time, self$N_species), device=self$device))
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
@@ -818,11 +870,13 @@ finn_class = nn_module(
         if(!inherits(self$process_regeneration, "hybrid")) pred_reg = predRegGlobal[,i,]
       }
 
-      # empty rate objects/tensors
-      light = torch_zeros(list(sites, time,  dbh$shape[3]), device=self$device)
-      g = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
-      m = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
-      r = torch_zeros(list(sites, time, dbh$shape[3]), device=self$device)
+      # empty rate objects/tensors, [sites, patches, cohorts] like the state they
+      # stand in for when no cohort is alive (they used to be sized with `time`
+      # in place of `patches`, which broke the cohort record of an empty stand)
+      light = torch_zeros(list(sites, patches, dbh$shape[3]), device=self$device)
+      g = torch_zeros(list(sites, patches, dbh$shape[3]), device=self$device)
+      m = torch_zeros(list(sites, patches, dbh$shape[3]), device=self$device)
+      r = torch_zeros(list(sites, patches, dbh$shape[3]), device=self$device)
       if(rec_i) trees_before = torch::torch_zeros_like(g)
 
       # detach previous cohort objects (to interrupt the gradients)
@@ -843,6 +897,18 @@ finn_class = nn_module(
       # trees=trees$detach()
       # species=species$detach()
       # cohort_ids=cohort_ids$detach()
+
+      # multiple shooting: sites whose interval opens at this step restart from
+      # the census tree list. The observed state carries no graph, so this is
+      # also the (per-site) truncation of the recurrent state.
+      if (multiple) {
+        k_site = apply(seg_start, 1, function(v) { w = which(!is.na(v) & v == i); if (length(w)) w[1] else 0L })
+        if (any(k_site > 0)) {
+          st = private$anchor_state(tree_obs, k_site, dbh, trees, species, cohort_ids, acc_g, acc_s)
+          dbh = st$dbh; trees = st$trees; species = st$species; cohort_ids = st$cohort_ids
+          acc_g = st$acc_g; acc_s = st$acc_s
+        }
+      }
 
       # Apply disturbance
       if(!is.null(disturbance)) {
@@ -920,6 +986,15 @@ finn_class = nn_module(
           light = light,
           growth = g
         )
+
+        # tracked trees: accumulate this year's rate and log survival per cohort
+        # id, before recruits are appended and the slots are re-sorted
+        if (multiple) {
+          tracked = (cohort_ids$ge(1L) & cohort_ids$le(n_track))$to(dtype = g$dtype)
+          tidx = cohort_ids$clamp(1L, n_track)$to(dtype = torch::torch_long())
+          acc_g = acc_g$scatter_add(3, tidx$clone(), g * tracked)
+          acc_s = acc_s$scatter_add(3, tidx$clone(), (1 - m$clamp(1e-6, 1 - 1e-6))$log() * tracked)
+        }
 
         trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
@@ -1061,8 +1136,13 @@ finn_class = nn_module(
 
         # Gradient shouldn't be required, also expensive for backpropagation because of reshape/view operations!
         #torch::with_no_grad({
-        # Masks to find alive cohorts
-          mask = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
+        # Masks to find alive cohorts. Under multiple shooting an anchored tree
+        # is kept until its interval ends even when the simulation has killed
+        # it: its diameter and survival probability must stay defined over the
+        # whole interval, and with trees = 0 it weighs nothing anywhere else.
+          keep = trees > 0.5
+          if (multiple) keep = keep | (cohort_ids$ge(1L) & cohort_ids$le(n_track))
+          mask = keep$flatten(start_dim = 1, end_dim = 2)
           org_dim = species$shape[1:2]
           org_dim_t = torch::torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
 
@@ -1095,7 +1175,8 @@ finn_class = nn_module(
       if(i > 0){
         if(dbh$shape[3] != 0){
           #dead_trees_mask = trees == 0
-          dbh = dbh*trees$gt(0.5)$float()
+          dbh = if (multiple) dbh*(trees$gt(0.5) | (cohort_ids$ge(1L) & cohort_ids$le(n_track)))$float()
+                else dbh*trees$gt(0.5)$float()
           BA_stem_values = BA_stem(dbh = dbh)*trees
           species = species
           samples = vector("list", 3)
@@ -1209,7 +1290,14 @@ finn_class = nn_module(
                 # tp$growth is the window MEAN of the annual rates (matching the
                 # annualised observation) and tp$mortality the interval death
                 # probability (matching the observed 0/1 over the interval).
-                tp = private$tree_predictions(tree_obs, tmp_index, env, i, M, p_t)
+                # Under multiple shooting the anchored trees were tracked
+                # through the simulated interval instead: mean annual rate and
+                # compounded survival from the accumulators (reset at the
+                # anchor, so they hold exactly this interval).
+                tp = if (multiple) {
+                  list(growth = acc_g / p_t$clamp(min = 1)$reshape(c(-1, 1, 1)),
+                       mortality = 1 - acc_s$exp())
+                } else private$tree_predictions(tree_obs, tmp_index, env, i, M, p_t)
                 if (identical(self$loss_agg$growth$type, "tree"))
                   loss[4] = self$loss_growth_func(tree_obs$growth[, tmp_index, , ], tp$growth)
                 if (identical(self$loss_agg$mortality$type, "tree"))
@@ -1303,10 +1391,14 @@ finn_class = nn_module(
         # recorded its dependency on the (still-attached) state at step i by this point;
         # this detach only prevents *future* steps from continuing to backprop through the
         # state as it existed at/before step i.
-        dbh=dbh$detach()
-        trees=trees$detach()
-        species=species$detach()
-        cohort_ids=cohort_ids$detach()
+        # Under multiple shooting the state is truncated only where a site is
+        # re-anchored, so the gradient spans each interval whole.
+        if (!multiple) {
+          dbh=dbh$detach()
+          trees=trees$detach()
+          species=species$detach()
+          cohort_ids=cohort_ids$detach()
+        }
       }
 
       if(!is.null(y)) {
@@ -1574,6 +1666,11 @@ finn_class = nn_module(
                  batchsize = NULL,
                  device = c("cpu", "gpu"),
                  update_step = 1L,
+                 # "single": one free run from init_cohort, state truncated every
+                 # update_step years. "multiple": restart from the observed tree
+                 # list at every census, gradient over the whole interval. See
+                 # the argument docs.
+                 shooting = c("single", "multiple"),
                  start_time = 1L,
                  plot_progress = TRUE,
                  folder = NULL,
@@ -1643,6 +1740,10 @@ finn_class = nn_module(
       loss_family = loss
     }
     loss_spec = loss_family
+    shooting = match.arg(shooting)
+    self$shooting = shooting
+    if (shooting == "multiple" && is.null(tree_data))
+      stop("shooting = 'multiple' needs `tree_data`: the observed tree list at every census is what the stand is reset to.", call. = FALSE)
     # Resolve how each response is reduced from cohorts to the observed quantity.
     # Stored on the model because it fixes tensor widths used inside forward().
     self$loss_agg = private$resolve_loss_aggregation(loss_aggregation, names(loss_spec))
@@ -1719,8 +1820,13 @@ finn_class = nn_module(
     }
     if(identical(self$period_mode, "per_site")) per_site = TRUE
     if(identical(self$period_mode, "constant")) per_site = FALSE
+    # Multiple shooting re-anchors sites at their own years and keeps the graph
+    # across an interval, so the loss must be backpropagated once per batch
+    # (the per-site path), never at each observation step.
+    if(shooting == "multiple") per_site = TRUE
     self$per_site_period = per_site
     if(per_site) cli::cli_alert_info("period_length varies between sites: using per-site aggregation windows (one backward per batch)")
+    if(shooting == "multiple") cli::cli_alert_info("shooting = 'multiple': the stand is reset to the observed tree list at every census and the gradient spans each interval")
 
     # Observation tensors for the non-scalar aggregations. Built once, kept whole
     # on the model, and sliced by the batch index in the epoch loop (like
@@ -1746,7 +1852,7 @@ finn_class = nn_module(
       message(sprintf("[loss] '%s' aggregated into the %s quantiles (tau = %g)",
                       r, paste(self$quant_probs, collapse = ", "), self$quant_tau))
     }
-    if (any(agg_types == "tree")) {
+    if (any(agg_types == "tree") || shooting == "multiple") {
       if (is.null(tree_data)) stop("loss_aggregation 'tree' needs `tree_data`.", call. = FALSE)
       self$tree_obs = private$build_tree_obs(tree_data, site_ids, obs_years, patches)
     }
@@ -1921,6 +2027,7 @@ finn_class = nn_module(
                                 quant_obs = quant_obs_b,
                                 tree_obs = tree_obs_b,
                                 update_step = update_step,
+                                shooting = shooting,
                                 verbose = FALSE,
                                 year_sequence = year_sequence)
 
@@ -2328,6 +2435,40 @@ finn_class = nn_module(
         abind::abind(lapply(1:self$N_species, function(i) extract_env(f, data[data$species == i, ])), along = 3L)
       })
       torch::torch_tensor(abind::abind(per_class, along = 4L), dtype = torch::torch_float32())
+    },
+
+    # Multiple shooting: replace the stand of the sites whose interval opens at
+    # this step (k_site[s] > 0 names the census) by that census's tree list,
+    # slot j becoming cohort id j, and zero their tracking accumulators. The
+    # other sites keep their simulated state; torch_where keeps the graph for
+    # them and cuts it for the anchored ones (the observed state has none).
+    anchor_state = function(obs, k_site, dbh, trees, species, cohort_ids, acc_g, acc_s) {
+      sites = dbh$shape[1]; patches = dbh$shape[2]; n_track = obs$dbh$shape[4]
+      kk  = torch::torch_tensor(pmax(k_site, 1L), dtype = torch::torch_long(), device = dbh$device)
+      idx = kk$reshape(c(sites, 1, 1, 1))$expand(c(sites, 1, patches, n_track))
+      a_dbh     = obs$dbh$gather(2, idx$clone())$squeeze(2)$to(dtype = dbh$dtype)      # [sites, patches, n_track]
+      a_trees   = obs$trees$gather(2, idx$clone())$squeeze(2)$to(dtype = trees$dtype)
+      a_species = obs$species$gather(2, idx$clone())$squeeze(2)$to(dtype = species$dtype)
+      a_ids     = torch::torch_tensor(array(rep(seq_len(n_track), each = sites * patches),
+                                            dim = c(sites, patches, n_track)),
+                                      dtype = cohort_ids$dtype, device = dbh$device)
+      # both sides need the same cohort width: pad the narrower with empty slots
+      pad3 = function(x, n, fill) {
+        if (n <= 0) return(x)
+        torch::torch_cat(list(x, torch::torch_full(c(sites, patches, n), fill, dtype = x$dtype, device = x$device)), 3)
+      }
+      C = dbh$shape[3]
+      dbh = pad3(dbh, n_track - C, 0); trees = pad3(trees, n_track - C, 0)
+      species = pad3(species, n_track - C, 1); cohort_ids = pad3(cohort_ids, n_track - C, 0)
+      a_dbh = pad3(a_dbh, C - n_track, 0); a_trees = pad3(a_trees, C - n_track, 0)
+      a_species = pad3(a_species, C - n_track, 1); a_ids = pad3(a_ids, C - n_track, 0)
+      mk = torch::torch_tensor(k_site > 0, dtype = torch::torch_bool(), device = dbh$device)$reshape(c(sites, 1, 1))
+      list(dbh        = torch::torch_where(mk, a_dbh, dbh),
+           trees      = torch::torch_where(mk, a_trees, trees),
+           species    = torch::torch_where(mk, a_species, species),
+           cohort_ids = torch::torch_where(mk, a_ids, cohort_ids),
+           acc_g      = torch::torch_where(mk, torch::torch_zeros_like(acc_g), acc_g),
+           acc_s      = torch::torch_where(mk, torch::torch_zeros_like(acc_s), acc_s))
     },
 
     # Observed trees -> padded [sites, obs_years, patches, max_trees] tensors.
