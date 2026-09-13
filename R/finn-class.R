@@ -259,6 +259,67 @@ finn = function(N_species,
 #'   parameters. A single number (default `2.0`) applies the same budget to
 #'   every group; a named list/vector keyed by `"mechanistic"`/`"nn"`/`"loss"`
 #'   overrides individual groups, e.g. `clip_norm = list(loss = 5, nn = 1)`.
+#' @param reanchor (`logical(1)`)\cr Fit by **multiple shooting** instead of single
+#'   shooting. With the default `FALSE` the cohort state is initialised once from
+#'   `init_cohort` and then runs free over the whole horizon, so simulation error
+#'   compounds across every observation. With `TRUE` the simulated state is
+#'   discarded at every timestep for which `anchor_cohorts` supplies an observed
+#'   tree list and rebuilt from it, after that timestep's loss has been
+#'   backpropagated — drift is then bounded by one inter-census segment. This is
+#'   not the same as the gradient truncation controlled by `update_step`, which
+#'   cuts the gradient but keeps the state; set `update_step` to the segment length
+#'   to let the gradient span the whole segment.
+#' @param anchor_cohorts (`list()`)\cr Named list of [FINN::CohortMat] objects, the
+#'   observed state to restart from. Names are the simulation timesteps to
+#'   re-anchor at (integers as characters, and entries of the model's internal
+#'   `year_sequence`, i.e. timesteps that carry an observation). Every anchor must
+#'   have the same number of species, sites and patches as `init_cohort`; the
+#'   number of cohorts may differ between anchors and from `init_cohort`. The last
+#'   observation year needs no anchor — nothing is simulated after it — and an
+#'   anchor may not fall inside another observation's `period_length` window,
+#'   because the aggregated rates would then mix pre- and post-anchor state.
+#'   `fit()` copies the anchors onto its own device and never modifies them, so one
+#'   list can be reused across fits. Ignored unless `reanchor = TRUE`.
+#'
+#'   **Build the arrays directly** —
+#'   `CohortMat(dbh = , trees = , species = , dims = , sp = )` — rather than via
+#'   `CohortMat(obs_df = )`. The `obs_df` path runs `obsDF2arrays()`, which rounds
+#'   `trees` to whole stems and silently renumbers any `siteID`/`patchID` that is
+#'   not a complete `1:n` sequence; on a simulated or partly empty stand that
+#'   corrupts the anchor, and a renumbered site no longer aligns with `init_cohort`.
+#' @param anchor_mode (`character(1)`)\cr What an anchor does to the simulated state.
+#'   `"replace"` (default) overwrites it wholesale. `"merge"` keeps the simulated
+#'   cohorts with `dbh < anchor_min_dbh` and concatenates them with the full anchor.
+#'   Use `"merge"` whenever the inventory has a minimum-dbh threshold (FIA: 12.7 cm):
+#'   an anchor built from it contains no small trees, so `"replace"` deletes FINN's
+#'   entire regeneration pool at every census — on FIA that inflates 200-year
+#'   equilibrium basal area by 41%. Nothing is double counted, because the
+#'   observation is complete at and above the threshold. Ignored unless
+#'   `reanchor = TRUE`.
+#' @param anchor_min_dbh (`numeric(1)`)\cr The inventory's minimum-dbh threshold, in
+#'   the units of the `dbh` column. Required by `anchor_mode = "merge"`, ignored by
+#'   `"replace"`.
+#' @param teacher_forcing (`logical(1)`)\cr Fit by **direct estimation** instead of
+#'   by simulation, and never run a trajectory at all. The cohort state is reset at
+#'   **every** timestep to the observed stand at the census that STARTS that
+#'   timestep's observation interval — `init_cohort` for the first interval, then
+#'   `anchor_cohorts` — so each year's demographic rates are evaluated at an
+#'   observed state and the simulated state is never carried forward. The interval
+#'   rates are then aggregated over the window and scored exactly as `fit()`
+#'   already scores them, so growth, mortality and regeneration keep their usual
+#'   meaning. The three STATE responses (`dbh`, `ba`, `trees`) **leave the loss**:
+#'   predicting them requires a trajectory, and there is none here.
+#'
+#'   Mutually exclusive with `reanchor`, which is a different estimator:
+#'   re-anchoring still free-runs the whole segment between two censuses and scores
+#'   where it lands. `update_step` is inert under teacher forcing — there is no
+#'   multi-year trajectory to truncate — and the anchor validation refuses any
+#'   `update_step` that would change which observations are scored.
+#'
+#'   `anchor_cohorts` must supply an anchor for every observed timestep except the
+#'   last (nothing is conditioned on the final census, because nothing follows it).
+#'   Only `fit()` teacher-forces; `predict()`/`simulateForest()` always simulate,
+#'   so a teacher-forced model is still validated by single shooting.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
@@ -290,6 +351,11 @@ fit = function(model,
                record_gradients = FALSE,
                env_autoscale = TRUE,
                clip_norm = 2.0,
+               reanchor = FALSE,
+               anchor_cohorts = NULL,
+               anchor_mode = "replace",
+               anchor_min_dbh = NULL,
+               teacher_forcing = FALSE,
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -315,6 +381,11 @@ fit = function(model,
                       record_gradients = record_gradients,
                       env_autoscale = env_autoscale,
                       clip_norm = clip_norm,
+                      reanchor = reanchor,
+                      anchor_cohorts = anchor_cohorts,
+                      anchor_mode = anchor_mode,
+                      anchor_min_dbh = anchor_min_dbh,
+                      teacher_forcing = teacher_forcing,
                       ...))
 }
 
@@ -520,6 +591,20 @@ finn_class = nn_module(
   #' @param update_step integer. Backpropagation step length.
   #' @param verbose logical. Print progress if TRUE.
   #' @param year_sequence at which year indices should the predictions compared with the observed values
+  #' @param reanchor logical. Multiple shooting: replace the simulated cohort state
+  #'   by the observed one at every timestep that has an entry in `anchor_cohorts`.
+  #' @param anchor_cohorts named list. Names are timesteps (as characters), entries
+  #'   carry `$dbh`, `$trees` and `$species` (a [CohortMat] or a plain list of the
+  #'   three tensors, already subset to the sites of this call).
+  #' @param anchor_mode character. `"replace"` (default) overwrites the simulated
+  #'   state with the anchor; `"merge"` keeps the simulated cohorts below
+  #'   `anchor_min_dbh` and appends the anchor to them.
+  #' @param anchor_min_dbh numeric. The dbh below which the anchors are blind
+  #'   (same units as `dbh`). Required by `anchor_mode = "merge"`.
+  #' @param teacher_forcing logical. Direct estimation: reset the cohort state at
+  #'   every timestep to the last observed stand (the incoming cohorts, then
+  #'   `anchor_cohorts`), so no trajectory is ever simulated. The `dbh`/`ba`/`trees`
+  #'   loss terms are dropped, because scoring them would need one.
   #' @return list. A list of predicted values for dbh, number of trees, and other recorded time points. If `debug` is TRUE, raw results and cohorts are also returned.
   forward = function(dbh = NULL,
                      trees = NULL,
@@ -536,8 +621,15 @@ finn_class = nn_module(
                      return_cohorts = FALSE,
                      update_step = 1L,
                      verbose = TRUE,
-                     year_sequence = NULL){
+                     year_sequence = NULL,
+                     reanchor = FALSE,
+                     anchor_cohorts = NULL,
+                     anchor_mode = "replace",
+                     anchor_min_dbh = NULL,
+                     teacher_forcing = FALSE){
 
+    anchor_mode = match.arg(anchor_mode, c("replace", "merge"))
+    if(isTRUE(reanchor) && isTRUE(teacher_forcing)) stop("`reanchor` and `teacher_forcing` are different estimators and cannot be combined: re-anchoring free-runs each segment from an observed state, teacher forcing never simulates one.")
 
     # if no cohorts exist initialize empty cohort array
     if(is.null(dbh)){
@@ -596,6 +688,21 @@ finn_class = nn_module(
       dim = species$shape), dtype=torch_int32(), device = self$device
     )
 
+    # observed cohorts -> a state the time loop can run on: right device and dtypes, and ids
+    # continued above `max_id` so no id is ever reused
+    anchor_state = function(anchor, max_id) list(
+      dbh     = anchor$dbh$to(dtype = self$dtype, device = self$device),
+      trees   = anchor$trees$to(dtype = self$dtype, device = self$device),
+      species = anchor$species$to(dtype = torch_int64(), device = self$device),
+      ids     = torch_tensor(array((max_id+1):(max_id+prod(anchor$species$shape)),
+                                   dim = anchor$species$shape),
+                             dtype = torch_int32(), device = self$device))
+
+    # Teacher forcing: the rates observed over an interval were generated by the stand at the
+    # census that STARTS it, so the state is reset to that observation at every timestep and
+    # the simulated state is never carried forward. The incoming cohorts are the year-0 census.
+    forced = if(isTRUE(teacher_forcing)) list(dbh = dbh, trees = trees, species = species, ids = cohort_ids) else NULL
+
     # init Result tensors
     Result = lapply(1:7,function(tmp) torch::torch_zeros(list(sites, time, self$N_species), device=self$device))
     names(Result) =  c("dbh","ba", "trees", "growth", "mort", "reg", "r_mean_ha")
@@ -638,6 +745,13 @@ finn_class = nn_module(
     # create process bar
     if(verbose) cli::cli_progress_bar(format = "Year: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} ", total = time, clear = FALSE)
     for(i in 1:time){
+
+      if(isTRUE(teacher_forcing)) {
+        dbh = forced$dbh
+        trees = forced$trees
+        species = forced$species
+        cohort_ids = forced$ids
+      }
 
       # store this timestep's cohorts?
       rec_i = record_cohorts && (i %in% record_years)
@@ -978,12 +1092,17 @@ finn_class = nn_module(
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
           # browser()
-          # #dbh
-          loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
-          # ba
-          loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
-          # counts
-          loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
+          # Under teacher forcing the state at step i is the LAST OBSERVED stand carried one
+          # year, not a trajectory that reached year i, so the three state responses are not
+          # predictions of this census at all and leave the objective.
+          if(!isTRUE(teacher_forcing)) {
+            # #dbh
+            loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
+            # ba
+            loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
+            # counts
+            loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
+          }
 
 
           # growth rates - check for NA in period_length, if not, then accumulate gradients?
@@ -1117,11 +1236,46 @@ finn_class = nn_module(
         # recorded its dependency on the (still-attached) state at step i by this point;
         # this detach only prevents *future* steps from continuing to backprop through the
         # state as it existed at/before step i.
-        dbh=dbh$detach()
-        trees=trees$detach()
-        species=species$detach()
-        cohort_ids=cohort_ids$detach()
+        anchor = if(isTRUE(reanchor)) anchor_cohorts[[as.character(i)]] else NULL
+        if(is.null(anchor)) {
+          dbh=dbh$detach()
+          trees=trees$detach()
+          species=species$detach()
+          cohort_ids=cohort_ids$detach()
+        } else {
+          # Multiple shooting: the segment ends here, so the simulated state is REPLACED by
+          # the observed cohorts rather than carried forward - a freshly built array carries
+          # no graph, and ids continue above the current max so none is reused.
+          a = anchor_state(anchor, cohort_ids$max()$item())
+          a_dbh = a$dbh
+          a_trees = a$trees
+          a_species = a$species
+          a_ids = a$ids
+          if(identical(anchor_mode, "merge")) {
+            if(is.null(anchor_min_dbh)) stop("`anchor_mode = \"merge\"` requires `anchor_min_dbh`, the dbh below which the anchors are blind.")
+            # The anchor is complete at and above `anchor_min_dbh`, so carrying the simulated
+            # cohorts below it double counts nothing - replacing them instead deletes the whole
+            # regeneration pool at every census. Zeroed trees is the dead-cohort convention, so
+            # the above-threshold simulated slots are dropped by the next padding pass.
+            keep = dbh$lt(anchor_min_dbh)$bitwise_and(trees$gt(0.5))$to(dtype = self$dtype)
+            dbh = torch_cat(list(dbh$detach()*keep, a_dbh), 3)
+            trees = torch_cat(list(trees$detach()*keep, a_trees), 3)
+            species = torch_cat(list(species$detach(), a_species), 3)
+            cohort_ids = torch_cat(list(cohort_ids$detach(), a_ids), 3)
+          } else {
+            dbh = a_dbh
+            trees = a_trees
+            species = a_species
+            cohort_ids = a_ids
+          }
+        }
       }
+
+      # this timestep's census closes the interval it observed, so everything after it is
+      # conditioned on THIS observed stand instead. Outside `update_boundary` on purpose:
+      # there is no trajectory here, so nothing depends on where the gradient is truncated.
+      if(isTRUE(teacher_forcing) && !is.null(anchor_cohorts[[as.character(i)]]))
+        forced = anchor_state(anchor_cohorts[[as.character(i)]], cohort_ids$max()$item())
 
       if(!is.null(y)) {
         #for(j in 1:3) Result[[j]] = Result[[j]]$detach()
@@ -1325,6 +1479,19 @@ finn_class = nn_module(
                  # a named list/vector (any of "mechanistic", "nn", "loss") overrides
                  # individual groups, e.g. clip_norm = list(loss = 5, nn = 1).
                  clip_norm = 2.0,
+                 # multiple shooting: restart the simulated cohort state from the observed
+                 # cohorts in `anchor_cohorts` (named by simulation timestep) instead of
+                 # running free from t = 0. FALSE is single shooting, i.e. unchanged.
+                 reanchor = FALSE,
+                 anchor_cohorts = NULL,
+                 # "replace" overwrites the simulated state with the anchor; "merge" keeps the
+                 # simulated cohorts below `anchor_min_dbh`, which the anchor cannot observe.
+                 anchor_mode = "replace",
+                 anchor_min_dbh = NULL,
+                 # direct estimation: reset the cohort state to the last observed stand at
+                 # EVERY timestep, so the rates are evaluated at an observed state and no
+                 # trajectory is simulated. Drops the dbh/ba/trees loss terms.
+                 teacher_forcing = FALSE,
                  ...) {
 
     # Only touch the global graphics state when we actually draw the training
@@ -1487,6 +1654,11 @@ finn_class = nn_module(
 
     year_sequence = which(levels(as.factor(env$year)) %in% levels(as.factor(data$year)), arr.ind = TRUE)
 
+    # A loss only fires where an observation year is ALSO an update_step boundary (see
+    # forward()). If no observation year is, the objective is empty and the fit silently
+    # trains on nothing - e.g. observations at 5/10/15/20 with update_step = 3.
+    if(!any(year_sequence %% update_step == 0)) stop(paste("update_step", update_step, "scores no observation: none of the observation timesteps (", paste(year_sequence, collapse = ", "), ") is a multiple of it"))
+
     # init networks if not yet done
     private$create_nn(self$process_mortality, "mortality", dim(envs$mortality_env)[3])
     private$create_nn(self$process_growth, "growth", dim(envs$growth_env)[3])
@@ -1506,6 +1678,54 @@ finn_class = nn_module(
       if(self$init_cohort$sp != sp) stop(paste("sp in cohort", self$init_cohort$sp, "does not match sp from data", sp))
       patches = dim(self$init_cohort$species_r)[2]
     }
+
+    anchor_mode = match.arg(anchor_mode, c("replace", "merge"))
+    if(reanchor && teacher_forcing) stop("`reanchor` and `teacher_forcing` are different estimators and cannot be combined: re-anchoring free-runs each segment from an observed state, teacher forcing never simulates one.")
+    # `update_step` is inert under teacher forcing - there is no multi-year trajectory to
+    # truncate - and this is the invariant that makes that true: every census is still scored.
+    if(teacher_forcing && !all(year_sequence %% update_step == 0)) stop(paste("teacher_forcing = TRUE needs every observation to be scored, but update_step", update_step, "drops the observations at timestep(s)", paste(year_sequence[year_sequence %% update_step != 0], collapse = ", ")))
+    # a missing anchor would silently condition an interval on a much older census. The first
+    # interval is conditioned on init_cohort and nothing follows the last observation, so
+    # those two are the only timesteps that need no anchor.
+    if(teacher_forcing) {
+      gaps = setdiff(utils::head(sort(year_sequence), -1L), as.integer(names(anchor_cohorts)))
+      if(length(gaps)) stop(paste("`teacher_forcing = TRUE` needs an anchor at every observed timestep except the last; missing", paste(gaps, collapse = ", ")))
+    }
+    if(reanchor || (teacher_forcing && !is.null(anchor_cohorts))) {
+      if(is.null(anchor_cohorts)) stop("`reanchor = TRUE` requires `anchor_cohorts`, a named list of CohortMat objects (names = simulation timesteps).")
+      if(anchor_mode == "merge" && is.null(anchor_min_dbh)) stop("`anchor_mode = \"merge\"` requires `anchor_min_dbh`, the dbh below which the anchors are blind (same units as the `dbh` column).")
+      if(length(anchor_cohorts) == 0 || is.null(names(anchor_cohorts)) || any(names(anchor_cohorts) == "")) stop("`anchor_cohorts` must be a non-empty list, named by the simulation timesteps to re-anchor at.")
+      init_dims = self$init_cohort$dbh$shape
+      for(k in names(anchor_cohorts)) {
+        step = as.integer(k)
+        anchor = anchor_cohorts[[k]]
+        if(!(step %in% year_sequence)) stop(paste("anchor_cohorts: timestep", k, "is not in year_sequence (", paste(year_sequence, collapse = ", "), ") and would never be used"))
+        # the state is only replaced where it is also truncated, i.e. at an update_step
+        # boundary - an anchor anywhere else would silently never fire
+        if(!teacher_forcing && step %% update_step != 0) stop(paste("anchor_cohorts: timestep", k, "is not a multiple of update_step", update_step, "and would never be used"))
+        if(anchor$sp != self$init_cohort$sp) stop(paste("anchor_cohorts: timestep", k, "has sp", anchor$sp, "but init_cohort has sp", self$init_cohort$sp))
+        if(anchor$dbh$shape[1] != init_dims[1]) stop(paste("anchor_cohorts: timestep", k, "has", anchor$dbh$shape[1], "sites but init_cohort has", init_dims[1]))
+        if(anchor$dbh$shape[2] != init_dims[2]) stop(paste("anchor_cohorts: timestep", k, "has", anchor$dbh$shape[2], "patches but init_cohort has", init_dims[2]))
+        # growth/mortality/regeneration are aggregated over (i - period + 1):i, so an anchor
+        # anywhere in that window makes the aggregate mix pre- and post-anchor state
+        for(t in seq_along(year_sequence)) {
+          p = pl[,t]
+          inside = !is.na(p) & step >= (year_sequence[t] - p + 1) & step <= (year_sequence[t] - 1)
+          if(any(inside)) stop(paste("anchor_cohorts: timestep", k, "falls inside the rate-aggregation window of the observation at timestep", year_sequence[t], "(period_length", max(p[inside]), "); the aggregated growth/mortality/regeneration would mix pre- and post-anchor state"))
+        }
+      }
+    }
+    self$reanchor = reanchor
+    self$teacher_forcing = teacher_forcing
+    self$anchor_mode = anchor_mode
+    self$anchor_min_dbh = anchor_min_dbh
+    # Detached copies on the fit's device. CohortMat always builds its buffers on the CPU
+    # (its `device` argument only sets device_r), and the caller's anchors must survive a
+    # fit unmoved and unmodified so the same list can be reused across fits.
+    self$anchor_cohorts = if(!reanchor && !teacher_forcing) NULL else lapply(anchor_cohorts, function(a)
+      list(dbh     = a$dbh$detach()$to(dtype = self$dtype, device = self$device)$clone(),
+           trees   = a$trees$detach()$to(dtype = self$dtype, device = self$device)$clone(),
+           species = a$species$detach()$to(dtype = torch_int64(), device = self$device)$clone()))
 
     if(device == "gpu") {
       device = "cuda:0"
@@ -1593,6 +1813,12 @@ finn_class = nn_module(
           dbh = self$init_cohort$dbh$to(device = self$device, non_blocking=TRUE)[ind,]
         }
 
+        # the anchors are site-aligned state (already on device), so they must be subset by
+        # the batch's site index exactly as init_cohort is
+        anchors = NULL
+        if(reanchor || teacher_forcing) anchors = lapply(self$anchor_cohorts, function(a)
+          list(dbh = a$dbh[ind,], trees = a$trees[ind,], species = a$species[ind,]))
+
         pred_tmp = self$forward(dbh = dbh,
                                 trees = trees,
                                 species = species,
@@ -1602,7 +1828,12 @@ finn_class = nn_module(
                                 y = y,
                                 update_step = update_step,
                                 verbose = FALSE,
-                                year_sequence = year_sequence)
+                                year_sequence = year_sequence,
+                                reanchor = reanchor,
+                                anchor_cohorts = anchors,
+                                anchor_mode = anchor_mode,
+                                anchor_min_dbh = anchor_min_dbh,
+                                teacher_forcing = teacher_forcing)
 
         # browser()
         pred = pred_tmp[[1]]
