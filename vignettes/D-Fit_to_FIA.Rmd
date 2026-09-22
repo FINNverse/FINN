@@ -42,7 +42,7 @@ EPOCHS <- 500L
 
 The input tables are built by **`dev/make_extdata.R`**, which draws 400 sites
 from the full Oregon FIA set in `data-raw/` and splits them into two train and test data. 
-The **climate** (`fia_env_dt.csv`) was created in the FINN-fia
+The **climate** (`fia_env_dt`) was created in the FINN-fia
 analysis repo (`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`);
 see `data-raw/README.md` for the full chain.
 
@@ -51,18 +51,19 @@ holdout sites for evaluation. A fitted FINN model should generalize to other sit
 
 
 ``` r
-ext <- function(f) system.file("extdata", f, package = "FINN")
+# The tables ship with FINN as datasets (?fia_obs_dt), already in FINN's input
+# format, so there is nothing to read or prepare.
 
 # --- training sites --------------------------------------------------------
-obs_dt     <- fread(ext("fia_obs_dt.csv"))     # observations, wide (one column per variable)
-env_dt     <- fread(ext("fia_env_dt.csv"))     # RAW, untransformed climate
-init_trees <- fread(ext("fia_init_trees.csv"))
-species_dt <- fread(ext("fia_species_dt.csv"))
+obs_dt     <- fia_obs_dt        # observations, wide (one column per variable)
+env_dt     <- fia_env_dt        # RAW, untransformed climate
+init_trees <- fia_init_trees
+species_dt <- fia_species_dt
 
 # --- holdout sites: never seen during fitting ------------------------------
-obs_test   <- fread(ext("fia_obs_test.csv"))
-env_test   <- fread(ext("fia_env_test.csv"))
-init_test  <- fread(ext("fia_init_test.csv"))
+obs_test   <- fia_obs_test
+env_test   <- fia_env_test
+init_test  <- fia_init_test
 
 # long form of the observations, so later we can match FINN's long predictions
 # (sim$long$site) with a single merge()
@@ -281,53 +282,56 @@ FINN model summary
 ### GROWTH
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable    sp1    sp2      sp3      sp4      sp5   sp6   sp7    sp8   sp9
-     temp 0.0242 0.0133 0.744175 0.000735 0.000385 0.473 0.489 2.7839 0.342
-     prec 0.2288 2.5776 0.000987 0.005823 0.002549 0.297 0.383 0.0168 0.635
-   sp10   sp11
- 2.7389 0.0854
- 0.0286 0.4186
+ variable    sp1      sp2     sp3     sp4     sp5   sp6  sp7   sp8   sp9  sp10
+     temp 0.0276 0.000234 0.42326 0.00237 0.07741 0.424 1.28 0.894 0.156 1.858
+     prec 0.2681 0.280129 0.00509 0.00463 0.00365 0.168 0.40 0.902 0.215 0.102
+  sp11
+ 0.115
+ 0.406
 
 Average conditional effects (mean; species in columns):
- variable     sp1     sp2     sp3      sp4      sp5    sp6    sp7      sp8
-     temp -0.0158 0.00638 0.07445 -0.00308  0.00199 0.0975 0.0421 -0.03546
-     prec  0.0497 0.08533 0.00361 -0.01113 -0.00454 0.0713 0.0354 -0.00381
+ variable     sp1     sp2     sp3      sp4     sp5    sp6    sp7     sp8
+     temp -0.0184 0.00104  0.0662  0.00582 0.02611 0.1138 0.0418 -0.0353
+     prec  0.0546 0.06963 -0.0111 -0.01190 0.00609 0.0798 0.0285 -0.0195
      sp9    sp10    sp11
- -0.0879  0.2412 -0.0218
-  0.1042 -0.0224  0.0496
+ -0.0987  0.1730 -0.0253
+  0.1103 -0.0362  0.0489
 
 ### MORTALITY
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable    sp1    sp2    sp3   sp4  sp5    sp6    sp7    sp8      sp9  sp10
-     prec 0.0605 3.6817 0.4992 0.201 1.07 0.0711 0.5722 0.0183 0.292514 1.192
-     temp 0.0508 0.0545 0.0836 0.200 0.41 1.9825 0.0238 1.5557 0.000331 0.237
+ variable    sp1  sp2   sp3   sp4   sp5    sp6   sp7      sp8    sp9  sp10
+     prec 0.0385 1.17 0.657 0.171 1.353 0.0149 0.651 0.000971 0.2527 1.974
+     temp 0.1300 1.20 0.473 0.601 0.117 0.4158 0.011 2.489906 0.0143 0.193
    sp11
- 0.0151
- 0.3825
+ 0.0851
+ 0.4337
 
 Average conditional effects (mean; species in columns):
- variable     sp1      sp2     sp3     sp4    sp5      sp6     sp7     sp8
-     prec 0.00770  0.02773 0.02021 -0.0245 0.0262 -0.00244 -0.0976 -0.0102
-     temp 0.00742 -0.00326 0.00883 -0.0211 0.0232 -0.01712  0.0149 -0.0645
-       sp9    sp10    sp11
-  0.009963 -0.0741 -0.0066
- -0.000322 -0.0302 -0.0297
+ variable     sp1     sp2    sp3     sp4    sp5      sp6      sp7       sp8
+     prec 0.00624  0.0394 0.0297 -0.0228 0.0422 -0.00295 -0.08145  0.000434
+     temp 0.01245 -0.0199 0.0218 -0.0255 0.0122 -0.00716 -0.00777 -0.037597
+      sp9    sp10    sp11
+  0.02124 -0.0925  0.0107
+ -0.00548 -0.0282 -0.0230
 
 ### REGENERATION
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable     sp1   sp2   sp3    sp4   sp5    sp6   sp7   sp8   sp9  sp10  sp11
-     prec 0.00331 0.923 0.148 1.1918 0.337 1.0344 0.501 0.294 0.677 0.701 1.169
-     temp 0.91140 0.144 0.564 0.0518 0.676 0.0754 0.860 0.452 0.423 0.360 0.132
+ variable     sp1    sp2   sp3     sp4   sp5      sp6   sp7    sp8   sp9  sp10
+     prec 0.00284 1.0194 0.223 0.89976 0.247 1.06e+00 0.458 0.0949 0.887 1.014
+     temp 0.90525 0.0876 0.554 0.00558 0.743 2.16e-05 0.921 1.3634 0.475 0.493
+  sp11
+ 1.307
+ 0.164
 
 Average conditional effects (mean; species in columns):
- variable   sp1    sp2   sp3    sp4    sp5   sp6    sp7     sp8   sp9   sp10
-     prec 0.143 -3.083 -1.33 -0.410 -0.794 0.487  0.500 0.00812 0.543  1.074
-     temp 2.604  0.766 -1.62  0.077 -0.644 0.125 -0.553 0.01056 0.389 -0.827
+ variable    sp1    sp2   sp3     sp4    sp5     sp6    sp7   sp8   sp9   sp10
+     prec 0.0935 -3.300 -1.61 -0.6449 -0.645  1.0405  0.693 0.106 0.684  1.122
+     temp 1.7789  0.585 -1.58 -0.0416 -0.702 -0.0043 -0.786 0.687 0.466 -0.834
    sp11
-  1.525
- -0.514
+  2.075
+ -0.739
 ```
 
 The niche and ALE sections below unpack this overview into per-driver response
@@ -371,32 +375,32 @@ comparison[order(variable, model)]
 #> Key: <variable, model>
 #>     variable                 model spearman_train spearman_holdout rmse_train
 #>       <fctr>                <char>          <num>            <num>      <num>
-#>  1:      dbh  Hybrid (growth = NN)           0.80             0.73      13.05
-#>  2:      dbh Process (mechanistic)           0.80             0.73      12.93
-#>  3:       ba  Hybrid (growth = NN)           0.80             0.79       0.12
-#>  4:       ba Process (mechanistic)           0.80             0.80       0.12
-#>  5:    trees  Hybrid (growth = NN)           0.78             0.77       0.75
-#>  6:    trees Process (mechanistic)           0.78             0.78       0.77
-#>  7:   growth  Hybrid (growth = NN)           0.58             0.50       0.09
-#>  8:   growth Process (mechanistic)           0.60             0.56       0.10
-#>  9:     mort  Hybrid (growth = NN)           0.18             0.04       0.15
-#> 10:     mort Process (mechanistic)           0.17             0.03       0.15
-#> 11:      reg  Hybrid (growth = NN)           0.23             0.23       6.20
-#> 12:      reg Process (mechanistic)           0.23             0.24       6.22
+#>  1:      dbh  Hybrid (growth = NN)           0.82             0.72      12.73
+#>  2:      dbh Process (mechanistic)           0.80             0.73      13.05
+#>  3:       ba  Hybrid (growth = NN)           0.81             0.81       0.12
+#>  4:       ba Process (mechanistic)           0.82             0.81       0.13
+#>  5:    trees  Hybrid (growth = NN)           0.79             0.79       0.75
+#>  6:    trees Process (mechanistic)           0.80             0.79       0.76
+#>  7:   growth  Hybrid (growth = NN)           0.59             0.54       0.09
+#>  8:   growth Process (mechanistic)           0.59             0.56       0.10
+#>  9:     mort  Hybrid (growth = NN)           0.16             0.03       0.15
+#> 10:     mort Process (mechanistic)           0.20             0.04       0.15
+#> 11:      reg  Hybrid (growth = NN)           0.26             0.26       6.21
+#> 12:      reg Process (mechanistic)           0.26             0.24       6.21
 #>     rmse_holdout
 #>            <num>
-#>  1:        13.89
-#>  2:        13.78
+#>  1:        14.16
+#>  2:        13.83
 #>  3:         0.09
 #>  4:         0.09
-#>  5:         0.77
-#>  6:         0.78
+#>  5:         0.79
+#>  6:         0.77
 #>  7:         0.10
-#>  8:         0.11
-#>  9:         0.16
-#> 10:         0.15
-#> 11:         6.47
-#> 12:         6.46
+#>  8:         0.10
+#>  9:         0.15
+#> 10:         0.16
+#> 11:         6.46
+#> 12:         6.47
 ```
 
 
@@ -585,7 +589,7 @@ sessionInfo()
 #> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 #> 
 #> locale:
-#> [1] C
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 #> 
 #> time zone: Europe/Berlin
 #> tzcode source: internal
@@ -594,7 +598,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       
+#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.2.0       
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       

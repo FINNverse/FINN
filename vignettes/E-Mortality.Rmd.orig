@@ -66,16 +66,19 @@ interval are in neither column; see `?makeObsData` for the open-cohort
 alternative.)
 
 ```{r load-data}
-ext <- function(f) system.file("extdata", f, package = "FINN")
+# The tables ship with FINN as datasets (?fia_obs_dt), already in FINN's input
+# format, so there is nothing to read or prepare.
 
-obs_dt     <- fread(ext("fia_obs_dt.csv"))
-env_dt     <- fread(ext("fia_env_dt.csv"))
-init_trees <- fread(ext("fia_init_trees.csv"))
-species_dt <- fread(ext("fia_species_dt.csv"))
+# --- training sites --------------------------------------------------------
+obs_dt     <- fia_obs_dt        # observations, wide (one column per variable)
+env_dt     <- fia_env_dt        # RAW, untransformed climate
+init_trees <- fia_init_trees
+species_dt <- fia_species_dt
 
-obs_test   <- fread(ext("fia_obs_test.csv"))
-env_test   <- fread(ext("fia_env_test.csv"))
-init_test  <- fread(ext("fia_init_test.csv"))
+# --- holdout sites: never seen during fitting ------------------------------
+obs_test   <- fia_obs_test
+env_test   <- fia_env_test
+init_test  <- fia_init_test
 
 obs_dt[, .(siteID, year, species_name, n_at_risk, n_died, mort)][n_at_risk > 0][1:6]
 ```

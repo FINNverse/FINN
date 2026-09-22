@@ -7,6 +7,16 @@ for 0.1.0 runs unchanged.
 
 ## New features
 
+* **Bundled Oregon FIA data as package datasets.** The calibration sample that
+  the `D-Fit_to_FIA` and `E-Mortality` vignettes fit on now ships as lazy-loaded
+  datasets in FINN's input format: `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`
+  (200 training sites), `fia_obs_test`, `fia_env_test`, `fia_init_test` (200
+  disjoint holdout sites) and `fia_species_dt` (the shared species coding). They
+  are ready for `fit()` / `makeInitCohorts()` without any file reading; see
+  `?fia_obs_dt`. The `fia_*.csv` files previously under `inst/extdata` are gone
+  (the xz-compressed datasets are ~120 KB versus ~2.2 MB of CSV); the
+  `example_*.csv` raw inputs for the data-preparation vignette stay.
+
 * **Per-predictor environmental scaling (`env_autoscale`).** Previously every
   environmental predictor was standardised the same way. `env_autoscale` now takes
   a per-predictor specification — `"auto"` (z-score, the default), `"identity"`

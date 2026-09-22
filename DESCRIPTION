@@ -27,6 +27,7 @@ Description: A hybrid dynamic forest (gap) model (FINN) that can be configured
     <doi:10.1111/2041-210x.70347>.
 License: GPL (>= 3)
 Encoding: UTF-8
+LazyData: true
 URL: https://github.com/FINNverse/FINN, https://finnverse.github.io/FINN/
 BugReports: https://github.com/FINNverse/FINN/issues
 Depends:

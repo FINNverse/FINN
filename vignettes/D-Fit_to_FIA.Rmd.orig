@@ -52,7 +52,7 @@ EPOCHS <- 500L
 
 The input tables are built by **`dev/make_extdata.R`**, which draws 400 sites
 from the full Oregon FIA set in `data-raw/` and splits them into two train and test data. 
-The **climate** (`fia_env_dt.csv`) was created in the FINN-fia
+The **climate** (`fia_env_dt`) was created in the FINN-fia
 analysis repo (`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`);
 see `data-raw/README.md` for the full chain.
 
@@ -60,18 +60,19 @@ The data consists of 200 sites to fit on, and 200
 holdout sites for evaluation. A fitted FINN model should generalize to other sites. So the holdout is a genuine out-of-sample test.
 
 ```{r load-data}
-ext <- function(f) system.file("extdata", f, package = "FINN")
+# The tables ship with FINN as datasets (?fia_obs_dt), already in FINN's input
+# format, so there is nothing to read or prepare.
 
 # --- training sites --------------------------------------------------------
-obs_dt     <- fread(ext("fia_obs_dt.csv"))     # observations, wide (one column per variable)
-env_dt     <- fread(ext("fia_env_dt.csv"))     # RAW, untransformed climate
-init_trees <- fread(ext("fia_init_trees.csv"))
-species_dt <- fread(ext("fia_species_dt.csv"))
+obs_dt     <- fia_obs_dt        # observations, wide (one column per variable)
+env_dt     <- fia_env_dt        # RAW, untransformed climate
+init_trees <- fia_init_trees
+species_dt <- fia_species_dt
 
 # --- holdout sites: never seen during fitting ------------------------------
-obs_test   <- fread(ext("fia_obs_test.csv"))
-env_test   <- fread(ext("fia_env_test.csv"))
-init_test  <- fread(ext("fia_init_test.csv"))
+obs_test   <- fia_obs_test
+env_test   <- fia_env_test
+init_test  <- fia_init_test
 
 # long form of the observations, so later we can match FINN's long predictions
 # (sim$long$site) with a single merge()

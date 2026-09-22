@@ -23,9 +23,10 @@ raw (untransformed) values live in `env_unscaled_dt.csv`.
 data-raw/*.csv
    │  dev/make_extdata.R        ← STEP 1: subsample + re-index
    ▼
-inst/extdata/  fia_obs_dt.csv, fia_env_dt.csv (RAW climate),
-               fia_init_trees.csv, fia_species_dt.csv,
-               example_tree_dt.csv, example_env_dt.csv
+data/          fia_obs_dt, fia_env_dt (RAW climate), fia_init_trees,
+               fia_obs_test, fia_env_test, fia_init_test, fia_species_dt
+               (package datasets, *.rda; documented in R/data.R)
+inst/extdata/  example_tree_dt.csv, example_env_dt.csv  (vignette C)
    │
    └─ vignettes/build.R         ← STEP 2: knit *.Rmd.orig -> *.Rmd
                                    (trains the models, bakes in results + figures)

@@ -9,17 +9,19 @@
 # inst/extdata/. Downstream: vignettes/build.R knits the vignettes, which train
 # the models inline (there are no .pt pre-fits or .rds caches any more).
 #
-# Source (data-raw/, ~18 MB, build-ignored) -> inst/extdata/ products:
+# Source (data-raw/, ~18 MB, build-ignored) -> inst/extdata/ + data/ products:
 #   Vignette "C-Data_preparation": a RAW tree list + matching env with
 #   siteName/patchName/OrigYear keys, so makeObsData -> resolveSiteIDs ->
 #   makeInitCohorts run live on the sample.
 #     - example_tree_dt.csv, example_env_dt.csv
-#   Vignette "D-Fit_to_FIA": ID-resolved tables, re-indexed (siteID 1..N,
-#   species 1..K) so they fit/simulate as-is, split into TRAIN and a disjoint
-#   HOLDOUT so the vignette can report out-of-sample performance.
-#     - train:   fia_obs_dt.csv, fia_env_dt.csv (RAW climate), fia_init_trees.csv
-#     - holdout: fia_obs_test.csv, fia_env_test.csv, fia_init_test.csv
-#     - shared:  fia_species_dt.csv  (species coding is derived from TRAIN)
+#   Vignettes "D-Fit_to_FIA" / "E-Mortality" (and the torch-gated tests):
+#   ID-resolved tables, re-indexed (siteID 1..N, species 1..K) so they
+#   fit/simulate as-is, split into TRAIN and a disjoint HOLDOUT so the vignettes
+#   can report out-of-sample performance. These ship as package DATASETS
+#   (data/*.rda, documented in R/data.R), not as CSVs:
+#     - train:   fia_obs_dt, fia_env_dt (RAW climate), fia_init_trees
+#     - holdout: fia_obs_test, fia_env_test, fia_init_test
+#     - shared:  fia_species_dt  (species coding is derived from TRAIN)
 #
 # Run from the package root:  Rscript dev/make_extdata.R
 suppressMessages({library(data.table); library(FINN)})
@@ -151,18 +153,27 @@ obs_f <- tr$obs                                   # reused by the report below
 species_f <- copy(sp_map)[, .(species, species_name)][order(species)]
 
 env_out_cols <- c("siteID", "year", env_vars)
+# Shipped as lazy-loaded package datasets (data/*.rda; docs in R/data.R). One
+# object per file, named exactly like the object, xz-compressed: the seven
+# tables are ~120 KB this way versus ~2.2 MB as CSVs. After re-running this,
+# R CMD INSTALL . before knitting the vignettes (vignettes/build.R checks).
+dir.create("data", showWarnings = FALSE)
+save_dataset <- function(x, name) {
+  assign(name, x)
+  save(list = name, file = file.path("data", paste0(name, ".rda")), compress = "xz")
+}
 # --- train ---
-fwrite(tr$obs,                     file.path(out, "fia_obs_dt.csv"))
-fwrite(tr$env[, ..env_out_cols],   file.path(out, "fia_env_dt.csv"))   # RAW units
-fwrite(tr$init,                    file.path(out, "fia_init_trees.csv"))
+save_dataset(tr$obs,                   "fia_obs_dt")
+save_dataset(tr$env[, ..env_out_cols], "fia_env_dt")      # RAW units
+save_dataset(tr$init,                  "fia_init_trees")
 # --- holdout (never seen during fitting) ---
-fwrite(te$obs,                     file.path(out, "fia_obs_test.csv"))
-fwrite(te$env[, ..env_out_cols],   file.path(out, "fia_env_test.csv"))
-fwrite(te$init,                    file.path(out, "fia_init_test.csv"))
+save_dataset(te$obs,                   "fia_obs_test")
+save_dataset(te$env[, ..env_out_cols], "fia_env_test")
+save_dataset(te$init,                  "fia_init_test")
 # --- shared species coding ---
-fwrite(species_f,                  file.path(out, "fia_species_dt.csv"))
-# note: no fia_env_scales_dt.csv — the model now stores the standardization
-# constants itself (m$env_scaling) when fit with env_autoscale = TRUE.
+save_dataset(species_f,                "fia_species_dt")
+# note: no env-scales table — the model stores the standardization constants
+# itself (m$env_scaling) when fit with env_autoscale = TRUE.
 
 ## ---------------------------------------------------------------------------
 ## Vignette 2 sample: RAW tree list + env for a few sites, keyed by siteName.

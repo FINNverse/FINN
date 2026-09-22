@@ -54,18 +54,27 @@ if (length(args)) {
 # reinstalling therefore knits the vignettes against stale data - silently, and
 # with results that look perfectly plausible. This has bitten twice; fail loudly
 # instead.
+# The same applies to the FIA datasets in data/: the installed package holds
+# them in a lazy-load DB, so compare the objects, not the files.
 local({
+  if (!nzchar(system.file(package = "FINN"))) stop("FINN is not installed - run R CMD INSTALL . first.")
+  stale <- character()
   src_dir <- "inst/extdata"
-  if (!dir.exists(src_dir)) return(invisible(NULL))
-  inst_dir <- system.file("extdata", package = "FINN")
-  if (!nzchar(inst_dir)) stop("FINN is not installed - run R CMD INSTALL . first.")
-  files <- list.files(src_dir)
-  stale <- files[!vapply(files, function(f) {
-    a <- file.path(src_dir, f); b <- file.path(inst_dir, f)
-    file.exists(b) && identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
-  }, logical(1))]
+  if (dir.exists(src_dir)) {
+    inst_dir <- system.file("extdata", package = "FINN")
+    files <- list.files(src_dir)
+    stale <- c(stale, files[!vapply(files, function(f) {
+      a <- file.path(src_dir, f); b <- file.path(inst_dir, f)
+      file.exists(b) && identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
+    }, logical(1))])
+  }
+  for (f in list.files("data", pattern = "\\.rda$")) {
+    e <- new.env(); nm <- load(file.path("data", f), envir = e)
+    inst <- tryCatch(getExportedValue("FINN", nm), error = function(err) NULL)
+    if (!identical(inst, e[[nm]])) stale <- c(stale, file.path("data", f))
+  }
   if (length(stale)) {
-    stop("installed inst/extdata is STALE vs this source tree:\n  ",
+    stop("installed FINN is STALE vs this source tree:\n  ",
          paste(stale, collapse = "\n  "),
          "\nRun `R CMD INSTALL . --no-docs` before knitting, or the vignettes ",
          "will silently train on old data.")

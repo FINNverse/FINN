@@ -29,15 +29,14 @@ toy_tree_dt <- function() {
   )
 }
 
-# Fit a tiny FINN model on a 4-site subset of the bundled FIA extdata (the real
+# Fit a tiny FINN model on a 4-site subset of the bundled FIA datasets (the real
 # input format). Torch-gated: callers MUST skip_if_no_torch() first. Returns the
 # fitted model together with the env / init_cohort it was fit on, so the
 # integration test and the xAI smoke tests can share one small, ~1s setup.
 fit_toy_finn <- function(epochs = 2L, n_sites = 4L) {
-  ext <- function(f) system.file("extdata", f, package = "FINN")
-  obs <- data.table::fread(ext("fia_obs_dt.csv"))
-  env <- data.table::fread(ext("fia_env_dt.csv"))
-  it  <- data.table::fread(ext("fia_init_trees.csv"))
+  obs <- FINN::fia_obs_dt
+  env <- FINN::fia_env_dt
+  it  <- FINN::fia_init_trees
 
   sites <- utils::head(sort(unique(obs$siteID)), n_sites)
   obs <- obs[siteID %in% sites]

@@ -23,10 +23,9 @@ build_sat_model <- function(logK_len, Nsp) {
 }
 
 sat_data <- function(n_sites = 4L) {
-  ext <- function(f) system.file("extdata", f, package = "FINN")
-  obs <- data.table::fread(ext("fia_obs_dt.csv"))
-  env <- data.table::fread(ext("fia_env_dt.csv"))
-  it  <- data.table::fread(ext("fia_init_trees.csv"))
+  obs <- FINN::fia_obs_dt
+  env <- FINN::fia_env_dt
+  it  <- FINN::fia_init_trees
   sites <- utils::head(sort(unique(obs$siteID)), n_sites)
   Nsp <- max(obs$species)
   list(obs = obs[siteID %in% sites], env = env[siteID %in% sites],

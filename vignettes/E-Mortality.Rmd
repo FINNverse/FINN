@@ -57,16 +57,19 @@ alternative.)
 
 
 ``` r
-ext <- function(f) system.file("extdata", f, package = "FINN")
+# The tables ship with FINN as datasets (?fia_obs_dt), already in FINN's input
+# format, so there is nothing to read or prepare.
 
-obs_dt     <- fread(ext("fia_obs_dt.csv"))
-env_dt     <- fread(ext("fia_env_dt.csv"))
-init_trees <- fread(ext("fia_init_trees.csv"))
-species_dt <- fread(ext("fia_species_dt.csv"))
+# --- training sites --------------------------------------------------------
+obs_dt     <- fia_obs_dt        # observations, wide (one column per variable)
+env_dt     <- fia_env_dt        # RAW, untransformed climate
+init_trees <- fia_init_trees
+species_dt <- fia_species_dt
 
-obs_test   <- fread(ext("fia_obs_test.csv"))
-env_test   <- fread(ext("fia_env_test.csv"))
-init_test  <- fread(ext("fia_init_test.csv"))
+# --- holdout sites: never seen during fitting ------------------------------
+obs_test   <- fia_obs_test
+env_test   <- fia_env_test
+init_test  <- fia_init_test
 
 obs_dt[, .(siteID, year, species_name, n_at_risk, n_died, mort)][n_at_risk > 0][1:6]
 #>    siteID  year          species_name n_at_risk n_died      mort
@@ -214,10 +217,10 @@ obs_pred[is.finite(obs) & is.finite(value),
          by = .(model, split)][order(split, model)]
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
-#> 1: Hybrid (mortality = NN) holdout     0.12   994
-#> 2:   Process (mechanistic) holdout     0.03   994
+#> 1: Hybrid (mortality = NN) holdout     0.08   994
+#> 2:   Process (mechanistic) holdout     0.04   994
 #> 3: Hybrid (mortality = NN)   train     0.19  1003
-#> 4:   Process (mechanistic)   train     0.17  1003
+#> 4:   Process (mechanistic)   train     0.20  1003
 ```
 
 **AUC** asks the question the binomial actually poses: does the model give a
@@ -250,10 +253,10 @@ auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
 auc_tab[order(split, -AUC)]
 #>                      model   split   AUC deaths at_risk
 #>                     <char>  <char> <num>  <int>   <int>
-#> 1: Hybrid (mortality = NN) holdout 0.573    727   10013
-#> 2:   Process (mechanistic) holdout 0.517    727   10013
+#> 1: Hybrid (mortality = NN) holdout 0.562    727   10013
+#> 2:   Process (mechanistic) holdout 0.511    727   10013
 #> 3: Hybrid (mortality = NN)   train 0.648    656    9907
-#> 4:   Process (mechanistic)   train 0.609    656    9907
+#> 4:   Process (mechanistic)   train 0.621    656    9907
 ```
 
 0.5 is coin-flipping, 1.0 is perfect ranking.
@@ -340,7 +343,7 @@ sessionInfo()
 #> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 #> 
 #> locale:
-#> [1] C
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 #> 
 #> time zone: Europe/Berlin
 #> tzcode source: internal
@@ -349,7 +352,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       
+#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.2.0       
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       
