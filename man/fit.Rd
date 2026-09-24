@@ -36,6 +36,8 @@ fit(
   anchor_mode = "replace",
   anchor_min_dbh = NULL,
   teacher_forcing = FALSE,
+  loss_resolution = c("site", "tree"),
+  tree_data = NULL,
   ...
 )
 }
@@ -236,6 +238,50 @@ last (nothing is conditioned on the final census, because nothing follows it).
 Only \code{fit()} teacher-forces; \code{predict()}/\code{simulateForest()} always simulate,
 so a teacher-forced model is still validated by single shooting.}
 
+\item{loss_resolution}{(\code{character(1)})\cr The resolution the \code{growth} and
+\code{mortality} terms are scored at. \code{"site"} (the default) is the validated path
+and is unchanged in every respect: both are per (site, census, species) cell.
+\code{"tree"} scores the same two responses per individual tree and \strong{replaces}
+the cell-resolution terms rather than adding to them — scoring one response
+twice under two independent weights is a redundancy the optimiser can trade
+against itself. Needs \code{tree_data}. The loss vector, \code{weights} and \verb{$history}
+keep their six positions and their meaning in both modes; only the resolution
+of positions 4 and 5 changes, and the likelihood family is the one \code{loss}
+names for them. \code{dbh}, \code{ba}, \code{trees} and \code{regeneration} are untouched —
+a recruit has no per-tree counterpart at all.
+
+The correspondence is carried by the cohort ids: a cohort keeps the flat index
+of the slot it was created in, so cohort \emph{j} of a generation is tree \emph{j} of the
+list that generation started from. Recruits get ids above that block and can
+never enter a residual. A generation starts at \code{init_cohort} and restarts at
+every anchor under \code{reanchor}/\code{teacher_forcing}; \code{anchor_mode = "merge"} keeps
+the carried sub-threshold cohorts out of it, which the anchor never saw.
+Growth is scored over the interval exactly as the aggregate term is, mortality
+as the compounded probability \code{1 - prod(1 - m)} against the tree's 0/1 fate —
+never the sampled death, which at \code{trees = 1} is a coin flip.
+
+The term does not depend on the fitting regime but its residual does: under
+\code{teacher_forcing} the kernel runs on the observed tree, so the residual is
+parameter error alone; under \code{reanchor} the cohort has drifted for at most one
+census interval; under single shooting for up to the whole horizon, and the
+tracked set shrinks with every simulated death. A cohort the model kills inside
+a window accumulates hazard over fewer years than the fate covers, which
+attenuates its predicted death probability; that is measured, not corrected —
+\verb{$tree_coverage} reports per census and epoch the fraction of target-bearing
+slots that survived the whole window, and \verb{$tree_pred$n} the per-slot years.}
+
+\item{tree_data}{(\code{list()})\cr Per-tree targets, named by the simulation
+timesteps to score trees at (entries of the model's internal \code{year_sequence}).
+Each entry is a list of two numeric arrays, \code{growth} and \code{mort}, with the
+dimensions of the cohort state at the \strong{start} of the interval that ends at
+that timestep — \code{init_cohort} under single shooting, the previous census's
+anchor under \code{reanchor}/\code{teacher_forcing}. Element \verb{[s, p, c]} is the tree
+cohort \verb{[s, p, c]} was built from, \code{NA} a tree with no observation. \code{growth}
+is on the scale of the aggregate \code{growth} response, i.e. ANNUAL — the aggregate
+response evaluated on one tree — while \code{mort} is the 0/1 fate over the whole
+interval, matched against the compounded probability. Recruits the model
+simulates have no slot and are never scored; recruitment stays a count.}
+
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
 \value{
@@ -264,7 +310,10 @@ trees), \code{growth}, \code{mortality} and \code{regeneration}. Following Pichl
 (2026), reasonable choices are mean squared error (\code{"mse"}, equivalent to a
 Gaussian likelihood) for \code{dbh} and \code{ba}, Poisson likelihood for \code{trees},
 negative binomial (\code{"nbinom"}) for \code{regeneration}, and \code{"mse"} for \code{growth} as
-a continuous rate. \code{mortality} is an observed \emph{proportion} of trees that died
+a continuous rate. Both rate responses are per YEAR: over a \code{period_length}
+window they are compared against the model's mean over that window, so an
+inventory interval has to be annualised before it becomes a target. \code{mortality}
+is an observed annual \emph{proportion} of trees that died
 and the model predicts it through a sigmoid, so it defaults to \code{"binomial"} —
 a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
 targets). This respects the [0, 1] support and the mean-variance link of a
