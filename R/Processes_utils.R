@@ -163,8 +163,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$dispersion_parameter = dispersion_parameter
   out$sample_regeneration = sample_regeneration
   out$NN = NN
-  out$upper = NULL
-  out$lower = NULL
+  out$upper = upper
+  out$lower = lower
   out$dropout = dropout
   out$n_quantiles = n_quantiles
   out$continuous = continuous
