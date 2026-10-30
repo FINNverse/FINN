@@ -1,0 +1,13 @@
+bibentry(
+  bibtype = "Article",
+  title   = "Inferring processes within dynamic forest models using hybrid modelling",
+  author  = c(person("Maximilian", "Pichler"),
+              person("Yannek", "Käber")),
+  journal = "Methods in Ecology and Evolution",
+  year    = "2026",
+  volume  = "17",
+  number  = "8",
+  pages   = "2477--2493",
+  doi     = "10.1111/2041-210X.70347",
+  header  = "To cite FINN in publications, please use:"
+)

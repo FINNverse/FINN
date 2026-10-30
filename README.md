@@ -70,3 +70,27 @@ lists them.
      whenever a vignette is renamed (they did once already, when these moved from
      .qmd to precompiled .Rmd), and GitHub shows the un-executed source anyway -
      no figures, no results. The site URLs survive renames. -->
+
+## How to cite FINN
+
+Please cite the paper describing the approach, not the software:
+
+> Pichler, M. & Käber, Y. (2026) Inferring processes within dynamic
+> forest models using hybrid modelling. *Methods in Ecology and
+> Evolution*, **17**, 2477–2493.
+> <https://doi.org/10.1111/2041-210X.70347>
+
+`citation("FINN")` prints this entry and its BibTeX form:
+
+``` bibtex
+@Article{,
+  title   = {Inferring processes within dynamic forest models using hybrid modelling},
+  author  = {Maximilian Pichler and Yannek Käber},
+  journal = {Methods in Ecology and Evolution},
+  year    = {2026},
+  volume  = {17},
+  number  = {8},
+  pages   = {2477--2493},
+  doi     = {10.1111/2041-210X.70347},
+}
+```
