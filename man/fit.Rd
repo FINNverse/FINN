@@ -31,6 +31,13 @@ fit(
   record_gradients = FALSE,
   env_autoscale = TRUE,
   clip_norm = 2,
+  reanchor = FALSE,
+  anchor_cohorts = NULL,
+  anchor_mode = "replace",
+  anchor_min_dbh = NULL,
+  teacher_forcing = FALSE,
+  loss_resolution = c("site", "tree"),
+  tree_data = NULL,
   ...
 )
 }
@@ -165,6 +172,116 @@ parameters. A single number (default \code{2.0}) applies the same budget to
 every group; a named list/vector keyed by \code{"mechanistic"}/\code{"nn"}/\code{"loss"}
 overrides individual groups, e.g. \code{clip_norm = list(loss = 5, nn = 1)}.}
 
+\item{reanchor}{(\code{logical(1)})\cr Fit by \strong{multiple shooting} instead of single
+shooting. With the default \code{FALSE} the cohort state is initialised once from
+\code{init_cohort} and then runs free over the whole horizon, so simulation error
+compounds across every observation. With \code{TRUE} the simulated state is
+discarded at every timestep for which \code{anchor_cohorts} supplies an observed
+tree list and rebuilt from it, after that timestep's loss has been
+backpropagated — drift is then bounded by one inter-census segment. This is
+not the same as the gradient truncation controlled by \code{update_step}, which
+cuts the gradient but keeps the state; set \code{update_step} to the segment length
+to let the gradient span the whole segment.}
+
+\item{anchor_cohorts}{(\code{list()})\cr Named list of \link{CohortMat} objects, the
+observed state to restart from. Names are the simulation timesteps to
+re-anchor at (integers as characters, and entries of the model's internal
+\code{year_sequence}, i.e. timesteps that carry an observation). Every anchor must
+have the same number of species, sites and patches as \code{init_cohort}; the
+number of cohorts may differ between anchors and from \code{init_cohort}. The last
+observation year needs no anchor — nothing is simulated after it — and an
+anchor may not fall inside another observation's \code{period_length} window,
+because the aggregated rates would then mix pre- and post-anchor state.
+\code{fit()} copies the anchors onto its own device and never modifies them, so one
+list can be reused across fits. Ignored unless \code{reanchor = TRUE}.
+
+\strong{Build the arrays directly} —
+\code{CohortMat(dbh = , trees = , species = , dims = , sp = )} — rather than via
+\code{CohortMat(obs_df = )}. The \code{obs_df} path runs \code{obsDF2arrays()}, which rounds
+\code{trees} to whole stems and silently renumbers any \code{siteID}/\code{patchID} that is
+not a complete \code{1:n} sequence; on a simulated or partly empty stand that
+corrupts the anchor, and a renumbered site no longer aligns with \code{init_cohort}.}
+
+\item{anchor_mode}{(\code{character(1)})\cr What an anchor does to the simulated state.
+\code{"replace"} (default) overwrites it wholesale. \code{"merge"} keeps the simulated
+cohorts with \code{dbh < anchor_min_dbh} and concatenates them with the full anchor.
+Use \code{"merge"} whenever the inventory has a minimum-dbh threshold (FIA: 12.7 cm):
+an anchor built from it contains no small trees, so \code{"replace"} deletes FINN's
+entire regeneration pool at every census — on FIA that inflates 200-year
+equilibrium basal area by 41\%. Nothing is double counted, because the
+observation is complete at and above the threshold. Ignored unless
+\code{reanchor = TRUE}.}
+
+\item{anchor_min_dbh}{(\code{numeric(1)})\cr The inventory's minimum-dbh threshold, in
+the units of the \code{dbh} column. Required by \code{anchor_mode = "merge"}, ignored by
+\code{"replace"}.}
+
+\item{teacher_forcing}{(\code{logical(1)})\cr Fit by \strong{direct estimation} instead of
+by simulation, and never run a trajectory at all. The cohort state is reset at
+\strong{every} timestep to the observed stand at the census that STARTS that
+timestep's observation interval — \code{init_cohort} for the first interval, then
+\code{anchor_cohorts} — so each year's demographic rates are evaluated at an
+observed state and the simulated state is never carried forward. The interval
+rates are then aggregated over the window and scored exactly as \code{fit()}
+already scores them, so growth, mortality and regeneration keep their usual
+meaning. The three STATE responses (\code{dbh}, \code{ba}, \code{trees}) \strong{leave the loss}:
+predicting them requires a trajectory, and there is none here.
+
+Mutually exclusive with \code{reanchor}, which is a different estimator:
+re-anchoring still free-runs the whole segment between two censuses and scores
+where it lands. \code{update_step} is inert under teacher forcing — there is no
+multi-year trajectory to truncate — and the anchor validation refuses any
+\code{update_step} that would change which observations are scored.
+
+\code{anchor_cohorts} must supply an anchor for every observed timestep except the
+last (nothing is conditioned on the final census, because nothing follows it).
+Only \code{fit()} teacher-forces; \code{predict()}/\code{simulateForest()} always simulate,
+so a teacher-forced model is still validated by single shooting.}
+
+\item{loss_resolution}{(\code{character(1)})\cr The resolution the \code{growth} and
+\code{mortality} terms are scored at. \code{"site"} (the default) is the validated path
+and is unchanged in every respect: both are per (site, census, species) cell.
+\code{"tree"} scores the same two responses per individual tree and \strong{replaces}
+the cell-resolution terms rather than adding to them — scoring one response
+twice under two independent weights is a redundancy the optimiser can trade
+against itself. Needs \code{tree_data}. The loss vector, \code{weights} and \verb{$history}
+keep their six positions and their meaning in both modes; only the resolution
+of positions 4 and 5 changes, and the likelihood family is the one \code{loss}
+names for them. \code{dbh}, \code{ba}, \code{trees} and \code{regeneration} are untouched —
+a recruit has no per-tree counterpart at all.
+
+The correspondence is carried by the cohort ids: a cohort keeps the flat index
+of the slot it was created in, so cohort \emph{j} of a generation is tree \emph{j} of the
+list that generation started from. Recruits get ids above that block and can
+never enter a residual. A generation starts at \code{init_cohort} and restarts at
+every anchor under \code{reanchor}/\code{teacher_forcing}; \code{anchor_mode = "merge"} keeps
+the carried sub-threshold cohorts out of it, which the anchor never saw.
+Growth is scored over the interval exactly as the aggregate term is, mortality
+as the compounded probability \code{1 - prod(1 - m)} against the tree's 0/1 fate —
+never the sampled death, which at \code{trees = 1} is a coin flip.
+
+The term does not depend on the fitting regime but its residual does: under
+\code{teacher_forcing} the kernel runs on the observed tree, so the residual is
+parameter error alone; under \code{reanchor} the cohort has drifted for at most one
+census interval; under single shooting for up to the whole horizon, and the
+tracked set shrinks with every simulated death. A cohort the model kills inside
+a window accumulates hazard over fewer years than the fate covers, which
+attenuates its predicted death probability; that is measured, not corrected —
+\verb{$tree_coverage} reports per census and epoch the fraction of target-bearing
+slots that survived the whole window, and \verb{$tree_pred$n} the per-slot years.}
+
+\item{tree_data}{(\code{list()})\cr Per-tree targets, named by the simulation
+timesteps to score trees at (entries of the model's internal \code{year_sequence}).
+Each entry is a list of two numeric arrays, \code{growth} and \code{mort}, with the
+dimensions of the cohort state at the \strong{start} of the interval that ends at
+that timestep — \code{init_cohort} under single shooting, the previous census's
+anchor under \code{reanchor}/\code{teacher_forcing}. Element \verb{[s, p, c]} is the tree
+cohort \verb{[s, p, c]} was built from, \code{NA} a tree with no observation. \code{growth}
+is on the scale of the aggregate \code{growth} response, i.e. ANNUAL — the aggregate
+response evaluated on one tree — while \code{mort} is the 0/1 fate over the whole
+interval, matched against the compounded probability. Recruits the model
+simulates have no slot and are never scored; recruitment stays a count.}
+
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
 \value{
@@ -193,7 +310,10 @@ trees), \code{growth}, \code{mortality} and \code{regeneration}. Following Pichl
 (2026), reasonable choices are mean squared error (\code{"mse"}, equivalent to a
 Gaussian likelihood) for \code{dbh} and \code{ba}, Poisson likelihood for \code{trees},
 negative binomial (\code{"nbinom"}) for \code{regeneration}, and \code{"mse"} for \code{growth} as
-a continuous rate. \code{mortality} is an observed \emph{proportion} of trees that died
+a continuous rate. Both rate responses are per YEAR: over a \code{period_length}
+window they are compared against the model's mean over that window, so an
+inventory interval has to be annualised before it becomes a target. \code{mortality}
+is an observed annual \emph{proportion} of trees that died
 and the model predicts it through a sigmoid, so it defaults to \code{"binomial"} —
 a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
 targets). This respects the [0, 1] support and the mean-variance link of a
