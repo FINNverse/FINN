@@ -7,7 +7,7 @@ automatically (see below), not by hand.
 
 <!-- AUTO-MAINTAINED: the `project-progress` skill refreshes the table below from
      git history. Do not hand-edit; if something looks wrong, fix it in a session
-     and it will be kept current. Last refreshed: 2026-09-12. -->
+     and it will be kept current. Last refreshed: 2026-09-22. -->
 
 ## Contributors
 
@@ -23,9 +23,8 @@ Best-effort attribution from git history; refined over time by the skill.
 | Hybrid / neural-network processes (Level-1 & Level-2, transformer/DNN) | Maximilian | core of the MEE 2026 method paper |
 | Core model & mechanistic processes (`finn-class`, `Processes`) | both | growth/mortality/regeneration/competition + forward pass |
 | Calibration features (`env_autoscale`, `custom_parameters`, saturating regeneration, `recruit_obs_weight`, `growth_period_scale`, per-site aggregation windows for mixed remeasurement intervals) | Yannek | the 0.2.0 additions; per-site windows PR #17 |
-| Observation/loss API (`loss_family`, `loss_aggregation`: per-tree growth & mortality, size classes, dbh quantiles; `predictTrees`; persistent cohort ids) and `regeneration_adult` | Yannek | branch `loss-aggregation`, not yet merged |
-| Training regimes: `fit(shooting = "multiple")` (re-anchoring to the observed tree list at every census, interval-long gradient, tracked per-tree terms) | Yannek (design study of the four regimes: Max) | branch `loss-aggregation`, 7e99d52 |
+| Observation/loss API (`loss_family`, `loss_aggregation`: per-tree growth & mortality, size classes, dbh quantiles; `predictTrees`; persistent cohort ids) and `regeneration_adult` | Yannek | branch `loss-aggregation`, merged into `main` with `reanchor`/`teacher_forcing`/`loss_resolution` (design study of the training regimes: Max) |
 | CRAN packaging & release (DESCRIPTION, NEWS, cran-comments, review fixes) | Yannek | maintainer |
-| Data interface (`makeObsData`/`resolveSiteIDs`/`makeInitCohorts`, extdata) | both | |
+| Data interface (`makeObsData`/`resolveSiteIDs`/`makeInitCohorts`, extdata) and the bundled `fia_*` datasets | both (datasets: Yannek) | FIA sample as lazy-loaded data |
 | Vignettes & docs | both | precompiled vignettes, pkgdown, README |
 | Collaboration / Claude Code setup | Yannek | shared CLAUDE.md, skills, hooks, claude-config |

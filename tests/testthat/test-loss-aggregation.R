@@ -185,6 +185,22 @@ test_that("one non-finite response no longer discards the other five", {
   expect_true(all(h[c(1, 2, 4, 5, 6)] > 0))   # the other responses still scored
 })
 
+test_that("nonfinite = 'skip_step' discards the whole timestep instead", {
+  bad <- copy(obs)[, trees := -1]
+  expect_warning(m <- run_fit(loss_family = replace(LOSS, "trees", "poisson"), data = bad,
+                              nonfinite = "skip_step"),
+                 "discarded the whole timestep")
+  h <- as.numeric(m$history[[1]])
+  expect_true(m$nonfinite_counts[3] > 0)
+  # every observation here carries the broken term, so nothing was scored at all
+  expect_true(all(is.na(h) | h == 0))
+  # with finite losses the two modes are the same fit
+  a <- run_fit(loss_family = LOSS)
+  b <- run_fit(loss_family = LOSS, nonfinite = "skip_step")
+  expect_identical(a$history, b$history)
+  expect_identical(lapply(a$parameters, as.numeric), lapply(b$parameters, as.numeric))
+})
+
 test_that("predictTrees returns one prediction per observed tree", {
   tree_dt <- data.table(expand.grid(siteID = 1:Nsites, year = c(3L, 6L), patchID = 1:2, slot = 1:4))
   tree_dt[, `:=`(species = rep_len(1:Nsp, .N), dbh = rep_len(c(8, 16, 24, 32), .N),

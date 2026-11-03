@@ -76,8 +76,7 @@ test_that("gradients reach the adult threshold and the half-saturation density",
 
 test_that("regeneration_adult fits, and its parameters move", {
   skip_if_no_torch()
-  ext <- function(f) system.file("extdata", f, package = "FINN")
-  obs <- fread(ext("fia_obs_dt.csv")); env <- fread(ext("fia_env_dt.csv")); it <- fread(ext("fia_init_trees.csv"))
+  obs <- copy(FINN::fia_obs_dt); env <- copy(FINN::fia_env_dt); it <- copy(FINN::fia_init_trees)
   sites <- head(sort(unique(obs$siteID)), 4L)
   Nsp <- max(obs$species)
   m <- build_adult_model(Nsp)

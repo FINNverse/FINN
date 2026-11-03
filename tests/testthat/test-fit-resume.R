@@ -10,8 +10,7 @@ library(data.table)
 # Torch-gated; tiny FIA subset.
 
 resume_setup <- function() {
-  ext <- function(f) system.file("extdata", f, package = "FINN")
-  obs <- fread(ext("fia_obs_dt.csv")); env <- fread(ext("fia_env_dt.csv")); it <- fread(ext("fia_init_trees.csv"))
+  obs <- copy(FINN::fia_obs_dt); env <- copy(FINN::fia_env_dt); it <- copy(FINN::fia_init_trees)
   sites <- head(sort(unique(obs$siteID)), 4L)
   Nsp <- max(obs$species)
   list(obs = obs[siteID %in% sites], env = env[siteID %in% sites],

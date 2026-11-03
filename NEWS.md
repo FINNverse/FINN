@@ -7,6 +7,45 @@ for 0.1.0 runs unchanged.
 
 ## New features
 
+* **Bundled Oregon FIA data as package datasets.** The calibration sample that
+  the `D-Fit_to_FIA` and `E-Mortality` vignettes fit on now ships as lazy-loaded
+  datasets in FINN's input format: `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`
+  (200 training sites), `fia_obs_test`, `fia_env_test`, `fia_init_test` (200
+  disjoint holdout sites) and `fia_species_dt` (the shared species coding). They
+  are ready for `fit()` / `makeInitCohorts()` without any file reading; see
+  `?fia_obs_dt`. The `fia_*.csv` files previously under `inst/extdata` are gone
+  (the xz-compressed datasets are ~120 KB versus ~2.2 MB of CSV); the
+  `example_*.csv` raw inputs for the data-preparation vignette stay.
+
+* **Scoring individual trees, two ways.** `fit()` can score `growth` and
+  `mortality` per observed tree instead of per site, species and census. Both
+  options take the same tree table in `tree_data` (one row per tree and census:
+  `siteID`, `year`, `patchID`, `species`, `growth`, `died`, ...) and are chosen
+  explicitly: `loss_aggregation = c(growth = "tree", mortality = "tree")`
+  predicts each OBSERVED tree (its measured `dbh`, light from the observed
+  stand; the responses can be chosen separately and the initial cohorts may be
+  binned), while `loss_resolution = "tree"` predicts each SIMULATED cohort that
+  started as an observed tree along the model's own trajectory (needs a
+  `cohortID` column and one initial cohort per tree; combines with `reanchor`
+  and `teacher_forcing`). `loss_resolution = "tree"` no longer takes a list of
+  per-timestep target arrays — fit() builds those from the table and refuses
+  any row it cannot place on an initial cohort. See `?fit`, section *Scoring
+  individual trees*, for the comparison. The two cannot be combined on one
+  response. `predictTrees()` evaluates the first option on a fitted model.
+
+* **Training regimes: `reanchor` and `teacher_forcing`.** Multiple shooting
+  (`reanchor = TRUE` with `anchor_cohorts`, optionally `anchor_mode = "merge"`
+  below `anchor_min_dbh`) rebuilds the simulated stand from the observed tree
+  list at every census; `teacher_forcing = TRUE` resets it every year. The
+  development branch's `fit(shooting = "multiple")`, which re-anchored to the
+  tree table itself, was dropped before release in favour of these.
+
+* **`fit(nonfinite = )`.** When one of the six loss terms is not finite at a
+  timestep, `"drop_term"` (the default) leaves only that term out, still
+  backpropagates the other responses there and counts the occurrences in
+  `model$nonfinite_counts`; `"skip_step"` discards the whole timestep, which is
+  what earlier versions did.
+
 * **Per-predictor environmental scaling (`env_autoscale`).** Previously every
   environmental predictor was standardised the same way. `env_autoscale` now takes
   a per-predictor specification — `"auto"` (z-score, the default), `"identity"`
