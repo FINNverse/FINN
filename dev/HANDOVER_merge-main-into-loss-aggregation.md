@@ -135,25 +135,93 @@ processes, same seeds, `shuffle = FALSE`, `identical()` on `$history`,
 - A bug in the first merge draft (`tree_gen_base` became double after an anchor →
   `scatter_add` dtype error) was fixed before the merge commit.
 
+## Discussion Yannek – Max, 2026-11-03 (for the record)
+
+Max and Yannek talked through the two branches after the merge. What came out:
+
+**1. Tree-level loss, tracked cohorts (`loss_resolution = "tree"`).** Agreed
+principle: one cohort is one tree, tracked over the whole census interval.
+Max's implementation has a known bias: a tree that dies inside the window drops
+out of the accumulators at once, so the growth term is computed only from trees
+that survive (and mortality accumulates hazard over fewer years). Yannek's
+removed `shooting = "multiple"` kept killed anchored trees in the tracked set
+(slots kept at `trees = 0`), which avoids this. Decision: use Yannek's solution
+here, possibly combined with Max's: record the year a tracked tree dies and use
+it to correct the growth rate (and the mortality exposure) instead of dropping
+the tree. **Not implemented in the merge yet** — the merge contains Max's
+version unchanged (it reports the bias as `$tree_coverage`).
+
+**2. Multiple shooting vs teacher forcing.** Same idea in both branches: reset
+the simulated state to the observed census. Teacher forcing in the strict sense
+predicts each next step from the previous OBSERVED state; multiple shooting
+re-anchors at each census and free-runs between censuses. The merge keeps
+main's `reanchor` / `teacher_forcing`.
+
+**3. Yannek's observed-tree scoring (`loss_aggregation = "tree"`) is a
+conditional / PPA-like estimator.** Max pointed out what it actually does: the
+model simulates the interval for the stand variables (dbh, basal area, stems),
+but the per-tree growth and mortality terms are computed by applying the process
+functions to the OBSERVED start-of-interval census, with light from competition
+at the interval start. The simulated trajectory itself does not enter those
+terms; only the fitted competition parameters do. This is close to a PPA
+(perfect plasticity approximation) style prefit for growth and mortality, which
+would not need the simulation at all, so as implemented it costs a full
+simulation without using it for these terms. The approach exists in the
+literature but is debated: the criticism is that it ignores the trajectory
+(a paper Max will send; the conditioning issue is also discussed in Oberpriller
+et al. 2021, Ecology Letters 24:1251–1261). Yannek's motivation: avoid comparing
+an observed growth rate with one produced under simulated light that is wrong
+because mortality in the simulation removed the neighbours.
+- Options discussed: (a) keep it as an explicit variant; (b) turn it into a real
+  PPA variant — estimate light competition from the observed stand, prefit the
+  processes, no training through trajectories (cheap). Note that Yannek's BWI
+  stage 1 (`FINN-bwi/fits/2026-11-02-stage1-finnproc-mgmt-lag`) is already
+  exactly such a prefit (light from the observed stand, process functions
+  evaluated per year, no trajectory).
+- Consequence for the BWI paper: the final model's stage-2 mortality term uses
+  this conditional scoring (growth is the cell-level aggregate of the simulated
+  trajectory). Both expected the paper's results not to change much; a direct
+  comparison of observed-tree vs tracked-cohort scoring on BWI is running
+  (`FINN-bwi/fits/2026-11-03-stage2-pertree-{observed,simulated}`). The methods
+  section must describe the conditional scoring explicitly.
+
+**4. Agreed restructuring of the fitting interface.** Rework the two branches
+so that three choices are clearly separate and orthogonal:
+1. trajectory regime: single shooting vs teacher forcing / re-anchoring;
+2. loss resolution: aggregated (site × species × census) vs tree level;
+3. the conditional (observed-stand) scoring kept as a separate, explicitly named
+   variant, or moved into a PPA-style prefit.
+
+The open question is the argument names.
+
+**5. Division of work.** Max disentangles and restructures the branches on top
+of this merge (after his abstract deadline) and then has the combined version
+tested extensively on BWI, BCI and the other data sets. Yannek writes the
+methods (data preparation etc.) and drafts figures for the BWI drought paper;
+figures to be discussed together.
+
 ## Open points for you
 
 1. **Review the merge**, in particular the tree-loss slot remap in `forward()` and
    `build_tree_targets()`, then decide when to merge into `main` (PR).
-2. **Naming.** The two per-tree options live on two arguments. Unifying them on
-   `loss_aggregation` (e.g. `"tree"` for the observed-tree scoring and
-   `"tree_tracked"` for yours) would be easier to explain, but renames your
-   argument. Not done; your call.
-3. **Per-site anchoring.** Yannek's removed `shooting = "multiple"` anchored each
+2. **Restructure the interface** as agreed (discussion point 4): trajectory
+   regime × loss resolution, with the conditional observed-stand scoring as a
+   separately named variant or a PPA-style prefit. This supersedes the naming
+   question of the two per-tree options.
+3. **Dead trees in tracked-cohort scoring** (discussion point 1): keep killed
+   cohorts in the tracked set and record their death year to correct growth and
+   mortality exposure, instead of dropping them.
+4. **Per-site anchoring.** Yannek's removed `shooting = "multiple"` anchored each
    site at the start of its own interval and kept the gradient over the whole
    interval; `reanchor` anchors globally by timestep and needs `update_step` to
    divide the interval. Worth porting if inventories with heterogeneous
    intervals use `reanchor`.
-4. **`loss_aggregation = "tree"` only runs on the per-site path**
+5. **`loss_aggregation = "tree"` only runs on the per-site path**
    (`period_mode = "per_site"`); lifting it into the constant-period branch would
    remove a usability trap.
-5. **`anchor_cohorts` as a table** (converted with `makeInitCohorts()`), for
+6. **`anchor_cohorts` as a table** (converted with `makeInitCohorts()`), for
    consistency with `tree_data`. Not done.
-6. `R CMD check --as-cran` and a pkgdown build have not been run on the merge;
+7. `R CMD check --as-cran` and a pkgdown build have not been run on the merge;
    the precompiled vignettes were not rebuilt.
 
 ## Context: what depends on this (FINN-bwi)
