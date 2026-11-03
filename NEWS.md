@@ -84,6 +84,18 @@ for 0.1.0 runs unchanged.
   recruitment to what an inventory actually records — a building block for the
   inventory simulator.
 
+## Behaviour changes
+
+* **Growth enters `mortality()` in %/yr.** The default mortality process now
+  uses `growth / growth_scale` with `growth_scale = 0.01`, so the growth
+  coefficient `parMort[, 3]` acts per 1 %/yr of annual relative growth. On the
+  raw rate the term spanned only a few tenths on the logit between slow and fast
+  trees even at the coefficient bound of -10 (in the BWI calibration 13 of 15
+  species sat at that bound). This is the one default that does not reproduce
+  0.1.0: pass `growth_scale = 1` through a custom process function to recover
+  the old behaviour. Saved models keep the process function they were fitted
+  with.
+
 ## Bug fixes
 
 * `createProcess(NN = ...)` is no longer silently dropped inside `create_nn()`.

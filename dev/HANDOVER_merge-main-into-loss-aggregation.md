@@ -135,6 +135,19 @@ processes, same seeds, `shuffle = FALSE`, `identical()` on `$history`,
 - A bug in the first merge draft (`tree_gen_base` became double after an anchor →
   `scatter_add` dtype error) was fixed before the merge commit.
 
+## Added after the merge (2026-11-03): growth in %/yr inside `mortality()`
+
+`FINN::mortality()` now uses `growth / growth_scale` with `growth_scale = 0.01`
+(Yannek's decision: this is the new default). On the raw rate the growth term
+spanned only ~0.3 on the logit between a slow and a fast tree even at the
+coefficient bound of −10, and in the BWI calibration 13 of 15 species sat at that
+bound. This is the one default that no longer reproduces 0.1.0 / `loss-aggregation`
+6497d01 bit for bit (the earlier bit-identity checks predate it); saved models keep
+the process function they were fitted with. `test-reanchor.R` "the cohort state is
+replaced by the anchor" now asks for > 80 % (was 90 %) of the trees in the
+anchored species, since the random initial growth coefficients act 100× more
+strongly. A test of the scaling is in `test-processes.R`. See NEWS.md.
+
 ## Discussion Yannek – Max, 2026-11-03 (for the record)
 
 Max and Yannek talked through the two branches after the merge. What came out:

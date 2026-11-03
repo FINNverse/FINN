@@ -108,8 +108,10 @@ test_that("the cohort state is replaced by the anchor, not carried forward", {
   # only timestep 2 is anchored, not every observation year (timestep 3 is the last
   # one, nothing is simulated after it), so the year-3 state is the anchor evolved by
   # one year: anchored on species 2 only, it must be dominated by species 2
+  # (0.885 since mortality() takes growth in %/yr, growth_scale = 0.01: the random
+  # initial growth coefficients now act 100x more strongly; 0.8 still means dominated)
   a3 = species_trees(anch$model, 3)
-  expect_gt(a3[species == 2, trees] / sum(a3$trees), 0.9)
+  expect_gt(a3[species == 2, trees] / sum(a3$trees), 0.8)
   # ... and that is not what the free-running state does
   f3 = species_trees(free$model, 3)
   expect_gt(a3[species == 2, trees], 10 * f3[species == 2, trees])

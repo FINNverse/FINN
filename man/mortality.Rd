@@ -13,7 +13,8 @@ mortality(
   light,
   base_steepness = 5,
   debug = FALSE,
-  growth = NULL
+  growth = NULL,
+  growth_scale = 0.01
 )
 }
 \arguments{
@@ -34,6 +35,14 @@ mortality(
 \item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
 
 \item{growth}{torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.}
+
+\item{growth_scale}{numeric Growth enters the logit as \code{growth / growth_scale}.
+The default 0.01 expresses the annual relative growth in \%/yr (about one
+standard deviation of observed growth), so that the growth coefficient
+\code{parMort[, 3]} acts per 1 \%/yr and its bounds of +-10 allow a meaningful
+effect. With the raw rate (\code{growth_scale = 1}, the behaviour before 0.2.0)
+the term spans only a few tenths on the logit between slow and fast trees
+even at the bound.}
 }
 \value{
 A \code{torch} tensor of per-cohort mortality probabilities; or, if

@@ -207,11 +207,18 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #' @param base_steepness numeric Steepness of the shade-response sigmoid. Defaults to 5.
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #' @param growth torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.
+#' @param growth_scale numeric Growth enters the logit as `growth / growth_scale`.
+#'   The default 0.01 expresses the annual relative growth in %/yr (about one
+#'   standard deviation of observed growth), so that the growth coefficient
+#'   `parMort[, 3]` acts per 1 %/yr and its bounds of +-10 allow a meaningful
+#'   effect. With the raw rate (`growth_scale = 1`, the behaviour before 0.2.0)
+#'   the term spans only a few tenths on the logit between slow and fast trees
+#'   even at the bound.
 #'
 #' @return A `torch` tensor of per-cohort mortality probabilities; or, if
 #'   `debug = TRUE`, a list of the intermediate components.
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL) {
+mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL, growth_scale = 0.01) {
   if(is.null(growth)) growth = self$g
   if(self$record_raws) {
     self$raw_m = c(self$raw_m,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
@@ -221,7 +228,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
                                                                      species$unsqueeze(4)$float()), dim = 4)) ))
   }
 
-  environment = torch::torch_sigmoid(pred+growth*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
+  environment = torch::torch_sigmoid(pred+growth/growth_scale*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
   predM = environment
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM)
   else out = predM
