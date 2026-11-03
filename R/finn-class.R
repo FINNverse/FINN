@@ -2112,6 +2112,16 @@ finn_class = nn_module(
     # Two ways to score single trees exist side by side and ask different
     # questions (observed vs simulated tree, see ?fit); the same response cannot
     # be scored both ways in one fit.
+    # Retention keeps a killed tracked cohort in the array with trees = 0. Every stand
+    # reduction weights by stem number and drops it -- except the height quantile of the
+    # BINNED competition, which counts slots. Measured on a one-patch stand, the same live
+    # cohorts with and without ghosts beside them: without the mask a live cohort's light
+    # moves by up to 1.00 (fully shaded to open); with it, by 0 exactly, in every cell of a
+    # 3 x 5 x 20 grid (experiments/2026-11-03-fitmatrix/ghost_light.R). So the tree term is
+    # only inert on the trajectory under a masked or unbinned light.
+    if (tree_res && !isTRUE(self$continuous) && !isTRUE(self$light_mask))
+      warning("loss_resolution = \"tree\" keeps a cohort the simulation kills in the array until its interval ends, and the binned competition takes its height quantiles over every slot, so those cohorts move the light of the living ones -- by up to 1.00 in a one-patch test. Use createProcess(light_mask = TRUE) or continuous = TRUE for the competition process, or the per-tree term changes the trajectory it is scoring.",
+              call. = FALSE)
     if (tree_res && any(vapply(self$loss_agg[c("growth", "mortality")], function(a) identical(a$type, "tree"), logical(1))))
       stop("`loss_resolution = \"tree\"` (the simulated cohort each tree started as) cannot be combined with `loss_aggregation = \"tree\"` for growth or mortality (the observed tree); choose one of the two ways of scoring individual trees.", call. = FALSE)
     auto_weights = is.character(weights) && length(weights) == 1L && identical(weights, "auto")

@@ -153,7 +153,10 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
                                 torch::torch_full_like(cohortHeights, NaN))
            else cohortHeights
       cohortHeights_quant = if(isTRUE(light_mask))
-        torch::torch_nanquantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
+        # a patch whose cohorts are all dead has an all-NaN slice and no quantile;
+        # its basal area is zero, so edges of 0 put everything in the top bin and
+        # give the empty patch full light, which is the right answer.
+        torch::torch_nanquantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))$nan_to_num(nan = 0)
         else torch::torch_quantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
       indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L)$contiguous(), cohortHeights$squeeze(4), right = TRUE) + 1L
       # Calculation of comp

@@ -427,3 +427,11 @@ test_that("the per-tree terms carry a gradient to the growth and mortality kerne
     expect_equal(gr(m, "nn_regeneration.0.weight"), 0)   # regeneration stays a count
   }
 })
+
+test_that("tracked tree scoring warns when the binned light is unmasked", {
+  skip_if_no_torch()
+  # Retention is inert on the stand only if the dead-but-tracked cohorts are kept out
+  # of the height quantiles; see experiments/2026-11-03-fitmatrix/ghost_light.R.
+  d = tll$obs(4L, 4L)
+  expect_warning(tll$fit(d, tll$table(4L)), "light_mask")
+})
