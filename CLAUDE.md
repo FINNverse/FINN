@@ -39,6 +39,14 @@ discovers it automatically:
   do. Volatile facts (versions, release status) are NOT stored here; read them
   from `DESCRIPTION`/`NEWS.md`.
 
+## Branch `merge-main-into-loss-aggregation` (handover, 2026-11-03)
+
+This branch merges `main` into `loss-aggregation`. Before working on it, read
+`dev/HANDOVER_merge-main-into-loss-aggregation.md`: the decisions on the
+overlapping features, the `tree_data` table interface, the `nonfinite` option,
+the bit-for-bit checks and the open points. Remove this section once the branch
+is merged into `main`.
+
 ## Golden rules (do not violate)
 
 1. **Never `git add -A`, `git add --all`, or `git add .`** in this repo. It has
