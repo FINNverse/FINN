@@ -472,7 +472,11 @@ finn = function(N_species,
 #'   sample does not depend on the parameters. `$tree_deaths` reports per census and
 #'   epoch how often the simulation killed a tree the inventory found alive
 #'   (`frac_killed`) and in which year (`mean_kill_year`) — a diagnostic, not a
-#'   correction.
+#'   correction. A generation outlives a window under single shooting, so a slot
+#'   killed in an earlier window enters the next one already dead; `frac_ghost`
+#'   is that share and it is excluded from `frac_killed`, which counts this
+#'   window's kills alone. Under `reanchor`/`teacher_forcing` the generation
+#'   restarts at every census and `frac_ghost` is 0 by construction.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -1537,11 +1541,17 @@ finn_class = nn_module(
                                   n_alive = as.numeric(n_alive$detach()$cpu()))
             # of the slots carrying a fate: how many the simulation killed before the window
             # closed, and how long those lived. A survivor has n_alive == n_ok.
+            # A generation outlives a window under single shooting, so a slot killed in an
+            # earlier window enters this one already dead: it accumulates nothing and its
+            # `n_alive` is 0. Counting it with the trees killed INSIDE this window would mix
+            # two different statements and pull `mean_kill_year` toward zero, which is what
+            # it did. `ghost` is that share; `killed` is now this window's kills alone.
             has = td$mort$isnan()$bitwise_not()$to(dtype = self$dtype)
-            killed = has*n_alive$lt(n_ok - 0.5)$to(dtype = self$dtype)
+            ghost = has*n_alive$lt(0.5)$to(dtype = self$dtype)
+            killed = has*n_alive$lt(n_ok - 0.5)$to(dtype = self$dtype)*n_alive$gt(0.5)$to(dtype = self$dtype)
             tree_cov[[length(tree_cov) + 1L]] = c(i, as.numeric(torch_stack(list(
               has$sum(), killed$sum(), (killed*n_alive)$sum(),
-              (has*n_ok)$sum()))$detach()$cpu()))
+              (has*n_ok)$sum(), ghost$sum()))$detach()$cpu()))
           }
           if(per_site_mode) {
             # ---- per-site windows: mask M[s, t] = 1 for t in (i - p_s, i] ----
@@ -2632,7 +2642,7 @@ finn_class = nn_module(
         self$tree_deaths = rbind(self$tree_deaths, data.frame(
           epoch = epoch, census = as.integer(rownames(cv)), n_target = cv[,1],
           frac_killed = cv[,2]/cv[,1], mean_kill_year = cv[,3]/pmax(cv[,2], 1),
-          window = cv[,4]/cv[,1], row.names = NULL))
+          window = cv[,4]/cv[,1], frac_ghost = cv[,5]/cv[,1], row.names = NULL))
       }
 
       if (!is.null(lr_scheduler_obj)) {

@@ -393,7 +393,11 @@ the whole interval. Both terms therefore score every tree, and the scored
 sample does not depend on the parameters. \verb{$tree_deaths} reports per census and
 epoch how often the simulation killed a tree the inventory found alive
 (\code{frac_killed}) and in which year (\code{mean_kill_year}) — a diagnostic, not a
-correction.}
+correction. A generation outlives a window under single shooting, so a slot
+killed in an earlier window enters the next one already dead; \code{frac_ghost}
+is that share and it is excluded from \code{frac_killed}, which counts this
+window's kills alone. Under \code{reanchor}/\code{teacher_forcing} the generation
+restarts at every census and \code{frac_ghost} is 0 by construction.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }

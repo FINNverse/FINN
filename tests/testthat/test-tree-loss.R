@@ -435,3 +435,20 @@ test_that("tracked tree scoring warns when the binned light is unmasked", {
   d = tll$obs(4L, 4L)
   expect_warning(tll$fit(d, tll$table(4L)), "light_mask")
 })
+
+test_that("$tree_deaths separates this window's kills from earlier generations' ghosts", {
+  skip_if_no_torch()
+  # One generation over several windows: a cohort killed in window 1 is dead at the start
+  # of window 2 and says nothing about it. frac_ghost is that share; frac_killed excludes it.
+  two = tll$fit(tll$obs(c(5L, 10L), 3L), tll$table(c(5L, 10L)))
+  d = two$tree_deaths
+  expect_true(all(c("frac_killed", "frac_ghost", "mean_kill_year") %in% names(d)))
+  ## ghosts exist at the FIRST census too, because the generation starts at year 0 while the
+  ## window covers only the last `period` years: a tree killed in the spin-up enters the
+  ## window already dead. The point of the column is that those are counted separately.
+  expect_true(all(d$frac_killed + d$frac_ghost <= 1 + 1e-9))
+  expect_true(all(d$mean_kill_year <= d$window + 1e-9))
+  expect_true(all(d$mean_kill_year > 0 | d$frac_killed == 0))
+  ## and the share already dead can only grow as one generation runs on
+  expect_gte(d$frac_ghost[d$census == 10], d$frac_ghost[d$census == 5])
+})
