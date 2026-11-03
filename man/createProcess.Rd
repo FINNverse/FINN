@@ -22,6 +22,7 @@ createProcess(
   sample_regeneration = TRUE,
   n_quantiles = 10L,
   continuous = FALSE,
+  light_mask = FALSE,
   custom_parameters = NULL
 )
 }
@@ -88,6 +89,16 @@ process is the competition process and \code{continuous = FALSE}.}
 of cohorts (\code{TRUE}) instead of binning cohorts into \code{n_quantiles} height
 classes (\code{FALSE}, default). Only used when this process is the competition
 process.}
+
+\item{light_mask}{(\code{logical(1)})\cr Take the height quantiles of the binned
+competition over the LIVE cohorts only. The cohort dimension is padded to the
+widest site x patch in the batch and an empty slot has height 0.001, so with
+enough padding every live cohort is searchsorted into the top bin, where
+nothing shades anything: measured on a 251 m2/ha stand of ten live cohorts,
+100 padded slots put all ten at light 1.00. Only the quantile INPUT is masked,
+so every cohort keeps its real height as the bin query. \code{FALSE} (the default)
+is the behaviour of every published FINN result. Ignored when
+\code{continuous = TRUE}, which compares pairs and is correct at any padding.}
 
 \item{custom_parameters}{(\verb{named list} or \code{NULL})\cr Extra parameters that a
 custom \code{func} needs, declared here so they are registered on the model by

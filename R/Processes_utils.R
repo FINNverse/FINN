@@ -86,6 +86,15 @@
 #' @param n_quantiles (`integer(1)`)\cr Number of height classes used to discretize
 #'   cohorts when computing shading/light availability. Only used when this
 #'   process is the competition process and `continuous = FALSE`.
+#' @param light_mask (`logical(1)`)\cr Take the height quantiles of the binned
+#'   competition over the LIVE cohorts only. The cohort dimension is padded to the
+#'   widest site x patch in the batch and an empty slot has height 0.001, so with
+#'   enough padding every live cohort is searchsorted into the top bin, where
+#'   nothing shades anything: measured on a 251 m2/ha stand of ten live cohorts,
+#'   100 padded slots put all ten at light 1.00. Only the quantile INPUT is masked,
+#'   so every cohort keeps its real height as the bin query. `FALSE` (the default)
+#'   is the behaviour of every published FINN result. Ignored when
+#'   `continuous = TRUE`, which compares pairs and is correct at any padding.
 #' @param continuous (`logical(1)`)\cr Compute shading continuously for every pair
 #'   of cohorts (`TRUE`) instead of binning cohorts into `n_quantiles` height
 #'   classes (`FALSE`, default). Only used when this process is the competition
@@ -116,7 +125,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, custom_parameters = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = FALSE, custom_parameters = NULL) {
   out = list()
 
   # ---- custom (extra) process parameters -------------------------------------
@@ -168,6 +177,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$dropout = dropout
   out$n_quantiles = n_quantiles
   out$continuous = continuous
+  out$light_mask = light_mask
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }

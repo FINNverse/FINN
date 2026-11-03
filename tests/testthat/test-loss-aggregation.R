@@ -281,3 +281,25 @@ test_that("dbh quantiles run end to end and validate their input", {
   expect_gt(h[1], 0)
   expect_equal(dim(as.array(mm$quant_obs)), c(Nsites, 2L, Nsp, 3L))
 })
+
+test_that("a per-tree aggregation forces the per-site path and its own baseline", {
+  ## On a constant period the tree term used to be unreachable in forward()
+  ## while compute_baseline_losses() still measured the per-tree null, so
+  ## weights = "auto" scaled the CELL term by the TREE baseline.
+  tree_dt <- data.table(expand.grid(siteID = 1:Nsites, year = c(3L, 6L), patchID = 1:2, slot = 1:4))
+  tree_dt[, `:=`(species = rep_len(1:Nsp, .N), dbh = rep_len(c(8, 16, 24, 32), .N),
+                 trees = 3, growth = 0.02, died = rep_len(c(0, 0, 1, 0), .N))]
+  tree_dt[, slot := NULL]
+  const <- copy(obs)[, period_length := 3L]
+  FINN.seed(SEED); m <- mk_model()
+  suppressMessages(fit(m, env = env, data = const, init_cohort = ic, patches = 2L,
+      patch_size = 0.1, env_autoscale = FALSE, epochs = 1L, lr = 0, weights = "auto",
+      batchsize = Nsites, shuffle = FALSE, optimizer = OPT, plot_progress = FALSE,
+      device = "cpu", loss_family = LOSS, loss_aggregation = c(mortality = "tree"),
+      tree_data = tree_dt))
+  expect_true(m$per_site_period)
+  ## and the mortality term is then the per-tree one: its baseline is the null
+  ## deviance of the observed fates, not of the cell rates
+  expect_equal(as.numeric(m$loss_baseline)[5],
+               mean((tree_dt$died - mean(tree_dt$died))^2), tolerance = 1e-6)
+})

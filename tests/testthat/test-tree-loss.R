@@ -227,11 +227,12 @@ test_that("a new generation of tree identities starts at every anchor", {
     do.call(tl_fit, c(list(f, d, loss_resolution = "tree", tree_data = td,
                            anchor_cohorts = list("2" = A)), arg))
     expect_length(f$model$tree_pred$growth, 4*4*2)
-    expect_true(all(f$model$tree_pred$n == 1))   # every anchored tree is tracked
+    # every anchored tree is tracked for its whole (one-year) window; empty slots are not
+    expect_true(all(f$model$tree_pred$n %in% c(0, 1)))
+    expect_gt(sum(f$model$tree_pred$n == 1), 0)
     expect_true(all(is.finite(as.numeric(f$model$history[[1]])[4:5])))
-    # the interval after the anchor starts from a stand in which every tree is alive, so
-    # no window is truncated there
-    expect_equal(f$model$tree_coverage$frac_full[f$model$tree_coverage$census == 3], 1)
+    # every tracked slot now covers its whole window, anchored or not
+    expect_true(all(f$model$tree_pred$n == f$model$tree_pred$n[1]))
   }
 
   # single shooting keeps one generation for the whole horizon, so the tracked set shrinks
@@ -240,10 +241,12 @@ test_that("a new generation of tree identities starts at every anchor", {
          tree_data = rbind(tl_table(tl_target(dims), init, year = 1),
                            tl_table(tl_target(dims), init, year = 2)))
   expect_length(s$model$tree_pred$growth, prod(dims))
-  expect_lt(sum(s$model$tree_pred$n > 0.5), sum(s$init$trees_r > 0.5))
-  # ... and the erosion is reported per census rather than assumed
-  expect_identical(s$model$tree_coverage$census, c(2L, 3L))
-  expect_gt(s$model$tree_coverage$frac_full[1], s$model$tree_coverage$frac_full[2])
+  # retention: a tracked slot covers its whole window whether the simulation killed it or
+  # not, so `n` takes only two values - the window length, or 0 for a slot that never held
+  # a tree. Before retention it took every value between.
+  expect_setequal(unique(s$model$tree_pred$n), c(0, 1))
+  expect_identical(s$model$tree_deaths$census, c(2L, 3L))
+  expect_true(all(s$model$tree_deaths$frac_killed >= 0 & s$model$tree_deaths$frac_killed <= 1))
 })
 
 
@@ -358,23 +361,21 @@ tll = local({
 })
 
 
-test_that("growth is scored only where the cohort lived through the WHOLE window", {
+test_that("every tracked cohort covers the whole window, killed or not", {
   skip_if_no_torch()
-  # A cohort killed in year 2 of a 4-year window carries a 2-year increment, which is not a
-  # prediction of the interval's growth; the mortality term keeps it (a 2-year hazard against
-  # a 4-year fate is an attenuated prediction, not a different quantity - see tree_coverage).
+  # Retention: a cohort the simulation kills in year 2 of a 4-year window keeps accumulating
+  # growth and hazard to the window's end, because the observation is the mean annual rate
+  # and the 0/1 fate over the WHOLE interval. The scored sample is therefore not a function
+  # of the parameters, and the kills are reported instead of removing observations.
   m = tll$fit(tll$obs(4L, 4L), tll$table(4L))
   tp = m$tree_pred
   y = as.numeric(aperm(tll$target()$growth, c(3, 2, 1)))
-  whole = tp$n >= 3.5
-  scored = tp$n > 0.5
-  expect_gt(sum(scored & !whole), 4)                 # truncated slots exist to be excluded
-  expect_equal(as.numeric(m$history[[1]])[4], mean((tp$growth[whole] - y[whole])^2), tolerance = 1e-6)
-  # scoring truncated increments as interval growth is the mutation the one-year suite cannot
-  # see; here it is a different number by a factor of two
-  expect_gt(abs(mean((tp$growth[scored] - y[scored])^2) - mean((tp$growth[whole] - y[whole])^2)), 1e-3)
-  expect_equal(m$tree_coverage$frac_full, mean(whole), tolerance = 1e-12)
-  expect_equal(m$tree_coverage$mean_n_over_L, mean(tp$n[scored])/4, tolerance = 1e-6)
+  expect_true(all(tp$n == 4))                        # the whole window, every slot
+  expect_equal(as.numeric(m$history[[1]])[4], mean((tp$growth - y)^2), tolerance = 1e-6)
+  # the diagnostic replaces the hidden observations
+  expect_true(all(tp$n_alive <= tp$n))
+  expect_gt(m$tree_deaths$frac_killed, 0)            # the simulation does kill some of them
+  expect_equal(m$tree_deaths$window, 4, tolerance = 1e-12)
 })
 
 
@@ -388,10 +389,9 @@ test_that("the accumulators cover the window, not everything since the last cens
 
   two = tll$fit(tll$obs(c(5L, 10L), 3L), tll$table(c(5L, 10L)))
   expect_equal(max(two$tree_pred$n), 3)              # the second window, read after the fit
-  expect_identical(two$tree_coverage$census, c(5L, 10L))
-  expect_true(all(two$tree_coverage$n_target == 24))
-  # single shooting conditions the tracked set on ever more simulated survival
-  expect_gt(two$tree_coverage$frac_full[1], two$tree_coverage$frac_full[2])
+  expect_identical(two$tree_deaths$census, c(5L, 10L))
+  expect_true(all(two$tree_deaths$n_target == 24))
+  expect_true(all(two$tree_deaths$window == 3))
 })
 
 

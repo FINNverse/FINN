@@ -35,3 +35,25 @@ test_that("BA_stem (torch) matches the numeric dbh2ba", {
   expect_equal(as.numeric(BA_stem(torch::torch_tensor(dbh))),
                dbh2ba(dbh), tolerance = 1e-6)
 })
+
+test_that("light_mask takes the bin edges over the live cohorts only", {
+  skip_if_no_torch()
+  # Padding slots have height 0.001 and occupy the lower deciles, so with enough of
+  # them every live cohort lands in the top bin and shades nothing.
+  mk <- function(n_pad) {
+    K <- 3L + n_pad
+    d <- array(c(rep(c(15, 30, 55), 1), rep(0, n_pad)), dim = c(1, 1, K))
+    n <- array(c(rep(1, 3), rep(0, n_pad)), dim = c(1, 1, K))
+    list(dbh = torch::torch_tensor(d, dtype = torch::torch_float32()),
+         trees = torch::torch_tensor(n, dtype = torch::torch_float32()),
+         species = torch::torch_tensor(array(1L, dim = c(1, 1, K)), dtype = torch::torch_long()))
+  }
+  pc <- torch::torch_tensor(cbind(0.5, 1), dtype = torch::torch_float32())
+  lt <- function(x, ...) as.array(competition(dbh = x$dbh, species = x$species, trees = x$trees,
+                                              parComp = pc, patch_size_ha = 0.1, ...))[1, 1, 1:3]
+  dense <- mk(0L); sparse <- mk(60L)
+  # unmasked: the padding pushes the live cohorts into the top bin
+  expect_false(isTRUE(all.equal(lt(dense), lt(sparse), tolerance = 1e-5)))
+  # masked: the padding is invisible, so a sparse patch gets the dense patch's light
+  expect_equal(lt(dense, light_mask = TRUE), lt(sparse, light_mask = TRUE), tolerance = 1e-6)
+})

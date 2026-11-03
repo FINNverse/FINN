@@ -14,7 +14,8 @@ competition(
   ba = NULL,
   cohortHeights = NULL,
   n_quantiles = 10,
-  continuous = FALSE
+  continuous = FALSE,
+  light_mask = FALSE
 )
 }
 \arguments{

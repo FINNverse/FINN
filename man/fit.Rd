@@ -383,12 +383,17 @@ is a coin flip.
 The term does not depend on the fitting regime but its residual does: under
 \code{teacher_forcing} the kernel runs on the observed tree, so the residual is
 parameter error alone; under \code{reanchor} the cohort has drifted for at most one
-census interval; under single shooting for up to the whole horizon, and the
-tracked set shrinks with every simulated death. A cohort the model kills inside
-a window accumulates hazard over fewer years than the fate covers, which
-attenuates its predicted death probability; that is measured, not corrected —
-\verb{$tree_coverage} reports per census and epoch the fraction of target-bearing
-slots that survived the whole window, and \verb{$tree_pred$n} the per-slot years.}
+census interval; under single shooting for up to the whole horizon.
+
+A cohort the simulation kills inside a window is \strong{kept} to the window's end
+with \code{trees = 0}: it shades nothing and contributes nothing to \code{dbh}, \code{ba} or
+\code{trees}, but its diameter and its hazard keep accumulating, because the
+observation it is scored against is the mean annual rate and the 0/1 fate over
+the whole interval. Both terms therefore score every tree, and the scored
+sample does not depend on the parameters. \verb{$tree_deaths} reports per census and
+epoch how often the simulation killed a tree the inventory found alive
+(\code{frac_killed}) and in which year (\code{mean_kill_year}) — a diagnostic, not a
+correction.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
@@ -471,7 +476,7 @@ the simulated stand.\tabular{lll}{
    \code{init_cohort} \tab any, incl. binned (\code{makeInitCohorts(dbh_binsize = )}) \tab one cohort per tree (\code{makeInitCohorts()} without \code{dbh_binsize}) \cr
    \code{tree_data} needs \tab \code{dbh} at the interval start \tab \code{cohortID} of the initial cohort \cr
    combines with \tab the simulated \code{dbh}/\code{ba}/\code{trees}/\code{regeneration} terms \tab \code{reanchor} and \code{teacher_forcing} (under teacher forcing the trajectory is reset to the observed stand every year, which comes close to the first option) \cr
-   diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_coverage}, \verb{$tree_pred} \cr
+   diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_deaths}, \verb{$tree_pred} \cr
 }
 
 

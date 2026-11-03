@@ -129,7 +129,7 @@ height = function(dbh, parHeight) {
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
 #' @export
-competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE){
+competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE, light_mask = FALSE){
   parHeight = parComp[,1]
   parCompStr = parComp[,2]
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)*parCompStr[species]*0.1
@@ -142,8 +142,19 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
     } else {
       device = dbh$device
       quants = torch::torch_linspace(0, 1, steps = n_quantiles+1, dtype = dbh$dtype, device = device)
-      # Quantiles and their indices
-      cohortHeights_quant = torch::torch_quantile(cohortHeights, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
+      # Quantiles and their indices. `light_mask` takes the bin edges over the LIVE cohorts
+      # only: the cohort dimension is padded to the widest site x patch of the batch, and an
+      # empty slot has height 0.001, so with many of them every live cohort lands in the top
+      # bin, where nothing shades anything. Only the quantile INPUT is masked; the
+      # searchsorted query keeps every cohort's real height, so a dead-but-tracked cohort is
+      # still placed in a bin and still receives light.
+      hq = if(isTRUE(light_mask))
+             torch::torch_where(trees$gt(0.5)$unsqueeze(4), cohortHeights,
+                                torch::torch_full_like(cohortHeights, NaN))
+           else cohortHeights
+      cohortHeights_quant = if(isTRUE(light_mask))
+        torch::torch_nanquantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
+        else torch::torch_quantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
       indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L)$contiguous(), cohortHeights$squeeze(4), right = TRUE) + 1L
       # Calculation of comp
       cohortHeights_quant = cohortHeights_quant$unsqueeze(4)
