@@ -281,3 +281,73 @@ test_that("dbh quantiles run end to end and validate their input", {
   expect_gt(h[1], 0)
   expect_equal(dim(as.array(mm$quant_obs)), c(Nsites, 2L, Nsp, 3L))
 })
+
+## ---- fast set-up (branch fast-setup, 2026-11-05) ------------------------------
+## Trees all in one patch, as in the BWI data (every tree has patchID 1).
+one_patch_trees <- function() {
+  tree_dt <- data.table(expand.grid(siteID = 1:Nsites, year = c(3L, 6L), slot = 1:4))
+  tree_dt[, `:=`(patchID = 1L, species = rep_len(1:Nsp, .N), dbh = rep_len(c(8, 16, 24, 32), .N),
+                 trees = 3, growth = 0.02, died = rep_len(c(0, 0, 1, 0), .N), period_length = 3L)]
+  tree_dt[, slot := NULL][]
+}
+
+test_that("the tree tensors have the trees' own patches, not `patches`", {
+  tree_dt <- one_patch_trees()
+  m <- run_fit(loss_family = LOSS, loss_aggregation = c(mortality = "tree"), tree_data = tree_dt)
+  # run_fit() passes patches = 2: the tensors used to carry an empty second patch
+  expect_equal(dim(as.array(m$tree_obs$dbh)), c(Nsites, 2L, 1L, 4L))
+  # predictTrees() ignores `patches` for the same reason
+  P2   <- predictTrees(m, tree_dt, env, patches = 2L, patch_size = 0.1)
+  P100 <- predictTrees(m, tree_dt, env, patches = 100L, patch_size = 0.1)
+  expect_identical(P2, P100)
+})
+
+test_that("empty patches in the tree tensors change no tree's prediction", {
+  # the property that makes sizing the patch dimension by the data safe: light
+  # is computed per patch, so padding the tensors with tree-free patches (what
+  # `patches` used to do) leaves every real tree's growth and mortality as is
+  m <- run_fit(loss_family = LOSS, loss_aggregation = c(mortality = "tree"), tree_data = one_patch_trees())
+  tp  <- m$.__enclos_env__$private$tree_predictions
+  pad <- function(x, fill, n = 4L) {
+    sh <- x$shape; sh[3] <- n
+    torch::torch_cat(list(x, torch::torch_full(sh, fill, dtype = x$dtype)), dim = 3L)
+  }
+  ob <- m$tree_obs
+  padded <- list(dbh = pad(ob$dbh, 0), trees = pad(ob$trees, 0), species = pad(ob$species, 1L),
+                 growth = pad(ob$growth, NaN), died = pad(ob$died, NaN))
+  envt <- list(growth = torch::torch_randn(c(Nsites, 6, 2)), mort = torch::torch_randn(c(Nsites, 6, 2)))
+  M <- torch::torch_zeros(c(Nsites, 6)); M[, 4:6] <- 1
+  torch::with_no_grad({
+    a <- tp(ob, 2L, envt, 6L, M, torch::torch_ones(Nsites) * 3)
+    b <- tp(padded, 2L, envt, 6L, M, torch::torch_ones(Nsites) * 3)
+  })
+  expect_identical(as.array(a$growth), as.array(b$growth)[, 1, , drop = FALSE])
+  expect_identical(as.array(a$mortality), as.array(b$mortality)[, 1, , drop = FALSE])
+})
+
+test_that("epochs = 0 runs the set-up only", {
+  FINN.seed(SEED); mm <- mk_model()
+  before <- lapply(mm$parameters, function(p) as.numeric(p$detach()))
+  fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
+      env_autoscale = FALSE, epochs = 0L, lr = 0.1, weights = "auto", batchsize = Nsites,
+      shuffle = FALSE, optimizer = OPT, plot_progress = FALSE, device = "cpu",
+      loss_family = LOSS, loss_aggregation = c(mortality = "tree"), tree_data = one_patch_trees())
+  expect_length(mm$history, 0L)                       # no epoch ran (1:0 used to run two)
+  after <- lapply(mm$parameters, function(p) as.numeric(p$detach()))
+  expect_identical(after[names(before)], before)
+  # the env layers are built inside fit() from initEnv and must still be there
+  expect_equal(after[["nn_growth.0.weight"]], c(0.5, 0.5, 0.4, -0.4), tolerance = 1e-7)
+  expect_equal(after[["nn_mortality.0.weight"]], c(-2.5, -2.5, 0.3, -0.3), tolerance = 1e-7)
+  expect_length(mm$loss_baseline, 6L)                 # but the set-up did: baselines and weights
+  expect_true(all(is.finite(mm$loss_weights)))
+  expect_false(is.null(mm$tree_obs))
+})
+
+test_that("fit() drops the observation tensors of an earlier call", {
+  m <- run_fit(loss_family = LOSS, loss_aggregation = c(mortality = "tree"), tree_data = one_patch_trees())
+  expect_false(is.null(m$tree_obs))
+  fit(m, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
+      env_autoscale = FALSE, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites,
+      shuffle = FALSE, optimizer = OPT, plot_progress = FALSE, device = "cpu", loss_family = LOSS)
+  expect_null(m$tree_obs); expect_null(m$class_obs); expect_null(m$quant_obs)
+})

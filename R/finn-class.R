@@ -174,7 +174,9 @@ finn = function(N_species,
 #' @param patches (`integer(1)`)\cr Number of patches.
 #' @param patch_size (`numeric(1)`)\cr Patch size.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat]
-#' @param epochs (`integer(1)`)\cr Number of iteration steps.
+#' @param epochs (`integer(1)`)\cr Number of iteration steps. `epochs = 0`
+#'   runs the set-up only (data tensors, `loss_baseline`, `loss_weights` for
+#'   `weights = "auto"`) and trains nothing; the parameters stay as they were.
 #' @param lr (`numeric(1)`)\cr Learning rate of the optimizer.
 #' @param lr_scheduler (`character(1)|function`)\cr Learning-rate schedule applied
 #'   on top of the constant `lr` above. `"none"` (default) keeps `lr` constant,
@@ -596,7 +598,10 @@ fit = function(model,
 #'   `year`, `patchID`, `species`, `dbh` (at the interval start) and
 #'   `period_length` (the interval, in timesteps).
 #' @param env (`data.table|data.frame`)\cr Environment, as for [FINN::fit].
-#' @param patches (`integer(1)`)\cr Number of patches, as in the fit.
+#' @param patches (`integer(1)`)\cr Not used: the patch dimension of the
+#'   observed-tree tensors is the number of distinct `patchID`s in `tree_data`
+#'   (it used to be `patches`, and the extra patches were empty). Kept so
+#'   existing calls run unchanged.
 #' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
 #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
 #' @return One row per row of `tree_data`, in the same order (`.row` records the
@@ -1764,7 +1769,8 @@ finn_class = nn_module(
   #'   [FINN::fit]'s `tree_data`: `siteID`, `year`, `patchID`, `species`, `dbh`
   #'   (at the interval start) and `period_length` (the interval, in timesteps).
   #' @param env (`data.table|data.frame`)\cr Environment, as for [FINN::fit].
-  #' @param patches (`integer(1)`)\cr Number of patches, as in the fit.
+  #' @param patches (`integer(1)`)\cr Not used: the patch dimension is the
+  #'   number of distinct `patchID`s in `tree_data`. Kept for compatibility.
   #' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
   #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
   #' @return One row per row of `tree_data`, IN THE SAME ORDER (`.row` records
@@ -1781,7 +1787,7 @@ finn_class = nn_module(
     if (!"period_length" %in% colnames(d))
       stop("`tree_data` needs a `period_length` column: the rates are interval quantities.", call. = FALSE)
     obs_years = sort(unique(d$year)); site_ids = sort(unique(d$siteID))
-    tobs = private$build_tree_obs(d, site_ids, obs_years, patches)
+    tobs = private$build_tree_obs(d, site_ids, obs_years)
     envs = private$extract_env_method(env)
     # the environment networks are built lazily, on the first fit() or predict();
     # build them here too so this works on a model that has never been run
@@ -2042,6 +2048,14 @@ finn_class = nn_module(
     self$conditional_effects = NULL
     self$ale                 = NULL
     self$perm_importance     = NULL
+    # The observation tensors of the non-scalar aggregations are rebuilt below
+    # for exactly the aggregations of THIS call. Left over from an earlier fit()
+    # (or a torch_load()ed model) they would be stale, or dead tensors, and
+    # forward() would still evaluate them (tree_obs runs tree_predictions()
+    # whenever it is non-NULL).
+    self$tree_obs  = NULL
+    self$class_obs = NULL
+    self$quant_obs = NULL
 
     # setup loss functions
     # weights = "auto" (the default): epoch 1 runs unweighted so each loss term
@@ -2181,7 +2195,7 @@ finn_class = nn_module(
     }
     if (any(agg_types == "tree")) {
       if (is.null(tree_data)) stop("loss_aggregation 'tree' needs `tree_data`.", call. = FALSE)
-      self$tree_obs = private$build_tree_obs(tree_data, site_ids, obs_years, patches)
+      self$tree_obs = private$build_tree_obs(tree_data, site_ids, obs_years)
     }
     # loss_resolution = "tree": the table becomes one target array per scored
     # census, aligned to the cohort slots of the layout that census's interval
@@ -2410,7 +2424,7 @@ finn_class = nn_module(
 
     self$train()
 
-    for(epoch in 1:epochs){
+    for(epoch in seq_len(epochs)){
       counter = 1
       batch_loss = matrix(NA, nrow = 10000, ncol = 7L)
       tree_cov = list()
@@ -2662,8 +2676,8 @@ finn_class = nn_module(
               call. = FALSE)
     }
 
-    # ignore debugging method
-    self$pred = list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))
+    # ignore debugging method; with epochs = 0 nothing was predicted
+    if (epochs > 0) self$pred = list(long = pred2DF(list(Predictions = pred), "long"), wide = pred2DF(list(Predictions = pred), "wide"))
     # par is restored via on.exit() (set above, only when plot_progress = TRUE)
 
   },
@@ -3019,7 +3033,14 @@ finn_class = nn_module(
     # Observed trees -> padded [sites, obs_years, patches, max_trees] tensors.
     # Padding slots carry trees = 0 (no weight in competition) and NaN responses,
     # which the loss functions already mask out.
-    build_tree_obs = function(tree_data, site_ids, obs_years, n_patches) {
+    #
+    # The patch dimension is the number of distinct patchIDs in the table, not
+    # the `patches` of fit()/predictTrees(). Light is computed per patch from the
+    # trees in it, so patches holding no tree change no prediction; sized by
+    # `patches` (25 in the BWI fits, where every tree has patchID 1) the tensors
+    # carried 24 empty patches through competition, growth and mortality in
+    # every batch.
+    build_tree_obs = function(tree_data, site_ids, obs_years) {
       # copy(): as.data.table() returns the caller's own object when it already
       # is a data.table, and everything below adds columns by reference
       d = data.table::copy(data.table::as.data.table(tree_data))
@@ -3039,7 +3060,7 @@ finn_class = nn_module(
       if (!nrow(d)) stop("`tree_data` has no rows matching the sites and observation years of `data`.", call. = FALSE)
       data.table::setorder(d, s, y, p)
       d[, slot := seq_len(.N), by = .(s, y, p)]
-      dims = c(length(site_ids), length(obs_years), n_patches, max(d$slot))
+      dims = c(length(site_ids), length(obs_years), max(d$p), max(d$slot))
       idx  = cbind(d$s, d$y, d$p, d$slot)
       fill_arr = function(col, fill) { a = array(fill, dim = dims); a[idx] = d[[col]]; a }
       message(sprintf("[tree_data] %d trees, up to %d per patch and observation year", nrow(d), dims[4]))

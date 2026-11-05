@@ -1,5 +1,19 @@
 #include <Rcpp.h>
+#include <unordered_map>
 using namespace Rcpp;
+
+// Index of the first entry of `ids` per value, keyed on the value as a double
+// (the climate matrix is numeric). Looking a row up in this map gives the same
+// answer as the linear scan `for (j ...) if (ids[j] == x) break;` it replaces:
+// first match, exact numeric equality (int promoted to double), and no match
+// for NaN/NA (NaN never compares equal). The scan made every row O(Nsites), so
+// a call was O(rows x sites) - ~90 s at 32,686 sites; the map makes it O(rows).
+static std::unordered_map<double, int> first_index_map(const IntegerVector& ids) {
+  std::unordered_map<double, int> m;
+  m.reserve(ids.size() * 2 + 1);
+  for (int j = 0; j < ids.size(); ++j) m.emplace(static_cast<double>(ids[j]), j);  // emplace keeps the first j
+  return m;
+}
 
 // [[Rcpp::export]]
 NumericVector climateDF2arrayCpp(NumericMatrix climate_dt,
@@ -25,29 +39,19 @@ NumericVector climateDF2arrayCpp(NumericMatrix climate_dt,
     env_array = NumericVector(Nsites * Nyears * Nenv, NA_REAL);
   }
 
+  const std::unordered_map<double, int> site_map = first_index_map(site_ids);
+  const std::unordered_map<double, int> year_map = first_index_map(year_ids);
+
   for (int i = 0; i < total_rows; ++i) {
-    int site = -1;
-    int year = -1;
+    // Match the siteID (1st column, index 0) and the year (2nd column, index 1)
+    std::unordered_map<double, int>::const_iterator s_it = site_map.find(climate_dt(i, 0));
+    std::unordered_map<double, int>::const_iterator y_it = year_map.find(climate_dt(i, 1));
 
-    // Match the siteID
-    for (int j = 0; j < site_ids.size(); ++j) {
-      if (site_ids[j] == climate_dt(i, 0)) { // siteID is now the 1st column (index 0)
-        site = j;
-        break;
-      }
-    }
-
-    // Match the year
-    for (int j = 0; j < year_ids.size(); ++j) {
-      if (year_ids[j] == climate_dt(i, 1)) { // year is now the 2nd column (index 1)
-        year = j;
-        break;
-      }
-    }
-
-    if (site == -1 || year == -1) {
+    if (s_it == site_map.end() || y_it == year_map.end()) {
       stop("Site or year index not found. Check your data.");
     }
+    int site = s_it->second;
+    int year = y_it->second;
 
     for (int e = 0; e < Nenv; ++e) {
       int env_col;
