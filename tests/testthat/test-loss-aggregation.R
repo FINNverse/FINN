@@ -220,6 +220,17 @@ test_that("predictTrees returns one prediction per observed tree", {
   # larger trees grow relatively less: the kernel's exp(-b * dbh) term
   D <- merge(P, tree_dt[, .(siteID, year, patchID, dbh)], by = c("siteID", "year", "patchID"), allow.cartesian = TRUE)
   expect_lt(cor(D$dbh, D$growth_pred), 0)
+  # the window is scored in one pass over its years: a 2-year window must be
+  # the mean of the two 1-year growth rates and the compounded survival of the
+  # two 1-year death probabilities of the same trees (same stand, same light)
+  two <- copy(tree_dt)[year == 6L][, period_length := 2L]
+  one <- rbind(copy(two)[, `:=`(year = 5L, period_length = 1L)], copy(two)[, period_length := 1L])
+  P2 <- predictTrees(m, two, env, patches = 2L, patch_size = 0.1)
+  P1 <- predictTrees(m, one, env, patches = 2L, patch_size = 0.1)
+  g1 <- P1[year == 5L, growth_pred]; g2 <- P1[year == 6L, growth_pred]
+  m1 <- P1[year == 5L, mort_pred];   m2 <- P1[year == 6L, mort_pred]
+  expect_equal(P2$growth_pred, (g1 + g2) / 2, tolerance = 1e-5)
+  expect_equal(P2$mort_pred, 1 - (1 - m1) * (1 - m2), tolerance = 1e-5)
 })
 
 test_that("the quantile operator reproduces weighted diameter quantiles", {

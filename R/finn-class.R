@@ -2891,6 +2891,34 @@ finn_class = nn_module(
       # only the years some site actually has in its window
       p_max  = as.numeric(p_t$max()$item())
       j_from = max(1L, i - as.integer(ceiling(p_max)) + 1L)
+      nj = i - j_from + 1L
+      hybrid = inherits(self$process_growth, "hybrid") || inherits(self$process_mortality, "hybrid")
+      if (!hybrid) {
+        # All window years in one pass: the years become a second dimension next
+        # to the sites, [sites, years, patches, trees]. The process functions are
+        # elementwise in everything but the species lookup, so the extra
+        # dimension passes through them, and the ten-odd calls per year become
+        # one. Out-of-window years contribute 0 to the growth sum and a survival
+        # of 1 (the mask M); the survival product is accumulated in LOG space (the
+        # direct form, prod (1 - m_j)^w_j, needs a tensor exponent whose backward
+        # is not defined for the mask's dtype).
+        yr = function(t) t$unsqueeze(2)$expand(c(-1, nj, -1, -1))
+        dbh4 = yr(dbh); sp4 = yr(sp); n4 = yr(n); light4 = yr(light)
+        # [sites, years, species] env predictions -> per tree
+        per_tree = function(pred) torch_gather(pred$unsqueeze(3)$expand(c(-1, -1, sp$shape[2], -1)), 4, sp4)
+        pred_g = per_tree(self$nn_growth(env[["growth"]][, j_from:i, , drop = FALSE]))
+        g = self$growth_func(dbh = dbh4, species = sp4, parGrowth = self$par_growth,
+                             pred = pred_g, light = light4, trees = n4)
+        pred_m = per_tree(self$nn_mortality(env[["mort"]][, j_from:i, , drop = FALSE]))
+        m = self$mortality_func(dbh = dbh4, species = sp4, trees = n4, parMort = self$par_mortality,
+                                pred = pred_m, light = light4, growth = g)
+        w4 = M[, j_from:i, drop = FALSE]$unsqueeze(3)$unsqueeze(4)
+        g_sum = (g * w4)$sum(2)
+        lsurv = ((1 - m$clamp(1e-6, 1 - 1e-6))$log() * w4)$sum(2)
+        denom = p_t$clamp(min = 1)$reshape(c(-1, 1, 1))
+        return(list(growth = g_sum / denom, mortality = 1 - lsurv$exp()))
+      }
+      # hybrid processes take the raw environment and their own networks: year by year
       g_sum = NULL; lsurv = NULL
       for (j in j_from:i) {
         w3 = M[, j]$reshape(c(-1, 1, 1))
