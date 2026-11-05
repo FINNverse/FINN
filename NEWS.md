@@ -603,6 +603,17 @@ someone who was affected.
   (checked on two BWI stage-2 calls: parameters, loss history, baselines,
   `param_history`, `predictTrees()`).
 
+* **The per-tree scoring evaluates the window in one pass.**
+  `loss_aggregation = "tree"` and `predictTrees()` applied growth and mortality
+  to the observed trees once per year of the remeasurement window (10 calls of
+  each process per batch on the BWI data); the years are now a dimension of
+  the tensors and the processes run once (mechanistic processes; hybrid ones
+  keep the year loop). Same formula, but the sums over the years and over the
+  trees are taken in another order, so the result is equal only to floating
+  point precision: on two BWI stage-2 calls the fitted parameters after 3
+  epochs differ by at most 2e-6 (absolute, float32), the loss history by 6e-8
+  and `predictTrees()` by 3e-6 (FINN-bwi fits/2026-11-06-finn-speed-review).
+
 ## Bug fixes
 
 * A model that never went through `fit()` simulated with the 0.1.0 Gamma death
