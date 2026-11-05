@@ -125,6 +125,40 @@ index_species = function(pred, species) {
 
 
 
+#' Sum cohort values per site and species
+#'
+#' The hot-path form of [aggregate_results()] used by the time loop of
+#' `forward()`: every sample is scattered into a fresh species tensor and summed
+#' over the patches in ONE `scatter_add` for all samples (stacked along a new
+#' leading dimension), instead of one `torch_zeros` + `scatter_add` + `sum` +
+#' `add_` per sample. The values are the same (a `scatter_add` accumulates each
+#' output element over the cohorts in index order whether the samples are
+#' stacked or not, and the sum over the patches is unchanged); only the number
+#' of torch calls differs, which is what costs time on the small tensors of a
+#' batch.
+#'
+#' @param labels torch.Tensor int64 species index, `[sites, patches, cohorts]`.
+#' @param samples list of torch.Tensor, each `[sites, patches, cohorts]` and of
+#'   the same dtype, the values to sum.
+#' @param sp integer Number of species (the size of the last output dimension).
+#'
+#' @return A list of `torch` tensors `[sites, sp]`, one per element of `samples`,
+#'   the per-site, per-species sums over patches and cohorts.
+#' @keywords internal
+#' @noRd
+aggregate_species = function(labels, samples, sp) {
+  k = length(samples)
+  if(k == 1L) {
+    s1 = samples[[1]]
+    return(list(torch::torch_zeros(s1$shape[1], s1$shape[2], sp, dtype = s1$dtype, device = s1$device)$scatter_add(3, labels, s1)$sum(dim = 2)))
+  }
+  st = torch::torch_stack(samples)                                          # [k, sites, patches, cohorts]
+  idx = labels$unsqueeze(1)$expand(c(k, -1, -1, -1))
+  out = torch::torch_zeros(k, st$shape[2], st$shape[3], sp, dtype = st$dtype, device = st$device)$scatter_add(4, idx, st)$sum(dim = 3)
+  lapply(seq_len(k), function(v) out[v, , ])
+}
+
+
 #' Aggregate function
 #'
 #' @param labels labels

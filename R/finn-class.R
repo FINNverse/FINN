@@ -1069,6 +1069,12 @@ finn_class = nn_module(
       if(!inherits(self$process_regeneration, "hybrid")) predRegGlobal = self$nn_regeneration(env[["reg"]])
     }
 
+    # Does any site carry a period_length? If not, the gradients are yearly and the
+    # Result tensors are detached after every step. `y` does not change inside the
+    # loop, so this is decided once (it used to be a reduction over y, plus a
+    # host sync, at every step).
+    yearly_gradients = !is.null(y) && as.numeric(y[,,,7]$isnan()$bitwise_not()$sum()) < 0.5
+
     # create process bar
     if(verbose) cli::cli_progress_bar(format = "Year: {cli::pb_current}/{cli::pb_total} {cli::pb_bar} ETA: {cli::pb_eta} ", total = time, clear = FALSE)
     for(i in 1:time){
@@ -1292,12 +1298,6 @@ finn_class = nn_module(
       # from previous cohort
       #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
       if(dbh$shape[3] != 0){
-        samples = vector("list", 3)
-        names(samples) = c(
-          "g*trees_before",
-          "m*trees_before",
-          "trees_before"
-        )
         # Result[[4]] is the tree-weighted mean of g, matching an observed
         # mean(dbh/dbh_before - 1). `g` is the model's native parameter
         # (dbh_new = dbh*(1+g)), which is why the relative rate is the right
@@ -1305,31 +1305,29 @@ finn_class = nn_module(
         # tested over 3 seeds and came out WORSE on every one, even when scored
         # on the absolute scale, and ~4x more seed-variable - it couples the
         # growth parameter to whichever trees happen to be present.
-        samples[[1]] = g*trees_before
-        samples[[2]] = m*trees_before
-        samples[[3]] = trees_before # original number of trees
+        # Sums over patches and cohorts of g*trees_before, m*trees_before and
+        # trees_before (the original number of trees), [sites, species] each.
+        tmp_res = aggregate_species(species, list(g*trees_before, m*trees_before, trees_before), sp)
 
-        Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
-        # calculate the sum of all elements in samples over all patches for each species, patch and site
-        tmp_res = aggregate_results(species, samples, Results_tmp, aggregation = "sum")
-
-        # Aggregation [sites, patches, cohorts] --> [sites, species]:
-        if(as.numeric(trees$sum() > 0)) {
+        # Aggregation [sites, patches, cohorts] --> [sites, species]: the
+        # tree-weighted means where a species has trees, 0 elsewhere. The
+        # denominator is 1 where there are none, so that the quotient is
+        # defined everywhere and masked afterwards; where the mask holds it is
+        # the plain quotient, as before.
+        if(trees$sum()$item() > 0) {
           mask = tmp_res[[3]]$gt(0.5)
+          denom = torch_where(mask, tmp_res[[3]], 1)
           # Growth
-          Result[[4]][,i,][mask] = Result[[4]][,i,][mask]+tmp_res[[1]][mask]/tmp_res[[3]][mask] # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+          Result[[4]][,i,] = torch_where(mask, tmp_res[[1]]/denom, 0) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
           # Mort
-          Result[[5]][,i,][mask] = Result[[5]][,i,][mask]+tmp_res[[2]][mask]/tmp_res[[3]][mask] # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
+          Result[[5]][,i,] = torch_where(mask, tmp_res[[2]]/denom, 0) # summe dbh_growth / summe trees  #/cohort_counts[alive_species])
         }
       }
       # reg extra
-      ## Regeneration count
-      tmp_res = aggregate_results(species_new, list(r), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-      Result[[6]][,i,] = Result[[6]][,i,]$add(tmp_res[[1]])/patches
-
-      ## Regeneration rate mean
-      tmp_res = aggregate_results(species_new, list(r_mean_ha), list(torch::torch_zeros(Result[[1]][,i,]$shape[1], sp, device = self$device )))
-      r_mean_ha = tmp_res[[1]]/patches
+      ## Regeneration count and regeneration rate mean, per patch
+      tmp_res = aggregate_species(species_new, list(r, r_mean_ha), sp)
+      Result[[6]][,i,] = tmp_res[[1]]/patches
+      r_mean_ha = tmp_res[[2]]/patches
       Result[[7]][,i,] = r_mean_ha
       #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
       ## Update arrays ####
@@ -1393,23 +1391,19 @@ finn_class = nn_module(
           #dead_trees_mask = trees == 0
           dbh = dbh*trees$gt(0.5)$float()
           BA_stem_values = BA_stem(dbh = dbh)*trees
-          species = species
-          samples = vector("list", 3)
-          samples[[1]] = trees * dbh #* mask
-          samples[[2]] = BA_stem_values #* mask# torch_sigmoid((trees - 0.5)/1e-3) # better to just use greater? (Masking!) Gradients shouldn't be needed! (I think?)
-          samples[[3]] = trees # torch_sigmoid((trees - 0.5)/1e-3)
-          Results_tmp = replicate(length(samples), torch_zeros_like(Result[[1]][,i,]))
-
-          tmp_res = aggregate_results(species, samples, Results_tmp)
+          # sums over patches and cohorts of trees*dbh, the basal area and the
+          # trees, [sites, species] each
+          tmp_res = aggregate_species(species, list(trees * dbh, BA_stem_values, trees), sp)
           # BA and number of trees Result[[1]] and Result[[2]]
-          if(as.numeric(trees$sum() > 0)) {
-            # mask only alive trees
+          if(trees$sum()$item() > 0) {
+            # mask only alive trees (see the rate aggregation above for the form)
             mask = tmp_res[[3]]$gt(0.5)
-            Result[[1]][,i,][mask] = Result[[1]][,i,][mask]+ (tmp_res[[1]][mask]/tmp_res[[3]][mask]) # /cohort_counts[alive_species]
+            denom = torch_where(mask, tmp_res[[3]], 1)
+            Result[[1]][,i,] = torch_where(mask, tmp_res[[1]]/denom, 0) # /cohort_counts[alive_species]
             # BA
-            Result[[2]][,i,]= Result[[2]][,i,]$add(tmp_res[[2]]$div_(patches))
+            Result[[2]][,i,] = tmp_res[[2]]/patches
             # Trees
-            Result[[3]][,i,]= Result[[3]][,i,]$add(tmp_res[[3]]$div_(patches))
+            Result[[3]][,i,] = tmp_res[[3]]/patches
           }
           rm(BA_stem_values)
         }
@@ -1706,12 +1700,8 @@ finn_class = nn_module(
         }
       }
 
-      if(!is.null(y)) {
-        #for(j in 1:3) Result[[j]] = Result[[j]]$detach()
-        # if period_length = NA on all sites, it is assumed that we need only yearly gradients
-        if(as.numeric(y[,,,7]$isnan()$bitwise_not()$sum()) < 0.5) for(j in 1:7) Result[[j]] = Result[[j]]$detach()
-
-      }
+      # if period_length = NA on all sites, it is assumed that we need only yearly gradients
+      if(yearly_gradients) for(j in 1:7) Result[[j]] = Result[[j]]$detach()
       if(!per_site_mode) loss$detach_()
 
       if(verbose) cli::cli_progress_update()

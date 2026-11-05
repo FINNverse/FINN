@@ -112,6 +112,19 @@ for 0.1.0 runs unchanged.
   in `tree_data`. Light is computed per patch, so no prediction changes;
   `predictTrees(patches = )` is now ignored.
 
+* **Fewer torch calls per time step in `forward()`.** On the tensors of one
+  batch (~30k elements) a torch op costs ~25 us of fixed overhead and the time
+  loop made ~2000 of them per step, so the op count, not the arithmetic, sets
+  the speed. The per-species aggregation of the rates, the recruits and the
+  stand (growth, mortality, dbh, basal area, trees, regeneration) now scatters
+  all its samples in one call (`aggregate_species()`, internal) and writes the
+  masked tree-weighted means with `torch_where()` instead of two masked index
+  assignments; `trees$sum() > 0` is read with `$item()`; whether the gradients
+  are yearly (no `period_length` anywhere) is decided once per call instead of
+  by a reduction over `y` at every step. The results are bit-identical
+  (checked on two BWI stage-2 calls: parameters, loss history, baselines,
+  `param_history`, `predictTrees()`).
+
 ## Bug fixes
 
 * `fit(epochs = 0)` ran two epochs (`1:0`); it now runs the set-up only
