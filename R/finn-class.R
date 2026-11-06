@@ -341,7 +341,7 @@ finn = function(N_species,
 #' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
 #' @param shuffle (`logical(1)`)\cr Shuffle data or not.
 #' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
-#' @param env_autoscale \cr How to scale the environmental predictors in `env`.
+#' @param env_autoscale How to scale the environmental predictors in `env`.
 #'   The learned transformation is stored on the model and re-applied
 #'   automatically at every `predict()`/`simulate()` call, so raw (untransformed)
 #'   `env` can be passed for both calibration and prediction. Accepts:

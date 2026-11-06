@@ -253,7 +253,7 @@ held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See 
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
 
-\item{env_autoscale}{\cr How to scale the environmental predictors in \code{env}.
+\item{env_autoscale}{How to scale the environmental predictors in \code{env}.
 The learned transformation is stored on the model and re-applied
 automatically at every \code{predict()}/\code{simulate()} call, so raw (untransformed)
 \code{env} can be passed for both calibration and prediction. Accepts:
