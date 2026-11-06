@@ -15,7 +15,9 @@ createHybrid(
   sample_regeneration = TRUE,
   transformer = TRUE,
   emb_dim = 20L,
-  dim_feedforward = 256L
+  dim_feedforward = 256L,
+  mortality_draw = c("gamma", "poisson"),
+  regeneration_sampler = c("gaussian", "refined")
 )
 }
 \arguments{
@@ -55,6 +57,14 @@ environment features.}
 \item{dim_feedforward}{(\code{integer(1)})\cr Dimension of the feed-forward
 sublayer within each transformer encoder layer. Only used when
 \code{transformer = TRUE}.}
+
+\item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn,
+\code{"gamma"} (default) or \code{"poisson"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+when this object is the mortality process.}
+
+\item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,
+\code{"gaussian"} (default) or \code{"refined"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+when this object is the regeneration process.}
 }
 \value{
 A list of class \code{"hybrid"} containing the process definition and

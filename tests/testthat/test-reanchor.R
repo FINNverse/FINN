@@ -10,10 +10,9 @@ library(data.table)
 # and an anchor at timestep 2 is visible in the year-3 state.
 
 reanchor_data = function(n_sites = 4L) {
-  ext = function(f) system.file("extdata", f, package = "FINN")
-  obs = data.table::fread(ext("fia_obs_dt.csv"))
-  env = data.table::fread(ext("fia_env_dt.csv"))
-  it  = data.table::fread(ext("fia_init_trees.csv"))
+  obs = data.table::copy(FINN::fia_obs_dt)
+  env = data.table::copy(FINN::fia_env_dt)
+  it  = data.table::copy(FINN::fia_init_trees)
   sites = utils::head(sort(unique(obs$siteID)), n_sites)
   obs = obs[siteID %in% sites]
   list(obs = obs, env = env[siteID %in% sites], it = it[siteID %in% sites],
@@ -52,6 +51,12 @@ anchor_mat = function(species, sp, sites = 4L, patches = 4L, ncohorts = 2L,
 }
 
 pars = function(m) unlist(lapply(m$parameters, function(p) as.numeric(p$cpu())))
+
+# A cohort is identified by (site, patch, id): ids are unique within a patch (an initial
+# cohort's id is its position in init_cohort, so it can be traced to its tree), not
+# across the whole array. Recruits and anchors draw their ids from a counter that only
+# goes up, so an id is never re-issued within a patch.
+cohort_key = function(ids) paste(slice.index(ids, 1), slice.index(ids, 2), ids)
 
 # trees per species at one timestep, summed over the sites of the last batch
 species_trees = function(m, timestep) {
@@ -103,8 +108,10 @@ test_that("the cohort state is replaced by the anchor, not carried forward", {
   # only timestep 2 is anchored, not every observation year (timestep 3 is the last
   # one, nothing is simulated after it), so the year-3 state is the anchor evolved by
   # one year: anchored on species 2 only, it must be dominated by species 2
+  # (0.885 since mortality() takes growth in %/yr, growth_scale = 0.01: the random
+  # initial growth coefficients now act 100x more strongly; 0.8 still means dominated)
   a3 = species_trees(anch$model, 3)
-  expect_gt(a3[species == 2, trees] / sum(a3$trees), 0.9)
+  expect_gt(a3[species == 2, trees] / sum(a3$trees), 0.8)
   # ... and that is not what the free-running state does
   f3 = species_trees(free$model, 3)
   expect_gt(a3[species == 2, trees], 10 * f3[species == 2, trees])
@@ -300,20 +307,20 @@ test_that("merging keeps the cohorts below the observation threshold, and nothin
   out = s$run(s$anchor, anchor_mode = "merge", anchor_min_dbh = s$thr, return_cohorts = TRUE)
   before = out$Predictions$Cohort$cohortStates[[2]]   # recorded before the anchor fires
   after  = out$Predictions$Cohort$cohortStates[[3]]
-  id_before = out$Predictions$Cohort$cohortID[[2]]
-  id_after  = out$Predictions$Cohort$cohortID[[3]]
+  k_before = cohort_key(out$Predictions$Cohort$cohortID[[2]])
+  k_after  = cohort_key(out$Predictions$Cohort$cohortID[[3]])
   # trees_before is NA for the cohorts recruited during the step, i.e. everything the
-  # anchor did not hand over
-  merged = !is.na(after$trees_before)
+  # anchor did not hand over, and 0 for the emptied slots the padding pass kept
+  merged = !is.na(after$trees_before) & after$trees_before > 0.5
   sub = before$trees > 0.5 & before$dbh < s$thr
   expect_gt(sum(sub), 10)                             # there is a regeneration pool to lose
 
-  carried = match(id_before[sub], id_after)
+  carried = match(k_before[sub], k_after)
   expect_false(anyNA(carried))
   expect_identical(after$trees_before[carried], before$trees[sub])
   expect_identical(after$dbh[carried], before$dbh[sub])
   # every simulated cohort the anchor can see is gone ...
-  expect_false(any(id_before[before$trees > 0.5 & before$dbh >= s$thr] %in% id_after[merged]))
+  expect_false(any(k_before[before$trees > 0.5 & before$dbh >= s$thr] %in% k_after[merged]))
   # ... so the basal area above the threshold is the anchor's, exactly
   above = merged & after$dbh >= s$thr
   expect_identical(sum(BA_stem(after$dbh[above])*after$trees_before[above]),
@@ -335,9 +342,9 @@ test_that("merging reuses no cohort id", {
   id_after  = out$Predictions$Cohort$cohortID[[3]]
 
   live = after$trees > 0.5
-  expect_identical(anyDuplicated(id_after[live]), 0L)
+  expect_identical(anyDuplicated(cohort_key(id_after)[live]), 0L)
   # the anchor's ids continue above the carried state's, they do not restart
-  fresh = id_after[live & !(id_after %in% id_before)]
+  fresh = id_after[live & !(cohort_key(id_after) %in% cohort_key(id_before))]
   expect_gt(length(fresh), 0)
   expect_gt(min(fresh), max(id_before))
 })

@@ -107,7 +107,7 @@ ggplot(melt(env_dt[, c("temp", "prec")], measure.vars = c("temp", "prec")),
   labs(x = NULL, y = "site x year") + theme_minimal()
 ```
 
-<img src="D/D-plot-env-1.png" style="display: block; margin: auto;" />
+<img src="D/D-plot-env-1.png" alt="" style="display: block; margin: auto;" />
 
 Stand abundance, measured as total basal area per plot (summed over species),
 against the temperature and precipitation gradients:
@@ -130,7 +130,7 @@ ggplot(grad, aes(value, ba)) +
   labs(x = NULL, y = "Total basal area per plot") + theme_minimal()
 ```
 
-<img src="D/D-plot-observations-1.png" style="display: block; margin: auto;" />
+<img src="D/D-plot-observations-1.png" alt="" style="display: block; margin: auto;" />
 
 ## Initial cohorts
 
@@ -259,7 +259,7 @@ ggplot(melt(hist_dt, id.vars = "epoch", variable.name = "response"),
   theme_minimal()
 ```
 
-<img src="D/D-convergence-1.png" style="display: block; margin: auto;" />
+<img src="D/D-convergence-1.png" alt="" style="display: block; margin: auto;" />
 
 The structural responses drop well below 1 within a few epochs. The per-tree rates
 sit much closer to it; they are only weakly constrained by two inventories, which
@@ -282,56 +282,53 @@ FINN model summary
 ### GROWTH
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable    sp1      sp2     sp3     sp4     sp5   sp6  sp7   sp8   sp9  sp10
-     temp 0.0276 0.000234 0.42326 0.00237 0.07741 0.424 1.28 0.894 0.156 1.858
-     prec 0.2681 0.280129 0.00509 0.00463 0.00365 0.168 0.40 0.902 0.215 0.102
+ variable    sp1    sp2   sp3    sp4    sp5   sp6   sp7   sp8   sp9     sp10
+     prec 0.2499 1.7427 0.406 0.8189 0.2255 0.393 0.241 0.448 0.568 0.000456
+     temp 0.0339 0.0672 1.245 0.0971 0.0555 0.325 0.447 0.755 0.253 1.210784
   sp11
- 0.115
- 0.406
+ 0.517
+ 0.127
 
 Average conditional effects (mean; species in columns):
- variable     sp1     sp2     sp3      sp4     sp5    sp6    sp7     sp8
-     temp -0.0184 0.00104  0.0662  0.00582 0.02611 0.1138 0.0418 -0.0353
-     prec  0.0546 0.06963 -0.0111 -0.01190 0.00609 0.0798 0.0285 -0.0195
-     sp9    sp10    sp11
- -0.0987  0.1730 -0.0253
-  0.1103 -0.0362  0.0489
+ variable     sp1     sp2     sp3     sp4     sp5    sp6    sp7     sp8     sp9
+     prec  0.0499  0.0767 -0.0573 -0.1190 -0.0243 0.0891 0.0352 -0.0192  0.1088
+     temp -0.0178 -0.0109  0.1095  0.0369  0.0121 0.0853 0.0515 -0.0393 -0.0683
+     sp10    sp11
+ -0.00281  0.0479
+  0.14732 -0.0228
 
 ### MORTALITY
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable    sp1  sp2   sp3   sp4   sp5    sp6   sp7      sp8    sp9  sp10
-     prec 0.0385 1.17 0.657 0.171 1.353 0.0149 0.651 0.000971 0.2527 1.974
-     temp 0.1300 1.20 0.473 0.601 0.117 0.4158 0.011 2.489906 0.0143 0.193
-   sp11
- 0.0851
- 0.4337
+ variable    sp1  sp2     sp3  sp4   sp5   sp6    sp7    sp8   sp9   sp10
+     prec 0.0242 3.53 0.34226 1.70 0.665 0.233 0.7010 0.0205 0.131 0.8740
+     temp 0.0858 0.71 0.00541 1.82 0.253 0.755 0.0412 0.7979 0.413 0.0576
+    sp11
+ 0.00176
+ 0.37218
 
 Average conditional effects (mean; species in columns):
- variable     sp1     sp2    sp3     sp4    sp5      sp6      sp7       sp8
-     prec 0.00624  0.0394 0.0297 -0.0228 0.0422 -0.00295 -0.08145  0.000434
-     temp 0.01245 -0.0199 0.0218 -0.0255 0.0122 -0.00716 -0.00777 -0.037597
-      sp9    sp10    sp11
-  0.02124 -0.0925  0.0107
- -0.00548 -0.0282 -0.0230
+ variable      sp1    sp2     sp3     sp4    sp5     sp6     sp7      sp8
+     prec -0.00794 0.0374  0.0605  0.0417 0.0629 -0.0485 -0.0948  0.00927
+     temp  0.01494 0.0127 -0.0101 -0.0406 0.0415 -0.0740 -0.0172 -0.07974
+    sp9   sp10     sp11
+ 0.0169 -0.141  0.00109
+ 0.0390 -0.051 -0.01517
 
 ### REGENERATION
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable     sp1    sp2   sp3     sp4   sp5      sp6   sp7    sp8   sp9  sp10
-     prec 0.00284 1.0194 0.223 0.89976 0.247 1.06e+00 0.458 0.0949 0.887 1.014
-     temp 0.90525 0.0876 0.554 0.00558 0.743 2.16e-05 0.921 1.3634 0.475 0.493
-  sp11
- 1.307
- 0.164
+ variable   sp1   sp2      sp3    sp4    sp5   sp6   sp7   sp8   sp9  sp10 sp11
+     prec 0.922 1.444 0.000834 1.1976 0.4711 1.245 0.206 0.338 0.478 0.951 1.60
+     temp 1.350 0.469 1.075141 0.0579 0.0544 0.108 1.102 1.020 0.451 0.786 1.09
 
 Average conditional effects (mean; species in columns):
- variable    sp1    sp2   sp3     sp4    sp5     sp6    sp7   sp8   sp9   sp10
-     prec 0.0935 -3.300 -1.61 -0.6449 -0.645  1.0405  0.693 0.106 0.684  1.122
-     temp 1.7789  0.585 -1.58 -0.0416 -0.702 -0.0043 -0.786 0.687 0.466 -0.834
+ variable    sp1   sp2    sp3    sp4    sp5    sp6   sp7   sp8  sp9  sp10
+     temp  1.159  1.58 -5.531  0.177 -0.152 -0.756 -3.46 0.996 1.25 -6.33
+     prec -0.956 -3.47  0.211 -0.849 -0.466  2.592  2.17 0.459 1.19  6.72
    sp11
-  2.075
- -0.739
+ -0.906
+  1.113
 ```
 
 The niche and ALE sections below unpack this overview into per-driver response
@@ -375,32 +372,32 @@ comparison[order(variable, model)]
 #> Key: <variable, model>
 #>     variable                 model spearman_train spearman_holdout rmse_train
 #>       <fctr>                <char>          <num>            <num>      <num>
-#>  1:      dbh  Hybrid (growth = NN)           0.82             0.72      12.73
-#>  2:      dbh Process (mechanistic)           0.80             0.73      13.05
-#>  3:       ba  Hybrid (growth = NN)           0.81             0.81       0.12
-#>  4:       ba Process (mechanistic)           0.82             0.81       0.13
-#>  5:    trees  Hybrid (growth = NN)           0.79             0.79       0.75
-#>  6:    trees Process (mechanistic)           0.80             0.79       0.76
-#>  7:   growth  Hybrid (growth = NN)           0.59             0.54       0.09
-#>  8:   growth Process (mechanistic)           0.59             0.56       0.10
-#>  9:     mort  Hybrid (growth = NN)           0.16             0.03       0.15
-#> 10:     mort Process (mechanistic)           0.20             0.04       0.15
-#> 11:      reg  Hybrid (growth = NN)           0.26             0.26       6.21
-#> 12:      reg Process (mechanistic)           0.26             0.24       6.21
+#>  1:      dbh  Hybrid (growth = NN)           0.82             0.74      13.15
+#>  2:      dbh Process (mechanistic)           0.81             0.71      13.32
+#>  3:       ba  Hybrid (growth = NN)           0.74             0.73       0.13
+#>  4:       ba Process (mechanistic)           0.74             0.73       0.12
+#>  5:    trees  Hybrid (growth = NN)           0.70             0.70       0.83
+#>  6:    trees Process (mechanistic)           0.71             0.70       0.84
+#>  7:   growth  Hybrid (growth = NN)           0.60             0.55       0.09
+#>  8:   growth Process (mechanistic)           0.59             0.56       0.09
+#>  9:     mort  Hybrid (growth = NN)           0.15             0.01       0.15
+#> 10:     mort Process (mechanistic)           0.16             0.06       0.15
+#> 11:      reg  Hybrid (growth = NN)           0.23             0.22       6.17
+#> 12:      reg Process (mechanistic)           0.22             0.21       6.18
 #>     rmse_holdout
 #>            <num>
-#>  1:        14.16
-#>  2:        13.83
+#>  1:        13.78
+#>  2:        13.99
 #>  3:         0.09
 #>  4:         0.09
-#>  5:         0.79
-#>  6:         0.77
+#>  5:         0.86
+#>  6:         0.82
 #>  7:         0.10
 #>  8:         0.10
-#>  9:         0.15
+#>  9:         0.16
 #> 10:         0.16
-#> 11:         6.46
-#> 12:         6.47
+#> 11:         6.43
+#> 12:         6.44
 ```
 
 
@@ -434,7 +431,7 @@ ggplot(obs_pred[variable %in% c("dbh", "ba", "trees") & is.finite(obs)],
   theme_minimal() + theme(legend.position = "top")
 ```
 
-<img src="D/D-assess-plot-1.png" style="display: block; margin: auto;" />
+<img src="D/D-assess-plot-1.png" alt="" style="display: block; margin: auto;" />
 
 Each panel is on its **own** axes, and the grey line is 1:1, so the diagonal is
 the target in every panel regardless of the units on it.
@@ -518,7 +515,7 @@ plot_growth_ale(c("temp", "prec"),
                 c(temp = "temperature~(degree*C)", prec = "precipitation~(mm)"))
 ```
 
-<img src="D/D-ale-environmental-1.png" style="display: block; margin: auto;" />
+<img src="D/D-ale-environmental-1.png" alt="" style="display: block; margin: auto;" />
 
 ### Which drivers matter: `feature_importance()`
 
@@ -547,7 +544,7 @@ ggplot(fimp_growth, aes(reorder(variable, importance), importance, fill = import
   labs(x = NULL, y = "permutation importance (delta error)") + theme_minimal()
 ```
 
-<img src="D/D-featimp-plot-1.png" style="display: block; margin: auto;" />
+<img src="D/D-featimp-plot-1.png" alt="" style="display: block; margin: auto;" />
 
 Each species leans on a different climate driver; the importances are learned per
 species, not shared.
@@ -570,7 +567,7 @@ plot_growth_ale(c("dbh", "light"),
                 c(dbh = "diameter~(cm)", light = "light~availability"))
 ```
 
-<img src="D/D-ale-structural-1.png" style="display: block; margin: auto;" />
+<img src="D/D-ale-structural-1.png" alt="" style="display: block; margin: auto;" />
 
 Each curve spans only the range its *own* model actually simulates (ALE never
 extrapolates), so where the process and hybrid cover different ranges, as for
@@ -580,35 +577,42 @@ conditions; the mismatch is information, not an artefact.
 
 ``` r
 sessionInfo()
-#> R version 4.5.0 (2025-04-11)
-#> Platform: aarch64-apple-darwin20
-#> Running under: macOS 26.5.1
+#> R version 4.5.2 (2025-10-31)
+#> Platform: x86_64-pc-linux-gnu
+#> Running under: Ubuntu 26.04.1 LTS
 #> 
 #> Matrix products: default
-#> BLAS:   /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRblas.0.dylib 
-#> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
+#> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+#> LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.32.so;  LAPACK version 3.12.0
 #> 
 #> locale:
-#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+#>  [1] LC_CTYPE=de_DE.UTF-8       LC_NUMERIC=C              
+#>  [3] LC_TIME=de_DE.UTF-8        LC_COLLATE=de_DE.UTF-8    
+#>  [5] LC_MONETARY=de_DE.UTF-8    LC_MESSAGES=de_DE.UTF-8   
+#>  [7] LC_PAPER=de_DE.UTF-8       LC_NAME=C                 
+#>  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+#> [11] LC_MEASUREMENT=de_DE.UTF-8 LC_IDENTIFICATION=C       
 #> 
-#> time zone: Europe/Berlin
-#> tzcode source: internal
+#> time zone: Etc/UTC
+#> tzcode source: system (glibc)
 #> 
 #> attached base packages:
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.2.0       
+#> [1] torch_0.17.0        patchwork_1.3.2     ggplot2_4.0.3      
+#> [4] data.table_1.18.6.1 FINN_0.2.0         
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       
-#>  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.0         callr_3.7.6       
-#>  [9] splines_4.5.0      scales_1.4.0       lattice_0.22-6     R6_2.6.1          
-#> [13] labeling_0.4.3     generics_0.1.4     knitr_1.50         tibble_3.3.0      
-#> [17] pillar_1.11.0      RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57         
-#> [21] bit64_4.6.0-1      viridisLite_0.4.2  cli_3.6.6          withr_3.0.2       
-#> [25] magrittr_2.0.3     mgcv_1.9-1         ps_1.9.1           grid_4.5.0        
-#> [29] processx_3.8.6     lifecycle_1.0.5    nlme_3.1-168       coro_1.1.0        
-#> [33] vctrs_0.6.5        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      
-#> [37] abind_1.4-8        tools_4.5.0        pkgconfig_2.0.3
+#>  [1] Matrix_1.7-4       bit_4.6.0          gtable_0.3.6       dplyr_1.2.1       
+#>  [5] compiler_4.5.2     tidyselect_1.2.1   Rcpp_1.1.2         parallel_4.5.2    
+#>  [9] callr_3.8.0        splines_4.5.2      scales_1.4.0       lattice_0.22-9    
+#> [13] R6_2.6.1           labeling_0.4.3     generics_0.1.4     knitr_1.51        
+#> [17] tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.3.0       
+#> [21] xfun_0.60          S7_0.2.2           bit64_4.8.6        otel_0.2.0        
+#> [25] viridisLite_0.4.3  cli_3.6.6          mgcv_1.9-4         withr_3.0.3       
+#> [29] magrittr_2.0.5     ps_1.9.3           grid_4.5.2         processx_3.9.0    
+#> [33] nlme_3.1-168       lifecycle_1.0.5    coro_1.1.0         vctrs_0.7.3       
+#> [37] evaluate_1.0.5     glue_1.8.1         farver_2.1.2       abind_1.4-8       
+#> [41] tools_4.5.2        pkgconfig_2.0.3
 ```

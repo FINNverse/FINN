@@ -117,10 +117,13 @@ parGrowthEnv <- matrix(c(
 #               maximum size. Steep for the short-lived pioneer (senesces small
 #               and young), gentle for the long-lived climax.
 #   col3 (growth): negative -> suppressed, slow-growing trees die more (vigour).
+#               mortality() takes growth in %/yr (growth_scale = 0.01), so this
+#               column acts on 100 x the annual relative rate: -0.003 here is the
+#               -0.3 per unit rate the other columns are scaled against.
 parMort <- matrix(c(
   c(-1.0, -0.8, -0.5, -0.3),   # col1 light: pioneer strongly shade-intolerant
   c(0.60, 0.35, 0.30, 0.15),   # col2 dbh: senescence, steep pioneer -> gentle climax
-  c(-0.3, -0.3, -0.3, -0.3)    # col3 growth: vigour lowers mortality
+  c(-0.003, -0.003, -0.003, -0.003)  # col3 growth: vigour lowers mortality
 ), Nsp, 3)
 # baseline mortality ~ inverse longevity: high for the short-lived pioneer,
 # low for the long-lived climax.

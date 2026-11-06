@@ -45,7 +45,7 @@ FINN is calibrated against clearly defined inputs:
   start of the interval) and `n_died` (how many of them were dead at the end),
   with the rate `mort = n_died / n_at_risk` derived for convenience. That pair is
   the `cbind(died, survived)` response of a binomial GLM, and it is what the
-  default `mortality = "binomial"` loss consumes: the counts carry the sample
+  default `loss_family = c(..., mortality = "binomial", ...)` consumes: the counts carry the sample
   size, so a 60-tree observation outweighs a 1-tree one.
 - **`env_dt`**: `siteID, year, <env vars…>` in **natural units**; must cover
   every site × year in `obs_dt`. No manual scaling is needed: FINN

@@ -1,8 +1,29 @@
 ## Submission
 
 This is a minor-version update of FINN (0.1.0 -> 0.2.0). It adds model features
-developed for two forest-inventory calibration projects. All new arguments
-default to the previous behaviour, so existing 0.1.0 code runs unchanged.
+developed for two forest-inventory calibration projects: per-response
+likelihoods and loss aggregations including per-tree growth and mortality,
+multiple shooting and teacher forcing as training regimes, `predictTrees()`,
+saturating and adult-limited regeneration, per-site aggregation windows for
+mixed remeasurement intervals, and the Oregon FIA calibration sample as
+lazy-loaded datasets in place of the CSVs under `inst/extdata`.
+
+Three defaults do not reproduce 0.1.0, each with an argument that restores it:
+`mortality(growth_scale = 0.01)` (`growth_scale = 1`), `createProcess(light_mask
+= TRUE)` (`light_mask = FALSE`) and `finn(reg_floor = 1e-3)` (`reg_floor =
+0.2`). They are corrections rather than preferences: the unmasked height
+quantiles made a stand's light depend on which other sites shared its training
+batch, the old recruitment floor alone exceeded observed ingrowth by more than
+an order of magnitude on a 65-species pool, and the raw growth scale left the
+mortality growth coefficient at its bound for most species. Each is documented
+in NEWS.md with the measurement behind it. Every other new argument defaults to
+the previous behaviour.
+
+A fourth change is locale-dependent rather than argument-controlled:
+`resolveSiteIDs()` numbered sites, patches and species through `LC_COLLATE`, so
+the same input gave different integer ids on machines with different locales,
+and the species id indexes the fitted parameter matrices. Ordering is now
+radix. Results are unchanged under `C` and reproducible everywhere else.
 
 New in 0.2.0 (see NEWS.md for details):
 

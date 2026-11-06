@@ -22,7 +22,11 @@ createProcess(
   sample_regeneration = TRUE,
   n_quantiles = 10L,
   continuous = FALSE,
-  custom_parameters = NULL
+  light_mask = TRUE,
+  custom_parameters = NULL,
+  mortality_draw = c("gamma", "poisson"),
+  regeneration_sampler = c("gaussian", "refined"),
+  growth_scale = NULL
 )
 }
 \arguments{
@@ -89,6 +93,21 @@ of cohorts (\code{TRUE}) instead of binning cohorts into \code{n_quantiles} heig
 classes (\code{FALSE}, default). Only used when this process is the competition
 process.}
 
+\item{light_mask}{(\code{logical(1)})\cr Take the height quantiles of the binned
+competition over the LIVE cohorts only. The cohort dimension is padded to the
+widest site x patch in the batch and an empty slot has height 0.001, so with
+enough padding every live cohort is searchsorted into the top bin, where
+nothing shades anything: measured on a 251 m2/ha stand of ten live cohorts,
+100 padded slots put all ten at light 1.00. Only the quantile INPUT is masked,
+so every cohort keeps its real height as the bin query. \code{TRUE} is the default
+since 0.2.0, because the padded width is set by the widest site in the BATCH:
+the same stand of ten cohorts gets light 1.00 throughout beside a neighbour
+holding a hundred, and its correct gradient down to 0.159 beside a neighbour
+holding ten. Batch composition is not part of the model, so the unmasked
+quantile made the fitted objective depend on \code{batchsize}. \code{FALSE} reproduces
+results published before 0.2.0. Ignored when \code{continuous = TRUE}, which
+compares pairs and is correct at any padding.}
+
 \item{custom_parameters}{(\verb{named list} or \code{NULL})\cr Extra parameters that a
 custom \code{func} needs, declared here so they are registered on the model by
 \code{\link[=finn]{finn()}}, optimised jointly by \code{\link[=fit]{fit()}} (when trainable), and
@@ -99,6 +118,46 @@ numeric vector (a trainable parameter with that starting value) or a list with
 function accesses each as \code{self[[name]]}. Parameterise in the \emph{unconstrained}
 space and apply any link inside the function (e.g. store \verb{log K} and use
 \code{exp(self$logK)}), mirroring FINN's own \verb{par_*_unconstrained} convention.}
+
+\item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn
+from the cohort's mortality probability. Only used when this process is the
+mortality process. \code{"gamma"} (default, the behaviour of every published FINN
+result) matches a Gamma to the binomial's first two moments and \code{rsample()}s
+it, which gives a pathwise gradient -- the hazard a discrete draw does not
+cover -- but the forward pass rounds that draw straight-through, so the
+gradient flows through a quantity the simulation discards and the rounded
+count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
+cohorts at annual probabilities of 0.01-0.10. \code{"poisson"} draws a Bernoulli
+where the cohort holds one tree or fewer and a Poisson capped at the cohort
+size otherwise: integer-valued,
+exact in expectation for small \code{n*p}, no pathwise gradient. The Bernoulli
+branch matters because capping a Poisson at a one-tree cohort delivers only
+88\% of the calibrated probability at the \code{p = 0.26} of a suppressed stem.
+See \code{\link[=binomial_from_poisson]{binomial_from_poisson()}} for the measured effect on the simulated
+stand.}
+
+\item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn from the
+negative binomial. Only used when this process is the regeneration process and
+\code{sample_regeneration = TRUE}. \code{"gaussian"} (default, the behaviour of every
+published FINN result) offsets the Gamma draw by \code{+0.001}, clamps the
+probability at \code{1e-4} and pushes the result through
+\code{lambda + eps*sqrt(lambda)}. The offset and the clamp guard the Gaussian
+branch against a negative draw and against a NaN gradient through \code{log(0)};
+together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
+patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species -- over a pool of
+a hundred-odd species, as large as a temperate inventory's whole ingrowth.
+\code{"refined"} drops both (neither hazard applies to \code{torch_poisson})
+and samples exactly below \code{lambda = 2}. See
+\code{\link[=rnbinom_torch_refined]{rnbinom_torch_refined()}}.}
+
+\item{growth_scale}{(\code{numeric(1)} or \code{NULL})\cr Overrides the \code{growth_scale}
+default of the process \code{func}. Only used when this process is the mortality
+process and \code{func} declares that argument. \code{NULL} (the default) keeps the
+function's own default, which for \code{\link[=mortality]{mortality()}} is \code{0.01} -- growth
+enters the logit in \%/yr. \code{growth_scale = 1} feeds it the raw annual relative
+rate, the behaviour of 0.1.0. The value is set as the function's formal rather
+than passed down the forward pass, so a custom mortality \code{func} without the
+argument keeps working unchanged.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and

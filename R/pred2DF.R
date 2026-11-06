@@ -120,15 +120,17 @@ pred2DF <- function(pred, format = "wide") {
       # Convert dimension columns to integers
       for(dim_i in dim_names) cohort_temp_dt[[dim_i]] <- as.integer(cohort_temp_dt[[dim_i]])
 
-      # Remove rows where cohortID equals 0
-      #cohort_temp_dt <- cohort_temp_dt[cohortID != 0]
-      cohort_temp_dt <- cohort_temp_dt[cohort_temp_dt$cohortID != 0,]
-
-      # Get the indices of the cohortID in the cohort array
-      idx_mat <- matrix(nrow = 0, ncol = 3)
-      for(cohortID_i in cohort_temp_dt$cohortID) {
-        idx_mat = rbind(idx_mat, which(cohortID_i == cohorts_array_i, arr.ind = TRUE))
-      }
+      # as.data.frame.table() expands the array in its own index order, so the
+      # three Var columns already ARE the array indices - take them directly.
+      # (This used to search the whole array for each cohortID value, which was
+      # quadratic AND assumed a cohortID could occur only once in the array; ids
+      # are unique within a (site, patch), not globally, so a per-patch id
+      # matched in every patch and the table blew up. The third dimension is the
+      # cohort SLOT, not the species; the real species is filled in below and
+      # overwrites that column, which is why the indices are taken first.)
+      keep <- cohort_temp_dt$cohortID != 0
+      idx_mat <- as.matrix(cohort_temp_dt[keep, ..dim_names])
+      cohort_temp_dt <- cohort_temp_dt[keep, ]
 
       # Add the year column to the data table
       cohort_temp_dt$year = year_i

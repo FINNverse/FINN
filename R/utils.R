@@ -399,6 +399,49 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 }
 
 
+#' Draw deaths as a Bernoulli/Poisson count
+#'
+#' @description
+#' The alternative mortality draw, selected with
+#' `createProcess(mortality_draw = "poisson")`; [binomial_from_gamma()] stays the
+#' default. A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is
+#' drawn as one; every larger cohort is drawn from a Poisson capped at `n`.
+#'
+#' @details
+#' [binomial_from_gamma()] matches a Gamma to the binomial's first two moments and
+#' `rsample()`s it, which buys a pathwise gradient -- the hazard it guards against
+#' is a discrete draw having no gradient at all. The forward pass then rounds that
+#' draw straight-through (`finn-class.R`), so the gradient flows through a quantity
+#' the simulation discards, and the rounded count delivers a measured 0.68-0.72 of
+#' the calibrated deaths for one-tree cohorts at annual probabilities of 0.01-0.10
+#' (5e5 draws per probability; 0.76 at `p = 0.26`). This draw is integer-valued, exact
+#' in expectation for small `n*p`, and carries no pathwise gradient, which is how
+#' Lin et al. (2026) treat discrete events in a differentiable crop model: resolve
+#' them before differentiation and hold them fixed during gradient evaluation.
+#' The Bernoulli branch is not cosmetic -- capping a Poisson at a one-tree cohort
+#' delivers only 88\% of the calibrated probability at the `p = 0.26` of a
+#' suppressed stem, which is the stem that decides thinning.
+#'
+#' The choice shows up in the simulated stand rather than in a holdout score: a
+#' long simulation to equilibrium separates the two draws by a factor of several
+#' in basal area and stem number, while the fitted loss moves far less, because
+#' the rounded deficit is a bias on the trajectory and not on the parameters.
+#'
+#' @param n torch.Tensor Number of trees at risk per cohort.
+#' @param p torch.Tensor Annual mortality probability per cohort.
+#'
+#' @return A `torch` tensor of integer death counts, never exceeding `n`.
+#' @references
+#' Lin et al. (2026). \doi{10.48550/arXiv.2610.36827}
+#' @keywords internal
+#' @export
+binomial_from_poisson = function(n, p) {
+  one = n$le(1.5)$to(dtype = n$dtype)
+  one * torch::torch_bernoulli(p) +
+    (1 - one) * torch::torch_minimum(torch::torch_poisson(n * p), n)
+}
+
+
 #' Draw binomial counts from per-trial Bernoulli probabilities
 #'
 #' @param n torch.Tensor Number of Bernoulli trials per element.
@@ -601,6 +644,46 @@ rnbinom_torch = function(pred, theta) {
   logits = torch::torch_log(probs) - torch::torch_log1p(-probs)
   return(sample_poisson_gaussian((torch::distr_gamma(total_count, (-logits)$exp() )$rsample() +0.001)$abs() ))
   # stats::rgamma(length(pred),total_count, exp(- logits ))
+}
+
+#' Negative-binomial recruit draw without the recruitment floor
+#'
+#' @description
+#' The alternative regeneration sampler, selected with
+#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()` stays the
+#' default. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
+#' the Gamma draw is clamped at that same `eps` instead of taking `+0.001` and an
+#' absolute value, and the draw goes through `sample_poisson_refined()` (an exact
+#' `torch_poisson` below `lambda = 2`, the Gaussian approximation above) instead of
+#' `sample_poisson_gaussian()`.
+#'
+#' @details
+#' The `+0.001` offset and the `1e-4` clamp exist for the Gaussian branch: they
+#' keep the Gamma draw off zero and stop `log(0)` sending a NaN gradient back
+#' through `distr_gamma()$rsample()`. Neither hazard applies to `torch_poisson`,
+#' and together they impose a recruitment FLOOR of 0.0011 per cell-year, which at a
+#' FINN patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 *per species* -- over a
+#' pool of a hundred-odd species, as large as the whole ingrowth a temperate
+#' inventory records. `sample_poisson_gaussian()`
+#' (`lambda + eps*sqrt(lambda)`, rounded straight-through by the forward pass)
+#' rounds the floor away but also rounds the signal away: at a FINN patch of
+#' 0.0168 ha the per-cell mean is 0.001-0.008, and over 2e6 draws the delivered
+#' fraction of the calibrated mean was 0.000-0.048 at `theta = 1`.
+#'
+#' For the measured consequence of both repairs on the simulated stand, and why
+#' the holdout cannot separate them, see [binomial_from_poisson()].
+#'
+#' @param pred torch.Tensor Expected recruits per patch.
+#' @param theta torch.Tensor Negative-binomial dispersion.
+#'
+#' @return A `torch` tensor of recruit counts.
+#' @keywords internal
+#' @export
+rnbinom_torch_refined = function(pred, theta) {
+  eps = 1e-10
+  probs = torch::torch_clamp(1.0 - theta/(theta + pred) + eps, eps, 1.0 - eps)
+  logits = torch::torch_log(probs) - torch::torch_log1p(-probs)
+  sample_poisson_refined(torch::distr_gamma(theta, (-logits)$exp())$rsample()$clamp(min = eps))
 }
 
 dnbinom_torch = function(pred, true, theta) {

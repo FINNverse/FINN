@@ -10,10 +10,9 @@ library(data.table)
 # the last observation is timestep 3 and the only anchor teacher forcing needs is at 2.
 
 tf_data = function(n_sites = 4L) {
-  ext = function(f) system.file("extdata", f, package = "FINN")
-  obs = data.table::fread(ext("fia_obs_dt.csv"))
-  env = data.table::fread(ext("fia_env_dt.csv"))
-  it  = data.table::fread(ext("fia_init_trees.csv"))
+  obs = data.table::copy(FINN::fia_obs_dt)
+  env = data.table::copy(FINN::fia_env_dt)
+  it  = data.table::copy(FINN::fia_init_trees)
   sites = utils::head(sort(unique(obs$siteID)), n_sites)
   obs = obs[siteID %in% sites]
   list(obs = obs, env = env[siteID %in% sites], it = it[siteID %in% sites],
@@ -106,11 +105,18 @@ tf_setup = function(d) {
        })
 }
 
-# Cohort ids are issued above the running maximum, so the highest id alive at a timestep
-# only rises while the state is CARRIED. Resetting the state puts back the ids it was built
-# with, which makes the peak id an exact, deterministic signature of what each step started
-# from - unlike the stand itself, which mortality and recruitment resample every year.
+# Recruits draw their ids from a counter that only goes up (an initial cohort's id is its
+# position in init_cohort, 1..n_init), so the ids present at a step that are at most the
+# previous step's peak are the cohorts the step STARTED from, and those above the init
+# block among them are recruits carried over from earlier steps. That is an exact,
+# deterministic signature of what each step started from - unlike the stand itself, which
+# mortality and recruitment resample every year: a reset state carries no recruit, a
+# carried one carries every survivor.
 peak_id = function(out, step) max(out$Predictions$Cohort$cohortID[[step]])
+carried_recruits = function(out, step, n_init) {
+  ids = out$Predictions$Cohort$cohortID[[step]]
+  sum(ids > n_init & ids <= peak_id(out, step - 1L))
+}
 tot_trees = function(out, step) sum(out$Predictions$Site$trees[, step, ])
 
 
@@ -119,24 +125,27 @@ test_that("the state entering every timestep is the last observed stand", {
   d = tf_data()
   s = tf_setup(d)
   A = tf_anchor(2L, sp = d$Nsp, sites = s$sites)
+  n_init = dim(s$init$trees_r)[3]
 
-  # no anchors: every timestep restarts from init_cohort, so no id is ever issued twice
-  # over and the peak stands still
+  # no anchors: every timestep restarts from init_cohort, so no recruit of an earlier
+  # step is ever carried into the next
   tf = s$run(teacher_forcing = TRUE)
-  expect_identical(peak_id(tf, 2), peak_id(tf, 1))
-  expect_identical(peak_id(tf, 3), peak_id(tf, 1))
+  expect_identical(carried_recruits(tf, 2, n_init), 0L)
+  expect_identical(carried_recruits(tf, 3, n_init), 0L)
   # ... and the stand does not accumulate three years of recruits either
   expect_lt(tot_trees(tf, 3) / tot_trees(tf, 1), 1.35)  # only the year env differs
 
-  # a free run carries its state instead, so both rise
+  # a free run carries its state instead, recruits included
   fr = s$run()
-  expect_gt(peak_id(fr, 2), peak_id(fr, 1))
-  expect_gt(peak_id(fr, 3), peak_id(fr, 2))
+  expect_gt(carried_recruits(fr, 2, n_init), 0)
+  expect_gt(carried_recruits(fr, 3, n_init), 0)
   expect_gt(tot_trees(fr, 3) / tot_trees(fr, 1), 1.5)
 
-  # the anchor at timestep 2 takes over from timestep 3 on, and not before
+  # the anchor at timestep 2 takes over from timestep 3 on, and not before: nothing is
+  # carried into either step, and the anchor's ids are issued above everything before
   tfa = s$run(teacher_forcing = TRUE, anchor_cohorts = list("2" = A))
-  expect_identical(peak_id(tfa, 2), peak_id(tfa, 1))
+  expect_identical(carried_recruits(tfa, 2, n_init), 0L)
+  expect_identical(carried_recruits(tfa, 3, n_init), 0L)
   expect_gt(peak_id(tfa, 3), peak_id(tfa, 2))
   # the anchor is 50 stems per slot of species 2 only, so it must dominate timestep 3 and
   # be absent from timestep 2

@@ -103,8 +103,8 @@ can waste what is.
 
 ## Why `binomial` and not `mse`
 
-FINN scores mortality with `loss = c(..., mortality = "binomial", ...)` by
-default. Squared error assumes an unbounded response with constant variance;
+FINN scores mortality with `loss_family = c(..., mortality = "binomial", ...)`
+by default. Squared error assumes an unbounded response with constant variance;
 mortality is neither. A proportion lives on \[0, 1\] and its variance *shrinks*
 as the rate approaches either end, so on a response that is ~69% zeros, MSE puts
 almost no gradient where the data actually are.
