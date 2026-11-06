@@ -2,8 +2,67 @@
 
 This release adds the model features developed for the **FIA** (US Forest
 Inventory and Analysis) and **BWI** (German Bundeswaldinventur) calibration
-projects. Every new argument defaults to the previous behaviour, so code written
-for 0.1.0 runs unchanged.
+projects. Every new argument defaults to the previous behaviour; the one change
+that does not reproduce 0.1.0 is `mortality()`'s own `growth_scale` default,
+marked in the table below.
+
+The two tables are the overview; the sections below them carry the detail.
+
+### What is new since 0.1.0
+
+| what | where | default |
+|---|---|---|
+| Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |
+| Per-response likelihood, renamed | `fit(loss_family = )` | as `loss` had it; `loss` still accepted, deprecated |
+| How a response is reduced before it is scored: `"mean"`, `"sum"`, `"size_classes"`, `"quantiles"`, `"tree"` | `fit(loss_aggregation = )` | `NULL` (per-cell means) |
+| Tree table feeding both per-tree routes | `fit(tree_data = )` | `NULL` |
+| Score growth and mortality on each simulated cohort that started as an observed tree | `fit(loss_resolution = )` | `"site"` |
+| Evaluate the observed-tree route on a fitted model | `predictTrees()` | new export |
+| Per census and epoch: `frac_killed`, `mean_kill_year`, `frac_ghost`; and the per-tree predictions | `$tree_deaths`, `$tree_pred` | under `loss_resolution = "tree"` |
+| Multiple shooting: rebuild the stand from the observed tree list at every anchor | `fit(reanchor = , anchor_cohorts = , anchor_mode = , anchor_min_dbh = )` | `FALSE`, `NULL`, `"replace"`, `NULL` |
+| Reset the stand to the observation every year | `fit(teacher_forcing = )` | `FALSE` |
+| Per-site aggregation windows for mixed remeasurement intervals | automatic from `period_length`; override with `model$period_mode` | `"auto"` |
+| A non-finite loss term drops that term, or the whole timestep; occurrences counted | `fit(nonfinite = )`, `$nonfinite_counts` | `"drop_term"` |
+| Set-up only, no training | `fit(epochs = 0)` | — |
+| Per-predictor scaling: `"auto"`, `"identity"`, `"0to1"` or a function | `fit(env_autoscale = )` | `"auto"`; `TRUE`/`FALSE`/`NULL` unchanged |
+| Beverton-Holt cap on recruitment | `regeneration_saturation()` | new export |
+| Recruitment limited by conspecific adults | `regeneration_adult()` | new export |
+| A process function declares and calibrates its own named parameters | `createProcess(custom_parameters = )` | `NULL` |
+| Additive recruitment floor, was hard-coded at 0.2 | `finn(reg_floor = )` | `1e-3` |
+| Weight of the regeneration term in the loss | `finn(recruit_obs_weight = )` | `1.0` |
+| Score growth over the whole remeasurement interval | `finn(growth_period_scale = )` | `FALSE` |
+| Binned competition takes its height quantiles over the live cohorts only | `createProcess(light_mask = )` | `FALSE` |
+| Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
+| Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
+| A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
+| **Growth enters `mortality()` in %/yr.** The one default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
+
+### What was broken
+
+Most of these were silent. The last column says whether a result changes for
+someone who was affected.
+
+| defect | results change? |
+|---|---|
+| `fit(epochs = 0)` ran two epochs (`1:0`) | yes — it trained when asked not to |
+| `createProcess(upper = , lower = )` were overwritten with `NULL`, so every fit ran on the process defaults | yes — a fit asking for tighter bounds ran unconstrained |
+| `createProcess(NN = )` was dropped inside `create_nn()` | yes — the supplied network was not used |
+| `createProcess(growth_scale = )` was unvalidated: a bare `NA` divides by 1 and silently restores the 0.1.0 objective, `0` saturates mortality | yes, and with nothing to signal it; now an error |
+| A `torch_load()`ed model's optimizer was reused although it no longer owned the model's tensors | yes — a crash (`optim_ignite_*`) or no training at all (`optim_adam`) |
+| Observed-tree, size-class and quantile tensors of an earlier `fit()` were still evaluated in `forward()` | yes — a stale term entered the loss |
+| `fit()` set-up looked site and year up by linear scan, O(rows x sites) | no — arrays bit-identical; ~20 min of set-up per fit at 32,686 sites |
+| Observed-tree tensors were sized by `patches`, not by the patches the trees occupy | no — light is per patch; `predictTrees(patches = )` is now ignored |
+| Per-tree growth and mortality were evaluated at the interval's last year only, against interval observations | yes, for the per-tree routes (new in 0.2.0) |
+| `predictTrees()` returned rows in its own order, and failed on a model that had never been run | yes — misaligned predictions |
+| A tracked cohort the simulation killed left the scored set mid-window, so the scored sample was a function of the parameters | yes, for `loss_resolution = "tree"` (new in 0.2.0) |
+| A retained dead cohort moved the height quantiles of the binned competition, and so the light of the living | yes — now a warning unless `light_mask` or `continuous` is set |
+| `torch_nanquantile` over a patch with no live cohort returned `NaN` into the likelihood | yes — the fit aborted; the quantiles are now 0 |
+| A per-tree term was scored under a weight taken from the per-tree null while the cell term ran | yes, on data with a constant census period |
+| `period_mode = "constant"` with a per-tree term was silently overridden, with a false reason | yes — now an error naming both halves |
+| Cohort ids were enumerated flat over the whole array, losing the tree each cohort came from | no — the link was recoverable, just not without a positional formula |
+| `$tree_deaths` counted an earlier window's ghosts among this window's kills, and recorded liveness before the death draw | diagnostic only — `frac_killed` was identically 0 on a one-year window |
+| `$tree_pred` was not reset by `fit()`, and `$tree_deaths` reported `NaN` for a census with no fate target | diagnostic only |
+| A U+039B and a U+00D7 in `?fit`, a stray `\cr`, two dangling `\link` targets, a `@param` on the wrong function | no — the LaTeX manual and two `R CMD check` WARNINGs |
 
 ## New features
 
