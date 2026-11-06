@@ -209,6 +209,18 @@ someone who was affected.
   0.1.0: `createProcess(func = FINN::mortality, growth_scale = 1)` recovers the
   old behaviour. Saved models keep the process function they were fitted with.
 
+* **Per-site path: one mean per batch, not one per observation year.** With
+  sites observed in different years (`period_mode = "per_site"`), each
+  response's loss was the MEAN over the units of each observation year, and the
+  years' means were SUMMED. A year with ten trees then weighed as much as one
+  with thousands (in the BWI split-census set-up the pre-drought half of 10 % of
+  the trees carried 75 % of the mortality objective, the drought half 3 %). The
+  loss is now one mean over all units scored in the batch (each year's mean
+  weighted by its share of trees / `n_at_risk` / `growth_n` / cells), which is
+  also what the `weights = "auto"` baselines measure; the reported history is
+  that pooled mean. A batch that scores one observation year is bit-identical
+  to before; the constant-period path is unchanged.
+
 ## Performance
 
 * **`fit()` set-up no longer scales with sites x rows.** `climateDF2array()`
