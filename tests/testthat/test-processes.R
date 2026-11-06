@@ -77,3 +77,26 @@ test_that("mortality scales growth by growth_scale (default 0.01, i.e. %/yr)", {
   logit <- as.numeric(pr) + c(0.005, 0.02) / 0.01 * c(-2, 1) + c(0.3, 0.8) * c(-0.5, 0.2) + c(0.2, 0.4) * c(0.3, -0.1)
   expect_equal(m_default, plogis(logit), tolerance = 1e-6)
 })
+
+
+test_that("createProcess(growth_scale =) is a reachable opt-out of the 0.01 default", {
+  skip_if_no_torch()
+  # The documented wrapper is not: FINN::mortality reads self$record_raws from its own
+  # namespace environment and set_environment() rebinds the outer function only. The
+  # value therefore has to arrive as the installed kernel's formal.
+  mk <- function(gs) finn(N_species = 2L,
+    competition_process  = createProcess(~0, func = FINN::competition),
+    growth_process       = createProcess(~1, func = FINN::growth),
+    mortality_process    = createProcess(~1, func = FINN::mortality, growth_scale = gs),
+    regeneration_process = createProcess(~1, func = FINN::regeneration))
+  expect_equal(as.numeric(formals(mk(NULL)$mortality_func)$growth_scale), 0.01)
+  expect_equal(as.numeric(formals(mk(1)$mortality_func)$growth_scale), 1)
+  # a custom kernel without the argument is left alone
+  own <- function(dbh, species, trees, parMort, pred, light, growth = NULL) torch::torch_sigmoid(pred)
+  m <- finn(N_species = 2L,
+    competition_process  = createProcess(~0, func = FINN::competition),
+    growth_process       = createProcess(~1, func = FINN::growth),
+    mortality_process    = createProcess(~1, func = own, growth_scale = 1),
+    regeneration_process = createProcess(~1, func = FINN::regeneration))
+  expect_false("growth_scale" %in% names(formals(m$mortality_func)))
+})

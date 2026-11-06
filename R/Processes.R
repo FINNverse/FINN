@@ -230,7 +230,10 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #'   `parMort[, 3]` acts per 1 %/yr and its bounds of +-10 allow a meaningful
 #'   effect. With the raw rate (`growth_scale = 1`, the behaviour before 0.2.0)
 #'   the term spans only a few tenths on the logit between slow and fast trees
-#'   even at the bound.
+#'   even at the bound. Set it for a fitted model through
+#'   `createProcess(func = FINN::mortality, growth_scale = 1)`, not through a
+#'   wrapper function: the kernel reads `self$record_raws` from its own
+#'   environment and a wrapper leaves that unbound.
 #'
 #' @return A `torch` tensor of per-cohort mortality probabilities; or, if
 #'   `debug = TRUE`, a list of the intermediate components.

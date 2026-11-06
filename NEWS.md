@@ -113,9 +113,8 @@ for 0.1.0 runs unchanged.
   raw rate the term spanned only a few tenths on the logit between slow and fast
   trees even at the coefficient bound of -10 (in the BWI calibration 13 of 15
   species sat at that bound). This is the one default that does not reproduce
-  0.1.0: pass `growth_scale = 1` through a custom process function to recover
-  the old behaviour. Saved models keep the process function they were fitted
-  with.
+  0.1.0: `createProcess(func = FINN::mortality, growth_scale = 1)` recovers the
+  old behaviour. Saved models keep the process function they were fitted with.
 
 ## Performance
 

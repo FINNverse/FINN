@@ -25,7 +25,8 @@ createProcess(
   light_mask = FALSE,
   custom_parameters = NULL,
   mortality_draw = c("gamma", "poisson"),
-  regeneration_sampler = c("gaussian", "refined")
+  regeneration_sampler = c("gaussian", "refined"),
+  growth_scale = NULL
 )
 }
 \arguments{
@@ -137,11 +138,21 @@ published FINN result) offsets the Gamma draw by \code{+0.001}, clamps the
 probability at \code{1e-4} and pushes the result through
 \code{lambda + eps*sqrt(lambda)}. The offset and the clamp guard the Gaussian
 branch against a negative draw and against a NaN gradient through \code{log(0)};
-together they are a recruitment FLOOR of 0.0011 per cell-year, which over 149
-species is 9.8 recruits ha^-1 yr^-1, as large as the entire observed ingrowth
-of 11.4. \code{"refined"} drops both (neither hazard applies to \code{torch_poisson})
+together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
+patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species -- over a pool of
+a hundred-odd species, as large as a temperate inventory's whole ingrowth.
+\code{"refined"} drops both (neither hazard applies to \code{torch_poisson})
 and samples exactly below \code{lambda = 2}. See
 \code{\link[=rnbinom_torch_refined]{rnbinom_torch_refined()}}.}
+
+\item{growth_scale}{(\code{numeric(1)} or \code{NULL})\cr Overrides the \code{growth_scale}
+default of the process \code{func}. Only used when this process is the mortality
+process and \code{func} declares that argument. \code{NULL} (the default) keeps the
+function's own default, which for \code{\link[=mortality]{mortality()}} is \code{0.01} -- growth
+enters the logit in \%/yr. \code{growth_scale = 1} feeds it the raw annual relative
+rate, the behaviour of 0.1.0. The value is set as the function's formal rather
+than passed down the forward pass, so a custom mortality \code{func} without the
+argument keeps working unchanged.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and

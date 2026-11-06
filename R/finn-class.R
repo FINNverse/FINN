@@ -3559,7 +3559,19 @@ finn_class = nn_module(
         self$par_theta_recruits = obj$dispersion_parameter
       }
 
-      if(type == "mortality") self$mortality_draw = obj$mortality_draw
+      if(type == "mortality") {
+        self$mortality_draw = obj$mortality_draw
+        # Set as the function's formal, not passed down forward(): the kernel reads
+        # `self$record_raws` from its own environment, so a user wrapper around
+        # FINN::mortality() cannot be rebound by set_environment() and is not a
+        # reachable opt-out. NULL keeps the func's own default, so a custom
+        # mortality func without the argument is untouched.
+        if(!is.null(obj$growth_scale) && "growth_scale" %in% names(formals(self$mortality_func))) {
+          fn = self$mortality_func
+          formals(fn)$growth_scale = obj$growth_scale
+          self$mortality_func = fn
+        }
+      }
 
       if(type == "competition") {
         self$n_quantiles = obj$n_quantiles

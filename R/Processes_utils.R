@@ -115,6 +115,14 @@
 #'   88% of the calibrated probability at the `p = 0.26` of a suppressed stem.
 #'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
 #'   stand.
+#' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
+#'   default of the process `func`. Only used when this process is the mortality
+#'   process and `func` declares that argument. `NULL` (the default) keeps the
+#'   function's own default, which for [FINN::mortality()] is `0.01` -- growth
+#'   enters the logit in %/yr. `growth_scale = 1` feeds it the raw annual relative
+#'   rate, the behaviour of 0.1.0. The value is set as the function's formal rather
+#'   than passed down the forward pass, so a custom mortality `func` without the
+#'   argument keeps working unchanged.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn from the
 #'   negative binomial. Only used when this process is the regeneration process and
 #'   `sample_regeneration = TRUE`. `"gaussian"` (default, the behaviour of every
@@ -122,9 +130,10 @@
 #'   probability at `1e-4` and pushes the result through
 #'   `lambda + eps*sqrt(lambda)`. The offset and the clamp guard the Gaussian
 #'   branch against a negative draw and against a NaN gradient through `log(0)`;
-#'   together they are a recruitment FLOOR of 0.0011 per cell-year, which over 149
-#'   species is 9.8 recruits ha^-1 yr^-1, as large as the entire observed ingrowth
-#'   of 11.4. `"refined"` drops both (neither hazard applies to `torch_poisson`)
+#'   together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
+#'   patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species -- over a pool of
+#'   a hundred-odd species, as large as a temperate inventory's whole ingrowth.
+#'   `"refined"` drops both (neither hazard applies to `torch_poisson`)
 #'   and samples exactly below `lambda = 2`. See
 #'   [FINN::rnbinom_torch_refined()].
 #' @param custom_parameters (`named list` or `NULL`)\cr Extra parameters that a
@@ -153,10 +162,11 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = FALSE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined")) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = FALSE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)
+  out$growth_scale = growth_scale
 
   # ---- custom (extra) process parameters -------------------------------------
   # A named list declaring extra parameters a custom `func` needs. Each element is
