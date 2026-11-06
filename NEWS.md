@@ -2,9 +2,10 @@
 
 This release adds the model features developed for the **FIA** (US Forest
 Inventory and Analysis) and **BWI** (German Bundeswaldinventur) calibration
-projects. Every new argument defaults to the previous behaviour; the one change
-that does not reproduce 0.1.0 is `mortality()`'s own `growth_scale` default,
-marked in the table below.
+projects. Every new argument defaults to the previous behaviour, with three
+exceptions that do not reproduce 0.1.0 and are marked in the table below:
+`mortality(growth_scale = 0.01)`, `createProcess(light_mask = TRUE)` and
+`finn(reg_floor = 1e-3)`.
 
 The two tables are the overview; the sections below them carry the detail.
 
@@ -24,11 +25,11 @@ The two tables are the overview; the sections below them carry the detail.
 | Per-site aggregation windows for mixed remeasurement intervals | automatic from `period_length`; override with `model$period_mode` | `"auto"` |
 | A non-finite loss term drops that term, or the whole timestep; occurrences counted | `fit(nonfinite = )`, `$nonfinite_counts` | `"drop_term"` |
 | Set-up only, no training | `fit(epochs = 0)` | — |
-| Per-predictor scaling: `"auto"`, `"identity"`, `"0to1"` or a function | `fit(env_autoscale = )` | `"auto"`; `TRUE`/`FALSE`/`NULL` unchanged |
+| Per-predictor scaling: `"auto"`, `"identity"`, `"0to1"` or a function | `fit(env_autoscale = )` | `TRUE`, which z-scores as before; the new strings are opt-in |
 | Beverton-Holt cap on recruitment | `regeneration_saturation()` | new export |
 | Recruitment limited by conspecific adults | `regeneration_adult()` | new export |
 | A process function declares and calibrates its own named parameters | `createProcess(custom_parameters = )` | `NULL` |
-| Additive recruitment floor, was hard-coded at 0.2 | `finn(reg_floor = )` | `1e-3` |
+| **Additive recruitment floor, was hard-coded at 0.2.** A default that does **not** reproduce 0.1.0 — see below | `finn(reg_floor = )` | **`1e-3`** (was 0.2) |
 | Weight of the regeneration term in the loss | `finn(recruit_obs_weight = )` | `1.0` |
 | Score growth over the whole remeasurement interval | `finn(growth_period_scale = )` | `FALSE` |
 | **Binned competition takes its height quantiles over the live cohorts only.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(light_mask = )` | **`TRUE`** (was unmasked) |
@@ -177,6 +178,13 @@ someone who was affected.
   inventory simulator.
 
 ## Behaviour changes
+
+* **The recruitment floor is `1e-3`, not 0.2.** `finn(reg_floor = )` replaces a
+  hard-coded additive floor of 0.2 on the expected recruitment of every species
+  in every cell-year. At 0.2 the floor alone delivered about 13 stems per hectare
+  per year over a 65-species FIA pool, against roughly 0.7 observed -- the floor
+  was the recruitment. It exists to keep the negative-binomial likelihood away
+  from a zero mean, which `1e-3` does. `finn(reg_floor = 0.2)` restores 0.1.0.
 
 * **The binned competition masks padding out of its height quantiles.**
   `createProcess(light_mask = )` now defaults to `TRUE`. The cohort dimension is
