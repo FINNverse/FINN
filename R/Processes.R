@@ -125,11 +125,17 @@ height = function(dbh, parHeight) {
 #' @param cohortHeights torch.Tensor (Optional) Pre-computed cohort heights. Defaults to NULL.
 #' @param n_quantiles integer Number of height quantiles used when `continuous = FALSE`. Defaults to 10.
 #' @param continuous logical Use the continuous competition formulation. Defaults to FALSE.
+#' @param light_mask logical Take the height quantiles over the live cohorts only
+#'   (`trees > 0.5`), leaving every cohort's real height as the bin query. Defaults
+#'   to TRUE since 0.2.0: unmasked, the padded cohort width is set by the widest
+#'   site in the batch, so the same stand's light depends on which other sites
+#'   happen to share its batch. `FALSE` reproduces earlier results. See
+#'   [FINN::createProcess()] for the measurement.
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
 #' @export
-competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE){
+competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE, light_mask = TRUE){
   parHeight = parComp[,1]
   parCompStr = parComp[,2]
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)*parCompStr[species]*0.1
@@ -142,8 +148,22 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
     } else {
       device = dbh$device
       quants = torch::torch_linspace(0, 1, steps = n_quantiles+1, dtype = dbh$dtype, device = device)
-      # Quantiles and their indices
-      cohortHeights_quant = torch::torch_quantile(cohortHeights, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
+      # Quantiles and their indices. `light_mask` takes the bin edges over the LIVE cohorts
+      # only: the cohort dimension is padded to the widest site x patch of the batch, and an
+      # empty slot has height 0.001, so with many of them every live cohort lands in the top
+      # bin, where nothing shades anything. Only the quantile INPUT is masked; the
+      # searchsorted query keeps every cohort's real height, so a dead-but-tracked cohort is
+      # still placed in a bin and still receives light.
+      hq = if(isTRUE(light_mask))
+             torch::torch_where(trees$gt(0.5)$unsqueeze(4), cohortHeights,
+                                torch::torch_full_like(cohortHeights, NaN))
+           else cohortHeights
+      cohortHeights_quant = if(isTRUE(light_mask))
+        # a patch whose cohorts are all dead has an all-NaN slice and no quantile;
+        # its basal area is zero, so edges of 0 put everything in the top bin and
+        # give the empty patch full light, which is the right answer.
+        torch::torch_nanquantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))$nan_to_num(nan = 0)
+        else torch::torch_quantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
       indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L)$contiguous(), cohortHeights$squeeze(4), right = TRUE) + 1L
       # Calculation of comp
       cohortHeights_quant = cohortHeights_quant$unsqueeze(4)
@@ -213,7 +233,10 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #'   `parMort[, 3]` acts per 1 %/yr and its bounds of +-10 allow a meaningful
 #'   effect. With the raw rate (`growth_scale = 1`, the behaviour before 0.2.0)
 #'   the term spans only a few tenths on the logit between slow and fast trees
-#'   even at the bound.
+#'   even at the bound. Set it for a fitted model through
+#'   `createProcess(func = FINN::mortality, growth_scale = 1)`, not through a
+#'   wrapper function: the kernel reads `self$record_raws` from its own
+#'   environment and a wrapper leaves that unbound.
 #'
 #' @return A `torch` tensor of per-cohort mortality probabilities; or, if
 #'   `debug = TRUE`, a list of the intermediate components.

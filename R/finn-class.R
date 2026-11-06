@@ -225,7 +225,7 @@ finn = function(N_species,
 #'       This is the size-distribution counterpart of the mean diameter: with a
 #'       `poisson` family it scores total abundance and size composition at
 #'       once, since independent Poisson class counts factorise into
-#'       `Poisson(N | Λ) × Multinomial(n | N, p)`. Class membership uses a
+#'       `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
 #'       difference of sigmoids rather than a hard cut so the term stays
 #'       differentiable with respect to diameter; `tau` controls that softness
 #'       and small values approach hard binning.
@@ -341,7 +341,7 @@ finn = function(N_species,
 #' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
 #' @param shuffle (`logical(1)`)\cr Shuffle data or not.
 #' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
-#' @param env_autoscale \cr How to scale the environmental predictors in `env`.
+#' @param env_autoscale How to scale the environmental predictors in `env`.
 #'   The learned transformation is stored on the model and re-applied
 #'   automatically at every `predict()`/`simulate()` call, so raw (untransformed)
 #'   `env` can be passed for both calibration and prediction. Accepts:
@@ -464,12 +464,26 @@ finn = function(N_species,
 #'   The term does not depend on the fitting regime but its residual does: under
 #'   `teacher_forcing` the kernel runs on the observed tree, so the residual is
 #'   parameter error alone; under `reanchor` the cohort has drifted for at most one
-#'   census interval; under single shooting for up to the whole horizon, and the
-#'   tracked set shrinks with every simulated death. A cohort the model kills inside
-#'   a window accumulates hazard over fewer years than the fate covers, which
-#'   attenuates its predicted death probability; that is measured, not corrected —
-#'   `$tree_coverage` reports per census and epoch the fraction of target-bearing
-#'   slots that survived the whole window, and `$tree_pred$n` the per-slot years.
+#'   census interval; under single shooting for up to the whole horizon.
+#'
+#'   A cohort the simulation kills inside a window is **kept** with `trees = 0` for
+#'   as long as its generation lasts — to the next anchor under
+#'   `reanchor`/`teacher_forcing`, which restart the generation there, and
+#'   to the end of the horizon under single shooting, where `tree_live0` is rebuilt
+#'   only at anchors. It shades nothing and contributes nothing to `dbh`, `ba` or
+#'   `trees`, but its diameter and its hazard keep accumulating, because the
+#'   observation it is scored against is the mean annual rate and the 0/1 fate over
+#'   the whole interval. Both terms therefore score every tree, and the scored
+#'   sample does not depend on the parameters. `$tree_deaths` reports per census and
+#'   epoch how often the simulation killed a tree the inventory found alive
+#'   (`frac_killed`) and in which year (`mean_kill_year`) — a diagnostic, not a
+#'   correction. A generation outlives a window under single shooting, so a slot
+#'   killed in an earlier window enters the next one already dead; `frac_ghost`
+#'   is that share and it is excluded from `frac_killed`, which counts this
+#'   window's kills alone. Under `reanchor`/`teacher_forcing` the generation
+#'   restarts at every anchor, so `frac_ghost` is 0 by construction only where the
+#'   anchors cover every census; a sparser anchor list carries ghosts like single
+#'   shooting does.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -494,7 +508,7 @@ finn = function(N_species,
 #' | `init_cohort` | any, incl. binned (`makeInitCohorts(dbh_binsize = )`) | one cohort per tree (`makeInitCohorts()` without `dbh_binsize`) |
 #' | `tree_data` needs | `dbh` at the interval start | `cohortID` of the initial cohort |
 #' | combines with | the simulated `dbh`/`ba`/`trees`/`regeneration` terms | `reanchor` and `teacher_forcing` (under teacher forcing the trajectory is reset to the observed stand every year, which comes close to the first option) |
-#' | diagnostics | [predictTrees()] | `$tree_coverage`, `$tree_pred` |
+#' | diagnostics | [predictTrees()] | `$tree_deaths`, `$tree_pred` |
 #'
 #' Use the first to estimate the process functions from the trees as observed,
 #' the second to test whether simulated trajectories follow the real trees. The
@@ -1006,9 +1020,28 @@ finn_class = nn_module(
     tree_acc = NULL
     tree_cov = list()
     tree_flat = function(a) a$to(dtype = self$dtype, device = self$device)$permute(c(3,2,1))$reshape(c(-1))
-    tree_new = function(n) lapply(1:3, function(k) torch::torch_zeros(n + 1L, device = self$device))
+    tree_new = function(n) lapply(1:5, function(k) torch::torch_zeros(n + 1L, device = self$device))
     # Slot-wise zeroing keeps the graph of the sites still inside their window (the per-site
     # path backwards once, at the end); elsewhere that graph is already freed, so start fresh.
+    # A generation's slots are the cohort layout it was built from, padding included.
+    # Only the slots that held a real tree are tracked; the empty ones would otherwise
+    # accumulate a rate against a NaN target and pollute `$tree_deaths`.
+    tree_live0 = NULL
+    tree_slot_idx = function(ids = cohort_ids) {
+      loc = ids$to(dtype = torch_long()) - tree_gen_base
+      inr = loc$ge(1)$bitwise_and(loc$le(tree_gen_nc))
+      sl  = tree_sp_off + (loc - 1L)*tree_sp_n + 1L
+      torch_where(inr, sl, torch_full_like(sl, tree_gen_n + 1L))
+    }
+    tree_mark_live = function(tr = trees, ids = cohort_ids) {
+      idx = tree_slot_idx(ids)$flatten()
+      v = tr$gt(0.5)$to(dtype = torch_float32())$flatten()
+      torch::torch_zeros(tree_gen_n + 1L, device = self$device)$scatter_add(1, idx, v)$gt(0.5)
+    }
+    tree_tracked = function() {
+      idx = tree_slot_idx()
+      tree_live0$to(dtype = torch_float32())$gather(1, idx$flatten())$reshape(idx$shape)$gt(0.5)
+    }
     tree_zero = function(acc, reset) {
       if(!any(reset > 0.5)) return(acc)
       if(all(reset > 0.5)) return(tree_new(tree_gen_n))
@@ -1017,6 +1050,7 @@ finn_class = nn_module(
     }
     if(tree_mode) {
       tree_acc = tree_new(tree_gen_n)
+      tree_live0 = tree_mark_live()
       tree_data = lapply(tree_data, function(td) lapply(td, tree_flat))
       # The accumulators cover (i - period_length + 1):i, the window the aggregate rate terms
       # use, so they are zeroed at each window's first year - zeroing at each census instead
@@ -1149,7 +1183,8 @@ finn_class = nn_module(
           ba = NULL,
           cohortHeights = NULL,
           n_quantiles = self$n_quantiles,
-          continuous = self$continuous
+          continuous = self$continuous,
+          light_mask = isTRUE(self$light_mask)
         )
 
         if (light$gt(1.0)$sum()$item() > 0) {
@@ -1184,7 +1219,8 @@ finn_class = nn_module(
           ba = NULL,
           cohortHeights = NULL,
           n_quantiles = self$n_quantiles,
-          continuous = self$continuous
+          continuous = self$continuous,
+          light_mask = isTRUE(self$light_mask)
         )
         # cat("Second section  B2\n")
 
@@ -1202,31 +1238,39 @@ finn_class = nn_module(
           growth = g
         )
 
-        trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
+        n_at_risk = torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0)
+        m_draw = torch::torch_clamp(m, 0.01, 0.99)
+        # NULL (a model saved before mortality_draw existed, or a hybrid built elsewhere) is the default
+        trees_dead = (if(identical(self$mortality_draw, "poisson")) binomial_from_poisson(n_at_risk, m_draw)
+                      else binomial_from_gamma(n_at_risk, m_draw))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
+        trees = torch_clamp(trees - trees_dead, min = 0) #### TODO if trees = 0 then NA...prevent!
 
         ## Tree-level loss: accumulate this year's rates per tracked cohort ####
-        # `trees` is still the pre-death count here, and liveness is `trees > 0.5`: a dead
-        # slot is zeroed, not removed, and keeps a diameter. Masked slots go to the scratch
-        # cell at the end of the accumulator rather than being dropped.
+        # A tracked cohort accumulates for the WHOLE window whether or not the simulation
+        # killed it: the observation it is scored against is the mean annual rate and the
+        # 0/1 fate over the whole interval, so a truncated accumulation would compare two
+        # different quantities. A killed slot keeps `trees = 0`, shades nothing and
+        # contributes nothing to the stand terms, but its diameter and hazard stay defined.
+        # Accumulators 4 and 5 are the two liveness counts `$tree_deaths` needs, and one of
+        # them is not enough. 4 counts the years the cohort ENTERED alive, so a cohort killed
+        # in year k of an L-year window gets k and a cohort that was already dead at the
+        # window's start gets 0 -- but a kill in year L is then indistinguishable from a
+        # survivor. 5 counts the years it ENDED alive, which separates those two (k-1 against
+        # L) but gives 0 both for a year-1 kill and for a ghost. Survivor: 5 == n_ok.
+        # Ghost: 4 == 0. Killed in this window: 4 > 0 and 5 < n_ok, in year 4.
         if(tree_mode) {
-          local = cohort_ids$to(dtype = torch_long()) - tree_gen_base
-          keep = trees$gt(0.5)$bitwise_and(local$ge(1))$bitwise_and(local$le(tree_gen_nc))$to(dtype = torch_float32())
-          slot = tree_sp_off + (local - 1L)*tree_sp_n + 1L
-          idx = torch_where(keep$gt(0.5), slot, torch_full_like(slot, tree_gen_n + 1L))$flatten()
+          keep = tree_tracked()$to(dtype = torch_float32())
+          idx = torch_where(keep$gt(0.5), tree_slot_idx(),
+                            torch_full_like(cohort_ids$to(dtype = torch_long()), tree_gen_n + 1L))$flatten()
           gi = if(isTRUE(self$growth_period_scale)) torch_log1p(g) else g
           tree_acc[[1]] = tree_acc[[1]]$scatter_add(1, idx, (gi*keep)$flatten())
           tree_acc[[2]] = tree_acc[[2]]$scatter_add(1, idx, (torch_log((1-m)$clamp(1e-6, 1))$negative()*keep)$flatten())
           tree_acc[[3]] = tree_acc[[3]]$scatter_add(1, idx, keep$flatten())
+          tree_acc[[4]] = tree_acc[[4]]$scatter_add(1, idx, (keep*trees_before$gt(0.5)$to(dtype = torch_float32()))$flatten())
+          tree_acc[[5]] = tree_acc[[5]]$scatter_add(1, idx, (keep*trees$gt(0.5)$to(dtype = torch_float32()))$flatten())
         }
-        # trees_dead = (trees*m)*trees$ge(0.5)$float()
-        # trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
-        # trees_before = trees
-
-        #.unsqueeze(3) # TODO check!
-        #trees$sub_(m)$clamp_(min = 0.0)
-        trees = torch_clamp(trees - trees_dead, min = 0) #### TODO if trees = 0 then NA...prevent!
       }
 
       ### Competition 3 ####
@@ -1242,7 +1286,8 @@ finn_class = nn_module(
         ba = NULL,
         cohortHeights = NULL,
         n_quantiles = self$n_quantiles,
-        continuous = self$continuous
+        continuous = self$continuous,
+        light_mask = isTRUE(self$light_mask)
       )
 
       # browser()
@@ -1267,7 +1312,8 @@ finn_class = nn_module(
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
       if(self$sample_regeneration){
-        r = rnbinom_torch(r_mean_patch, self$par_theta_recruits)
+        r = if(identical(self$regeneration_sampler, "refined")) rnbinom_torch_refined(r_mean_patch, self$par_theta_recruits)
+            else rnbinom_torch(r_mean_patch, self$par_theta_recruits)
       }else if(!self$sample_regeneration){
         r = r_mean_patch
       }
@@ -1357,8 +1403,11 @@ finn_class = nn_module(
 
         # Gradient shouldn't be required, also expensive for backpropagation because of reshape/view operations!
         #torch::with_no_grad({
-        # Masks to find alive cohorts
-          mask = (trees > 0.5)$flatten(start_dim = 1, end_dim = 2)
+        # Masks to find alive cohorts. A tracked cohort is kept even when the simulation
+        # killed it, so its diameter and hazard stay defined to the end of the interval.
+          alive_now = trees > 0.5
+          if(tree_mode) alive_now = alive_now$bitwise_or(tree_tracked())
+          mask = alive_now$flatten(start_dim = 1, end_dim = 2)
           org_dim = species$shape[1:2]
           org_dim_t = torch::torch_tensor(org_dim, dtype = torch_long(), device = "cpu")
 
@@ -1391,7 +1440,8 @@ finn_class = nn_module(
       if(i > 0){
         if(dbh$shape[3] != 0){
           #dead_trees_mask = trees == 0
-          dbh = dbh*trees$gt(0.5)$float()
+          if(tree_mode) dbh = dbh*trees$gt(0.5)$bitwise_or(tree_tracked())$float()
+          else dbh = dbh*trees$gt(0.5)$float()
           BA_stem_values = BA_stem(dbh = dbh)*trees
           species = species
           samples = vector("list", 3)
@@ -1484,36 +1534,44 @@ finn_class = nn_module(
           period = unique(accumulate_gradients[,1])
 
           ## Tree resolution: score the closed window, in place of the cell terms ####
-          # Growth needs the cohort alive for the WHOLE window - a truncated increment is not a
-          # prediction of the interval's growth. Mortality keeps every cohort alive at the
-          # window's start and scores the compounded per-step probability, not the sampled fate
-          # (at trees = 1 a straight-through death is a coin flip). A cohort killed mid-window
-          # therefore carries a hazard over fewer years than the observation covers - the one
-          # contamination this term adds, and `tree_coverage` measures it per census.
+          # Every tracked cohort covers the whole window by construction (see the accumulator
+          # above), so neither term selects its own sample any more. Mortality scores the
+          # compounded per-step probability, never the sampled fate, which at trees = 1 is a
+          # coin flip. `$tree_deaths` reports how often the simulation killed a tree the
+          # inventory found alive, and in which year - a diagnostic, not a correction.
           if(tree_mode && !is.null(tree_data[[as.character(i)]])) {
             td = tree_data[[as.character(i)]]
             w = accumulate_gradients[,1]
             w[!is.finite(w)] = 1
             w_flat = torch_tensor(rep(w, times = tree_gen_n %/% sites), dtype = self$dtype, device = self$device)
             n_ok = tree_acc[[3]]$narrow(1, 1, tree_gen_n)
+            n_entered = tree_acc[[4]]$narrow(1, 1, tree_gen_n)
+            n_alive = tree_acc[[5]]$narrow(1, 1, tree_gen_n)
             g_acc = tree_acc[[1]]$narrow(1, 1, tree_gen_n)
             g_pred = if(isTRUE(self$growth_period_scale)) torch_expm1(g_acc) else g_acc/n_ok$clamp(min = 1)
             p_death = torch_expm1(tree_acc[[2]]$narrow(1, 1, tree_gen_n)$negative())$negative()
-            whole = n_ok$ge(w_flat - 0.5)
-            alive = n_ok$gt(0.5)
-            hide = function(t, k) torch_where(k, t, torch_full_like(t, NaN))
-            loss[4] = self$loss_growth_func(hide(td$growth, whole), g_pred)
-            loss[5] = self$loss_mortality_func(hide(td$mort, alive), p_death$clamp(1e-6, 1 - 1e-6))
+            loss[4] = self$loss_growth_func(td$growth, g_pred)
+            loss[5] = self$loss_mortality_func(td$mort, p_death$clamp(1e-6, 1 - 1e-6))
             self$tree_pred = list(growth = as.numeric(g_pred$detach()$cpu()),
                                   mort = as.numeric(p_death$detach()$cpu()),
-                                  n = as.numeric(n_ok$detach()$cpu()))
-            # hazard erosion, per census: of the slots that carry a fate, how many were alive
-            # for the whole window (unbiased) and how much of it the others accumulated
+                                  n = as.numeric(n_ok$detach()$cpu()),
+                                  n_alive = as.numeric(n_alive$detach()$cpu()))
+            # of the slots carrying a fate: how many the simulation killed before the window
+            # closed, and how long those lived. A survivor ends every tracked year alive,
+            # `n_alive == n_ok`; a kill in the window's LAST year is a survivor by the
+            # entering count alone, which is why both counts are kept.
+            # A generation outlives a window under single shooting, so a slot killed in an
+            # earlier window enters this one already dead: it accumulates nothing and its
+            # `n_entered` is 0. Counting it with the trees killed INSIDE this window would
+            # mix two different statements and pull `mean_kill_year` toward zero, which is
+            # what it did. `ghost` is that share; `killed` is this window's kills alone, and
+            # the year it died is the number of years it entered alive.
             has = td$mort$isnan()$bitwise_not()$to(dtype = self$dtype)
-            a = has*alive$to(dtype = self$dtype)
+            ghost = has*n_entered$lt(0.5)$to(dtype = self$dtype)
+            killed = has*n_alive$lt(n_ok - 0.5)$to(dtype = self$dtype)*n_entered$gt(0.5)$to(dtype = self$dtype)
             tree_cov[[length(tree_cov) + 1L]] = c(i, as.numeric(torch_stack(list(
-              has$sum(), (has*whole$to(dtype = self$dtype))$sum(), a$sum(),
-              (a*n_ok/w_flat)$sum()))$detach()$cpu()))
+              has$sum(), killed$sum(), (killed*n_entered)$sum(),
+              (has*n_ok)$sum(), ghost$sum()))$detach()$cpu()))
           }
           if(per_site_mode) {
             # ---- per-site windows: mask M[s, t] = 1 for t in (i - p_s, i] ----
@@ -1666,6 +1724,7 @@ finn_class = nn_module(
             tree_gen_n = as.integer(prod(a$species$shape))
             tree_gen_nc = as.integer(a$species$shape[3])
             tree_acc = tree_new(tree_gen_n)
+            tree_live0 = tree_mark_live(a$trees, a$ids)
           }
           a_dbh = a$dbh
           a_trees = a$trees
@@ -1703,6 +1762,7 @@ finn_class = nn_module(
           tree_gen_n = as.integer(prod(forced$species$shape))
           tree_gen_nc = as.integer(forced$species$shape[3])
           tree_acc = tree_new(tree_gen_n)
+          tree_live0 = tree_mark_live(forced$trees, forced$ids)
         }
       }
 
@@ -1745,7 +1805,7 @@ finn_class = nn_module(
       )
     }
     Result_out = list(Predictions = Predictions, loss = loss_out)
-    if(length(tree_cov)) Result_out$tree_coverage = do.call(rbind, tree_cov)
+    if(length(tree_cov)) Result_out$tree_deaths = do.call(rbind, tree_cov)
 
     # (parameters' requires_grad is restored via on.exit() above, even if this
     # function exits early due to an error)
@@ -2091,6 +2151,16 @@ finn_class = nn_module(
     # Two ways to score single trees exist side by side and ask different
     # questions (observed vs simulated tree, see ?fit); the same response cannot
     # be scored both ways in one fit.
+    # Retention keeps a killed tracked cohort in the array with trees = 0. Every stand
+    # reduction weights by stem number and drops it -- except the height quantile of the
+    # BINNED competition, which counts slots. Measured on a one-patch stand, the same live
+    # cohorts with and without ghosts beside them: without the mask a live cohort's light
+    # moves by up to 1.00 (fully shaded to open); with it, by 0 exactly, in every cell of a
+    # 3 x 5 x 20 grid. So the tree term is only inert on the trajectory under a masked or
+    # unbinned light.
+    if (tree_res && !isTRUE(self$continuous) && !isTRUE(self$light_mask))
+      warning("loss_resolution = \"tree\" keeps a cohort the simulation kills in the array until its interval ends, and the binned competition takes its height quantiles over every slot, so those cohorts move the light of the living ones -- by up to 1.00 in a one-patch test. Use createProcess(light_mask = TRUE) or continuous = TRUE for the competition process, or the per-tree term changes the trajectory it is scoring.",
+              call. = FALSE)
     if (tree_res && any(vapply(self$loss_agg[c("growth", "mortality")], function(a) identical(a$type, "tree"), logical(1))))
       stop("`loss_resolution = \"tree\"` (the simulated cohort each tree started as) cannot be combined with `loss_aggregation = \"tree\"` for growth or mortality (the observed tree); choose one of the two ways of scoring individual trees.", call. = FALSE)
     auto_weights = is.character(weights) && length(weights) == 1L && identical(weights, "auto")
@@ -2159,15 +2229,29 @@ finn_class = nn_module(
     # forward() to the per-site path. `self$period_mode` ("auto" / "constant" /
     # "per_site") overrides the detection.
     pl = array(response$period_length[,,1], dim = dim(response$period_length)[1:2])
-    per_site = FALSE
+    agg_types = vapply(self$loss_agg, function(a) a$type, character(1))
+    varies = FALSE
     for(k in seq_len(ncol(pl))) {
       v = pl[,k]; nn = v[!is.na(v)]
-      if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) { per_site = TRUE; break }
+      if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) { varies = TRUE; break }
     }
-    if(identical(self$period_mode, "per_site")) per_site = TRUE
+    # The per-tree terms are only evaluated on the per-site path, while
+    # compute_baseline_losses() measures their null on the per-tree observation
+    # regardless. On a constant period that combination does not fall back to
+    # the cell term, it scores the cell term under a weight taken from the
+    # per-tree null, so there is no correct constant path and an explicit
+    # period_mode = "constant" is a contradiction rather than a preference.
+    tree_agg = any(agg_types == "tree")
+    if(tree_agg && identical(self$period_mode, "constant"))
+      stop("period_mode = \"constant\" cannot be combined with loss_aggregation = \"tree\": the per-tree terms are only evaluated on the per-site path, and on the constant path the cell term would be scored under a weight taken from the per-tree null. Use period_mode = \"auto\" or \"per_site\", or drop the \"tree\" aggregation.", call. = FALSE)
+    per_site = varies || tree_agg || identical(self$period_mode, "per_site")
     if(identical(self$period_mode, "constant")) per_site = FALSE
     self$per_site_period = per_site
-    if(per_site) cli::cli_alert_info("period_length varies between sites: using per-site aggregation windows (one backward per batch)")
+    if(per_site) cli::cli_alert_info(paste0(
+      "Using per-site aggregation windows (one backward per batch): ",
+      if(varies) "period_length varies between sites"
+      else if(tree_agg) "loss_aggregation = \"tree\" needs them"
+      else "period_mode = \"per_site\""))
 
     # Observation tensors for the non-scalar aggregations. Built once, kept whole
     # on the model, and sliced by the batch index in the epoch loop (like
@@ -2176,7 +2260,6 @@ finn_class = nn_module(
     # responses that no longer live in `Y`.
     obs_years = sort(unique(data$year))
     site_ids  = sort(unique(data$siteID))
-    agg_types = vapply(self$loss_agg, function(a) a$type, character(1))
     if (any(agg_types == "size_classes")) {
       r = names(agg_types)[agg_types == "size_classes"][1]
       self$class_breaks = self$loss_agg[[r]]$args$breaks
@@ -2385,7 +2468,10 @@ finn_class = nn_module(
     DataLoader = torch::dataloader(data, batch_size=batchsize, shuffle=shuffle, num_workers=0, pin_memory=TRUE, drop_last=TRUE)
 
     self$history = list()
-    self$tree_coverage = NULL
+    self$tree_deaths = NULL
+    # written only by forward()'s tree branch, so a plain fit() after a tree one would
+    # otherwise leave the first call's predictions in place with nothing marking them stale
+    self$tree_pred = NULL
     self$gradients = list()
 
     # Rebuild the optimizer if this is the first fit() call, or if `lr` changed since
@@ -2496,7 +2582,7 @@ finn_class = nn_module(
         # browser()
         pred = pred_tmp[[1]]
         loss = pred_tmp[[2]]
-        if(!is.null(pred_tmp$tree_coverage)) tree_cov[[length(tree_cov) + 1L]] = pred_tmp$tree_coverage
+        if(!is.null(pred_tmp$tree_deaths)) tree_cov[[length(tree_cov) + 1L]] = pred_tmp$tree_deaths
         # ---- Guard before gradient clipping ----
         # Safe gradient checker: skips NULL or undefined grads
         check_grads <- function(params) {
@@ -2586,19 +2672,19 @@ finn_class = nn_module(
       #cat("Epoch: ", epoch, "Loss: ", bl, "\n")
       self$history[[epoch]] = colMeans(batch_loss, na.rm = TRUE)
 
-      # Hazard erosion, summed over the batches of this epoch: a cohort the model kills inside
-      # a window accumulates hazard over fewer years than the fate it is scored against, which
-      # attenuates its predicted death probability. Teacher forcing never truncates
-      # (frac_full == 1), re-anchoring truncates within a window, single shooting compounds
-      # across them - so the three regimes score the same term on different samples, and this
-      # is the number that says by how much. Measured, not corrected.
+      # How often the simulation killed a tree the inventory found alive, summed over this
+      # epoch's batches. Every tracked cohort is scored over its whole window, so this is a
+      # statement about the model's mortality, not about the sample the loss saw.
       if(length(tree_cov)) {
         cv = do.call(rbind, tree_cov)
         cv = rowsum(cv[, -1, drop = FALSE], cv[, 1])
-        self$tree_coverage = rbind(self$tree_coverage, data.frame(
+        # a census can legitimately carry no fate at all (`died` all NA); every share below
+        # would then be 0/0, which also breaks `frac_killed + frac_ghost <= 1`
+        cv = cv[cv[,1] > 0, , drop = FALSE]
+        self$tree_deaths = rbind(self$tree_deaths, data.frame(
           epoch = epoch, census = as.integer(rownames(cv)), n_target = cv[,1],
-          frac_full = cv[,2]/cv[,1], frac_scored = cv[,3]/cv[,1], mean_n_over_L = cv[,4]/cv[,3],
-          row.names = NULL))
+          frac_killed = cv[,2]/cv[,1], mean_kill_year = cv[,3]/pmax(cv[,2], 1),
+          window = cv[,4]/cv[,1], frac_ghost = cv[,5]/cv[,1], row.names = NULL))
       }
 
       if (!is.null(lr_scheduler_obj)) {
@@ -2897,7 +2983,8 @@ finn_class = nn_module(
                                     parComp = self$par_competition, h = NULL,
                                     patch_size_ha = self$patch_size_ha, ba = NULL,
                                     cohortHeights = NULL,
-                                    n_quantiles = self$n_quantiles, continuous = self$continuous)
+                                    n_quantiles = self$n_quantiles, continuous = self$continuous,
+                                    light_mask = isTRUE(self$light_mask))
       # only the years some site actually has in its window
       p_max  = as.numeric(p_t$max()$item())
       j_from = max(1L, i - as.integer(ceiling(p_max)) + 1L)
@@ -3491,12 +3578,28 @@ finn_class = nn_module(
       # process specific parameters, e.g. theta for nbinom sampling of the recruits
       if(type == "regeneration") {
         self$sample_regeneration = obj$sample_regeneration
+        self$regeneration_sampler = obj$regeneration_sampler
         self$par_theta_recruits = obj$dispersion_parameter
+      }
+
+      if(type == "mortality") {
+        self$mortality_draw = obj$mortality_draw
+        # Set as the function's formal, not passed down forward(): the kernel reads
+        # `self$record_raws` from its own environment, so a user wrapper around
+        # FINN::mortality() cannot be rebound by set_environment() and is not a
+        # reachable opt-out. NULL keeps the func's own default, so a custom
+        # mortality func without the argument is untouched.
+        if(!is.null(obj$growth_scale) && "growth_scale" %in% names(formals(self$mortality_func))) {
+          fn = self$mortality_func
+          formals(fn)$growth_scale = obj$growth_scale
+          self$mortality_func = fn
+        }
       }
 
       if(type == "competition") {
         self$n_quantiles = obj$n_quantiles
         self$continuous = obj$continuous
+        self$light_mask = obj$light_mask
       }
 
     },

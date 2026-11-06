@@ -14,7 +14,8 @@ competition(
   ba = NULL,
   cohortHeights = NULL,
   n_quantiles = 10,
-  continuous = FALSE
+  continuous = FALSE,
+  light_mask = TRUE
 )
 }
 \arguments{
@@ -37,6 +38,13 @@ competition(
 \item{n_quantiles}{integer Number of height quantiles used when \code{continuous = FALSE}. Defaults to 10.}
 
 \item{continuous}{logical Use the continuous competition formulation. Defaults to FALSE.}
+
+\item{light_mask}{logical Take the height quantiles over the live cohorts only
+(\code{trees > 0.5}), leaving every cohort's real height as the bin query. Defaults
+to TRUE since 0.2.0: unmasked, the padded cohort width is set by the widest
+site in the batch, so the same stand's light depends on which other sites
+happen to share its batch. \code{FALSE} reproduces earlier results. See
+\code{\link[=createProcess]{createProcess()}} for the measurement.}
 }
 \value{
 torch.Tensor Fraction of available light (light) for each cohort.

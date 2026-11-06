@@ -132,7 +132,7 @@ classes, and the observation is read from columns \code{n_class_1} …
 \if{html}{\out{<div class="sourceCode">}}\preformatted{  This is the size-distribution counterpart of the mean diameter: with a
   `poisson` family it scores total abundance and size composition at
   once, since independent Poisson class counts factorise into
-  `Poisson(N | Λ) × Multinomial(n | N, p)`. Class membership uses a
+  `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
   difference of sigmoids rather than a hard cut so the term stays
   differentiable with respect to diameter; `tau` controls that softness
   and small values approach hard binning.
@@ -253,7 +253,7 @@ held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See 
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
 
-\item{env_autoscale}{\cr How to scale the environmental predictors in \code{env}.
+\item{env_autoscale}{How to scale the environmental predictors in \code{env}.
 The learned transformation is stored on the model and re-applied
 automatically at every \code{predict()}/\code{simulate()} call, so raw (untransformed)
 \code{env} can be passed for both calibration and prediction. Accepts:
@@ -385,12 +385,26 @@ is a coin flip.
 The term does not depend on the fitting regime but its residual does: under
 \code{teacher_forcing} the kernel runs on the observed tree, so the residual is
 parameter error alone; under \code{reanchor} the cohort has drifted for at most one
-census interval; under single shooting for up to the whole horizon, and the
-tracked set shrinks with every simulated death. A cohort the model kills inside
-a window accumulates hazard over fewer years than the fate covers, which
-attenuates its predicted death probability; that is measured, not corrected —
-\verb{$tree_coverage} reports per census and epoch the fraction of target-bearing
-slots that survived the whole window, and \verb{$tree_pred$n} the per-slot years.}
+census interval; under single shooting for up to the whole horizon.
+
+A cohort the simulation kills inside a window is \strong{kept} with \code{trees = 0} for
+as long as its generation lasts — to the next anchor under
+\code{reanchor}/\code{teacher_forcing}, which restart the generation there, and
+to the end of the horizon under single shooting, where \code{tree_live0} is rebuilt
+only at anchors. It shades nothing and contributes nothing to \code{dbh}, \code{ba} or
+\code{trees}, but its diameter and its hazard keep accumulating, because the
+observation it is scored against is the mean annual rate and the 0/1 fate over
+the whole interval. Both terms therefore score every tree, and the scored
+sample does not depend on the parameters. \verb{$tree_deaths} reports per census and
+epoch how often the simulation killed a tree the inventory found alive
+(\code{frac_killed}) and in which year (\code{mean_kill_year}) — a diagnostic, not a
+correction. A generation outlives a window under single shooting, so a slot
+killed in an earlier window enters the next one already dead; \code{frac_ghost}
+is that share and it is excluded from \code{frac_killed}, which counts this
+window's kills alone. Under \code{reanchor}/\code{teacher_forcing} the generation
+restarts at every anchor, so \code{frac_ghost} is 0 by construction only where the
+anchors cover every census; a sparser anchor list carries ghosts like single
+shooting does.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
@@ -473,7 +487,7 @@ the simulated stand.\tabular{lll}{
    \code{init_cohort} \tab any, incl. binned (\code{makeInitCohorts(dbh_binsize = )}) \tab one cohort per tree (\code{makeInitCohorts()} without \code{dbh_binsize}) \cr
    \code{tree_data} needs \tab \code{dbh} at the interval start \tab \code{cohortID} of the initial cohort \cr
    combines with \tab the simulated \code{dbh}/\code{ba}/\code{trees}/\code{regeneration} terms \tab \code{reanchor} and \code{teacher_forcing} (under teacher forcing the trajectory is reset to the observed stand every year, which comes close to the first option) \cr
-   diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_coverage}, \verb{$tree_pred} \cr
+   diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_deaths}, \verb{$tree_pred} \cr
 }
 
 

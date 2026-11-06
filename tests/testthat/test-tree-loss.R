@@ -23,12 +23,12 @@ tl_data = function(years_obs = c(1, 2), period = 1L, n_sites = 4L) {
        Nsp = max(obs$species))
 }
 
-tl_model = function(d) {
+tl_model = function(d, light_mask = TRUE) {
   FINN.seed(1)
   init = makeInitCohorts(d$it, Nspecies = d$Nsp)
   m = finn(
     N_species            = d$Nsp, recruits_dbh = 12.9,
-    competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
+    competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE, light_mask = light_mask),
     growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
     regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
     mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
@@ -227,11 +227,12 @@ test_that("a new generation of tree identities starts at every anchor", {
     do.call(tl_fit, c(list(f, d, loss_resolution = "tree", tree_data = td,
                            anchor_cohorts = list("2" = A)), arg))
     expect_length(f$model$tree_pred$growth, 4*4*2)
-    expect_true(all(f$model$tree_pred$n == 1))   # every anchored tree is tracked
+    # every anchored tree is tracked for its whole (one-year) window; empty slots are not
+    expect_true(all(f$model$tree_pred$n %in% c(0, 1)))
+    expect_gt(sum(f$model$tree_pred$n == 1), 0)
     expect_true(all(is.finite(as.numeric(f$model$history[[1]])[4:5])))
-    # the interval after the anchor starts from a stand in which every tree is alive, so
-    # no window is truncated there
-    expect_equal(f$model$tree_coverage$frac_full[f$model$tree_coverage$census == 3], 1)
+    # every tracked slot now covers its whole window, anchored or not
+    expect_true(all(f$model$tree_pred$n == f$model$tree_pred$n[1]))
   }
 
   # single shooting keeps one generation for the whole horizon, so the tracked set shrinks
@@ -240,10 +241,12 @@ test_that("a new generation of tree identities starts at every anchor", {
          tree_data = rbind(tl_table(tl_target(dims), init, year = 1),
                            tl_table(tl_target(dims), init, year = 2)))
   expect_length(s$model$tree_pred$growth, prod(dims))
-  expect_lt(sum(s$model$tree_pred$n > 0.5), sum(s$init$trees_r > 0.5))
-  # ... and the erosion is reported per census rather than assumed
-  expect_identical(s$model$tree_coverage$census, c(2L, 3L))
-  expect_gt(s$model$tree_coverage$frac_full[1], s$model$tree_coverage$frac_full[2])
+  # retention: a tracked slot covers its whole window whether the simulation killed it or
+  # not, so `n` takes only two values - the window length, or 0 for a slot that never held
+  # a tree. Before retention it took every value between.
+  expect_setequal(unique(s$model$tree_pred$n), c(0, 1))
+  expect_identical(s$model$tree_deaths$census, c(2L, 3L))
+  expect_true(all(s$model$tree_deaths$frac_killed >= 0 & s$model$tree_deaths$frac_killed <= 1))
 })
 
 
@@ -336,10 +339,12 @@ tll = local({
     target = target,
     # the 24 trees at each of `years`, keyed to their initial cohorts (every slot is a tree)
     table = function(years) rbindlist(lapply(years, function(y) tl_table(target(), ic, year = y))),
-    fit = function(obs, td, period_scale = FALSE, weights = rep(1, 6), ...) {
+    # light_mask = TRUE is the configuration the tree term is meant to run in; without it
+    # every fit here fires the unmasked-light warning and a new one would be invisible.
+    fit = function(obs, td, period_scale = FALSE, weights = rep(1, 6), light_mask = TRUE, ...) {
       FINN.seed(SEED)
       m = finn(N_species = Nsp, recruits_dbh = 5,
-        competition_process  = createProcess(~0, func = FINN::competition),
+        competition_process  = createProcess(~0, func = FINN::competition, light_mask = light_mask),
         growth_process       = createProcess(~1 + env1, initEnv = matrix(c(0.5, 0.5, 0.4, -0.4), Nsp, 2),
                                              initSpecies = matrix(c(0.1, 0.2, 0.05, 0.05), Nsp, 2), func = FINN::growth),
         mortality_process    = createProcess(~1 + env1, initEnv = matrix(c(-0.5, -0.5, 0.3, -0.3), Nsp, 2),
@@ -358,23 +363,21 @@ tll = local({
 })
 
 
-test_that("growth is scored only where the cohort lived through the WHOLE window", {
+test_that("every tracked cohort covers the whole window, killed or not", {
   skip_if_no_torch()
-  # A cohort killed in year 2 of a 4-year window carries a 2-year increment, which is not a
-  # prediction of the interval's growth; the mortality term keeps it (a 2-year hazard against
-  # a 4-year fate is an attenuated prediction, not a different quantity - see tree_coverage).
+  # Retention: a cohort the simulation kills in year 2 of a 4-year window keeps accumulating
+  # growth and hazard to the window's end, because the observation is the mean annual rate
+  # and the 0/1 fate over the WHOLE interval. The scored sample is therefore not a function
+  # of the parameters, and the kills are reported instead of removing observations.
   m = tll$fit(tll$obs(4L, 4L), tll$table(4L))
   tp = m$tree_pred
   y = as.numeric(aperm(tll$target()$growth, c(3, 2, 1)))
-  whole = tp$n >= 3.5
-  scored = tp$n > 0.5
-  expect_gt(sum(scored & !whole), 4)                 # truncated slots exist to be excluded
-  expect_equal(as.numeric(m$history[[1]])[4], mean((tp$growth[whole] - y[whole])^2), tolerance = 1e-6)
-  # scoring truncated increments as interval growth is the mutation the one-year suite cannot
-  # see; here it is a different number by a factor of two
-  expect_gt(abs(mean((tp$growth[scored] - y[scored])^2) - mean((tp$growth[whole] - y[whole])^2)), 1e-3)
-  expect_equal(m$tree_coverage$frac_full, mean(whole), tolerance = 1e-12)
-  expect_equal(m$tree_coverage$mean_n_over_L, mean(tp$n[scored])/4, tolerance = 1e-6)
+  expect_true(all(tp$n == 4))                        # the whole window, every slot
+  expect_equal(as.numeric(m$history[[1]])[4], mean((tp$growth - y)^2), tolerance = 1e-6)
+  # the diagnostic replaces the hidden observations
+  expect_true(all(tp$n_alive <= tp$n))
+  expect_gt(m$tree_deaths$frac_killed, 0)            # the simulation does kill some of them
+  expect_equal(m$tree_deaths$window, 4, tolerance = 1e-12)
 })
 
 
@@ -388,10 +391,9 @@ test_that("the accumulators cover the window, not everything since the last cens
 
   two = tll$fit(tll$obs(c(5L, 10L), 3L), tll$table(c(5L, 10L)))
   expect_equal(max(two$tree_pred$n), 3)              # the second window, read after the fit
-  expect_identical(two$tree_coverage$census, c(5L, 10L))
-  expect_true(all(two$tree_coverage$n_target == 24))
-  # single shooting conditions the tracked set on ever more simulated survival
-  expect_gt(two$tree_coverage$frac_full[1], two$tree_coverage$frac_full[2])
+  expect_identical(two$tree_deaths$census, c(5L, 10L))
+  expect_true(all(two$tree_deaths$n_target == 24))
+  expect_true(all(two$tree_deaths$window == 3))
 })
 
 
@@ -426,4 +428,57 @@ test_that("the per-tree terms carry a gradient to the growth and mortality kerne
     expect_gt(gr(m, "nn_mortality.0.weight"), 0)
     expect_equal(gr(m, "nn_regeneration.0.weight"), 0)   # regeneration stays a count
   }
+})
+
+test_that("tracked tree scoring warns when the binned light is unmasked", {
+  skip_if_no_torch()
+  # Retention is inert on the stand only if the dead-but-tracked cohorts are kept out
+  # of the height quantiles.
+  d = tll$obs(4L, 4L)
+  expect_warning(tll$fit(d, tll$table(4L), light_mask = FALSE), "light_mask")
+})
+
+test_that("$tree_deaths separates this window's kills from earlier generations' ghosts", {
+  skip_if_no_torch()
+  # One generation over several windows: a cohort killed in window 1 is dead at the start
+  # of window 2 and says nothing about it. frac_ghost is that share; frac_killed excludes it.
+  two = tll$fit(tll$obs(c(5L, 10L), 3L), tll$table(c(5L, 10L)))
+  d = two$tree_deaths
+  expect_true(all(c("frac_killed", "frac_ghost", "mean_kill_year") %in% names(d)))
+  ## ghosts exist at the FIRST census too, because the generation starts at year 0 while the
+  ## window covers only the last `period` years: a tree killed in the spin-up enters the
+  ## window already dead. The point of the column is that those are counted separately.
+  expect_true(all(d$frac_killed + d$frac_ghost <= 1 + 1e-9))
+  expect_true(all(d$mean_kill_year <= d$window + 1e-9))
+  expect_true(all(d$mean_kill_year > 0 | d$frac_killed == 0))
+  ## and the share already dead can only grow as one generation runs on
+  expect_gte(d$frac_ghost[d$census == 10], d$frac_ghost[d$census == 5])
+})
+
+
+test_that("$tree_deaths sees a kill in the window's last year", {
+  skip_if_no_torch()
+  # Liveness recorded BEFORE the death draw makes a cohort killed in year L of an L-year
+  # window indistinguishable from a survivor, so on one-year windows frac_killed was
+  # identically 0 and the kills surfaced only as the next window's ghosts. Two one-year
+  # windows: window 1 must report its own kills, and they must be the ghosts of window 2.
+  d = tll$fit(tll$obs(c(1L, 2L), 1L), tll$table(c(1L, 2L)))$tree_deaths
+  expect_true(all(d$window == 1))
+  expect_gt(d$frac_killed[d$census == 1], 0)
+  expect_equal(d$mean_kill_year[d$census == 1], 1)      # the only year there is
+  expect_equal(d$frac_ghost[d$census == 2], d$frac_killed[d$census == 1], tolerance = 1e-9)
+})
+
+
+test_that("$tree_deaths skips a census with no fate target instead of reporting NaN", {
+  skip_if_no_torch()
+  # `died` may legitimately be NA for every row of a census (a remeasurement that recorded
+  # diameters only). Every share is then 0/0: NaN, and `frac_killed + frac_ghost <= 1` fails.
+  td = tll$table(c(5L, 10L))
+  td[year == 5L, died := NA_real_]
+  d = tll$fit(tll$obs(c(5L, 10L), 3L), td)$tree_deaths
+  expect_false(5L %in% d$census)
+  expect_true(10L %in% d$census)
+  expect_true(all(is.finite(as.matrix(d))))
+  expect_true(all(d$frac_killed + d$frac_ghost <= 1 + 1e-9))
 })
