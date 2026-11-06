@@ -467,8 +467,8 @@ finn = function(N_species,
 #'   census interval; under single shooting for up to the whole horizon.
 #'
 #'   A cohort the simulation kills inside a window is **kept** with `trees = 0` for
-#'   as long as its generation lasts — to the window's end under
-#'   `reanchor`/`teacher_forcing`, which restart the generation at every census, and
+#'   as long as its generation lasts — to the next anchor under
+#'   `reanchor`/`teacher_forcing`, which restart the generation there, and
 #'   to the end of the horizon under single shooting, where `tree_live0` is rebuilt
 #'   only at anchors. It shades nothing and contributes nothing to `dbh`, `ba` or
 #'   `trees`, but its diameter and its hazard keep accumulating, because the
@@ -481,7 +481,9 @@ finn = function(N_species,
 #'   killed in an earlier window enters the next one already dead; `frac_ghost`
 #'   is that share and it is excluded from `frac_killed`, which counts this
 #'   window's kills alone. Under `reanchor`/`teacher_forcing` the generation
-#'   restarts at every census and `frac_ghost` is 0 by construction.
+#'   restarts at every anchor, so `frac_ghost` is 0 by construction only where the
+#'   anchors cover every census; a sparser anchor list carries ghosts like single
+#'   shooting does.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
