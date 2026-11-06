@@ -1,8 +1,8 @@
 ## The refactor's guard rail: the default objective must not move.
 ##
 ## Four configurations are fitted for three epochs with a non-zero learning rate
-## and every parameter compared against a stored reference. The references were
-## taken on the merge commit this branch started from; regenerate them only when
+## and every parameter compared against a stored reference. The references describe
+## the objective as of `mortality(growth_scale = 0.01)`; regenerate them only when
 ## a change to the objective is INTENDED, with
 ## `Rscript dev/make_identity_snapshots.R`, and say so in the commit message.
 skip_if_not_installed("torch")

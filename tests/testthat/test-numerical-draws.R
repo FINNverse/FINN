@@ -54,7 +54,7 @@ test_that("the refined sampler has no recruitment floor", {
   expect_lt(as.numeric(rnbinom_torch_refined(zero, theta)$mean()), 1e-5)
   ## the default's +0.001 offset and 1e-4 probability clamp are a floor of 0.0011
   ## per cell-year: the Gaussian draw rounds it away, an exact sampler delivers it
-  ## (0.0011 * 149 species / 0.0168 ha = 9.8 recruits ha^-1 yr^-1)
+  ## (0.0011 / 0.0168 ha = 0.066 recruits ha^-1 yr^-1 per species)
   eps <- 1e-4
   probs <- torch_clamp(1 - theta / (theta + zero) + eps, 0, 1 - eps)
   logits <- torch_log(probs) - torch_log1p(-probs)

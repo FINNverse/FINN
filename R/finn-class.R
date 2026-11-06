@@ -225,7 +225,7 @@ finn = function(N_species,
 #'       This is the size-distribution counterpart of the mean diameter: with a
 #'       `poisson` family it scores total abundance and size composition at
 #'       once, since independent Poisson class counts factorise into
-#'       `Poisson(N | Λ) × Multinomial(n | N, p)`. Class membership uses a
+#'       `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
 #'       difference of sigmoids rather than a hard cut so the term stays
 #'       differentiable with respect to diameter; `tau` controls that softness
 #'       and small values approach hard binning.
@@ -466,8 +466,11 @@ finn = function(N_species,
 #'   parameter error alone; under `reanchor` the cohort has drifted for at most one
 #'   census interval; under single shooting for up to the whole horizon.
 #'
-#'   A cohort the simulation kills inside a window is **kept** to the window's end
-#'   with `trees = 0`: it shades nothing and contributes nothing to `dbh`, `ba` or
+#'   A cohort the simulation kills inside a window is **kept** with `trees = 0` for
+#'   as long as its generation lasts — to the window's end under
+#'   `reanchor`/`teacher_forcing`, which restart the generation at every census, and
+#'   to the end of the horizon under single shooting, where `tree_live0` is rebuilt
+#'   only at anchors. It shades nothing and contributes nothing to `dbh`, `ba` or
 #'   `trees`, but its diameter and its hazard keep accumulating, because the
 #'   observation it is scored against is the mean annual rate and the 0/1 fate over
 #'   the whole interval. Both terms therefore score every tree, and the scored
@@ -2151,8 +2154,8 @@ finn_class = nn_module(
     # BINNED competition, which counts slots. Measured on a one-patch stand, the same live
     # cohorts with and without ghosts beside them: without the mask a live cohort's light
     # moves by up to 1.00 (fully shaded to open); with it, by 0 exactly, in every cell of a
-    # 3 x 5 x 20 grid (experiments/2026-11-03-fitmatrix/ghost_light.R). So the tree term is
-    # only inert on the trajectory under a masked or unbinned light.
+    # 3 x 5 x 20 grid. So the tree term is only inert on the trajectory under a masked or
+    # unbinned light.
     if (tree_res && !isTRUE(self$continuous) && !isTRUE(self$light_mask))
       warning("loss_resolution = \"tree\" keeps a cohort the simulation kills in the array until its interval ends, and the binned competition takes its height quantiles over every slot, so those cohorts move the light of the living ones -- by up to 1.00 in a one-patch test. Use createProcess(light_mask = TRUE) or continuous = TRUE for the competition process, or the per-tree term changes the trajectory it is scoring.",
               call. = FALSE)

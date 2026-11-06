@@ -35,14 +35,10 @@ The Bernoulli branch is not cosmetic -- capping a Poisson at a one-tree cohort
 delivers only 88\\% of the calibrated probability at the \code{p = 0.26} of a
 suppressed stem, which is the stem that decides thinning.
 
-Measured on a 1500-site FIA panel simulated to its 1000-year equilibrium
-against an observed stand of 30.7 m^2 ha^-1 / 437 stems ha^-1 / 29.6 cm: the
-default draw together with the default regeneration sampler settles at
-57.1 m^2 ha^-1 / 87 stems ha^-1 / 91.4 cm, and both repairs together at
-21.7 / 224 / 35.2. The same four arms differ by 0.056 on the held-out median
-over the six responses, below the 0.072 rescoring noise floor, so
-cross-validation cannot see this choice: it decides the simulated stand, not
-the holdout score.
+The choice shows up in the simulated stand rather than in a holdout score: a
+long simulation to equilibrium separates the two draws by a factor of several
+in basal area and stem number, while the fitted loss moves far less, because
+the rounded deficit is a bias on the trajectory and not on the parameters.
 }
 \references{
 Lin et al. (2026). \doi{10.48550/arXiv.2610.36827}

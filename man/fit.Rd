@@ -132,7 +132,7 @@ classes, and the observation is read from columns \code{n_class_1} …
 \if{html}{\out{<div class="sourceCode">}}\preformatted{  This is the size-distribution counterpart of the mean diameter: with a
   `poisson` family it scores total abundance and size composition at
   once, since independent Poisson class counts factorise into
-  `Poisson(N | Λ) × Multinomial(n | N, p)`. Class membership uses a
+  `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
   difference of sigmoids rather than a hard cut so the term stays
   differentiable with respect to diameter; `tau` controls that softness
   and small values approach hard binning.
@@ -387,8 +387,11 @@ The term does not depend on the fitting regime but its residual does: under
 parameter error alone; under \code{reanchor} the cohort has drifted for at most one
 census interval; under single shooting for up to the whole horizon.
 
-A cohort the simulation kills inside a window is \strong{kept} to the window's end
-with \code{trees = 0}: it shades nothing and contributes nothing to \code{dbh}, \code{ba} or
+A cohort the simulation kills inside a window is \strong{kept} with \code{trees = 0} for
+as long as its generation lasts — to the window's end under
+\code{reanchor}/\code{teacher_forcing}, which restart the generation at every census, and
+to the end of the horizon under single shooting, where \code{tree_live0} is rebuilt
+only at anchors. It shades nothing and contributes nothing to \code{dbh}, \code{ba} or
 \code{trees}, but its diameter and its hazard keep accumulating, because the
 observation it is scored against is the mean annual rate and the 0/1 fate over
 the whole interval. Both terms therefore score every tree, and the scored

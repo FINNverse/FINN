@@ -23,12 +23,12 @@ tl_data = function(years_obs = c(1, 2), period = 1L, n_sites = 4L) {
        Nsp = max(obs$species))
 }
 
-tl_model = function(d) {
+tl_model = function(d, light_mask = TRUE) {
   FINN.seed(1)
   init = makeInitCohorts(d$it, Nspecies = d$Nsp)
   m = finn(
     N_species            = d$Nsp, recruits_dbh = 12.9,
-    competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
+    competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE, light_mask = light_mask),
     growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
     regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
     mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
@@ -339,10 +339,12 @@ tll = local({
     target = target,
     # the 24 trees at each of `years`, keyed to their initial cohorts (every slot is a tree)
     table = function(years) rbindlist(lapply(years, function(y) tl_table(target(), ic, year = y))),
-    fit = function(obs, td, period_scale = FALSE, weights = rep(1, 6), ...) {
+    # light_mask = TRUE is the configuration the tree term is meant to run in; without it
+    # every fit here fires the unmasked-light warning and a new one would be invisible.
+    fit = function(obs, td, period_scale = FALSE, weights = rep(1, 6), light_mask = TRUE, ...) {
       FINN.seed(SEED)
       m = finn(N_species = Nsp, recruits_dbh = 5,
-        competition_process  = createProcess(~0, func = FINN::competition),
+        competition_process  = createProcess(~0, func = FINN::competition, light_mask = light_mask),
         growth_process       = createProcess(~1 + env1, initEnv = matrix(c(0.5, 0.5, 0.4, -0.4), Nsp, 2),
                                              initSpecies = matrix(c(0.1, 0.2, 0.05, 0.05), Nsp, 2), func = FINN::growth),
         mortality_process    = createProcess(~1 + env1, initEnv = matrix(c(-0.5, -0.5, 0.3, -0.3), Nsp, 2),
@@ -431,9 +433,9 @@ test_that("the per-tree terms carry a gradient to the growth and mortality kerne
 test_that("tracked tree scoring warns when the binned light is unmasked", {
   skip_if_no_torch()
   # Retention is inert on the stand only if the dead-but-tracked cohorts are kept out
-  # of the height quantiles; see experiments/2026-11-03-fitmatrix/ghost_light.R.
+  # of the height quantiles.
   d = tll$obs(4L, 4L)
-  expect_warning(tll$fit(d, tll$table(4L)), "light_mask")
+  expect_warning(tll$fit(d, tll$table(4L), light_mask = FALSE), "light_mask")
 })
 
 test_that("$tree_deaths separates this window's kills from earlier generations' ghosts", {
