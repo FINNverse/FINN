@@ -2225,21 +2225,28 @@ finn_class = nn_module(
     # "per_site") overrides the detection.
     pl = array(response$period_length[,,1], dim = dim(response$period_length)[1:2])
     agg_types = vapply(self$loss_agg, function(a) a$type, character(1))
-    per_site = FALSE
+    varies = FALSE
     for(k in seq_len(ncol(pl))) {
       v = pl[,k]; nn = v[!is.na(v)]
-      if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) { per_site = TRUE; break }
+      if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) { varies = TRUE; break }
     }
-    if(identical(self$period_mode, "per_site")) per_site = TRUE
-    if(identical(self$period_mode, "constant")) per_site = FALSE
     # The per-tree terms are only evaluated on the per-site path, while
     # compute_baseline_losses() measures their null on the per-tree observation
     # regardless. On a constant period that combination does not fall back to
     # the cell term, it scores the cell term under a weight taken from the
-    # per-tree null, so force the general path instead of allowing it.
-    if(any(agg_types == "tree")) per_site = TRUE
+    # per-tree null, so there is no correct constant path and an explicit
+    # period_mode = "constant" is a contradiction rather than a preference.
+    tree_agg = any(agg_types == "tree")
+    if(tree_agg && identical(self$period_mode, "constant"))
+      stop("period_mode = \"constant\" cannot be combined with loss_aggregation = \"tree\": the per-tree terms are only evaluated on the per-site path, and on the constant path the cell term would be scored under a weight taken from the per-tree null. Use period_mode = \"auto\" or \"per_site\", or drop the \"tree\" aggregation.", call. = FALSE)
+    per_site = varies || tree_agg || identical(self$period_mode, "per_site")
+    if(identical(self$period_mode, "constant")) per_site = FALSE
     self$per_site_period = per_site
-    if(per_site) cli::cli_alert_info("period_length varies between sites: using per-site aggregation windows (one backward per batch)")
+    if(per_site) cli::cli_alert_info(paste0(
+      "Using per-site aggregation windows (one backward per batch): ",
+      if(varies) "period_length varies between sites"
+      else if(tree_agg) "loss_aggregation = \"tree\" needs them"
+      else "period_mode = \"per_site\""))
 
     # Observation tensors for the non-scalar aggregations. Built once, kept whole
     # on the model, and sliced by the batch index in the epoch loop (like

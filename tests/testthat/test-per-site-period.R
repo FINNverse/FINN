@@ -73,6 +73,23 @@ test_that("mixed periods: each site is aggregated over its own window", {
   expect_error(run_fit(obsm, "constant"))
 })
 
+test_that("period_mode = 'constant' is refused, not overridden, by a per-tree term", {
+  obs5 <- mk_obs(list(c(5, 10), c(5, 10), c(5, 10)))
+  tt <- obs5[species == 1, .(siteID, year, patchID = 1L, species, dbh = 20, growth = 0.01, died = 0)]
+  go <- function(mode) {
+    FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
+    fit(mm, env = env, data = obs5, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
+        loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+        optimizer = OPT, plot_progress = FALSE, device = "cpu",
+        loss_aggregation = c(growth = "tree"), tree_data = tt)
+    mm
+  }
+  expect_error(go("constant"), "cannot be combined")
+  # on "auto" the same combination forces per-site windows and says why
+  expect_message(a <- go("auto"), "loss_aggregation")
+  expect_true(a$per_site_period)
+})
+
 test_that("mixed periods: gradients flow through the deferred backward", {
   obsm <- mk_obs(list(c(4), c(6), c(3, 7)))
   FINN.seed(99)
