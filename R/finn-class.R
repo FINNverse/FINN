@@ -169,6 +169,14 @@ finn = function(N_species,
 #'     \item `growth_n` — trees behind each observed `growth` mean; used to weight
 #'       the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
 #'   }
+#'
+#'   On the per-site path (`period_length` differing between sites, or sites
+#'   observed in different years) each response's loss of a batch is ONE mean
+#'   over all units it scores in that batch — observed trees for
+#'   `loss_aggregation = "tree"`, `n_at_risk` / `growth_n` for the weighted
+#'   cell terms, cells otherwise — across all observation years: the mean of
+#'   each observation year enters with weight \eqn{n_{year} / n_{batch}}. A
+#'   batch that scores a single observation year is unaffected.
 #' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
 #' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
 #' @param patches (`integer(1)`)\cr Number of patches.
@@ -1049,6 +1057,17 @@ finn_class = nn_module(
     # observation step (which would free the graph other sites still need).
     per_site_mode = !is.null(y) && isTRUE(self$per_site_period)
     loss_deferred = torch::torch_zeros(1L, device = self$device)
+    # Per-site path: every response is ONE mean over all units (trees, cells,
+    # tree counts) scored in this call, not a sum of per-step means. Each loss
+    # function returns the mean over the units of its step, so the steps are
+    # kept with their unit counts (`loss_n`) and weighted n_step / n_call at the
+    # end of the time loop. Summing per-step means gave a step with ten trees the
+    # weight of a step with thousands whenever sites are observed in different
+    # years (FINN-bwi variant B: 2.9 % of the mortality objective for the
+    # drought half of the split corners, 74.5 % for the pre-drought half). With
+    # one scored step per call every weight is n/n = 1 and nothing changes.
+    step_losses = list()
+    scored_n = function(true, n = NULL) if (per_site_mode) private$scored_units(true, n) else 0
 
     # storage for the raw per-timestep state. Cohort snapshots are kept only for
     # the requested timesteps (`record_cohorts`); patch snapshots stay tied to the
@@ -1435,6 +1454,7 @@ finn_class = nn_module(
       }
 
       loss = torch_zeros(7L, device = self$device)
+      loss_n = numeric(7L)   # units behind each term's mean at this step (per-site path)
 
       ##### Rework #######
       # NOTE: truncation of the recurrent cohort state (below) is intentionally
@@ -1450,6 +1470,7 @@ finn_class = nn_module(
           if(!isTRUE(teacher_forcing)) {
             # #dbh
             loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
+            loss_n[1] = scored_n(y[, tmp_index,,1])
 
             # ---- diameter quantiles replace the scalar mean diameter ----------
             # A mean cannot separate one exceptional tree from a shift of the whole
@@ -1460,11 +1481,14 @@ finn_class = nn_module(
             if (!is.null(quant_obs) && identical(self$loss_agg$dbh$type, "quantiles")) {
               q_pred = private$quantile_values(dbh, trees, species, self$quant_probs, self$quant_tau)
               loss[1] = self$loss_dbh_func(quant_obs[, tmp_index, , ], q_pred)
+              loss_n[1] = scored_n(quant_obs[, tmp_index, , ])
             }
             # ba
             loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
+            loss_n[2] = scored_n(y[, tmp_index,,2])
             # counts
             loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
+            loss_n[3] = scored_n(y[,tmp_index,,3])
           }
 
           # ---- size-classed stem counts replace the scalar `trees` term ------
@@ -1476,6 +1500,7 @@ finn_class = nn_module(
           if (!isTRUE(teacher_forcing) && !is.null(class_obs) && identical(self$loss_agg$trees$type, "size_classes")) {
             cls_pred = private$class_counts(dbh, trees, species, self$class_breaks, self$class_tau)
             loss[3] = self$loss_trees_func(class_obs[, tmp_index, , ], cls_pred)
+            loss_n[3] = scored_n(class_obs[, tmp_index, , ])
           }
 
           # growth rates - check for NA in period_length, if not, then accumulate gradients?
@@ -1502,8 +1527,12 @@ finn_class = nn_module(
             whole = n_ok$ge(w_flat - 0.5)
             alive = n_ok$gt(0.5)
             hide = function(t, k) torch_where(k, t, torch_full_like(t, NaN))
-            loss[4] = self$loss_growth_func(hide(td$growth, whole), g_pred)
-            loss[5] = self$loss_mortality_func(hide(td$mort, alive), p_death$clamp(1e-6, 1 - 1e-6))
+            g_true = hide(td$growth, whole)
+            m_true = hide(td$mort, alive)
+            loss[4] = self$loss_growth_func(g_true, g_pred)
+            loss[5] = self$loss_mortality_func(m_true, p_death$clamp(1e-6, 1 - 1e-6))
+            loss_n[4] = scored_n(g_true)
+            loss_n[5] = scored_n(m_true)
             self$tree_pred = list(growth = as.numeric(g_pred$detach()$cpu()),
                                   mort = as.numeric(p_death$detach()$cpu()),
                                   n = as.numeric(n_ok$detach()$cpu()))
@@ -1532,8 +1561,11 @@ finn_class = nn_module(
               if(!tree_mode) {
                 loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
                 loss[5] = self$loss_mortality_func(y[,tmp_index,,5], m_pred, y[,tmp_index,,8])
+                loss_n[4] = scored_n(y[,tmp_index,,4], y[,tmp_index,,9])
+                loss_n[5] = scored_n(y[,tmp_index,,5], y[,tmp_index,,8])
               }
               loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], r_pred)
+              loss_n[6] = scored_n(y[,tmp_index,,6])
 
               # ---- per-tree growth / mortality on the OBSERVED stand ---------
               # No correspondence is sought between model cohorts and observed
@@ -1546,21 +1578,21 @@ finn_class = nn_module(
                 # annualised observation) and tp$mortality the interval death
                 # probability (matching the observed 0/1 over the interval).
                 tp = private$tree_predictions(tree_obs, tmp_index, env, i, M, p_t)
-                if (identical(self$loss_agg$growth$type, "tree"))
+                if (identical(self$loss_agg$growth$type, "tree")) {
                   loss[4] = self$loss_growth_func(tree_obs$growth[, tmp_index, , ], tp$growth)
-                if (identical(self$loss_agg$mortality$type, "tree"))
+                  loss_n[4] = scored_n(tree_obs$growth[, tmp_index, , ])
+                }
+                if (identical(self$loss_agg$mortality$type, "tree")) {
                   loss[5] = self$loss_mortality_func(tree_obs$died[, tmp_index, , ], tp$mortality)
+                  loss_n[5] = scored_n(tree_obs$died[, tmp_index, , ])
+                }
               }
               self$obs_rec = y[,tmp_index,,6] |> as.matrix()
               self$pred_rec = r_pred |> as.matrix()
               self$loss_raw = as.numeric(loss)
               keep = private$scored_terms(loss, nonfinite)
-              if (length(keep)) {
-                l = private$loss_at_step(loss, keep, nonfinite)
-                loss_deferred = loss_deferred + l$sum
-                loss_total = loss_total + l$value
-                loss_count = loss_count + 1L
-              }
+              # kept with its unit counts; weighted and summed after the time loop
+              if (length(keep)) step_losses[[length(step_losses) + 1L]] = list(loss = loss, n = loss_n, keep = keep)
             }
           } else if(!is.na(period)) {
             # loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,(i-period+1):(i),]$mean(2) )
@@ -1720,7 +1752,23 @@ finn_class = nn_module(
 
     # browser()
 
-    # per-site windows: one backward over every observation scored in this call
+    # per-site windows: each term becomes one mean over all units scored in this
+    # call - step s enters with weight n_s / sum(n), the units of the steps where
+    # the term was kept - and one backward runs over the result. A term no step
+    # scored a unit of (no observations; its losses are 0) keeps weight 1.
+    if(per_site_mode && length(step_losses)) {
+      n_call = numeric(7L)
+      for(s in step_losses) n_call[s$keep] = n_call[s$keep] + s$n[s$keep]
+      for(s in step_losses) {
+        w = ifelse(n_call > 0, s$n / n_call, 1)
+        l = private$loss_at_step(s$loss * torch_tensor(w, dtype = s$loss$dtype, device = self$device),
+                                 s$keep, nonfinite)
+        loss_deferred = loss_deferred + l$sum
+        loss_total = loss_total + l$value
+      }
+      # loss_total already is the pooled mean; reported as is
+      loss_count = 1L
+    }
     if(per_site_mode && isTRUE(loss_deferred$requires_grad)) {
       loss_deferred$backward()
       for(j in 1:7) Result[[j]] = Result[[j]]$detach()
@@ -2740,6 +2788,18 @@ finn_class = nn_module(
         return(list(sum = loss$sum(), value = loss$detach()))
       list(sum   = loss[keep]$sum(),
            value = loss$detach()$nan_to_num(nan = 0, posinf = 0, neginf = 0))
+    },
+
+    # The number of units behind a loss function's mean, with the same mask and
+    # weights the loss functions use (create_loss_functions): the non-NaN
+    # entries of `true`, or the sum of their clamped weights `n` (n_at_risk for
+    # the binomial, growth_n for the weighted MSE). The per-site path weights
+    # each step's mean by this count, which makes the call's loss the mean over
+    # all its units - the same pooling the "auto" baselines use.
+    scored_units = function(true, n = NULL) {
+      mask = true$isnan()$bitwise_not()
+      if (is.null(n)) return(as.numeric(mask$sum()$cpu()))
+      as.numeric(n[mask]$clamp(min = 0)$sum()$cpu())
     },
 
     #=# Loss aggregation: how a response is reduced from cohorts to the observation #=#
