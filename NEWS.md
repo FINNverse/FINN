@@ -61,6 +61,7 @@ someone who was affected.
 | A retained dead cohort, and any empty padding slot, moved the height quantiles of the binned competition and so the light of the living | yes — masking is now the default; `light_mask = FALSE` keeps the old behaviour |
 | `torch_nanquantile` over a patch with no live cohort returned `NaN` into the likelihood | yes — the fit aborted; the quantiles are now 0 |
 | A per-tree term was scored under a weight taken from the per-tree null while the cell term ran | yes, on data with a constant census period |
+| With sites observed in different years, each response's loss summed one mean per observation year, so a year with ten trees weighed as much as one with thousands | yes, for `period_mode = "per_site"` — the loss is now one pooled mean per batch |
 | `period_mode = "constant"` with a per-tree term was silently overridden, with a false reason | yes — now an error naming both halves |
 | Cohort ids were enumerated flat over the whole array, losing the tree each cohort came from | no — the link was recoverable, just not without a positional formula |
 | `resolveSiteIDs()` numbered sites, patches and species through `LC_COLLATE`, so the same tables gave different integer ids on a German and on a `C` machine | yes, off a `C` locale — the species number indexes `par_growth` / `par_mortality`, so a parameter row belonged to another species |
