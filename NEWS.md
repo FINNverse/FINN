@@ -40,6 +40,27 @@ for 0.1.0 runs unchanged.
   development branch's `fit(shooting = "multiple")`, which re-anchored to the
   tree table itself, was dropped before release in favour of these.
 
+* **Two opt-in numerical repairs to the stochastic draws
+  (`createProcess(mortality_draw = , regeneration_sampler = )`).** Both default to
+  the previous behaviour, which is bit-identical (`tests/testthat/test-identity.R`,
+  config `sample_reg`). `mortality_draw = "poisson"` replaces the Gamma matched to
+  the binomial's first two moments by a Bernoulli draw where the cohort holds one
+  tree or fewer and a Poisson capped at the cohort size otherwise: the default
+  draw is rounded straight-through by the forward pass and then delivers 0.68-0.72
+  of the calibrated deaths for one-tree cohorts at annual probabilities of
+  0.01-0.10, and its pathwise gradient runs through a quantity the simulation
+  discards. `regeneration_sampler = "refined"` drops the `+0.001` Gamma offset and
+  the `1e-4` probability clamp (both guard the Gaussian branch against a negative
+  draw and a NaN gradient through `log(0)`; neither hazard applies to
+  `torch_poisson`) and samples exactly below `lambda = 2`. The offset and the clamp
+  are a recruitment floor of 0.0011 per cell-year, 9.8 recruits ha^-1 yr^-1 over
+  149 species, against an observed ingrowth of 11.4. Measured on a 1500-site FIA
+  panel at the 1000-year equilibrium against an observed 30.7 m^2 ha^-1 /
+  437 stems ha^-1 / 29.6 cm: the defaults settle at 57.1 / 87 / 91.4, both repairs
+  at 21.7 / 224 / 35.2, while the same four arms differ by 0.056 on the held-out
+  median over the six responses, below the 0.072 rescoring noise floor. The
+  holdout cannot separate these; the simulated stand can.
+
 * **`fit(nonfinite = )`.** When one of the six loss terms is not finite at a
   timestep, `"drop_term"` (the default) leaves only that term out, still
   backpropagates the other responses there and counts the occurrences in

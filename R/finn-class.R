@@ -1228,7 +1228,11 @@ finn_class = nn_module(
           growth = g
         )
 
-        trees_dead = binomial_from_gamma(torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0) , torch::torch_clamp(m, 0.01, 0.99))*trees$ge(0.5)$float()
+        n_at_risk = torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0)
+        m_draw = torch::torch_clamp(m, 0.01, 0.99)
+        # NULL (a model saved before mortality_draw existed, or a hybrid built elsewhere) is the default
+        trees_dead = (if(identical(self$mortality_draw, "poisson")) binomial_from_poisson(n_at_risk, m_draw)
+                      else binomial_from_gamma(n_at_risk, m_draw))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
 
@@ -1297,7 +1301,8 @@ finn_class = nn_module(
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
       if(self$sample_regeneration){
-        r = rnbinom_torch(r_mean_patch, self$par_theta_recruits)
+        r = if(identical(self$regeneration_sampler, "refined")) rnbinom_torch_refined(r_mean_patch, self$par_theta_recruits)
+            else rnbinom_torch(r_mean_patch, self$par_theta_recruits)
       }else if(!self$sample_regeneration){
         r = r_mean_patch
       }
@@ -3529,8 +3534,11 @@ finn_class = nn_module(
       # process specific parameters, e.g. theta for nbinom sampling of the recruits
       if(type == "regeneration") {
         self$sample_regeneration = obj$sample_regeneration
+        self$regeneration_sampler = obj$regeneration_sampler
         self$par_theta_recruits = obj$dispersion_parameter
       }
+
+      if(type == "mortality") self$mortality_draw = obj$mortality_draw
 
       if(type == "competition") {
         self$n_quantiles = obj$n_quantiles

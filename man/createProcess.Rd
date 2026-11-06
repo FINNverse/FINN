@@ -23,7 +23,9 @@ createProcess(
   n_quantiles = 10L,
   continuous = FALSE,
   light_mask = FALSE,
-  custom_parameters = NULL
+  custom_parameters = NULL,
+  mortality_draw = c("gamma", "poisson"),
+  regeneration_sampler = c("gaussian", "refined")
 )
 }
 \arguments{
@@ -110,6 +112,36 @@ numeric vector (a trainable parameter with that starting value) or a list with
 function accesses each as \code{self[[name]]}. Parameterise in the \emph{unconstrained}
 space and apply any link inside the function (e.g. store \verb{log K} and use
 \code{exp(self$logK)}), mirroring FINN's own \verb{par_*_unconstrained} convention.}
+
+\item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn
+from the cohort's mortality probability. Only used when this process is the
+mortality process. \code{"gamma"} (default, the behaviour of every published FINN
+result) matches a Gamma to the binomial's first two moments and \code{rsample()}s
+it, which gives a pathwise gradient -- the hazard a discrete draw does not
+cover -- but the forward pass rounds that draw straight-through, so the
+gradient flows through a quantity the simulation discards and the rounded
+count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
+cohorts at annual probabilities of 0.01-0.10. \code{"poisson"} draws a Bernoulli
+where the cohort holds one tree or fewer and a Poisson capped at the cohort
+size otherwise: integer-valued,
+exact in expectation for small \code{n*p}, no pathwise gradient. The Bernoulli
+branch matters because capping a Poisson at a one-tree cohort delivers only
+88\% of the calibrated probability at the \code{p = 0.26} of a suppressed stem.
+See \code{\link[=binomial_from_poisson]{binomial_from_poisson()}} for the measured effect on the simulated
+stand.}
+
+\item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn from the
+negative binomial. Only used when this process is the regeneration process and
+\code{sample_regeneration = TRUE}. \code{"gaussian"} (default, the behaviour of every
+published FINN result) offsets the Gamma draw by \code{+0.001}, clamps the
+probability at \code{1e-4} and pushes the result through
+\code{lambda + eps*sqrt(lambda)}. The offset and the clamp guard the Gaussian
+branch against a negative draw and against a NaN gradient through \code{log(0)};
+together they are a recruitment FLOOR of 0.0011 per cell-year, which over 149
+species is 9.8 recruits ha^-1 yr^-1, as large as the entire observed ingrowth
+of 11.4. \code{"refined"} drops both (neither hazard applies to \code{torch_poisson})
+and samples exactly below \code{lambda = 2}. See
+\code{\link[=rnbinom_torch_refined]{rnbinom_torch_refined()}}.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and

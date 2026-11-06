@@ -5,7 +5,7 @@ Nsp_i <- 2; Nsites_i <- 3; Tmax_i <- 6; SEED_i <- 11
 LOSS_i <- c(dbh = "mse", ba = "mse", trees = "mse", growth = "mse",
             mortality = "mse", regeneration = "mse")
 
-mk_model_i <- function() finn(N_species = Nsp_i, recruits_dbh = 5,
+mk_model_i <- function(sample_reg = FALSE) finn(N_species = Nsp_i, recruits_dbh = 5,
   competition_process  = createProcess(~0, func = FINN::competition, optimizeSpecies = TRUE),
   growth_process       = createProcess(~1 + env1, initEnv = matrix(c(0.5, 0.5, 0.4, -0.4), Nsp_i, 2),
                                        initSpecies = matrix(c(0.1, 0.2, 0.05, 0.05), Nsp_i, 2),
@@ -15,7 +15,7 @@ mk_model_i <- function() finn(N_species = Nsp_i, recruits_dbh = 5,
                                        func = FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE),
   regeneration_process = createProcess(~1 + env1, initEnv = matrix(c(1.5, 1.0, 0.5, -0.5), Nsp_i, 2),
                                        initSpecies = c(0.1, 0.1), func = FINN::regeneration,
-                                       sample_regeneration = FALSE, optimizeSpecies = TRUE, optimizeEnv = TRUE))
+                                       sample_regeneration = sample_reg, optimizeSpecies = TRUE, optimizeEnv = TRUE))
 
 identity_inputs <- function() {
   it <- data.table::data.table(
@@ -40,7 +40,9 @@ identity_configs <- function() list(
   constant   = list(period = 2L),
   per_site   = list(period = NULL),
   skip_step  = list(period = 2L, nonfinite = "skip_step"),
-  tree_mort  = list(period = NULL, loss_aggregation = c(mortality = "tree"), tree_data = TRUE))
+  tree_mort  = list(period = NULL, loss_aggregation = c(mortality = "tree"), tree_data = TRUE),
+  ## the only config that draws recruits: guards the default regeneration sampler as well
+  sample_reg = list(period = 2L, sample_reg = TRUE))
 
 identity_run <- function(cfg) {
   spec <- identity_configs()[[cfg]]
@@ -55,7 +57,7 @@ identity_run <- function(cfg) {
   if (!is.null(spec$loss_aggregation)) args$loss_aggregation <- spec$loss_aggregation
   if (isTRUE(spec$tree_data)) args$tree_data <- L$tree
   FINN.seed(SEED_i)
-  m <- mk_model_i()
+  m <- mk_model_i(isTRUE(spec$sample_reg))
   suppressMessages(suppressWarnings(do.call(fit, c(list(m), args))))
   list(history = as.numeric(unlist(m$history)),
        pars    = unlist(lapply(m$parameters[order(names(m$parameters))],
