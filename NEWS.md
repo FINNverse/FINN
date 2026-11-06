@@ -31,7 +31,7 @@ The two tables are the overview; the sections below them carry the detail.
 | Additive recruitment floor, was hard-coded at 0.2 | `finn(reg_floor = )` | `1e-3` |
 | Weight of the regeneration term in the loss | `finn(recruit_obs_weight = )` | `1.0` |
 | Score growth over the whole remeasurement interval | `finn(growth_period_scale = )` | `FALSE` |
-| Binned competition takes its height quantiles over the live cohorts only | `createProcess(light_mask = )` | `FALSE` |
+| **Binned competition takes its height quantiles over the live cohorts only.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(light_mask = )` | **`TRUE`** (was unmasked) |
 | Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
 | Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
 | A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
@@ -55,7 +55,7 @@ someone who was affected.
 | Per-tree growth and mortality were evaluated at the interval's last year only, against interval observations | yes, for the per-tree routes (new in 0.2.0) |
 | `predictTrees()` returned rows in its own order, and failed on a model that had never been run | yes — misaligned predictions |
 | A tracked cohort the simulation killed left the scored set mid-window, so the scored sample was a function of the parameters | yes, for `loss_resolution = "tree"` (new in 0.2.0) |
-| A retained dead cohort moved the height quantiles of the binned competition, and so the light of the living | yes — now a warning unless `light_mask` or `continuous` is set |
+| A retained dead cohort, and any empty padding slot, moved the height quantiles of the binned competition and so the light of the living | yes — masking is now the default; `light_mask = FALSE` keeps the old behaviour |
 | `torch_nanquantile` over a patch with no live cohort returned `NaN` into the likelihood | yes — the fit aborted; the quantiles are now 0 |
 | A per-tree term was scored under a weight taken from the per-tree null while the cell term ran | yes, on data with a constant census period |
 | `period_mode = "constant"` with a per-tree term was silently overridden, with a false reason | yes — now an error naming both halves |
@@ -177,6 +177,20 @@ someone who was affected.
   inventory simulator.
 
 ## Behaviour changes
+
+* **The binned competition masks padding out of its height quantiles.**
+  `createProcess(light_mask = )` now defaults to `TRUE`. The cohort dimension is
+  padded to the widest site x patch **of the batch** and an empty slot has height
+  ~0, so unmasked the bin edges are set by how many empty slots happen to sit
+  beside a stand. Measured on ten live cohorts of 55 to 8 cm: beside a batch
+  neighbour holding ten cohorts their light runs 1.00, 0.76, 0.58, 0.44, 0.34,
+  0.27, 0.22, 0.19, 0.17, 0.16; beside a neighbour holding a hundred it is 1.00
+  for all ten -- competition disappears, with the stand itself unchanged. Batch
+  composition is not part of the model, so the unmasked quantile made the fitted
+  objective a function of `batchsize`. This is a defect rather than a modelling
+  choice, which is why it changes a default instead of arriving as an option.
+  `createProcess(light_mask = FALSE)` reproduces results published before 0.2.0.
+  `continuous = TRUE` compares pairs and was never affected.
 
 * **Growth enters `mortality()` in %/yr.** The default mortality process now
   uses `growth / growth_scale` with `growth_scale = 0.01`, so the growth

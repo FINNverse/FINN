@@ -52,10 +52,13 @@ test_that("light_mask takes the bin edges over the live cohorts only", {
   lt <- function(x, ...) as.array(competition(dbh = x$dbh, species = x$species, trees = x$trees,
                                               parComp = pc, patch_size_ha = 0.1, ...))[1, 1, 1:3]
   dense <- mk(0L); sparse <- mk(60L)
-  # unmasked: the padding pushes the live cohorts into the top bin
-  expect_false(isTRUE(all.equal(lt(dense), lt(sparse), tolerance = 1e-5)))
-  # masked: the padding is invisible, so a sparse patch gets the dense patch's light
-  expect_equal(lt(dense, light_mask = TRUE), lt(sparse, light_mask = TRUE), tolerance = 1e-6)
+  # unmasked, which is what every result before 0.2.0 ran on: the padding pushes the
+  # live cohorts into the top bin, so the same three trees get a different light
+  expect_false(isTRUE(all.equal(lt(dense, light_mask = FALSE), lt(sparse, light_mask = FALSE),
+                                tolerance = 1e-5)))
+  # masked, the default: the padding is invisible, so a sparse patch gets the dense
+  # patch's light -- the padded width is set by the batch, which is not part of the model
+  expect_equal(lt(dense), lt(sparse), tolerance = 1e-6)
 })
 
 test_that("mortality scales growth by growth_scale (default 0.01, i.e. %/yr)", {

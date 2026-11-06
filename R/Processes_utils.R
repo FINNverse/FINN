@@ -92,9 +92,14 @@
 #'   enough padding every live cohort is searchsorted into the top bin, where
 #'   nothing shades anything: measured on a 251 m2/ha stand of ten live cohorts,
 #'   100 padded slots put all ten at light 1.00. Only the quantile INPUT is masked,
-#'   so every cohort keeps its real height as the bin query. `FALSE` (the default)
-#'   is the behaviour of every published FINN result. Ignored when
-#'   `continuous = TRUE`, which compares pairs and is correct at any padding.
+#'   so every cohort keeps its real height as the bin query. `TRUE` is the default
+#'   since 0.2.0, because the padded width is set by the widest site in the BATCH:
+#'   the same stand of ten cohorts gets light 1.00 throughout beside a neighbour
+#'   holding a hundred, and its correct gradient down to 0.159 beside a neighbour
+#'   holding ten. Batch composition is not part of the model, so the unmasked
+#'   quantile made the fitted objective depend on `batchsize`. `FALSE` reproduces
+#'   results published before 0.2.0. Ignored when `continuous = TRUE`, which
+#'   compares pairs and is correct at any padding.
 #' @param continuous (`logical(1)`)\cr Compute shading continuously for every pair
 #'   of cohorts (`TRUE`) instead of binning cohorts into `n_quantiles` height
 #'   classes (`FALSE`, default). Only used when this process is the competition
@@ -162,7 +167,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = FALSE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)

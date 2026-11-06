@@ -127,12 +127,15 @@ height = function(dbh, parHeight) {
 #' @param continuous logical Use the continuous competition formulation. Defaults to FALSE.
 #' @param light_mask logical Take the height quantiles over the live cohorts only
 #'   (`trees > 0.5`), leaving every cohort's real height as the bin query. Defaults
-#'   to FALSE. See [FINN::createProcess()] for when this matters.
+#'   to TRUE since 0.2.0: unmasked, the padded cohort width is set by the widest
+#'   site in the batch, so the same stand's light depends on which other sites
+#'   happen to share its batch. `FALSE` reproduces earlier results. See
+#'   [FINN::createProcess()] for the measurement.
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
 #' @export
-competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE, light_mask = FALSE){
+competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE, light_mask = TRUE){
   parHeight = parComp[,1]
   parCompStr = parComp[,2]
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)*parCompStr[species]*0.1
