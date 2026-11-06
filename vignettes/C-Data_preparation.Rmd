@@ -218,12 +218,12 @@ inputs <- resolveSiteIDs(
 head(inputs$obs_dt)
 #>    siteID  year    ba   dbh trees growth growth_n  mort n_at_risk n_died   reg
 #>     <int> <num> <num> <num> <num>  <num>    <int> <num>     <int>  <int> <num>
-#> 1:      2     0     0   NaN     0    NaN        0    NA         0      0     0
-#> 2:      2     1     0   NaN     0    NaN        0    NA         0      0     0
-#> 3:      2     2     0   NaN     0    NaN        0    NA         0      0     0
-#> 4:      3     0     0   NaN     0    NaN        0    NA         0      0     0
-#> 5:      3     1     0   NaN     0    NaN        0    NA         0      0     0
-#> 6:      3     2     0   NaN     0    NaN        0    NA         0      0     0
+#> 1:      1     0     0   NaN     0    NaN        0    NA         0      0     0
+#> 2:      1     1     0   NaN     0    NaN        0    NA         0      0     0
+#> 3:      1     2     0   NaN     0    NaN        0    NA         0      0     0
+#> 4:      2     0     0   NaN     0    NaN        0    NA         0      0     0
+#> 5:      2     1     0   NaN     0    NaN        0    NA         0      0     0
+#> 6:      2     2     0   NaN     0    NaN        0    NA         0      0     0
 #>    species   species_name
 #>      <int>         <char>
 #> 1:       1 Abies concolor
