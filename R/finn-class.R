@@ -2467,6 +2467,9 @@ finn_class = nn_module(
 
     self$history = list()
     self$tree_deaths = NULL
+    # written only by forward()'s tree branch, so a plain fit() after a tree one would
+    # otherwise leave the first call's predictions in place with nothing marking them stale
+    self$tree_pred = NULL
     self$gradients = list()
 
     # Rebuild the optimizer if this is the first fit() call, or if `lr` changed since
@@ -2673,6 +2676,9 @@ finn_class = nn_module(
       if(length(tree_cov)) {
         cv = do.call(rbind, tree_cov)
         cv = rowsum(cv[, -1, drop = FALSE], cv[, 1])
+        # a census can legitimately carry no fate at all (`died` all NA); every share below
+        # would then be 0/0, which also breaks `frac_killed + frac_ghost <= 1`
+        cv = cv[cv[,1] > 0, , drop = FALSE]
         self$tree_deaths = rbind(self$tree_deaths, data.frame(
           epoch = epoch, census = as.integer(rownames(cv)), n_target = cv[,1],
           frac_killed = cv[,2]/cv[,1], mean_kill_year = cv[,3]/pmax(cv[,2], 1),

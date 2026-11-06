@@ -163,6 +163,14 @@ for 0.1.0 runs unchanged.
   stand. Anything but a single positive finite number, or `NULL`, is now an error
   at `createProcess()` time. Saved models are unaffected.
 
+* `fit()` resets `$tree_pred` along with `$tree_obs` and `$tree_deaths`. It is
+  written only by the per-tree branch of `forward()`, so a plain fit after a
+  per-tree one left the earlier call's predictions in place.
+
+* `$tree_deaths` skips a census that carries no fate target at all (`died` is
+  `NA` for every row of it) instead of reporting `NaN` for `frac_killed`,
+  `window` and `frac_ghost`, which are `0/0` there.
+
 
 # FINN 0.1.0
 

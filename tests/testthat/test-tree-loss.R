@@ -468,3 +468,17 @@ test_that("$tree_deaths sees a kill in the window's last year", {
   expect_equal(d$mean_kill_year[d$census == 1], 1)      # the only year there is
   expect_equal(d$frac_ghost[d$census == 2], d$frac_killed[d$census == 1], tolerance = 1e-9)
 })
+
+
+test_that("$tree_deaths skips a census with no fate target instead of reporting NaN", {
+  skip_if_no_torch()
+  # `died` may legitimately be NA for every row of a census (a remeasurement that recorded
+  # diameters only). Every share is then 0/0: NaN, and `frac_killed + frac_ghost <= 1` fails.
+  td = tll$table(c(5L, 10L))
+  td[year == 5L, died := NA_real_]
+  d = tll$fit(tll$obs(c(5L, 10L), 3L), td)$tree_deaths
+  expect_false(5L %in% d$census)
+  expect_true(10L %in% d$census)
+  expect_true(all(is.finite(as.matrix(d))))
+  expect_true(all(d$frac_killed + d$frac_ghost <= 1 + 1e-9))
+})
