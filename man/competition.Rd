@@ -38,6 +38,10 @@ competition(
 \item{n_quantiles}{integer Number of height quantiles used when \code{continuous = FALSE}. Defaults to 10.}
 
 \item{continuous}{logical Use the continuous competition formulation. Defaults to FALSE.}
+
+\item{light_mask}{logical Take the height quantiles over the live cohorts only
+(\code{trees > 0.5}), leaving every cohort's real height as the bin query. Defaults
+to FALSE. See \code{\link[=createProcess]{createProcess()}} for when this matters.}
 }
 \value{
 torch.Tensor Fraction of available light (light) for each cohort.

@@ -657,17 +657,18 @@ rnbinom_torch = function(pred, theta) {
 #' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()` stays the
 #' default. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
 #' the Gamma draw is clamped at that same `eps` instead of taking `+0.001` and an
-#' absolute value, and the draw goes through [sample_poisson_refined()] (an exact
+#' absolute value, and the draw goes through `sample_poisson_refined()` (an exact
 #' `torch_poisson` below `lambda = 2`, the Gaussian approximation above) instead of
-#' [sample_poisson_gaussian()].
+#' `sample_poisson_gaussian()`.
 #'
 #' @details
 #' The `+0.001` offset and the `1e-4` clamp exist for the Gaussian branch: they
 #' keep the Gamma draw off zero and stop `log(0)` sending a NaN gradient back
 #' through `distr_gamma()$rsample()`. Neither hazard applies to `torch_poisson`,
-#' and together they impose a recruitment FLOOR of 0.0011 per cell-year, which
-#' over 149 species is 9.8 recruits ha^-1 yr^-1 -- as large as the entire observed
-#' ingrowth of 11.4 recruits ha^-1 yr^-1 in the FIA panel. `sample_poisson_gaussian()`
+#' and together they impose a recruitment FLOOR of 0.0011 per cell-year, which at a
+#' FINN patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 *per species* -- over a
+#' pool of a hundred-odd species, as large as the whole ingrowth a temperate
+#' inventory records. `sample_poisson_gaussian()`
 #' (`lambda + eps*sqrt(lambda)`, rounded straight-through by the forward pass)
 #' rounds the floor away but also rounds the signal away: at a FINN patch of
 #' 0.0168 ha the per-cell mean is 0.001-0.008, and over 2e6 draws the delivered

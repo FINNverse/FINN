@@ -125,6 +125,9 @@ height = function(dbh, parHeight) {
 #' @param cohortHeights torch.Tensor (Optional) Pre-computed cohort heights. Defaults to NULL.
 #' @param n_quantiles integer Number of height quantiles used when `continuous = FALSE`. Defaults to 10.
 #' @param continuous logical Use the continuous competition formulation. Defaults to FALSE.
+#' @param light_mask logical Take the height quantiles over the live cohorts only
+#'   (`trees > 0.5`), leaving every cohort's real height as the bin query. Defaults
+#'   to FALSE. See [FINN::createProcess()] for when this matters.
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
