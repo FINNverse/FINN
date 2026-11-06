@@ -1,8 +1,9 @@
-# Handover: branch `merge-main-into-loss-aggregation`
+# Record: merging `loss-aggregation` and `main`, and what the fitting regimes decided
 
-For Max (and the Claude session he works with). Written 2026-11-03 by Yannek's
-session. Read this before touching the branch; it explains what the merge
-decided, what was verified, and what is still open.
+Yannek to Max, written 2026-11-03, extended 2026-11-05. Completed: the branch
+reached `main` through PR #32. Kept as the record of what the merge decided,
+what was verified, and the discussion behind the fitting regimes -- not as
+instructions for a branch to work on.
 
 ## TL;DR
 
@@ -281,14 +282,15 @@ figures to be discussed together.
   (`FINN-bwi/fits/2026-11-03-stage2-pertree-{observed,simulated}`); they run
   against this merge installed in a separate library (`~/R/lib-finn-merge`).
 
-## For the Claude session picking this up
+## Working rules that outlived this branch
 
-- Work on `merge-main-into-loss-aggregation` (or a branch from it); do not push to
-  `main` or `loss-aggregation` without Max's go-ahead.
-- Before and after any change in `R/finn-class.R`: `devtools::test()` must stay
-  at 384+ passing, and the default path must stay bit-identical to `6497d01`
-  (and to `d4b3907` with `nonfinite = "skip_step"`). Compare in separate R
-  processes with separate libraries; never reinstall into the default library
-  while someone's fits run against it.
-- The repo's `CLAUDE.md` rules apply (no `git add -A`, roxygen docs, precompiled
-  vignettes, CONTRIBUTING via the skills).
+- Before and after any change in `R/finn-class.R`: the suite must not lose a
+  passing test, and the default path must stay bit-identical to the stored
+  references. `tests/testthat/test-identity.R` does that now -- five
+  configurations fitted three epochs at a non-zero learning rate, compared
+  against `tests/testthat/ref-identity/`. Regenerate them only when a change to
+  the objective is intended, and say so in the commit.
+- Compare in separate R processes with separate libraries, and never reinstall
+  into a library while someone's fits are running against it.
+- `CONTRIBUTING.md` and the repository's contribution rules apply as written
+  there.
