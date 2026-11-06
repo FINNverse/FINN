@@ -1015,7 +1015,7 @@ finn_class = nn_module(
     tree_acc = NULL
     tree_cov = list()
     tree_flat = function(a) a$to(dtype = self$dtype, device = self$device)$permute(c(3,2,1))$reshape(c(-1))
-    tree_new = function(n) lapply(1:4, function(k) torch::torch_zeros(n + 1L, device = self$device))
+    tree_new = function(n) lapply(1:5, function(k) torch::torch_zeros(n + 1L, device = self$device))
     # Slot-wise zeroing keeps the graph of the sites still inside their window (the per-site
     # path backwards once, at the end); elsewhere that graph is already freed, so start fresh.
     # A generation's slots are the cohort layout it was built from, padding included.
@@ -1240,6 +1240,7 @@ finn_class = nn_module(
                       else binomial_from_gamma(n_at_risk, m_draw))*trees$ge(0.5)$float()
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         trees_before = trees
+        trees = torch_clamp(trees - trees_dead, min = 0) #### TODO if trees = 0 then NA...prevent!
 
         ## Tree-level loss: accumulate this year's rates per tracked cohort ####
         # A tracked cohort accumulates for the WHOLE window whether or not the simulation
@@ -1247,7 +1248,13 @@ finn_class = nn_module(
         # 0/1 fate over the whole interval, so a truncated accumulation would compare two
         # different quantities. A killed slot keeps `trees = 0`, shades nothing and
         # contributes nothing to the stand terms, but its diameter and hazard stay defined.
-        # Accumulator 4 counts the years it was alive, which is what `$tree_deaths` reports.
+        # Accumulators 4 and 5 are the two liveness counts `$tree_deaths` needs, and one of
+        # them is not enough. 4 counts the years the cohort ENTERED alive, so a cohort killed
+        # in year k of an L-year window gets k and a cohort that was already dead at the
+        # window's start gets 0 -- but a kill in year L is then indistinguishable from a
+        # survivor. 5 counts the years it ENDED alive, which separates those two (k-1 against
+        # L) but gives 0 both for a year-1 kill and for a ghost. Survivor: 5 == n_ok.
+        # Ghost: 4 == 0. Killed in this window: 4 > 0 and 5 < n_ok, in year 4.
         if(tree_mode) {
           keep = tree_tracked()$to(dtype = torch_float32())
           idx = torch_where(keep$gt(0.5), tree_slot_idx(),
@@ -1256,15 +1263,9 @@ finn_class = nn_module(
           tree_acc[[1]] = tree_acc[[1]]$scatter_add(1, idx, (gi*keep)$flatten())
           tree_acc[[2]] = tree_acc[[2]]$scatter_add(1, idx, (torch_log((1-m)$clamp(1e-6, 1))$negative()*keep)$flatten())
           tree_acc[[3]] = tree_acc[[3]]$scatter_add(1, idx, keep$flatten())
-          tree_acc[[4]] = tree_acc[[4]]$scatter_add(1, idx, (keep*trees$gt(0.5)$to(dtype = torch_float32()))$flatten())
+          tree_acc[[4]] = tree_acc[[4]]$scatter_add(1, idx, (keep*trees_before$gt(0.5)$to(dtype = torch_float32()))$flatten())
+          tree_acc[[5]] = tree_acc[[5]]$scatter_add(1, idx, (keep*trees$gt(0.5)$to(dtype = torch_float32()))$flatten())
         }
-        # trees_dead = (trees*m)*trees$ge(0.5)$float()
-        # trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
-        # trees_before = trees
-
-        #.unsqueeze(3) # TODO check!
-        #trees$sub_(m)$clamp_(min = 0.0)
-        trees = torch_clamp(trees - trees_dead, min = 0) #### TODO if trees = 0 then NA...prevent!
       }
 
       ### Competition 3 ####
@@ -1539,7 +1540,8 @@ finn_class = nn_module(
             w[!is.finite(w)] = 1
             w_flat = torch_tensor(rep(w, times = tree_gen_n %/% sites), dtype = self$dtype, device = self$device)
             n_ok = tree_acc[[3]]$narrow(1, 1, tree_gen_n)
-            n_alive = tree_acc[[4]]$narrow(1, 1, tree_gen_n)
+            n_entered = tree_acc[[4]]$narrow(1, 1, tree_gen_n)
+            n_alive = tree_acc[[5]]$narrow(1, 1, tree_gen_n)
             g_acc = tree_acc[[1]]$narrow(1, 1, tree_gen_n)
             g_pred = if(isTRUE(self$growth_period_scale)) torch_expm1(g_acc) else g_acc/n_ok$clamp(min = 1)
             p_death = torch_expm1(tree_acc[[2]]$narrow(1, 1, tree_gen_n)$negative())$negative()
@@ -1550,17 +1552,20 @@ finn_class = nn_module(
                                   n = as.numeric(n_ok$detach()$cpu()),
                                   n_alive = as.numeric(n_alive$detach()$cpu()))
             # of the slots carrying a fate: how many the simulation killed before the window
-            # closed, and how long those lived. A survivor has n_alive == n_ok.
+            # closed, and how long those lived. A survivor ends every tracked year alive,
+            # `n_alive == n_ok`; a kill in the window's LAST year is a survivor by the
+            # entering count alone, which is why both counts are kept.
             # A generation outlives a window under single shooting, so a slot killed in an
             # earlier window enters this one already dead: it accumulates nothing and its
-            # `n_alive` is 0. Counting it with the trees killed INSIDE this window would mix
-            # two different statements and pull `mean_kill_year` toward zero, which is what
-            # it did. `ghost` is that share; `killed` is now this window's kills alone.
+            # `n_entered` is 0. Counting it with the trees killed INSIDE this window would
+            # mix two different statements and pull `mean_kill_year` toward zero, which is
+            # what it did. `ghost` is that share; `killed` is this window's kills alone, and
+            # the year it died is the number of years it entered alive.
             has = td$mort$isnan()$bitwise_not()$to(dtype = self$dtype)
-            ghost = has*n_alive$lt(0.5)$to(dtype = self$dtype)
-            killed = has*n_alive$lt(n_ok - 0.5)$to(dtype = self$dtype)*n_alive$gt(0.5)$to(dtype = self$dtype)
+            ghost = has*n_entered$lt(0.5)$to(dtype = self$dtype)
+            killed = has*n_alive$lt(n_ok - 0.5)$to(dtype = self$dtype)*n_entered$gt(0.5)$to(dtype = self$dtype)
             tree_cov[[length(tree_cov) + 1L]] = c(i, as.numeric(torch_stack(list(
-              has$sum(), killed$sum(), (killed*n_alive)$sum(),
+              has$sum(), killed$sum(), (killed*n_entered)$sum(),
               (has*n_ok)$sum(), ghost$sum()))$detach()$cpu()))
           }
           if(per_site_mode) {

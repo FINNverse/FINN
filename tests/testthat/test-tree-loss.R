@@ -452,3 +452,17 @@ test_that("$tree_deaths separates this window's kills from earlier generations' 
   ## and the share already dead can only grow as one generation runs on
   expect_gte(d$frac_ghost[d$census == 10], d$frac_ghost[d$census == 5])
 })
+
+
+test_that("$tree_deaths sees a kill in the window's last year", {
+  skip_if_no_torch()
+  # Liveness recorded BEFORE the death draw makes a cohort killed in year L of an L-year
+  # window indistinguishable from a survivor, so on one-year windows frac_killed was
+  # identically 0 and the kills surfaced only as the next window's ghosts. Two one-year
+  # windows: window 1 must report its own kills, and they must be the ghosts of window 2.
+  d = tll$fit(tll$obs(c(1L, 2L), 1L), tll$table(c(1L, 2L)))$tree_deaths
+  expect_true(all(d$window == 1))
+  expect_gt(d$frac_killed[d$census == 1], 0)
+  expect_equal(d$mean_kill_year[d$census == 1], 1)      # the only year there is
+  expect_equal(d$frac_ghost[d$census == 2], d$frac_killed[d$census == 1], tolerance = 1e-9)
+})

@@ -32,6 +32,19 @@ for 0.1.0 runs unchanged.
   any row it cannot place on an initial cohort. See `?fit`, section *Scoring
   individual trees*, for the comparison. The two cannot be combined on one
   response. `predictTrees()` evaluates the first option on a fitted model.
+  `loss_resolution = "tree"` reports `$tree_deaths` per census and epoch: the
+  share of inventory-alive trees the simulation killed inside the window
+  (`frac_killed`), the mean year it killed them (`mean_kill_year`), and the share
+  that entered the window already dead from an earlier one (`frac_ghost`).
+  Liveness is recorded after the death draw as well as before it: on the
+  entering count alone a cohort killed in the window's LAST year is
+  indistinguishable from a survivor, so both numbers were undercounts and
+  `frac_killed` was identically 0 on a one-year window. On the three-site,
+  24-tree fixture of `tests/testthat/test-tree-loss.R` the correction moves
+  `frac_killed` from 0 to 0.167 and 0.208 on two one-year windows, from 0.250 and
+  0.042 to 0.292 and 0.125 on two three-year windows, and from 0.458 to 0.625 on
+  a single four-year window, with `mean_kill_year` rising 1.82 to 2.40 there.
+  `frac_ghost` is unchanged.
 
 * **Training regimes: `reanchor` and `teacher_forcing`.** Multiple shooting
   (`reanchor = TRUE` with `anchor_cohorts`, optionally `anchor_mode = "merge"`
