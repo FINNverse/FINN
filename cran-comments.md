@@ -19,6 +19,12 @@ mortality growth coefficient at its bound for most species. Each is documented
 in NEWS.md with the measurement behind it. Every other new argument defaults to
 the previous behaviour.
 
+A fourth change is locale-dependent rather than argument-controlled:
+`resolveSiteIDs()` numbered sites, patches and species through `LC_COLLATE`, so
+the same input gave different integer ids on machines with different locales,
+and the species id indexes the fitted parameter matrices. Ordering is now
+radix. Results are unchanged under `C` and reproducible everywhere else.
+
 New in 0.2.0 (see NEWS.md for details):
 
 * `env_autoscale` gains per-predictor scaling ("auto"/"identity"/"0to1" or a

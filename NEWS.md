@@ -5,7 +5,9 @@ Inventory and Analysis) and **BWI** (German Bundeswaldinventur) calibration
 projects. Every new argument defaults to the previous behaviour, with three
 exceptions that do not reproduce 0.1.0 and are marked in the table below:
 `mortality(growth_scale = 0.01)`, `createProcess(light_mask = TRUE)` and
-`finn(reg_floor = 1e-3)`.
+`finn(reg_floor = 1e-3)`. A fourth change reproduces 0.1.0 only on a machine
+whose `LC_COLLATE` was already `C`: `resolveSiteIDs()` now numbers sites,
+patches and species by radix order instead of the collation locale's.
 
 The two tables are the overview; the sections below them carry the detail.
 
@@ -61,6 +63,7 @@ someone who was affected.
 | A per-tree term was scored under a weight taken from the per-tree null while the cell term ran | yes, on data with a constant census period |
 | `period_mode = "constant"` with a per-tree term was silently overridden, with a false reason | yes — now an error naming both halves |
 | Cohort ids were enumerated flat over the whole array, losing the tree each cohort came from | no — the link was recoverable, just not without a positional formula |
+| `resolveSiteIDs()` numbered sites, patches and species through `LC_COLLATE`, so the same tables gave different integer ids on a German and on a `C` machine | yes, off a `C` locale — the species number indexes `par_growth` / `par_mortality`, so a parameter row belonged to another species |
 | `$tree_deaths` counted an earlier window's ghosts among this window's kills, and recorded liveness before the death draw | diagnostic only — `frac_killed` was identically 0 on a one-year window |
 | `$tree_pred` was not reset by `fit()`, and `$tree_deaths` reported `NaN` for a census with no fate target | diagnostic only |
 | A U+039B and a U+00D7 in `?fit`, a stray `\cr`, two dangling `\link` targets, a `@param` on the wrong function | no — the LaTeX manual and two `R CMD check` WARNINGs |
@@ -200,6 +203,17 @@ someone who was affected.
   `createProcess(light_mask = FALSE)` reproduces results published before 0.2.0.
   `continuous = TRUE` compares pairs and was never affected.
 
+* **Site, patch and species ids are radix-ordered, not locale-ordered.**
+  `resolveSiteIDs()` assigned them through `as.factor()` and `sort()`, both of
+  which order by `LC_COLLATE`: `c("Acer", "abies_x")` is that order under `C`
+  and the reverse under `de_DE.UTF-8`. The species number indexes the fitted
+  parameter matrices, so the same input file gave `par_growth[1, ]` to one
+  species on one machine and to another species on the next, with nothing in the
+  output to show it. Ordering is now `sort(..., method = "radix")`, which ignores
+  the locale. Results are unchanged for anyone who ran under `C`; everyone else
+  gets a different, and now reproducible, numbering, so ids in artefacts built
+  before this release do not necessarily line up with ids built after it.
+
 * **Growth enters `mortality()` in %/yr.** The default mortality process now
   uses `growth / growth_scale` with `growth_scale = 0.01`, so the growth
   coefficient `parMort[, 3]` acts per 1 %/yr of annual relative growth. On the
@@ -243,6 +257,12 @@ someone who was affected.
   `-2^31`; `growth_scale = 0` saturates mortality to 0 or 1 across the whole
   stand. Anything but a single positive finite number, or `NULL`, is now an error
   at `createProcess()` time. Saved models are unaffected.
+
+* `resolveSiteIDs()` orders site, patch and species names with
+  `sort(..., method = "radix")` instead of the collation locale; see *Behaviour
+  changes*. Covered by `tests/testthat/test-locale-stable-ids.R`, which runs the
+  function under `C` and `de_DE.UTF-8` on names the two locales order
+  differently.
 
 * `fit()` resets `$tree_pred` along with `$tree_obs` and `$tree_deaths`. It is
   written only by the per-tree branch of `forward()`, so a plain fit after a
