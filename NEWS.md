@@ -105,7 +105,42 @@ for 0.1.0 runs unchanged.
   recruitment to what an inventory actually records — a building block for the
   inventory simulator.
 
+## Behaviour changes
+
+* **Growth enters `mortality()` in %/yr.** The default mortality process now
+  uses `growth / growth_scale` with `growth_scale = 0.01`, so the growth
+  coefficient `parMort[, 3]` acts per 1 %/yr of annual relative growth. On the
+  raw rate the term spanned only a few tenths on the logit between slow and fast
+  trees even at the coefficient bound of -10 (in the BWI calibration 13 of 15
+  species sat at that bound). This is the one default that does not reproduce
+  0.1.0: pass `growth_scale = 1` through a custom process function to recover
+  the old behaviour. Saved models keep the process function they were fitted
+  with.
+
+## Performance
+
+* **`fit()` set-up no longer scales with sites x rows.** `climateDF2array()`
+  (behind every response and environment array `fit()` builds, ~140 calls per
+  fit with 15 species) looked each row's site and year up by a linear scan, so
+  a call cost O(rows x sites): ~90 s at 32,686 BWI sites, ~20 min of set-up per
+  fit. The lookup is now a hash map, O(rows); the arrays are bit-identical.
+
+* **Observed-tree tensors have the trees' own patches.** For
+  `loss_aggregation = "tree"` and `predictTrees()`, the tree tensors were sized
+  by `patches` (e.g. 25) although the trees occupy fewer patches (all BWI trees
+  have `patchID` 1), and competition, growth and mortality ran on the empty
+  ones in every batch. They are now sized by the number of distinct `patchID`s
+  in `tree_data`. Light is computed per patch, so no prediction changes;
+  `predictTrees(patches = )` is now ignored.
+
 ## Bug fixes
+
+* `fit(epochs = 0)` ran two epochs (`1:0`); it now runs the set-up only
+  (data tensors, `loss_baseline` / `loss_weights`) and trains nothing.
+
+* `fit()` resets the observed-tree, size-class and quantile tensors of an
+  earlier call (or a `torch_load()`ed model) before building those of the
+  current one; stale tensors were otherwise still evaluated in `forward()`.
 
 * `createProcess(NN = ...)` is no longer silently dropped inside `create_nn()`.
 

@@ -135,6 +135,52 @@ processes, same seeds, `shuffle = FALSE`, `identical()` on `$history`,
 - A bug in the first merge draft (`tree_gen_base` became double after an anchor →
   `scatter_add` dtype error) was fixed before the merge commit.
 
+## Added after the merge (2026-11-03): growth in %/yr inside `mortality()`
+
+`FINN::mortality()` now uses `growth / growth_scale` with `growth_scale = 0.01`
+(Yannek's decision: this is the new default). On the raw rate the growth term
+spanned only ~0.3 on the logit between a slow and a fast tree even at the
+coefficient bound of −10, and in the BWI calibration 13 of 15 species sat at that
+bound. This is the one default that no longer reproduces 0.1.0 / `loss-aggregation`
+6497d01 bit for bit (the earlier bit-identity checks predate it); saved models keep
+the process function they were fitted with. `test-reanchor.R` "the cohort state is
+replaced by the anchor" now asks for > 80 % (was 90 %) of the trees in the
+anchored species, since the random initial growth coefficients act 100× more
+strongly. A test of the scaling is in `test-processes.R`. See NEWS.md.
+
+## Branch `fast-setup` (2026-11-05): faster fit() set-up, same results
+
+On top of `9ba45c5`; **please merge it into your restructuring work** (it touches
+`src/climateDF2array.cpp` and four places in `R/finn-class.R`). Not merged into
+any branch yet.
+
+1. `climateDF2arrayCpp()` looked each row's site and year up by a linear scan:
+   O(rows x sites), ~90 s per call at 32,686 BWI sites, and `fit()` makes ~140
+   calls (9 responses x 15 species + 3 envs) -> ~20 min of set-up per fit. Now an
+   `unordered_map` (first index per id, keyed on the double value; same
+   first-match / no-match-for-NaN semantics). Same signature, RcppExports
+   unchanged.
+2. `build_tree_obs()` sized the patch dimension with `patches` (25 in the BWI
+   fits) although all BWI trees have `patchID` 1, so `tree_predictions()` ran
+   competition/growth/mortality on 24 empty patches every batch. Now
+   `max(p)` (distinct `patchID`s in `tree_data`); the `n_patches` argument is
+   gone, and `predictTrees(patches = )` is ignored. Light is per patch, so no
+   prediction changes (test: padding the tensors with empty patches leaves every
+   tree's prediction `identical()`).
+3. `for (epoch in 1:epochs)` -> `seq_len(epochs)`; `fit(epochs = 0)` runs the
+   set-up only (`self$pred` is only built when an epoch ran).
+4. `fit()` sets `tree_obs`, `class_obs`, `quant_obs` to `NULL` before building
+   those of the current call (stale/dead tensors after an earlier fit or a
+   `torch_load()`).
+
+Verified (FINN-bwi `fits/2026-11-05-finn-fast-setup-check`): `devtools::test()`
+419 expectations, 0 failures; bit-for-bit identical (`identical()` on loss
+history, baselines, weights, every parameter, `param_history`) to `9ba45c5` on
+the merge-reproduction stage-2 template (v3 pilot) and on Yannek's final-A
+stage-2 call (v5 pilot, U-shape mortality, per-tree mortality, L2 Adam), 3
+epochs, 1 thread, separate processes and libraries. Speed numbers are in that
+folder's README.
+
 ## Discussion Yannek – Max, 2026-11-03 (for the record)
 
 Max and Yannek talked through the two branches after the merge. What came out:

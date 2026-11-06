@@ -76,7 +76,9 @@ the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
 
 \item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}}
 
-\item{epochs}{(\code{integer(1)})\cr Number of iteration steps.}
+\item{epochs}{(\code{integer(1)})\cr Number of iteration steps. \code{epochs = 0}
+runs the set-up only (data tensors, \code{loss_baseline}, \code{loss_weights} for
+\code{weights = "auto"}) and trains nothing; the parameters stay as they were.}
 
 \item{lr}{(\code{numeric(1)})\cr Learning rate of the optimizer.}
 

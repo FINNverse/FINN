@@ -57,3 +57,23 @@ test_that("light_mask takes the bin edges over the live cohorts only", {
   # masked: the padding is invisible, so a sparse patch gets the dense patch's light
   expect_equal(lt(dense, light_mask = TRUE), lt(sparse, light_mask = TRUE), tolerance = 1e-6)
 })
+
+test_that("mortality scales growth by growth_scale (default 0.01, i.e. %/yr)", {
+  skip_if_no_torch()
+  # FINN binds `self` when it installs the process; here a stub does it
+  mort <- FINN::mortality
+  environment(mort) <- list2env(list(self = list(record_raws = FALSE)), parent = environment(FINN::mortality))
+  sp  <- torch::torch_tensor(matrix(c(1L, 2L), 1, 2), dtype = torch::torch_long())
+  dbh <- torch::torch_tensor(matrix(c(20, 40), 1, 2))
+  g   <- torch::torch_tensor(matrix(c(0.005, 0.02), 1, 2))
+  li  <- torch::torch_tensor(matrix(c(0.3, 0.8), 1, 2))
+  pr  <- torch::torch_tensor(matrix(c(-4, -3), 1, 2))
+  par <- torch::torch_tensor(matrix(c(-0.5, 0.2, 0.3, -0.1, -2, 1), 2, 3))
+  m_default <- as.numeric(mort(dbh, sp, NULL, par, pr, li, growth = g))
+  # the same model on the raw rate needs the growth coefficient multiplied by 100
+  par_unscaled <- as.matrix(par); par_unscaled[, 3] <- par_unscaled[, 3] / 0.01
+  m_raw <- as.numeric(mort(dbh, sp, NULL, torch::torch_tensor(par_unscaled), pr, li, growth = g, growth_scale = 1))
+  expect_equal(m_default, m_raw, tolerance = 1e-6)
+  logit <- as.numeric(pr) + c(0.005, 0.02) / 0.01 * c(-2, 1) + c(0.3, 0.8) * c(-0.5, 0.2) + c(0.2, 0.4) * c(0.3, -0.1)
+  expect_equal(m_default, plogis(logit), tolerance = 1e-6)
+})
