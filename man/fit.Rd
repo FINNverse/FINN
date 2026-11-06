@@ -64,7 +64,15 @@ filtering to a constant interval first.
 to weight the binomial term (see \code{weights}).
 \item \code{growth_n} — trees behind each observed \code{growth} mean; used to weight
 the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
-}}
+}
+
+On the per-site path (\code{period_length} differing between sites, or sites
+observed in different years) each response's loss of a batch is ONE mean
+over all units it scores in that batch — observed trees for
+\code{loss_aggregation = "tree"}, \code{n_at_risk} / \code{growth_n} for the weighted
+cell terms, cells otherwise — across all observation years: the mean of
+each observation year enters with weight \eqn{n_{year} / n_{batch}}. A
+batch that scores a single observation year is unaffected.}
 
 \item{env}{(\code{data.table|data.frame})\cr Data with environmental covariates must be passed as \code{data.table} or \code{data.frame}.}
 
