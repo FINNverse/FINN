@@ -166,6 +166,12 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)
+  # `growth` enters the logit as a bare divisor, so a bad value is silent rather than loud:
+  # logical NA coerces to TRUE and divides by 1, which restores the pre-0.2.0 objective, and
+  # 0 saturates mortality to {0, 1} across the stand without a NaN reaching a live cohort.
+  if(!is.null(growth_scale) && !(is.numeric(growth_scale) && length(growth_scale) == 1L &&
+                                 is.finite(growth_scale) && growth_scale > 0))
+    stop("`growth_scale` must be a single positive finite number, or NULL.", call. = FALSE)
   out$growth_scale = growth_scale
 
   # ---- custom (extra) process parameters -------------------------------------

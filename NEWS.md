@@ -155,6 +155,14 @@ for 0.1.0 runs unchanged.
 
 * `createProcess(NN = ...)` is no longer silently dropped inside `create_nn()`.
 
+* `createProcess(growth_scale = )` is validated. The value is used as a bare
+  divisor inside `mortality()`, so every wrong value was silent: a bare `NA` is
+  logical and coerces to `TRUE`, so `growth / NA` divides by 1 and reproduces the
+  0.1.0 objective exactly, with no warning and no `NaN`; `NA_integer_` divides by
+  `-2^31`; `growth_scale = 0` saturates mortality to 0 or 1 across the whole
+  stand. Anything but a single positive finite number, or `NULL`, is now an error
+  at `createProcess()` time. Saved models are unaffected.
+
 
 # FINN 0.1.0
 

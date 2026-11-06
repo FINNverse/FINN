@@ -100,3 +100,18 @@ test_that("createProcess(growth_scale =) is a reachable opt-out of the 0.01 defa
     regeneration_process = createProcess(~1, func = FINN::regeneration))
   expect_false("growth_scale" %in% names(formals(m$mortality_func)))
 })
+
+
+test_that("createProcess rejects a growth_scale that is not a positive finite number", {
+  # The value is used as a bare divisor, so every wrong value is silent rather than loud:
+  # a bare NA is logical and coerces to TRUE, so `growth / NA` divides by 1 and restores the
+  # pre-0.2.0 objective; NA_integer_ divides by -2^31; 0 saturates mortality to {0, 1}.
+  cp <- function(gs) createProcess(~1, func = FINN::mortality, growth_scale = gs)
+  expect_error(cp(NA), "positive finite")
+  expect_error(cp(NA_real_), "positive finite")
+  expect_error(cp(0), "positive finite")
+  expect_error(cp(c(0.01, 1)), "positive finite")
+  expect_error(cp("0.01"), "positive finite")
+  expect_silent(cp(NULL))
+  expect_silent(cp(1))
+})
