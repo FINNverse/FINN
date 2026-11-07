@@ -19,6 +19,9 @@ test_that("the five reference configurations are bit-identical to the snapshots"
     f <- file.path(snap_dir, paste0(cfg, ".rds"))
     expect_true(file.exists(f),
                 info = paste("missing reference", f, "- see dev/make_identity_snapshots.R"))
-    expect_equal(identity_run(cfg), readRDS(f), tolerance = 1e-10, info = cfg)
+    # 1e-6, not 1e-10: the same code drifts by ~1e-7 between BLAS implementations
+    # (reported on macOS), while every objective change this guards against moves
+    # the parameters by orders of magnitude more.
+    expect_equal(identity_run(cfg), readRDS(f), tolerance = 1e-6, info = cfg)
   }
 })
