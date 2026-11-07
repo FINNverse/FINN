@@ -129,7 +129,7 @@ pred2DF <- function(pred, format = "wide") {
       # cohort SLOT, not the species; the real species is filled in below and
       # overwrites that column, which is why the indices are taken first.)
       keep <- cohort_temp_dt$cohortID != 0
-      idx_mat <- as.matrix(cohort_temp_dt[keep, ..dim_names])
+      idx_mat <- as.matrix(cohort_temp_dt[keep, dim_names, with = FALSE])
       cohort_temp_dt <- cohort_temp_dt[keep, ]
 
       # Add the year column to the data table

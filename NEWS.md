@@ -285,6 +285,9 @@ someone who was affected.
   `NA` for every row of it) instead of reporting `NaN` for `frac_killed`,
   `window` and `frac_ghost`, which are `0/0` there.
 
+* `pred2DF()` selects its index columns with `with = FALSE` instead of the
+  `..dim_names` prefix, which `R CMD check` reported as an undefined global.
+
 
 # FINN 0.1.0
 

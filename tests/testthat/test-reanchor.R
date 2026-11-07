@@ -21,14 +21,15 @@ reanchor_data = function(n_sites = 4L) {
 
 # a fresh, identically seeded model + init cohorts, so that two fits differ only
 # in the arguments under test
-reanchor_model = function(d) {
+reanchor_model = function(d, sample_regeneration = TRUE) {
   FINN.seed(1)
   init = makeInitCohorts(d$it, Nspecies = d$Nsp)
   m = finn(
     N_species            = d$Nsp, recruits_dbh = 12.9,
     competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
     growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-    regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+    regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE,
+                                         sample_regeneration = sample_regeneration),
     mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
   )
   list(model = m, init = init)
@@ -99,17 +100,19 @@ test_that("reanchor = TRUE changes the fitted parameters", {
 test_that("the cohort state is replaced by the anchor, not carried forward", {
   skip_if_no_torch()
   d = reanchor_data()
-  free = reanchor_model(d)
+  # deterministic recruitment: the share below is otherwise one negative-binomial
+  # draw, and the seed decides it. Measured over seeds 1-6 with sampling on, five
+  # give a share of 1.000 and seed 1 gives 0.763, so a fixed threshold tests the
+  # draw rather than the anchoring. Without the draw every seed gives 1.000.
+  free = reanchor_model(d, sample_regeneration = FALSE)
   reanchor_fit(free, d, epochs = 1L)
-  anch = reanchor_model(d)
+  anch = reanchor_model(d, sample_regeneration = FALSE)
   reanchor_fit(anch, d, epochs = 1L, reanchor = TRUE,
                anchor_cohorts = list("2" = anchor_mat(2L, sp = d$Nsp)))
 
   # only timestep 2 is anchored, not every observation year (timestep 3 is the last
   # one, nothing is simulated after it), so the year-3 state is the anchor evolved by
   # one year: anchored on species 2 only, it must be dominated by species 2
-  # (0.885 since mortality() takes growth in %/yr, growth_scale = 0.01: the random
-  # initial growth coefficients now act 100x more strongly; 0.8 still means dominated)
   a3 = species_trees(anch$model, 3)
   expect_gt(a3[species == 2, trees] / sum(a3$trees), 0.8)
   # ... and that is not what the free-running state does
