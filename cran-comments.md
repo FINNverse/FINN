@@ -29,17 +29,19 @@ New in 0.2.0 (see NEWS.md for details):
 
 * `env_autoscale` gains per-predictor scaling ("auto"/"identity"/"0to1" or a
   user function); the previous TRUE/FALSE/NULL forms are unchanged.
-* `finn()` gains `regeneration_saturation` (a Beverton-Holt cap on recruitment,
-  read back with the new exported `reg_saturation_K()`), `recruit_obs_weight`
-  and `growth_period_scale`.
+* New exported regeneration processes `regeneration_saturation()` (a
+  Beverton-Holt cap on recruitment) and `regeneration_adult()`; `finn()` gains
+  `recruit_obs_weight`, `growth_period_scale` and `reg_floor`.
 * `createProcess()` gains a `custom_parameters` interface.
 * A regeneration observation operator (internal hook).
 * Bug fix: `createProcess(NN = ...)` is no longer dropped in `create_nn()`.
 
 ## Test environments
 
-* local macOS, R 4.5.0
-* win-builder (R-devel)
+* local Ubuntu 26.04, R 4.5.2, with the torch backend present
+
+TO DO BEFORE SUBMISSION: re-run on macOS and win-builder from the submitted
+tarball and replace the results below with that run.
 
 ## R CMD check results
 
@@ -57,9 +59,10 @@ New in 0.2.0 (see NEWS.md for details):
 ## Notes for the reviewer
 
 * FINN builds on the 'torch' package, whose backend (libtorch) is downloaded at
-  runtime and is not present on the check machines. All examples that need it are
-  guarded with `@examplesIf torch::torch_is_installed()`, and the tests that need
-  it skip on CRAN, so the check runs without the backend.
+  runtime and is not present on the check machines. Examples that need it are
+  either guarded with `@examplesIf torch::torch_is_installed()` or wrapped in
+  `\dontrun{}`, and the tests that need it skip on CRAN (20 of the 26 test files
+  are behind `skip_if_no_torch()`), so the check runs without the backend.
 * The vignettes are precompiled (the model-fitting code is run once by the
   authors and the results are committed), so building them does not require the
   torch backend or a long run time.

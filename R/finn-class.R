@@ -90,6 +90,9 @@ finn = function(N_species,
                 recruit_obs_weight = 1.0,
                 growth_period_scale = FALSE,
                 reg_floor = 1e-3) {
+  if(!(is.numeric(reg_floor) && length(reg_floor) %in% c(1L, N_species) &&
+       all(is.finite(reg_floor)) && all(reg_floor >= 0)))
+    stop("`reg_floor` must be non-negative finite numbers, of length 1 or `N_species`.", call. = FALSE)
   finn_class(N_species = N_species,
              mortality_process = mortality_process,
              growth_process = growth_process,
@@ -2416,6 +2419,13 @@ finn_class = nn_module(
     }
 
     anchor_mode = match.arg(anchor_mode, c("replace", "merge"))
+    # `||` coerces, the execution gates use isTRUE(): `reanchor = 1` would pass every
+    # check below and then silently not re-anchor.
+    for (nm_ in c("reanchor", "teacher_forcing")) {
+      v_ = get(nm_)
+      if (!is.logical(v_) || length(v_) != 1L || is.na(v_))
+        stop(sprintf("`%s` must be TRUE or FALSE.", nm_), call. = FALSE)
+    }
     if(reanchor && teacher_forcing) stop("`reanchor` and `teacher_forcing` are different estimators and cannot be combined: re-anchoring free-runs each segment from an observed state, teacher forcing never simulates one.")
     # `update_step` is inert under teacher forcing - there is no multi-year trajectory to
     # truncate - and this is the invariant that makes that true: every census is still scored.
@@ -2521,6 +2531,7 @@ finn_class = nn_module(
     # written only by forward()'s tree branch, so a plain fit() after a tree one would
     # otherwise leave the first call's predictions in place with nothing marking them stale
     self$tree_pred = NULL
+    self$nonfinite_counts = NULL
     self$gradients = list()
 
     # Rebuild the optimizer if this is the first fit() call, or if `lr` changed since
@@ -2905,6 +2916,9 @@ finn_class = nn_module(
       if (is.character(spec)) spec = as.list(spec)
       if (!is.list(spec) || is.null(names(spec)))
         stop("`loss_aggregation` must be a NAMED character vector or list, one entry per response.", call. = FALSE)
+      if (anyDuplicated(names(spec)))
+        stop(sprintf("`loss_aggregation` names '%s' more than once; only the first entry would be used.",
+                     paste(unique(names(spec)[duplicated(names(spec))]), collapse = "', '")), call. = FALSE)
       for (r in names(spec)) {
         if (!r %in% responses)
           stop(sprintf("`loss_aggregation` names '%s', which is not a response in `loss_family` (%s).",
@@ -3354,6 +3368,11 @@ finn_class = nn_module(
             mask = true$isnan()$bitwise_not()
             if (!as.logical(mask$max()$data())) stop("no observations")
             yv = true[mask]
+            # A constant observation has a baseline of a few float ulps rather than
+            # 0, so the `w <= 0` guard below never fires and 1/baseline explodes.
+            # The tree branch already refuses a one-class target for this reason.
+            if (as.numeric(yv$max() - yv$min()) == 0)
+              stop("the observation is constant, so the intercept-only model is exact")
             mu = if (is.null(n)) {
               as.numeric(yv$mean())
             } else {

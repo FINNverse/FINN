@@ -177,6 +177,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(growth_scale) && !(is.numeric(growth_scale) && length(growth_scale) == 1L &&
                                  is.finite(growth_scale) && growth_scale > 0))
     stop("`growth_scale` must be a single positive finite number, or NULL.", call. = FALSE)
+  # the competition kernel gates on isTRUE(), so `light_mask = 1` would be accepted
+  # here and then silently leave the quantiles unmasked
+  if(!is.logical(light_mask) || length(light_mask) != 1L || is.na(light_mask))
+    stop("`light_mask` must be TRUE or FALSE.", call. = FALSE)
   out$growth_scale = growth_scale
 
   # ---- custom (extra) process parameters -------------------------------------
@@ -424,6 +428,15 @@ compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))
   cols = cols[vapply(cols, function(cc) is.numeric(env[[cc]]), logical(1))]
   if (!length(cols)) return(NULL)
+
+  # a named entry that matches no predictor is a typo, and silently falling back to
+  # "auto" for the predictor the user meant to name is the worst possible answer
+  if (!is.logical(spec) && !is.null(names(spec))) {
+    unknown = setdiff(names(spec)[nzchar(names(spec))], cols)
+    if (length(unknown))
+      stop(sprintf("`env_autoscale` names '%s', which is not an environmental predictor in `env` (%s).",
+                   paste(unknown, collapse = "', '"), paste(cols, collapse = ", ")), call. = FALSE)
+  }
 
   resolve_mode = function(col, i) {
     if (is.logical(spec)) return(if (isTRUE(spec)) "auto" else "identity")

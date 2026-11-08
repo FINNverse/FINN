@@ -38,7 +38,7 @@ The two tables are the overview; the sections below them carry the detail.
 | Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
 | Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
 | A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
-| **Growth enters `mortality()` in %/yr.** The one default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
+| **Growth enters `mortality()` in %/yr.** A default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
 
 ### What was broken
 
@@ -270,6 +270,23 @@ someone who was affected.
   `-2^31`; `growth_scale = 0` saturates mortality to 0 or 1 across the whole
   stand. Anything but a single positive finite number, or `NULL`, is now an error
   at `createProcess()` time. Saved models are unaffected.
+
+* `weights = "auto"` no longer explodes on a response that is constant over the
+  scored cells. The intercept-only baseline is then a few float ulps rather than
+  zero, so `1/baseline` passed the `<= 0` guard and produced weights of order
+  1e17 on a package fixture. Such a response is now left unscaled, with a
+  warning naming it.
+
+* `fit()` resets `$nonfinite_counts`, so the end-of-fit warning reports this
+  fit's dropped terms rather than the total since the model was built.
+
+* Arguments that gate on `isTRUE()` are validated as logicals: `fit(reanchor = )`,
+  `fit(teacher_forcing = )` and `createProcess(light_mask = )` accepted `1` and
+  then silently behaved as `FALSE`. `finn(reg_floor = )` is validated the way
+  `growth_scale` is. `fit(loss_aggregation = )` rejects a response named twice
+  instead of keeping the first entry, and `fit(env_autoscale = )` rejects a named
+  entry that matches no predictor instead of silently scaling that predictor
+  with the default.
 
 * `resolveSiteIDs()` orders site, patch and species names with
   `sort(..., method = "radix")` instead of the collation locale; see *Behaviour
