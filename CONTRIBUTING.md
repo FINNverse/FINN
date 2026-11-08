@@ -7,7 +7,7 @@ automatically (see below), not by hand.
 
 <!-- AUTO-MAINTAINED: the `project-progress` skill refreshes the table below from
      git history. Do not hand-edit; if something looks wrong, fix it in a session
-     and it will be kept current. Last refreshed: 2026-11-06. -->
+     and it will be kept current. Last refreshed: 2026-11-08. -->
 
 ## Contributors
 
@@ -29,6 +29,9 @@ Best-effort attribution from git history; refined over time by the skill.
 | Stochastic draws: `createProcess(mortality_draw = , regeneration_sampler = )` and `createProcess(growth_scale = )` | Maximilian | branch `fitting-interface`; opt-in, defaults unchanged |
 | `fit()` set-up performance (O(n) site/year lookup, tree tensors on the trees' own patches, `epochs = 0`) and `mortality(growth_scale = 0.01)` | Yannek | branch `fast-setup` |
 | CRAN packaging & release (DESCRIPTION, NEWS, cran-comments, review fixes) | Yannek | maintainer |
+| Locale-stable ids: radix ordering in `resolveSiteIDs()`, and the regression test behind it | Maximilian | the fourth change that does not reproduce 0.1.0 off a `C` locale |
+| Per-site loss pooling: one mean per batch instead of a sum of per-year means | Yannek | FINNverse/FINN#29, partial — the unit-count half |
+| 0.2.0 release readiness: `R CMD check --as-cran` clean-up, the argument-validation batch, `.Rbuildignore`, and the two test repairs | Maximilian | PR #32 review round |
 | Data interface (`makeObsData`/`resolveSiteIDs`/`makeInitCohorts`, extdata) and the bundled `fia_*` datasets | both (datasets: Yannek) | FIA sample as lazy-loaded data |
 | Vignettes & docs | both | precompiled vignettes, pkgdown, README |
 | Collaboration / Claude Code setup | Yannek | shared CLAUDE.md, skills, hooks, claude-config |
