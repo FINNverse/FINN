@@ -305,6 +305,23 @@ someone who was affected.
 * `pred2DF()` selects its index columns with `with = FALSE` instead of the
   `..dim_names` prefix, which `R CMD check` reported as an undefined global.
 
+* `fit()` and `predict()` check that `data`, `env` and `init_cohort` hold the
+  same sites and stop with the offending ids and the table they are missing
+  from (#33). Before, a mismatch ended in a torch index error that named
+  nothing, or silently paired a site with another site's environment. The ids
+  need not be `1:N`: every array is indexed by a site's position among the
+  sorted ids. `siteID` must be integer-valued in `data` and `env`. Covered by
+  `tests/testthat/test-site-sets.R`.
+
+* Site ids that are not `1:N` keep their identity end to end (#34).
+  `obsDF2arrays()` numbers sites in radix order (independent of the locale,
+  as `resolveSiteIDs()`) without the former warning and records the user ids
+  as attribute `"site_ids"`, which `CohortMat` keeps as `$site_ids`; a fitted
+  model keeps the lookup from array position to `siteID` as `$site_lookup`;
+  and `predict()` / `simulateForest()` return the caller's own `siteID`s
+  instead of positions. For ids that are `1:N` nothing changes. Patch and
+  cohort ids are renumbered in radix order as well. Covered by
+  `tests/testthat/test-site-sets.R`.
 
 # FINN 0.1.0
 

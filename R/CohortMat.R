@@ -6,7 +6,13 @@ NULL
 #'
 #' @param obs_dt data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
 #' @param additional_cols character vector Optional. Additional columns to be included as arrays.
-#' @return A list of arrays for species, dbh, trees, and additional columns.
+#' @return A list of arrays for species, dbh, trees, and additional columns. The
+#'   site dimension follows the sorted user `siteID`s (sorted with
+#'   `method = "radix"`, so independent of the locale); the user ids in that
+#'   order are attached as attribute `"site_ids"`, so a site set that is not
+#'   `1:N` keeps its identity. `CohortMat` stores them as `$site_ids`, and
+#'   [FINN::fit] / [FINN::predict.finn_class] check them against `data` and
+#'   `env`.
 #' @examples
 #' obs_dt <- data.frame(
 #'   siteID = c(1, 1, 2), patchID = c(1, 2, 1), cohortID = c(1, 1, 2),
@@ -15,16 +21,23 @@ NULL
 #' result <- obsDF2arrays(obs_dt, additional_cols = c("height"))
 #' @export
 obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
-  if(!identical(sort(as.integer(obs_dt$cohortID)), sort(as.integer(as.factor(obs_dt$cohortID))))) {
-    obs_dt$cohortID = as.integer(as.factor(obs_dt$cohortID))
+  # Position of each id in its sorted unique set. Sorted with method = "radix",
+  # which is independent of LC_COLLATE (as.factor() orders character ids through
+  # the locale, so the numbering used to differ between machines; see
+  # resolveSiteIDs()). For ids that already are 1:N this is the identity.
+  radix_index = function(x) match(x, sort(unique(x), method = "radix"))
+  if(!identical(sort(as.integer(obs_dt$cohortID)), sort(radix_index(obs_dt$cohortID)))) {
+    obs_dt$cohortID = radix_index(obs_dt$cohortID)
     warning("cohortID must be a complete sequence of integers starting from 1. Cohort IDs were reassigned.")
   }
-  if(!identical(sort(as.integer(obs_dt$siteID)), sort(as.integer(as.factor(obs_dt$siteID))))) {
-    obs_dt$siteID = as.integer(as.factor(obs_dt$siteID))
-    warning("siteID must be a complete sequence of integers starting from 1. Site IDs were reassigned.")
-  }
-  if(!identical(sort(as.integer(obs_dt$patchID)), sort(as.integer(as.factor(obs_dt$patchID))))) {
-    obs_dt$patchID = as.integer(as.factor(obs_dt$patchID))
+  # Sites are mapped silently: the user ids are kept as attribute "site_ids" (the
+  # lookup table from array position to user id), and fit() / predict() check
+  # them against `data` and `env`, so a mismatch stops instead of pairing a site
+  # with another site's environment.
+  site_ids = sort(unique(obs_dt$siteID), method = "radix")
+  obs_dt$siteID = match(obs_dt$siteID, site_ids)
+  if(!identical(sort(as.integer(obs_dt$patchID)), sort(radix_index(obs_dt$patchID)))) {
+    obs_dt$patchID = radix_index(obs_dt$patchID)
     warning("patchID must be a complete sequence of integers starting from 1. Patch IDs were reassigned.")
   }
   obs_dt$dbh = round(obs_dt$dbh, 4)
@@ -50,11 +63,13 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
   })
   names(additional_arrays) <- additional_cols
 
-  return(c(list(
+  out = c(list(
     species = species_array,
     dbh = dbh_array,
     trees = trees_array
-  ), additional_arrays))
+  ), additional_arrays)
+  attr(out, "site_ids") = site_ids
+  return(out)
 }
 
 #' Generate Cohorts Using Weibull Distribution
@@ -205,6 +220,9 @@ array2obsDF <- function(obs_array) {
 #' @field species_r An integer array representing the species in R array format.
 #' @field device_r A character string specifying the device in R format ('cpu' or 'cuda').
 #' @field obsDF2arrays Transforms data.table into array
+#' @field site_ids The user `siteID`s in the order of the site dimension when the
+#'   cohorts were built from `obs_df` (the lookup table from array position to
+#'   user id); `NULL` when built from arrays, where the site dimension is `1:N`.
 #'
 #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
 #' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
@@ -234,6 +252,7 @@ CohortMat = torch::nn_module("CohortMat",
     self$dims = dims
     self$sp = sp
     self$device_r = device
+    self$site_ids = NULL
 
     if (!is.null(obs_df)) {
       if (!all(c("siteID", "patchID", "species", "dbh", "trees") %in% colnames(obs_df)))
@@ -244,6 +263,7 @@ CohortMat = torch::nn_module("CohortMat",
       trees = obs_array$trees
       species = obs_array$species
       dims = dim(obs_array$species)
+      self$site_ids = attr(obs_array, "site_ids")
     }
 
     self$dbh = if (is.null(dbh)) array(0.0, dim = dims) else dbh
