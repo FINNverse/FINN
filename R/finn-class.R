@@ -2223,6 +2223,15 @@ finn_class = nn_module(
               call. = FALSE)
     if (tree_res && any(vapply(self$loss_agg[c("growth", "mortality")], function(a) identical(a$type, "tree"), logical(1))))
       stop("`loss_resolution = \"tree\"` (the simulated cohort each tree started as) cannot be combined with `loss_aggregation = \"tree\"` for growth or mortality (the observed tree); choose one of the two ways of scoring individual trees.", call. = FALSE)
+    # A state term on trees or ba cannot train regeneration: the recruits reach dbh
+    # through a sigmoid of scale 1e-3, whose derivative is zero almost everywhere, and
+    # the stem path runs through a rounding whose forward value is 0 below 0.5 recruits
+    # per patch and species. Measured on BWI, a stems term left recruitment at 3.08x the
+    # target and kept the recruitment loss from moving (FINNverse/FINN#43).
+    if ((isTRUE(self$par_regeneration_optimized) || isTRUE(self$env_regeneration_optimized)) &&
+        identical(as.character(loss_spec[["regeneration"]]), "none"))
+      warning("the regeneration process is being calibrated, but `loss_family['regeneration']` is \"none\", so no observed recruitment enters the loss. The other responses cannot train it: recruits reach `dbh` through a near-step sigmoid and `trees` through a rounding that is 0 below 0.5 recruits per patch and species. Score regeneration directly, or set optimizeSpecies = FALSE and optimizeEnv = FALSE on the regeneration process. See FINNverse/FINN#43.",
+              call. = FALSE)
     weight_scale = match.arg(weight_scale, c("auto", "raw"))
     auto_weights = identical(weight_scale, "auto")
     if (is.character(weights) && length(weights) == 1L && identical(weights, "auto")) weights = rep(1, 6)
@@ -2819,7 +2828,18 @@ finn_class = nn_module(
 
       if(!is.null(folder)) {
         if(!dir.exists(folder)) dir.create(folder)
-        if(epoch %% checkpoints == 0) torch::torch_save(self$clone(deep=FALSE), path = paste0(folder, "/", "epoch_", epoch, "model.pt"))
+        # written to a temporary name and renamed: a kill or a full disk during the
+        # save would otherwise leave a truncated .pt that torch_load() cannot read,
+        # and a checkpoint stands for an hour of compute (FINNverse/FINN#36)
+        if(epoch %% checkpoints == 0) {
+          final = paste0(folder, "/", "epoch_", epoch, "model.pt")
+          tmp   = paste0(folder, "/.epoch_", epoch, "model.pt.tmp", Sys.getpid())
+          torch::torch_save(self$clone(deep=FALSE), path = tmp)
+          if(!file.rename(tmp, final)) {
+            unlink(tmp)
+            warning(sprintf("could not write the checkpoint for epoch %d to '%s'.", epoch, final), call. = FALSE)
+          }
+        }
       }
 
       cli::cli_progress_update()
@@ -3757,7 +3777,13 @@ finn_class = nn_module(
       # if null, random initialisierung
       # else recalclate from init values the required values
       if(is.null(obj$initSpecies)) {
-        self[[paste0("par_", type)]] = init_species_parameters(type, self$N_species)
+        # mortality's growth coefficient is initialised on the scale growth enters on;
+        # a custom kernel without that formal keeps the historical range (scale 1)
+        gs = if (!is.null(obj$growth_scale)) obj$growth_scale
+             else if ("growth_scale" %in% names(formals(obj$func))) eval(formals(obj$func)$growth_scale)
+             else 1
+        if (!is.numeric(gs) || length(gs) != 1L || !is.finite(gs) || gs <= 0) gs = 1
+        self[[paste0("par_", type)]] = init_species_parameters(type, self$N_species, growth_scale = gs)
       } else {
         self[[paste0("par_", type)]] = obj$initSpecies
       }

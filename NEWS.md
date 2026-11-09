@@ -303,6 +303,25 @@ someone who was affected.
   entry that matches no predictor instead of silently scaling that predictor
   with the default.
 
+* **`mortality()`'s growth coefficient is initialised on the scale growth enters
+  on.** `parMort[, 3]` was drawn from `U(-0.2, 0.2)` regardless of
+  `growth_scale`, so at the 0.01 default the same draw acted a hundred times more
+  strongly. Measured on the four-site FIA fixture: an anchored stand of 1667
+  stems/ha at 25 cm drops to 1.0-7.5 stems/ha in a single year (mortality 0.93 to
+  1.00), against 28-75 stems/ha at `growth_scale = 1`. The range now scales with
+  `growth_scale`; a custom mortality kernel without that formal keeps the old
+  range. Random initialisations therefore differ from 0.2.0's.
+
+* `fit(folder = , checkpoints = )` writes each checkpoint to a temporary name and
+  renames it. A kill or a full disk during the save used to leave a truncated
+  `.pt` that `torch_load()` could not read.
+
+* `fit()` warns when the regeneration process is being calibrated while
+  `loss_family["regeneration"]` is `"none"`. No other response can train it:
+  recruits reach `dbh` through a sigmoid of scale `1e-3`, whose derivative is
+  zero almost everywhere, and `trees` through a rounding whose forward value is 0
+  below 0.5 recruits per patch and species.
+
 * `resolveSiteIDs()` orders site, patch and species names with
   `sort(..., method = "radix")` instead of the collation locale; see *Behaviour
   changes*. Covered by `tests/testthat/test-locale-stable-ids.R`, which runs the

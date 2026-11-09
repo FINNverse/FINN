@@ -524,7 +524,7 @@ backward = function(value, upper, lower) {
 }
 forward =  function(value, upper, lower) torch::torch_sigmoid(value) * (upper - lower) + lower
 
-init_species_parameters = function(type, N_species){
+init_species_parameters = function(type, N_species, growth_scale = 1){
   initLight = stats::runif(N_species, 0.45, 0.55)
   if(type == "competition") {
     init =
@@ -537,10 +537,14 @@ init_species_parameters = function(type, N_species){
             stats::runif(N_species, min = 0.045, 0.055))
   }
   if(type == "mortality") {
+    # the third column multiplies growth / growth_scale, so the range has to move with
+    # growth_scale or the same draw means something 1/growth_scale times stronger: at the
+    # 0.01 default an untouched +-0.2 puts the logit up to 8 units into saturation on the
+    # FIA fixture, killing 93 to 99.9 % of a 25 cm stand in one year (FINNverse/FINN#39)
     init =
       cbind(stats::runif(N_species, min = -0.2, 0.2),
             stats::runif(N_species, min = -0.2, 0.2),
-            stats::runif(N_species, min = -0.2, 0.2))
+            stats::runif(N_species, min = -0.2, 0.2) * growth_scale)
   }
   if(type == "regeneration") {
     init = matrix(initLight, ncol = 1L)
