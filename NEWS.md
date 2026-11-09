@@ -312,6 +312,14 @@ someone who was affected.
   `growth_scale`; a custom mortality kernel without that formal keeps the old
   range. Random initialisations therefore differ from earlier versions'.
 
+* The identity fixtures gained a configuration with unequal scored units per
+  observation year (`per_site_unbal`). Every existing per-site configuration
+  carried the same number of cells in every year -- 6 against 6 -- and with equal
+  counts the per-unit pooling of the per-site loss and the former sum of per-year
+  means agree exactly, so no snapshot could see a change to that weighting. The
+  new configuration is one species-census short in the first scored year, 5
+  against 6.
+
 * `fit(folder = , checkpoints = )` writes each checkpoint to a temporary name and
   renames it. A kill or a full disk during the save used to leave a truncated
   `.pt` that `torch_load()` could not read.

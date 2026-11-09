@@ -42,13 +42,21 @@ identity_configs <- function() list(
   skip_step  = list(period = 2L, nonfinite = "skip_step"),
   tree_mort  = list(period = NULL, loss_aggregation = c(mortality = "tree"), tree_data = TRUE),
   ## the only config that draws recruits: guards the default regeneration sampler as well
-  sample_reg = list(period = 2L, sample_reg = TRUE))
+  sample_reg = list(period = 2L, sample_reg = TRUE),
+  ## unequal scored units per observation year. The other per-site configs carry the
+  ## same number of cells in every year, so the per-unit pooling of the per-site loss
+  ## and the former sum of per-year means agree there and the snapshot cannot see a
+  ## change to the weighting (FINNverse/FINN#41). Here year 3 is one species-census
+  ## short, so the weights are unequal and the snapshot moves with them.
+  per_site_unbal = list(period = NULL, unbalanced = TRUE))
 
 identity_run <- function(cfg) {
   spec <- identity_configs()[[cfg]]
   L <- identity_inputs()
   obs <- data.table::copy(L$obs)
   obs[, period_length := if (is.null(spec$period)) data.table::fifelse(siteID == 1L, 3L, 2L) else spec$period]
+  # one species-census short in the first scored year: 5 cells against 6
+  if (isTRUE(spec$unbalanced)) obs <- obs[!(siteID == 1L & year == 3L & species == 2L)]
   args <- list(env = L$env, data = obs, init_cohort = L$init, patches = 2L, patch_size = 0.1,
                env_autoscale = FALSE, epochs = 3L, lr = 0.01, weights = rep(1, 6),
                batchsize = Nsites_i, shuffle = FALSE, plot_progress = FALSE, device = "cpu",
