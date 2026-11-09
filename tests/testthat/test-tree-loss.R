@@ -321,7 +321,9 @@ test_that("binned initial cohorts cannot be scored per tree", {
 # testable at all. `lr = 0` freezes the trajectory, the six aggregate responses are NA, so
 # only the tree terms are scored, and `weights = rep(1, 6)` keeps the loss hand-computable.
 
-tll = local({
+# built only where the libtorch backend exists (makeInitCohorts() needs it); every test
+# that uses `tll` calls skip_if_no_torch() first
+tll = if (!requireNamespace("torch", quietly = TRUE) || !torch::torch_is_installed()) NULL else local({
   Nsp = 2L
   Nsites = 3L
   Tmax = 10L
