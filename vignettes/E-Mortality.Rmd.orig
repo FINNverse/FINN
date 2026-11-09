@@ -260,6 +260,96 @@ reading is train-vs-holdout, not model-vs-model.
 fwrite(mort_pred, "E-mortality-predictions.csv")
 ```
 
+## Scoring each tree instead of each cell
+
+Everything above scores mortality per *cell*: the model's mean death
+probability over the cohorts of a site, census and species against the pooled
+proportion. That mean has a compositional confound. Mortality falls several-fold
+from the smallest to the largest trees, so the cell mean moves when the
+simulated size distribution moves, whether or not the hazard function is right,
+and a mortality parameter can end up correcting a growth or recruitment error.
+With a tree list in hand, `fit()` can instead score the fate of every observed
+tree: `loss_aggregation = c(mortality = "tree")` runs the mortality kernel on
+each tree at its measured diameter, with light from the observed stand, and
+compares the death probability over the interval with the tree's 0/1 fate. It
+measures the mortality function alone, teacher-forced onto the observed stands,
+and combines with the simulated `dbh`, `ba`, `trees` and regeneration terms
+(see `?fit`, section *Scoring individual trees*, for the other per-tree route
+and when each applies).
+
+Prefer it when the trees are available and mortality is the response of
+interest: it uses every tree as a trial rather than a few hundred cells, it is
+unaffected by how well the stand is simulated, and `predictTrees()` evaluates
+the same code path, so a validation cannot drift from the objective it checks.
+Its cost is that the scored mortality is no longer a property of the simulated
+trajectory.
+
+The bundled 200-site sample carries no tree fates, but the raw tree list of the
+**Preparing your data for FINN** vignette does: eight Oregon FIA plots, four
+patches each, three inventories. `makeObsData()` already derives each tree's
+start-of-interval state, so `tree_data` is a selection of its columns. The
+`year` of a row is the census that *closes* the interval, `dbh` the diameter at
+its start, `died` the fate over it; trees that recruited during the interval
+were not at risk and stay out.
+
+```{r tree-data}
+tree_raw <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+prep <- makeObsData(tree_raw[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+                    fix_period_length = 10, NspeciesQuantile = 0.98)
+inputs <- resolveSiteIDs(tree_dt = prep$tree_dt, obs_dt = prep$obs_dt,
+                         env_dt = fread(system.file("extdata", "example_env_dt.csv", package = "FINN")))
+tree_data <- inputs$tree_dt[year > 0 & living_before == TRUE,
+  .(siteID, year, patchID, species, dbh = dbh_before, growth = rel_growth,
+    died = as.numeric(status == "dead"), period_length = 1L)]
+tree_data[, .(trees = .N, died = sum(died)), by = year]
+```
+
+Two details of the set-up. The per-tree term is accumulated over each site's
+observation window, which `fit()` reads from a `period_length` column of `data`;
+without it nothing is scored on this path, so the column is set explicitly, to
+one timestep per census as everywhere in these vignettes. And the model is the
+mechanistic one from above, with the mortality term alone switched to the tree
+route:
+
+```{r tree-fit, results = "hide"}
+obs_8 <- copy(inputs$obs_dt)[, period_length := 1L]
+Nsp_8 <- nrow(inputs$species_dt)
+
+FINN.seed(42)
+m_tree <- finn(
+  N_species            = Nsp_8, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_tree,
+  env = inputs$env_dt, data = obs_8, init_cohort = inputs$initCohorts, device = "cpu",
+  epochs = EPOCHS, patches = 4, patch_size = 0.06, lr = 0.01, plot_progress = FALSE,
+  loss_aggregation = c(mortality = "tree"),   # growth and the state terms stay per cell
+  tree_data        = tree_data
+)
+```
+
+`predictTrees()` returns one row per row of `tree_data`, in the same order, so
+the predictions are bound on rather than joined. Each tree is one Bernoulli
+trial, so the AUC needs no weighting here; it is the same `auc_binom()` with
+one trial per row:
+
+```{r tree-predict}
+m_tree$eval()
+tree_pred <- cbind(tree_data,
+                   predictTrees(m_tree, tree_data = tree_data, env = inputs$env_dt)[, .(mort_pred)])
+tree_pred[, .(trees = .N, deaths = sum(died),
+              AUC = round(auc_binom(mort_pred, died, 1 - died), 3)), by = year]
+```
+
+Eight plots and two dozen deaths are a demonstration of the mechanism, not a
+mortality model, and the trees scored are the trees fitted. What the route buys
+shows in a drought or disturbance study, where the question is how the hazard of
+a tree of a given size and species responds to the environment, and the cell
+mean would let the simulated size distribution answer instead.
+
 ## What the network learned: ALE
 
 `ALE()` returns one table per process, so the same tool reads a mechanistic
