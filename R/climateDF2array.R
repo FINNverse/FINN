@@ -10,6 +10,19 @@
 #'   A combination of `siteID`, `year` (and `month`, `day` where present) that
 #'   appears more than once is an error, whether or not the rows are identical.
 #'   Missing (`siteID`, `year`) combinations become `NA` in the array.
+#'
+#' @examples
+#' library(data.table)
+#' # yearly climate of three sites over three years -> array [site, year, variable]
+#' env <- fia_env_dt[siteID %in% 1:3]
+#' a <- climateDF2array(env, env_vars = c("temp", "prec"))
+#' dim(a)
+#' a[1, , ]                      # site 1; the rows are the years 0, 1, 2
+#'
+#' # a monthly table (siteID, year, month) gives a fourth dimension of 12 months
+#' monthly <- CJ(siteID = 1:2, year = 2001:2002, month = 1:12)
+#' monthly[, temp := 10 + 8 * sin((month - 4) / 12 * 2 * pi)]
+#' dim(climateDF2array(monthly, env_vars = "temp"))
 #' @export
 climateDF2array <- function(climate_dt, env_vars) {
   # Ensure data.table is used

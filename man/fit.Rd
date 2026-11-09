@@ -512,3 +512,54 @@ the second to test whether simulated trajectories follow the real trees. The
 two cannot be combined in one fit.
 }
 
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# Three training sites of the bundled Oregon FIA sample (?fia_obs_dt): the
+# observations, their climate in natural units, and the year-0 tree list the
+# simulation starts from.
+sites <- 1:3
+obs   <- fia_obs_dt[siteID \%in\% sites]
+env   <- fia_env_dt[siteID \%in\% sites]
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+
+# Two epochs keep the example short; a calibration takes hundreds (see the
+# "Fitting FINN to forest inventory data" vignette). The set-up reports each
+# response's share of the objective before the first epoch runs.
+fit(m, data = obs, env = env, init_cohort = init,
+    epochs = 2L, patches = 4, patch_size = 0.06, lr = 0.01, plot_progress = FALSE)
+
+# Per-epoch losses, each divided by its intercept-only baseline (1 = no better
+# than predicting the mean), in the order dbh, ba, trees, growth, mortality,
+# regeneration; the baselines and the resulting weights are kept on the model.
+do.call(rbind, m$history)[, 1:6]
+m$loss_baseline
+m$loss_weights
+
+# A numeric `weights` multiplies the baseline-scaled losses, so it reads as a
+# share: growth now carries twice the weight of any other response. With
+# weight_scale = "raw" the same vector acts on the unscaled losses instead,
+# the meaning it had before 0.2.0. epochs = 0 runs the set-up only.
+fit(m, data = obs, env = env, init_cohort = init, epochs = 0L, patches = 4,
+    patch_size = 0.06, plot_progress = FALSE, weights = c(1, 1, 1, 2, 1, 1))
+fit(m, data = obs, env = env, init_cohort = init, epochs = 0L, patches = 4,
+    patch_size = 0.06, plot_progress = FALSE, weights = c(1, 1, 1, 2, 1, 1),
+    weight_scale = "raw")
+
+# simulate the fitted model (here on the sites it was fitted to; see ?predict.finn_class)
+pred <- predict(m, env = env, init_cohort = init, patches = 4, patch_size = 0.06)
+head(pred$long$site)
+\dontshow{\}) # examplesIf}
+}

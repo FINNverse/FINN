@@ -61,3 +61,35 @@ Simulate from a fitted FINN model. This is a thin, backwards-compatible
 alias for \link{predict.finn_class}; new code should call
 \code{predict(model, ...)} directly.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+
+# simulate the three sites forward from their observed year-0 tree list
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init,
+                      patches = 4, patch_size = 0.06)
+sim$long$site[variable == "ba" & year == 3]   # basal area per site and species, long
+head(sim$wide$site)                            # one column per variable
+
+# The same call with `return_cohorts` keeps the raw cohorts of the last year,
+# with the id of the initial cohort each one started as.
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init,
+                      patches = 4, patch_size = 0.06, return_cohorts = "last")
+head(sim$long$cohort)
+\dontshow{\}) # examplesIf}
+}

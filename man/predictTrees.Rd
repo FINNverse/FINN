@@ -54,3 +54,36 @@ the complement of the product of annual survivals.
 It is the same code path \code{fit(..., loss_aggregation = c(growth = "tree", mortality = "tree"))} scores, so a validation report cannot drift from the
 objective it is validating.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+
+# The trees observed at the first census: diameter at the start of the
+# interval, the patch they stand on, the census that closes the interval
+# (year 1) and its length in timesteps (one here, as in the fit).
+trees <- fia_init_trees[siteID \%in\% sites & living \%in\% TRUE,
+                        .(siteID, patchID, species, dbh, year = 1L, period_length = 1L)]
+m$eval()
+pred <- predictTrees(m, tree_data = trees, env = fia_env_dt[siteID \%in\% sites])
+head(pred)
+# one row per tree in the order of `trees`, so bind rather than join
+trees <- cbind(trees, pred[, .(growth_pred, mort_pred)])
+trees[, .(trees = .N, growth = mean(growth_pred), mortality = mean(mort_pred)),
+      by = species][order(species)]
+\dontshow{\}) # examplesIf}
+}

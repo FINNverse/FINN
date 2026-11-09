@@ -63,6 +63,35 @@
 #'
 #' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
 #'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # Every process at its default: the mechanistic function with fixed species
+#' # parameters and a linear environmental response over every column of `env`.
+#' m <- finn(N_species = 11)
+#'
+#' # Say per process what is learned -- the species parameters (optimizeSpecies),
+#' # the environmental response (optimizeEnv) -- and which predictors enter it.
+#' m <- finn(
+#'   N_species            = 11, recruits_dbh = 12.9,
+#'   competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#' names(m$parameters)       # what fit() will estimate
+#'
+#' # The whole workflow on three sites of the bundled Oregon FIA sample
+#' # (?fia_obs_dt): calibrate for two epochs, then simulate. See ?fit.
+#' library(data.table)
+#' sites <- 1:3
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = 11)
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
+#'                       patches = 4, patch_size = 0.06)
+#' head(sim$long$site)
 #' @export
 #' @param reg_floor (`numeric(1)`)\cr Additive floor on the expected recruitment of
 #'   every species in every patch, in stems ha^-1 per time step, used by
@@ -534,6 +563,55 @@ finn = function(N_species,
 #' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
 #'   the returned object is the one passed in, now carrying the training results
 #'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`).
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # Three training sites of the bundled Oregon FIA sample (?fia_obs_dt): the
+#' # observations, their climate in natural units, and the year-0 tree list the
+#' # simulation starts from.
+#' sites <- 1:3
+#' obs   <- fia_obs_dt[siteID %in% sites]
+#' env   <- fia_env_dt[siteID %in% sites]
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#'
+#' FINN.seed(1)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#'
+#' # Two epochs keep the example short; a calibration takes hundreds (see the
+#' # "Fitting FINN to forest inventory data" vignette). The set-up reports each
+#' # response's share of the objective before the first epoch runs.
+#' fit(m, data = obs, env = env, init_cohort = init,
+#'     epochs = 2L, patches = 4, patch_size = 0.06, lr = 0.01, plot_progress = FALSE)
+#'
+#' # Per-epoch losses, each divided by its intercept-only baseline (1 = no better
+#' # than predicting the mean), in the order dbh, ba, trees, growth, mortality,
+#' # regeneration; the baselines and the resulting weights are kept on the model.
+#' do.call(rbind, m$history)[, 1:6]
+#' m$loss_baseline
+#' m$loss_weights
+#'
+#' # A numeric `weights` multiplies the baseline-scaled losses, so it reads as a
+#' # share: growth now carries twice the weight of any other response. With
+#' # weight_scale = "raw" the same vector acts on the unscaled losses instead,
+#' # the meaning it had before 0.2.0. epochs = 0 runs the set-up only.
+#' fit(m, data = obs, env = env, init_cohort = init, epochs = 0L, patches = 4,
+#'     patch_size = 0.06, plot_progress = FALSE, weights = c(1, 1, 1, 2, 1, 1))
+#' fit(m, data = obs, env = env, init_cohort = init, epochs = 0L, patches = 4,
+#'     patch_size = 0.06, plot_progress = FALSE, weights = c(1, 1, 1, 2, 1, 1),
+#'     weight_scale = "raw")
+#'
+#' # simulate the fitted model (here on the sites it was fitted to; see ?predict.finn_class)
+#' pred <- predict(m, env = env, init_cohort = init, patches = 4, patch_size = 0.06)
+#' head(pred$long$site)
 #' @export
 fit = function(model,
                data = NULL,
@@ -643,6 +721,37 @@ fit = function(model,
 #'   the interval) and `mort_pred` (probability of dying during the interval).
 #'   Bind these onto `tree_data` directly rather than joining on
 #'   siteID/year/patchID, which would be many-to-many.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#'
+#' # The trees observed at the first census: diameter at the start of the
+#' # interval, the patch they stand on, the census that closes the interval
+#' # (year 1) and its length in timesteps (one here, as in the fit).
+#' trees <- fia_init_trees[siteID %in% sites & living %in% TRUE,
+#'                         .(siteID, patchID, species, dbh, year = 1L, period_length = 1L)]
+#' m$eval()
+#' pred <- predictTrees(m, tree_data = trees, env = fia_env_dt[siteID %in% sites])
+#' head(pred)
+#' # one row per tree in the order of `trees`, so bind rather than join
+#' trees <- cbind(trees, pred[, .(growth_pred, mort_pred)])
+#' trees[, .(trees = .N, growth = mean(growth_pred), mortality = mean(mort_pred)),
+#'       by = species][order(species)]
 #' @export
 predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
   model$predict_trees(tree_data = tree_data, env = env, patches = patches,
@@ -680,6 +789,45 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   `value`). When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
 #'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
 #'   ...) for the requested timesteps.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#'
+#' # Predict for sites the model never saw: the holdout half of the sample ships
+#' # with its own climate and year-0 tree list. The climate is passed in natural
+#' # units; the scaling learned in fit() is re-applied internally.
+#' test      <- 1:3
+#' init_test <- makeInitCohorts(fia_init_test[siteID %in% test], Nspecies = Nsp)
+#' m$eval()                                 # deterministic: dropout off
+#' pred <- predict(m, env = fia_env_test[siteID %in% test], init_cohort = init_test,
+#'                 patches = 4, patch_size = 0.06)
+#' head(pred$long$site)                     # siteID, year, species, variable, value
+#'
+#' # Score it on the cells the loss scores: one site, year and species at a time.
+#' obs_long <- melt(fia_obs_test[siteID %in% test], id.vars = c("siteID", "year", "species"),
+#'                  measure.vars = c("ba", "trees"), value.name = "obs")
+#' scored <- merge(obs_long, pred$long$site, by = c("siteID", "year", "species", "variable"))
+#' scored[, .(rmse = sqrt(mean((obs - value)^2))), by = variable]
+#'
+#' # the per-cohort state of the final simulated year
+#' pred <- predict(m, env = fia_env_test[siteID %in% test], init_cohort = init_test,
+#'                 patches = 4, patch_size = 0.06, return_cohorts = "last")
+#' head(pred$long$cohort)
 #' @method predict finn_class
 #' @export
 predict.finn_class = function(object,
@@ -735,6 +883,36 @@ predict.finn_class = function(object,
 #'   (long format: `siteID`, `year`, `species`, `variable`, `value`). When
 #'   `return_cohorts` is set, `$long$cohort` / `$wide$cohort` hold the raw
 #'   per-cohort state for the requested timesteps.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+#'                                        optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#'
+#' # simulate the three sites forward from their observed year-0 tree list
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
+#'                       patches = 4, patch_size = 0.06)
+#' sim$long$site[variable == "ba" & year == 3]   # basal area per site and species, long
+#' head(sim$wide$site)                            # one column per variable
+#'
+#' # The same call with `return_cohorts` keeps the raw cohorts of the last year,
+#' # with the id of the initial cohort each one started as.
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
+#'                       patches = 4, patch_size = 0.06, return_cohorts = "last")
+#' head(sim$long$cohort)
 #' @export
 simulateForest = function(model,
                           env,

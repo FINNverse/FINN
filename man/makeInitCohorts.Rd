@@ -74,6 +74,25 @@ Key fields of the resulting R6 object:
 \item \code{obsDF2arrays}: method converting \code{obs_df} into arrays.
 }
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# the year-0 tree list of three sites of the bundled Oregon FIA sample (?fia_init_trees)
+init_trees <- fia_init_trees[siteID \%in\% 1:3 & living \%in\% TRUE]
+Nsp <- max(fia_obs_dt$species)
+
+# one cohort per tree: what a per-tree loss (?fit, loss_resolution = "tree") needs
+ic <- makeInitCohorts(init_trees, Nspecies = Nsp)
+ic$dims                       # sites, patches, cohorts (the fullest patch sets the width)
+
+# trees binned to 5 cm diameter classes per site, patch and species: fewer cohorts
+icb <- makeInitCohorts(init_trees, dbh_binsize = 5, Nspecies = Nsp)
+icb$dims
+
+# the table behind the cohorts, with the cohortID a tree_data table refers to
+head(makeInitCohorts(init_trees, Nspecies = Nsp, treeID_table = TRUE)$init_trees)
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 \code{\link[FINN]{CohortMat}}
 }

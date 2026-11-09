@@ -102,6 +102,37 @@ are estimated yet. Use \link{fit} to calibrate the returned object against
 observed data, and \link{predict.finn_class}/\link{simulateForest} to
 simulate forest dynamics from a (fitted) model.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# Every process at its default: the mechanistic function with fixed species
+# parameters and a linear environmental response over every column of `env`.
+m <- finn(N_species = 11)
+
+# Say per process what is learned -- the species parameters (optimizeSpecies),
+# the environmental response (optimizeEnv) -- and which predictors enter it.
+m <- finn(
+  N_species            = 11, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+names(m$parameters)       # what fit() will estimate
+
+# The whole workflow on three sites of the bundled Oregon FIA sample
+# (?fia_obs_dt): calibrate for two epochs, then simulate. See ?fit.
+library(data.table)
+sites <- 1:3
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = 11)
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init,
+                      patches = 4, patch_size = 0.06)
+head(sim$long$site)
+\dontshow{\}) # examplesIf}
+}
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
 models using hybrid modelling. \emph{Methods in Ecology and Evolution}.

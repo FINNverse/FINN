@@ -60,3 +60,44 @@ Predict from a FINN model
 Simulate from a (fitted) FINN model. This is an S3 method for the
 \link[stats:predict]{stats::predict} generic, so it is dispatched as \code{predict(model, ...)}.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+
+# Predict for sites the model never saw: the holdout half of the sample ships
+# with its own climate and year-0 tree list. The climate is passed in natural
+# units; the scaling learned in fit() is re-applied internally.
+test      <- 1:3
+init_test <- makeInitCohorts(fia_init_test[siteID \%in\% test], Nspecies = Nsp)
+m$eval()                                 # deterministic: dropout off
+pred <- predict(m, env = fia_env_test[siteID \%in\% test], init_cohort = init_test,
+                patches = 4, patch_size = 0.06)
+head(pred$long$site)                     # siteID, year, species, variable, value
+
+# Score it on the cells the loss scores: one site, year and species at a time.
+obs_long <- melt(fia_obs_test[siteID \%in\% test], id.vars = c("siteID", "year", "species"),
+                 measure.vars = c("ba", "trees"), value.name = "obs")
+scored <- merge(obs_long, pred$long$site, by = c("siteID", "year", "species", "variable"))
+scored[, .(rmse = sqrt(mean((obs - value)^2))), by = variable]
+
+# the per-cohort state of the final simulated year
+pred <- predict(m, env = fia_env_test[siteID \%in\% test], init_cohort = init_test,
+                patches = 4, patch_size = 0.06, return_cohorts = "last")
+head(pred$long$cohort)
+\dontshow{\}) # examplesIf}
+}

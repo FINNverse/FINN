@@ -404,16 +404,23 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #'
 #' @seealso [FINN::regeneration], [FINN::createProcess()]
 #'
-#' @examples
-#' \dontrun{
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # three sites of the bundled Oregon FIA sample (?fia_obs_dt)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#'
+#' FINN.seed(1)
 #' m <- finn(
-#'   N_species = Nsp,
+#'   N_species = Nsp, recruits_dbh = 12.9,
 #'   regeneration_process = createProcess(
 #'     ~ temp + prec, FINN::regeneration_saturation,
-#'     custom_parameters = list(reg_logK = rep(log(800), Nsp)), # per-species K
-#'     optimizeSpecies = TRUE, optimizeEnv = TRUE)
-#' )
-#' }
+#'     custom_parameters = list(reg_logK = rep(log(800), Nsp)),  # per-species K, stems/ha/step
+#'     optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#' exp(as.numeric(m$reg_logK))   # the fitted carrying capacities
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid
@@ -493,18 +500,26 @@ regeneration_saturation = function(species, parReg, pred, light, debug = FALSE) 
 #'
 #' @seealso [FINN::regeneration_saturation], [FINN::createProcess()]
 #'
-#' @examples
-#' \dontrun{
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # three sites of the bundled Oregon FIA sample (?fia_obs_dt)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#'
+#' FINN.seed(1)
 #' m <- finn(
-#'   N_species = Nsp,
+#'   N_species = Nsp, recruits_dbh = 12.9,
 #'   regeneration_process = createProcess(
 #'     ~ temp + prec, FINN::regeneration_adult,
 #'     custom_parameters = list(reg_logK       = rep(log(50), Nsp),
 #'                              reg_adult_logx = rep(log(20), Nsp),   # adult from 20 cm
 #'                              reg_adult_logA = rep(log(20), Nsp)),  # f = 0.5 at 20 adults/ha
-#'     optimizeSpecies = TRUE, optimizeEnv = TRUE)
-#' )
-#' }
+#'     optimizeSpecies = TRUE, optimizeEnv = TRUE))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#' # the fitted cap, adult threshold (cm) and half-saturation adult density (per ha)
+#' exp(as.numeric(m$reg_logK)); exp(as.numeric(m$reg_adult_logx)); exp(as.numeric(m$reg_adult_logA))
 #'
 #' @import torch
 #' @export
