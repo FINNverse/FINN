@@ -323,14 +323,21 @@ someone who was affected.
   cohort ids are renumbered in radix order as well. Covered by
   `tests/testthat/test-site-sets.R`.
 
-* `climateDF2array()` stops on a (`siteID`, `year`[, `month`, `day`])
-  combination that appears more than once with different values, naming it
-  (#35); the last row used to win silently. Exact duplicate rows are collapsed,
-  as before in effect (the bundled `fia_env_dt` and `fia_env_test` hold every
-  row four times). A missing combination is still `NA`. Covered by
-  `tests/testthat/test-climateDF2array.R`. With it, `feature_importance()`
-  permutes over distinct rows: on duplicated rows the copies of a site-year got
-  different permuted values, of which the environment array kept one at random.
+* `climateDF2array()` stops on any (`siteID`, `year`[, `month`, `day`])
+  combination that appears more than once, identical or not, naming it (#35);
+  the last row used to win silently. A missing combination is still `NA`.
+  Covered by `tests/testthat/test-climateDF2array.R`.
+
+* The bundled `fia_env_dt` and `fia_env_test` hold one row per site x year
+  (600 rows each). They repeated every row four times, once per patch of the
+  source plot, all identical, so every environment array built from them is
+  unchanged (`dev/make_extdata.R` now deduplicates; the two `.rda` files were
+  deduplicated in place).
+
+* `feature_importance()` permutes over distinct `env` rows. On an `env` with
+  repeated site-year rows the copies received different permuted values, of
+  which the environment array kept one at random, so importance values computed
+  on such data change.
 
 * `createProcess(custom_parameters = )` checks names against a fixed list of
   fields FINN sets itself (#42). A name that a later process sets, such as
