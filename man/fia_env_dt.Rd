@@ -6,9 +6,9 @@
 \alias{fia_env_test}
 \title{Oregon FIA calibration data: site climate}
 \format{
-A \code{data.table} with 2400 rows and 8 columns: 200 sites x 3 years,
-each repeated 4 times (one row per patch of the source plot, all identical
--- climate is a site property). \code{\link[=fit]{fit()}} only needs one row per site x year.
+A \code{data.table} with 600 rows and 8 columns: 200 sites x 3 years, one
+row per site x year (climate is a site property; up to FINN 0.2.0 the
+tables repeated every row once per patch of the source plot).
 \describe{
 \item{\code{siteID}, \code{year}}{site index and year (\code{0}, \code{1}, \code{2}).}
 \item{\code{temp}, \code{tempmax}, \code{tempmin}}{annual mean, warmest-month maximum
@@ -19,7 +19,7 @@ and coldest-month minimum temperature, degrees C (bioclim 1, 5, 6).}
 (bioclim 15).}
 }
 
-An object of class \code{data.table} (inherits from \code{data.frame}) with 2400 rows and 8 columns.
+An object of class \code{data.table} (inherits from \code{data.frame}) with 600 rows and 8 columns.
 }
 \source{
 Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon

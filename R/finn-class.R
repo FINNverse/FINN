@@ -781,6 +781,79 @@ resolve_record_years = function(return_cohorts, time, debug = FALSE) {
        call. = FALSE)
 }
 
+# The site sets of the tables fit() and predict() pair. Every array is indexed by
+# the POSITION of a site among its table's sorted unique siteIDs, not by the id,
+# so the ids need not be 1:N -- but `data`, `env` and `init_cohort` must hold the
+# same sites. Otherwise a site is silently paired with another site's
+# environment, or torch stops with an index error that names nothing (#33).
+# `init_cohort` built from a table carries its user ids ($site_ids); one built
+# from arrays is sites 1..N and is checked by count. Returns the sorted user ids:
+# the lookup from array position to siteID.
+check_site_sets = function(env, data = NULL, init_cohort = NULL, caller = "fit()") {
+  ids_of = function(tab, what) {
+    id = tab[["siteID"]]
+    if (is.null(id)) stop(sprintf("%s: `%s` has no `siteID` column.", caller, what), call. = FALSE)
+    if (!is.numeric(id) || anyNA(id) || any(id != round(id)))
+      stop(sprintf("%s: `siteID` in `%s` must be integer-valued and not missing; resolveSiteIDs() turns site names into integer ids.", caller, what), call. = FALSE)
+    sort(unique(id))
+  }
+  show = function(x) {
+    x = sort(x)
+    paste0(paste(utils::head(x, 10L), collapse = ", "),
+           if (length(x) > 10L) sprintf(", ... (%d in all)", length(x)) else "")
+  }
+  env_ids = ids_of(env, "env")
+  msg = character(0)
+  if (!is.null(data)) {
+    data_ids = ids_of(data, "data")
+    a = setdiff(data_ids, env_ids); b = setdiff(env_ids, data_ids)
+    if (length(a)) msg = c(msg, sprintf("in `data` but not in `env`: %s", show(a)))
+    if (length(b)) msg = c(msg, sprintf("in `env` but not in `data`: %s", show(b)))
+  }
+  if (!is.null(init_cohort)) {
+    init_ids = init_cohort$site_ids
+    if (!is.null(init_ids)) {
+      a = setdiff(init_ids, env_ids); b = setdiff(env_ids, init_ids)
+      if (length(a)) msg = c(msg, sprintf("in `init_cohort` but not in `env`: %s", show(a)))
+      if (length(b)) msg = c(msg, sprintf("in `env` but not in `init_cohort`: %s", show(b)))
+    } else {
+      n_init = init_cohort$species$shape[1]
+      if (n_init != length(env_ids))
+        msg = c(msg, sprintf("`init_cohort` (built from arrays, sites 1..%d) has %d sites, `env` has %d",
+                             n_init, n_init, length(env_ids)))
+    }
+  }
+  if (length(msg))
+    stop(sprintf("%s: `data`, `env` and `init_cohort` must hold the same sites (the siteIDs need not be 1:N). Sites %s.",
+                 caller, paste(msg, collapse = "; ")), call. = FALSE)
+  env_ids
+}
+
+# Model fields FINN sets itself, during construction or in fit() (#42). A custom
+# parameter of the same name would be registered first, and the later assignment
+# would then be a silent no-op, because an nn_module drops an assignment to a
+# name already registered as a parameter (e.g. `light_mask`, which the
+# competition process sets after mortality registered its custom parameters).
+# Checked against this fixed list, not against the fields that happen to exist
+# when a process is registered. Prefixes and suffixes cover the per-process
+# fields (par_<type>, nn_<type>, <type>_func, ...).
+reserved_model_fields = c(
+  "N_species", "ale", "anchor_cohorts", "anchor_min_dbh", "anchor_mode", "class_breaks",
+  "class_obs", "class_tau", "conditional_effects", "continuous", "device", "dgtl_embedder",
+  "dtype", "emb_dim", "env_embedder", "env_scaling", "fit_id", "gradients", "growth_period_scale",
+  "history", "init_cohort", "light_mask", "loss_agg", "loss_baseline", "loss_raw",
+  "loss_resolution", "loss_weights", "mortality_draw", "n_quantiles", "nonfinite",
+  "nonfinite_counts", "num_species", "obs_rec", "optimizer", "optimizer_lr", "param_history",
+  "patch_size_ha", "per_site_period", "period_mode", "perm_importance", "positional_encoding",
+  "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
+  "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler",
+  "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
+  "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
+is_reserved_model_field = function(name) {
+  name %in% reserved_model_fields ||
+    grepl("^(par|env|nn|loss|process)_|_(formula|func|optimized)$", name)
+}
+
 #' finn class (internal representation of FINN); use [finn()] to construct.
 #' @noRd
 finn_class = nn_module(
@@ -1956,7 +2029,9 @@ finn_class = nn_module(
     self$patch_size_ha = patch_size
     if (is.null(self$recruit_obs_weight)) self$recruit_obs_weight = 1.0  # inventory-simulator: observation-operator inclusion weight (1 = per-ha, unchanged)
     if (is.null(self$growth_period_scale)) self$growth_period_scale = FALSE  # FALSE = mean of annual rates (default); TRUE = compounded period increment
-    # browser()
+    # `env` and `init_cohort` are paired by site position; the sorted user ids map
+    # the positions back, so the output carries the caller's own siteIDs.
+    site_ids_user = check_site_sets(env, init_cohort = init_cohort, caller = "predict()")
     envs = private$extract_env_method(env)
 
     if(!is.null(disturbance)) {
@@ -2026,13 +2101,13 @@ finn_class = nn_module(
       long_b = pred2DF(list(Predictions = pred), "long")
       wide_b = pred2DF(list(Predictions = pred), "wide")
       # pred2DF() labels sites 1..batch_size within this batch; remap those to the
-      # batch's global site indices (`ind`) so that runs split across more than one
-      # batch keep correct, non-colliding siteIDs. For the default single batch
-      # (batchsize = all sites) this is the identity.
+      # batch's global site positions (`ind`), and those to the caller's own
+      # siteIDs (`site_ids_user`, sorted as the env array). For ids that are 1:N
+      # in a single batch both steps are the identity.
       ind_r = as.integer(torch::as_array(ind$cpu()))
       for (nm in intersect(names(long_b), c("site", "patch", "cohort"))) {
-        long_b[[nm]][, siteID := ind_r[siteID]]
-        wide_b[[nm]][, siteID := ind_r[siteID]]
+        long_b[[nm]][, siteID := site_ids_user[ind_r[siteID]]]
+        wide_b[[nm]][, siteID := site_ids_user[ind_r[siteID]]]
       }
       predictions_batch = append(predictions_batch, list(list(long = long_b, wide = wide_b)))
 
@@ -2161,6 +2236,11 @@ finn_class = nn_module(
       print("No data. Switching into simulation modus...")
       return(self$predict(env = env, patches = patches, patch_size = patch_size, batchsize=batchsize, device=device))
     }
+    # `data`, `env` and `init_cohort` are paired by site POSITION, so they must
+    # hold the same site set (the ids need not be 1:N). The sorted ids are kept
+    # as the lookup table from array position to user id.
+    site_ids_user = check_site_sets(env, data = data, init_cohort = init_cohort, caller = "fit()")
+    self$site_lookup = data.table::data.table(siteID = site_ids_user, index = seq_along(site_ids_user))
 
     self$train_env         = data.table::copy(data.table::as.data.table(env))
     self$train_init_cohort = if(is.null(init_cohort)) NULL else list(cohort = init_cohort)
@@ -3769,8 +3849,8 @@ finn_class = nn_module(
       if(!is.null(obj$custom_parameters)) {
         for(pname in names(obj$custom_parameters)) {
           spec = obj$custom_parameters[[pname]]
-          if(!is.null(self[[pname]]))
-            stop(sprintf("custom_parameters name '%s' clashes with an existing model field; choose another.", pname), call. = FALSE)
+          if(!is.null(self[[pname]]) || is_reserved_model_field(pname))
+            stop(sprintf("custom_parameters name '%s' clashes with a model field (one FINN sets itself, now or later in construction or fit()); choose another.", pname), call. = FALSE)
           init_t = torch::torch_tensor(as.numeric(spec$init), dtype = torch::torch_float32())
           if(isTRUE(spec$trainable)) self$register_parameter(pname, torch::nn_parameter(init_t))
           else                       self$register_buffer(pname, init_t)
