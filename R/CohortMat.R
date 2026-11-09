@@ -35,6 +35,9 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
   # them against `data` and `env`, so a mismatch stops instead of pairing a site
   # with another site's environment.
   site_ids = sort(unique(obs_dt$siteID), method = "radix")
+  if (!isTRUE(all(site_ids == seq_along(site_ids))))
+    message(sprintf("obsDF2arrays(): siteIDs are not 1:%d; the site dimension follows their sorted order (kept as attribute \"site_ids\").",
+                    length(site_ids)))
   obs_dt$siteID = match(obs_dt$siteID, site_ids)
   if(!identical(sort(as.integer(obs_dt$patchID)), sort(radix_index(obs_dt$patchID)))) {
     obs_dt$patchID = radix_index(obs_dt$patchID)

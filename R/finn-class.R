@@ -791,7 +791,7 @@ check_site_sets = function(env, data = NULL, init_cohort = NULL, caller = "fit()
     id = tab[["siteID"]]
     if (is.null(id)) stop(sprintf("%s: `%s` has no `siteID` column.", caller, what), call. = FALSE)
     if (!is.numeric(id) || anyNA(id) || any(id != round(id)))
-      stop(sprintf("%s: `siteID` in `%s` must be integer-valued and not missing.", caller, what), call. = FALSE)
+      stop(sprintf("%s: `siteID` in `%s` must be integer-valued and not missing; resolveSiteIDs() turns site names into integer ids.", caller, what), call. = FALSE)
     sort(unique(id))
   }
   show = function(x) {

@@ -40,7 +40,7 @@ test_that("fit() stops with the offending ids when data, env and init_cohort hol
   expect_error(
     fit(fia_model(d$nsp), env = d$env[, siteID := as.character(siteID)], data = d$obs,
         epochs = 0L, patches = 2L, patch_size = 0.06, plot_progress = FALSE),
-    regexp = "must be integer-valued")
+    regexp = "must be integer-valued.*resolveSiteIDs\\(\\)")
 })
 
 test_that("non-contiguous site ids fit, are kept as a lookup, and come back in the output", {
@@ -64,8 +64,9 @@ test_that("non-contiguous site ids fit, are kept as a lookup, and come back in t
 test_that("obsDF2arrays() numbers sites in radix order and records the user ids", {
   obs <- data.frame(siteID = c(10, 3, 3, 7), patchID = 1, cohortID = c(1, 1, 2, 1),
                     species = 1, dbh = c(10, 20, 30, 40), trees = 1)
-  a <- obsDF2arrays(obs)
+  expect_message(a <- obsDF2arrays(obs), regexp = "siteIDs are not 1:3")
   expect_identical(attr(a, "site_ids"), c(3, 7, 10))
+  expect_no_message(obsDF2arrays(transform(obs, siteID = match(siteID, c(3, 7, 10)))))
   expect_equal(dim(a$dbh)[1], 3L)
   expect_equal(a$dbh[3, 1, 1], 10)     # site 10 is the third position
   expect_equal(a$dbh[1, 1, 1:2], c(20, 30))
