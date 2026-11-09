@@ -214,6 +214,15 @@ test_that("predictTrees returns one prediction per observed tree", {
                tree_data = tree_dt, data = obs_cls)
   P <- predictTrees(m, tree_dt, env, patches = 2L, patch_size = 0.1)
   expect_equal(nrow(P), nrow(tree_dt))
+  # the default must be the patch size the model was fitted with: light is
+  # f(BA / patch_size_ha), so a different one silently rescales competition in the
+  # route whose whole point is that a validation cannot drift from the fit
+  fitted_ps <- m$patch_size_ha
+  Pdef <- predictTrees(m, tree_dt, env, patches = 2L)
+  expect_identical(m$patch_size_ha, fitted_ps)
+  Pfit <- predictTrees(m, tree_dt, env, patches = 2L, patch_size = fitted_ps)
+  expect_equal(Pdef$growth_pred, Pfit$growth_pred)
+  expect_equal(Pdef$mort_pred, Pfit$mort_pred)
   expect_true(all(is.finite(P$growth_pred)) && all(is.finite(P$mort_pred)))
   expect_true(all(P$mort_pred >= 0 & P$mort_pred <= 1))
   expect_true(all(c("siteID", "year", "patchID") %in% names(P)))

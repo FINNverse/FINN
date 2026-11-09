@@ -9,7 +9,7 @@ predictTrees(
   tree_data,
   env,
   patches = 100L,
-  patch_size = 0.1,
+  patch_size = NULL,
   device = c("cpu", "gpu")
 )
 }
@@ -27,7 +27,8 @@ observed-tree tensors is the number of distinct \code{patchID}s in \code{tree_da
 (it used to be \code{patches}, and the extra patches were empty). Kept so
 existing calls run unchanged.}
 
-\item{patch_size}{(\code{numeric(1)})\cr Patch size, as in the fit.}
+\item{patch_size}{(\code{numeric(1)})\cr Patch size. Defaults to the one the model
+was fitted with (\code{model$patch_size_ha}); pass a value only to override it.}
 
 \item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}.}
 }

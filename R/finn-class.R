@@ -627,7 +627,8 @@ fit = function(model,
 #'   observed-tree tensors is the number of distinct `patchID`s in `tree_data`
 #'   (it used to be `patches`, and the extra patches were empty). Kept so
 #'   existing calls run unchanged.
-#' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
+#' @param patch_size (`numeric(1)`)\cr Patch size. Defaults to the one the model
+#'   was fitted with (`model$patch_size_ha`); pass a value only to override it.
 #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
 #' @return One row per row of `tree_data`, in the same order (`.row` records the
 #'   original position), with `growth_pred` (mean annual relative growth over
@@ -635,7 +636,7 @@ fit = function(model,
 #'   Bind these onto `tree_data` directly rather than joining on
 #'   siteID/year/patchID, which would be many-to-many.
 #' @export
-predictTrees = function(model, tree_data, env, patches = 100L, patch_size = 0.1, device = c("cpu", "gpu")) {
+predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
   model$predict_trees(tree_data = tree_data, env = env, patches = patches,
                       patch_size = patch_size, device = match.arg(device))
 }
@@ -1883,7 +1884,8 @@ finn_class = nn_module(
   #' @param env (`data.table|data.frame`)\cr Environment, as for [FINN::fit].
   #' @param patches (`integer(1)`)\cr Not used: the patch dimension is the
   #'   number of distinct `patchID`s in `tree_data`. Kept for compatibility.
-  #' @param patch_size (`numeric(1)`)\cr Patch size, as in the fit.
+  #' @param patch_size (`numeric(1)`)\cr Patch size. Defaults to the one the model
+  #'   was fitted with (`$patch_size_ha`); pass a value only to override it.
   #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
   #' @return One row per row of `tree_data`, IN THE SAME ORDER (`.row` records
   #'   the original position), with `growth_pred` (mean annual relative growth
@@ -1891,9 +1893,12 @@ finn_class = nn_module(
   #'   interval). Bind these onto `tree_data` directly; joining on
   #'   siteID/year/patchID would be many-to-many, since a patch holds many trees
   #'   in the same year.
-  predict_trees = function(tree_data, env, patches = 100L, patch_size = 0.1, device = c("cpu", "gpu")) {
+  predict_trees = function(tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
     device = match.arg(device)
     self$device = if (identical(device, "gpu")) "cuda" else "cpu"
+    # light is f(BA / patch_size_ha), so scoring at another patch size than the fit
+    # silently rescales competition - the one thing this route exists to rule out
+    if (is.null(patch_size)) patch_size = self$patch_size_ha
     self$patch_size_ha = patch_size
     d = data.table::as.data.table(tree_data)
     if (!"period_length" %in% colnames(d))
