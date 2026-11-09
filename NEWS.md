@@ -332,6 +332,13 @@ someone who was affected.
   permutes over distinct rows: on duplicated rows the copies of a site-year got
   different permuted values, of which the environment array kept one at random.
 
+* `createProcess(custom_parameters = )` checks names against a fixed list of
+  fields FINN sets itself (#42). A name that a later process sets, such as
+  `light_mask`, used to pass, became a trainable nobody read, and turned the
+  later assignment into a silent no-op. Covered by
+  `tests/testthat/test-processes.R`.
+
+
 # FINN 0.1.0
 
 First public release.

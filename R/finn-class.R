@@ -826,6 +826,31 @@ check_site_sets = function(env, data = NULL, init_cohort = NULL, caller = "fit()
   env_ids
 }
 
+# Model fields FINN sets itself, during construction or in fit() (#42). A custom
+# parameter of the same name would be registered first, and the later assignment
+# would then be a silent no-op, because an nn_module drops an assignment to a
+# name already registered as a parameter (e.g. `light_mask`, which the
+# competition process sets after mortality registered its custom parameters).
+# Checked against this fixed list, not against the fields that happen to exist
+# when a process is registered. Prefixes and suffixes cover the per-process
+# fields (par_<type>, nn_<type>, <type>_func, ...).
+reserved_model_fields = c(
+  "N_species", "ale", "anchor_cohorts", "anchor_min_dbh", "anchor_mode", "class_breaks",
+  "class_obs", "class_tau", "conditional_effects", "continuous", "device", "dgtl_embedder",
+  "dtype", "emb_dim", "env_embedder", "env_scaling", "fit_id", "gradients", "growth_period_scale",
+  "history", "init_cohort", "light_mask", "loss_agg", "loss_baseline", "loss_raw",
+  "loss_resolution", "loss_weights", "mortality_draw", "n_quantiles", "nonfinite",
+  "nonfinite_counts", "num_species", "obs_rec", "optimizer", "optimizer_lr", "param_history",
+  "patch_size_ha", "per_site_period", "period_mode", "perm_importance", "positional_encoding",
+  "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
+  "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler",
+  "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
+  "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
+is_reserved_model_field = function(name) {
+  name %in% reserved_model_fields ||
+    grepl("^(par|env|nn|loss|process)_|_(formula|func|optimized)$", name)
+}
+
 #' finn class (internal representation of FINN); use [finn()] to construct.
 #' @noRd
 finn_class = nn_module(
@@ -3750,8 +3775,8 @@ finn_class = nn_module(
       if(!is.null(obj$custom_parameters)) {
         for(pname in names(obj$custom_parameters)) {
           spec = obj$custom_parameters[[pname]]
-          if(!is.null(self[[pname]]))
-            stop(sprintf("custom_parameters name '%s' clashes with an existing model field; choose another.", pname), call. = FALSE)
+          if(!is.null(self[[pname]]) || is_reserved_model_field(pname))
+            stop(sprintf("custom_parameters name '%s' clashes with a model field (one FINN sets itself, now or later in construction or fit()); choose another.", pname), call. = FALSE)
           init_t = torch::torch_tensor(as.numeric(spec$init), dtype = torch::torch_float32())
           if(isTRUE(spec$trainable)) self$register_parameter(pname, torch::nn_parameter(init_t))
           else                       self$register_buffer(pname, init_t)
