@@ -1,3 +1,17 @@
+# FINN (development version)
+
+* Examples for the fitting workflow (`finn()`, `fit()`, `predict()`,
+  `simulateForest()`, `predictTrees()`, `regeneration_saturation()`,
+  `regeneration_adult()`, gated on an installed torch backend) and for the data
+  helpers (`makeObsData()`, `resolveSiteIDs()`, `makeInitCohorts()`,
+  `climateDF2array()`); the fitting vignettes gain sections on loss balancing,
+  convergence checks, persistence and blocked holdouts, staged calibration, the
+  recruitment cap and per-tree mortality scoring.
+
+* `resolveSiteIDs()` returns `env_dt` with one row per site and year; it used to
+  repeat each row once per patch, which `climateDF2array()` now rejects, so
+  `fit()` failed on the output of the documented data-preparation pipeline.
+
 # FINN 0.2.0
 
 This release adds the model features developed for the **FIA** (US Forest
