@@ -54,11 +54,14 @@ mk_trees <- function(split = TRUE) {
                died = rep_len(c(0, 1, 0), n), period_length = s$period_length[k])
   }))
 }
-run_fit <- function(obs, tree_dt = NULL, family, weights = rep(1, 6), agg = NULL) {
+run_fit <- function(obs, tree_dt = NULL, family, weights = rep(1, 6), agg = NULL,
+                    weight_scale = "raw") {
   FINN.seed(SEED); mm <- mk_model(); mm$period_mode <- "per_site"
+  # weight_scale = "raw": this file checks the pooling arithmetic by hand, so the
+  # reported loss must be the raw one and not the baseline-scaled objective
   suppressMessages(fit(mm, env = env, data = obs, init_cohort = ic, patches = 1L, patch_size = 0.1,
       env_autoscale = FALSE, loss_family = family, loss_aggregation = agg, tree_data = tree_dt,
-      epochs = 1L, lr = 0, weights = weights, batchsize = Nsites, shuffle = FALSE,
+      epochs = 1L, lr = 0, weights = weights, weight_scale = weight_scale, batchsize = Nsites, shuffle = FALSE,
       optimizer = OPT, plot_progress = FALSE, device = "cpu", clip_norm = 1e6))   # unclipped grads
   mm
 }
@@ -124,7 +127,7 @@ test_that("(iii) the auto baselines use the same per-unit pooling", {
   obs <- mk_obs(); td <- mk_trees()
   fam <- replace(FAM_CELL, c("dbh", "ba", "trees"), "none")
   raw  <- run_fit(obs, td, fam, agg = c(mortality = "tree"))
-  auto <- run_fit(obs, td, fam, weights = "auto", agg = c(mortality = "tree"))
+  auto <- run_fit(obs, td, fam, weights = "auto", agg = c(mortality = "tree"), weight_scale = "auto")
   b <- auto$loss_baseline
   # intercept-only loss over ALL units of all observation years
   y <- td$died; mu <- mean(y)

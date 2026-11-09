@@ -38,6 +38,7 @@ The two tables are the overview; the sections below them carry the detail.
 | Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
 | Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
 | A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
+| **A numeric `weights` vector multiplies the baseline-scaled objective instead of replacing it.** A default that does **not** reproduce 0.1.0 | `fit(weights = )`, `fit(weight_scale = )` | **`"auto"`**; `weight_scale = "raw"` restores the old meaning |
 | **Growth enters `mortality()` in %/yr.** A default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
 
 ### What was broken
@@ -204,6 +205,20 @@ someone who was affected.
   `createProcess(light_mask = FALSE)` reproduces results published before 0.2.0.
   `continuous = TRUE` compares pairs and was never affected.
 
+* **A numeric `weights` vector multiplies the scaled objective, it no longer
+  replaces it.** `fit(weights = )` used to bypass the `"auto"` baseline scaling
+  entirely, so the six numbers acted on losses whose raw magnitudes differ by
+  three orders of magnitude. Measured on BCI with the weight vector of the
+  published configuration, `c(0.1, 10, 1, 1, 1, 1)`: the raw baseline MSEs stand
+  at dbh : ba : growth = 1246 : 26 : 1, so growth held 0.26 % of the objective
+  at the start and 4.5 % at convergence, and `ba`'s nominal factor of ten was a
+  factor of ten on a scale already 26x growth's. Weights now multiply the
+  baseline-scaled losses, where a weight reads directly as that response's
+  share. `fit(weight_scale = "raw")` restores the old behaviour exactly and is
+  what reproduces an analysis fitted before 0.2.0. Every fit now prints each
+  response's share of the objective at the intercept-only baseline, in both
+  modes -- the silence was the actual defect.
+
 * **Site, patch and species ids are radix-ordered, not locale-ordered.**
   `resolveSiteIDs()` assigned them through `as.factor()` and `sort()`, both of
   which order by `LC_COLLATE`: `c("Acer", "abies_x")` is that order under `C`
@@ -287,6 +302,33 @@ someone who was affected.
   instead of keeping the first entry, and `fit(env_autoscale = )` rejects a named
   entry that matches no predictor instead of silently scaling that predictor
   with the default.
+
+* **`mortality()`'s growth coefficient is initialised on the scale growth enters
+  on.** `parMort[, 3]` was drawn from `U(-0.2, 0.2)` regardless of
+  `growth_scale`, so at the 0.01 default the same draw acted a hundred times more
+  strongly. Measured on the four-site FIA fixture: an anchored stand of 1667
+  stems/ha at 25 cm drops to 1.0-7.5 stems/ha in a single year (mortality 0.93 to
+  1.00), against 28-75 stems/ha at `growth_scale = 1`. The range now scales with
+  `growth_scale`; a custom mortality kernel without that formal keeps the old
+  range. Random initialisations therefore differ from earlier versions'.
+
+* The identity fixtures gained a configuration with unequal scored units per
+  observation year (`per_site_unbal`). Every existing per-site configuration
+  carried the same number of cells in every year -- 6 against 6 -- and with equal
+  counts the per-unit pooling of the per-site loss and the former sum of per-year
+  means agree exactly, so no snapshot could see a change to that weighting. The
+  new configuration is one species-census short in the first scored year, 5
+  against 6.
+
+* `fit(folder = , checkpoints = )` writes each checkpoint to a temporary name and
+  renames it. A kill or a full disk during the save used to leave a truncated
+  `.pt` that `torch_load()` could not read.
+
+* `fit()` warns when the regeneration process is being calibrated while
+  `loss_family["regeneration"]` is `"none"`. No other response can train it:
+  recruits reach `dbh` through a sigmoid of scale `1e-3`, whose derivative is
+  zero almost everywhere, and `trees` through a rounding whose forward value is 0
+  below 0.5 recruits per patch and species.
 
 * `resolveSiteIDs()` orders site, patch and species names with
   `sort(..., method = "radix")` instead of the collation locale; see *Behaviour
