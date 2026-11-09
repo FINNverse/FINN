@@ -12,7 +12,13 @@ obsDF2arrays(obs_dt, additional_cols = character(0))
 \item{additional_cols}{character vector Optional. Additional columns to be included as arrays.}
 }
 \value{
-A list of arrays for species, dbh, trees, and additional columns.
+A list of arrays for species, dbh, trees, and additional columns. The
+site dimension follows the sorted user \code{siteID}s (sorted with
+\code{method = "radix"}, so independent of the locale); the user ids in that
+order are attached as attribute \code{"site_ids"}, so a site set that is not
+\code{1:N} keeps its identity. \code{CohortMat} stores them as \verb{$site_ids}, and
+\link{fit} / \link{predict.finn_class} check them against \code{data} and
+\code{env}.
 }
 \description{
 Convert observation data frame to arrays

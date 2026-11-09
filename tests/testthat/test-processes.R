@@ -118,3 +118,21 @@ test_that("createProcess rejects a growth_scale that is not a positive finite nu
   expect_silent(cp(NULL))
   expect_silent(cp(1))
 })
+
+test_that("custom_parameters cannot shadow a field a later process sets (#42)", {
+  skip_if_no_torch()
+  expect_error(
+    finn(N_species = 2,
+         mortality_process   = createProcess(~1, FINN::mortality, custom_parameters = list(light_mask = 99)),
+         competition_process = createProcess(~0, FINN::competition, light_mask = TRUE)),
+    regexp = "custom_parameters name 'light_mask' clashes")
+  expect_error(
+    finn(N_species = 2,
+         regeneration_process = createProcess(~1, FINN::regeneration, custom_parameters = list(par_growth = 1))),
+    regexp = "custom_parameters name 'par_growth' clashes")
+  # a free name still registers as a trainable parameter
+  m <- finn(N_species = 2,
+            regeneration_process = createProcess(~1, FINN::regeneration_saturation,
+                                                 custom_parameters = list(reg_logK = rep(log(800), 2))))
+  expect_true("reg_logK" %in% names(m$parameters))
+})

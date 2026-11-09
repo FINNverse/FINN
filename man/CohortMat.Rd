@@ -65,5 +65,9 @@ An R6 class for managing cohorts of trees in forest models. This class allows fo
 \item{\code{device_r}}{A character string specifying the device in R format ('cpu' or 'cuda').}
 
 \item{\code{obsDF2arrays}}{Transforms data.table into array}
+
+\item{\code{site_ids}}{The user \code{siteID}s in the order of the site dimension when the
+cohorts were built from \code{obs_df} (the lookup table from array position to
+user id); \code{NULL} when built from arrays, where the site dimension is \code{1:N}.}
 }}
 

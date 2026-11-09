@@ -3,16 +3,16 @@ Type: Package
 Title: Forest Informed Neural Networks
 Version: 0.2.0
 Authors@R:
-    c(person(given = "Yannek",
-             family = "Käber",
-             role = c("aut", "cre"),
-             email = "y.kaeber@posteo.de",
-             comment = c(ORCID = "0000-0002-7041-9849")),
-      person(given = "Maximilian",
+    c(person(given = "Maximilian",
              family = "Pichler",
              role = "aut",
              email = "maximilian.pichler@biologie.uni-regensburg.de",
-             comment = c(ORCID = "0000-0003-2252-8327")))
+             comment = c(ORCID = "0000-0003-2252-8327")),
+      person(given = "Yannek",
+             family = "Käber",
+             role = c("aut", "cre"),
+             email = "y.kaeber@posteo.de",
+             comment = c(ORCID = "0000-0002-7041-9849")))
 Maintainer: Yannek Käber <y.kaeber@posteo.de>
 Description: A hybrid dynamic forest (gap) model (FINN) that can be configured
     as a fully mechanistic, process-based model, like classic forest gap models,

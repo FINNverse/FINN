@@ -244,8 +244,8 @@ is fitting it and **not generalising**.
 That is what a few hundred deaths buys. With ~66% of observations at exactly zero
 and mortality concentrated in whichever species happened to die on whichever plot,
 there is enough signal to memorise and not enough to transfer. The network variant
-sits *lower* still on the holdout, which is what you would expect from a model with
-more capacity to memorise with.
+ranks slightly better than the mechanistic process on the holdout, but both stay
+close to coin-flipping and far below their training skill, so neither transfers.
 
 So mortality here is honestly reported as **not identified out-of-sample**. The
 binomial likelihood is the right loss for a proportion and the closed cohort is
