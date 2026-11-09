@@ -68,6 +68,51 @@ you want to learn how a hybrid Dynamic Vegetation Model looks like and
 how you can build your own for inference and prediction FINN is the
 right tool and these vignettes will show you how to do it.
 
+## Three levels of hybridisation
+
+"Mechanistic, a neural network, or a mixture of the two" is a choice you make
+**per process**, and it has three settings. All three are written the same way,
+all three are calibrated end-to-end by the same `fit()` call, and nothing else in
+the model changes when you move between them.
+
+```{r hybrid-levels, eval = FALSE}
+# Level 0 - fully mechanistic. The process equation is FINN::growth, and the
+# environmental response is one coefficient per species and per covariate: a
+# classic niche model, interpretable coefficient by coefficient.
+createProcess(~ temp + prec, FINN::growth,
+              optimizeSpecies = TRUE, optimizeEnv = TRUE)
+
+# Level 1 - a network for the environmental response only. The process equation
+# and the species-specific process parameters stay mechanistic; only the map from
+# environment to a per-species effect becomes a small feed-forward network. Use
+# this when you believe the demography but not the shape of the niche.
+createProcess(~ temp + prec, FINN::growth, hidden = c(25L))
+
+# Level 2 - a network in place of the process equation itself. The network sees
+# the cohort, its species and the site's environment, and returns the rate
+# directly; the inverse link that keeps it a valid rate is applied for you.
+createHybrid(~ temp + prec, transformer = FALSE, hidden = c(50L, 50L))
+```
+
+The levels are named after Pichler & Käber (2026), and the trade-off between them
+is the usual one. Level 0 gives you coefficients you can read and defend, and it
+extrapolates the way its equations say it should. Level 2 gives the data the most
+freedom and the least structure to lean on, so it needs the most data and tells
+you the least about *why*. Level 1 is the middle: the demography is still yours,
+the niche is the model's.
+
+Two practical notes. The species parameters at level 1 remain per species, so a
+rare species still gets its own demography even where the network has little to
+learn from; that is often the reason to prefer level 1 over level 2 on inventory
+data. And whatever level you choose, the tools that say what the environmental
+response actually learned are the same — `ALE()`, `conditionalEffects()` and
+`feature_importance()` work on a network exactly as they do on a coefficient, which
+is what makes a level-1 or level-2 process arguable rather than merely accurate.
+
+This vignette stays at level 0 throughout. [Fitting FINN to forest inventory
+data](D-Fit_to_FIA.html) fits a level-1 growth process to real data, and [the
+mortality vignette](E-Mortality.html) does the same for mortality.
+
 # Installation
 
 Install the released version of FINN from CRAN:
