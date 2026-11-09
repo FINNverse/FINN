@@ -310,7 +310,7 @@ someone who was affected.
   stems/ha at 25 cm drops to 1.0-7.5 stems/ha in a single year (mortality 0.93 to
   1.00), against 28-75 stems/ha at `growth_scale = 1`. The range now scales with
   `growth_scale`; a custom mortality kernel without that formal keeps the old
-  range. Random initialisations therefore differ from 0.2.0's.
+  range. Random initialisations therefore differ from earlier versions'.
 
 * `fit(folder = , checkpoints = )` writes each checkpoint to a temporary name and
   renames it. A kill or a full disk during the save used to leave a truncated

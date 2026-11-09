@@ -2223,15 +2223,6 @@ finn_class = nn_module(
               call. = FALSE)
     if (tree_res && any(vapply(self$loss_agg[c("growth", "mortality")], function(a) identical(a$type, "tree"), logical(1))))
       stop("`loss_resolution = \"tree\"` (the simulated cohort each tree started as) cannot be combined with `loss_aggregation = \"tree\"` for growth or mortality (the observed tree); choose one of the two ways of scoring individual trees.", call. = FALSE)
-    # A state term on trees or ba cannot train regeneration: the recruits reach dbh
-    # through a sigmoid of scale 1e-3, whose derivative is zero almost everywhere, and
-    # the stem path runs through a rounding whose forward value is 0 below 0.5 recruits
-    # per patch and species. Measured on BWI, a stems term left recruitment at 3.08x the
-    # target and kept the recruitment loss from moving (FINNverse/FINN#43).
-    if ((isTRUE(self$par_regeneration_optimized) || isTRUE(self$env_regeneration_optimized)) &&
-        identical(as.character(loss_spec[["regeneration"]]), "none"))
-      warning("the regeneration process is being calibrated, but `loss_family['regeneration']` is \"none\", so no observed recruitment enters the loss. The other responses cannot train it: recruits reach `dbh` through a near-step sigmoid and `trees` through a rounding that is 0 below 0.5 recruits per patch and species. Score regeneration directly, or set optimizeSpecies = FALSE and optimizeEnv = FALSE on the regeneration process. See FINNverse/FINN#43.",
-              call. = FALSE)
     weight_scale = match.arg(weight_scale, c("auto", "raw"))
     auto_weights = identical(weight_scale, "auto")
     if (is.character(weights) && length(weights) == 1L && identical(weights, "auto")) weights = rep(1, 6)
@@ -2386,6 +2377,24 @@ finn_class = nn_module(
       # a warning here - the scaled path still warns, because there it changes the fit
       suppressWarnings(private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs, self$quant_obs))
     self$loss_baseline = base
+    # A state term on trees or ba cannot train regeneration: recruits reach dbh through
+    # a sigmoid of scale 1e-3, whose derivative is zero almost everywhere, and the stem
+    # path runs through a rounding whose forward value is 0 below 0.5 recruits per patch
+    # and species. Measured on BWI, a stems term left recruitment at 3.08x the target and
+    # kept the recruitment loss from moving (FINNverse/FINN#43). The loss can lack an
+    # observed recruitment in two ways: the term is switched off, or the family is set but
+    # the scored data carry no finite value for it.
+    if (isTRUE(self$par_regeneration_optimized) || isTRUE(self$env_regeneration_optimized)) {
+      reg_off = identical(as.character(loss_spec[["regeneration"]]), "none")
+      reg_empty = !reg_off && torch::with_no_grad({
+        m = Y[,,,6]$isnan()$bitwise_not()
+        !as.logical(m$any()$cpu())
+      })
+      if (reg_off || reg_empty)
+        warning(sprintf("the regeneration process is being calibrated, but %s, so no observed recruitment enters the loss. No other response can stand in for it: recruits reach `dbh` through a near-step sigmoid and `trees` through a rounding that is 0 below 0.5 recruits per patch and species. Score regeneration against an observation, or set optimizeSpecies = FALSE and optimizeEnv = FALSE on the regeneration process. See FINNverse/FINN#43.",
+                        if (reg_off) "`loss_family['regeneration']` is \"none\"" else "`data` carries no finite `reg` value in the scored cells"),
+                call. = FALSE)
+    }
     if (auto_weights) {
       # at tree resolution those two terms are scored over trees, so the null model they are
       # measured against is the intercept-only fit to the per-tree targets, not to the cells
