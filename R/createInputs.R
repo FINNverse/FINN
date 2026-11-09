@@ -53,7 +53,10 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   tree_dt[, year := period-1,]
   tree_dt <- tree_dt[, -"period"]
 
-  env_dt <- merge(env_dt, siteID_dt[,.(siteName, siteID, year, period)], by = c("siteName","year"), all = FALSE)
+  # siteID_dt has one row per site, patch and year; the environment is a site
+  # property, so take the site x year rows once or every patch would duplicate
+  # them and climateDF2array() refuses the table when fit() builds its arrays.
+  env_dt <- merge(env_dt, unique(siteID_dt[,.(siteName, siteID, year, period)]), by = c("siteName","year"), all = FALSE)
   env_dt[, OrigYear := year,]
   env_dt[, year := period-1,]
   env_dt <- env_dt[, -"period"]
