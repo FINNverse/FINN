@@ -350,7 +350,13 @@ finn = function(N_species,
 #'   in both modes.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
-#' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
+#'   synonym for `"gpu"`. Only NVIDIA cards are supported. A card does not always
+#'   pay: the per-tree route (`loss_resolution = "tree"`, `loss_aggregation = "tree"`)
+#'   issues thousands of small kernels per simulated year and is bound by dispatch
+#'   rather than arithmetic, so it can run at the same speed on either device with
+#'   the card almost idle. Measure one configuration before committing a long fit to
+#'   a GPU.
 #' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
 #' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
 #' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
@@ -656,7 +662,8 @@ fit = function(model,
 #'   existing calls run unchanged.
 #' @param patch_size (`numeric(1)`)\cr Patch size. Defaults to the one the model
 #'   was fitted with (`model$patch_size_ha`); pass a value only to override it.
-#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
+#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
+#'   synonym for `"gpu"`.
 #' @return One row per row of `tree_data`, in the same order (`.row` records the
 #'   original position), with `growth_pred` (mean annual relative growth over
 #'   the interval) and `mort_pred` (probability of dying during the interval).
@@ -665,7 +672,7 @@ fit = function(model,
 #' @export
 predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
   model$predict_trees(tree_data = tree_data, env = env, patches = patches,
-                      patch_size = patch_size, device = match.arg(device))
+                      patch_size = patch_size, device = resolve_device(device))
 }
 
 
@@ -681,7 +688,8 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #' @param patches (`integer(1)`)\cr Number of patches.
 #' @param patch_size (`numeric(1)`)\cr Patch size.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
-#' @param device (`character(1)`)\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.
+#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
+#'   synonym for `"gpu"`. Only NVIDIA cards are supported.
 #' @param return_cohorts Controls whether the raw per-cohort state is returned in
 #'   addition to the aggregated site output. Storing cohorts every timestep is
 #'   expensive, so the default is `FALSE` (none). Use `TRUE` (or `"all"`) for
@@ -736,7 +744,8 @@ predict.finn_class = function(object,
 #' @param patches (`integer(1)`)\cr Number of patches.
 #' @param patch_size (`numeric(1)`)\cr Patch size.
 #' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
-#' @param device (`character(1)`)\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.
+#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
+#'   synonym for `"gpu"`. Only NVIDIA cards are supported.
 #' @param return_cohorts Controls whether the raw per-cohort state is returned in
 #'   addition to the aggregated site output. Storing cohorts every timestep is
 #'   expensive, so the default is `FALSE` (none). Use `TRUE` (or `"all"`) for
@@ -2001,7 +2010,8 @@ finn_class = nn_module(
   #'   number of distinct `patchID`s in `tree_data`. Kept for compatibility.
   #' @param patch_size (`numeric(1)`)\cr Patch size. Defaults to the one the model
   #'   was fitted with (`$patch_size_ha`); pass a value only to override it.
-  #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`.
+  #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
+#'   synonym for `"gpu"`.
   #' @return One row per row of `tree_data`, IN THE SAME ORDER (`.row` records
   #'   the original position), with `growth_pred` (mean annual relative growth
   #'   over the interval) and `mort_pred` (probability of dying during the
@@ -2009,7 +2019,7 @@ finn_class = nn_module(
   #'   siteID/year/patchID would be many-to-many, since a patch holds many trees
   #'   in the same year.
   predict_trees = function(tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
-    device = match.arg(device)
+    device = resolve_device(device)
     self$device = if (identical(device, "gpu")) "cuda" else "cpu"
     # light is f(BA / patch_size_ha), so scoring at another patch size than the fit
     # silently rescales competition - the one thing this route exists to rule out
@@ -2063,7 +2073,7 @@ finn_class = nn_module(
                       return_cohorts = FALSE,
                       debug = FALSE
                       ) {
-    device = match.arg(device)
+    device = resolve_device(device)
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size
@@ -2362,7 +2372,7 @@ finn_class = nn_module(
     # baseline it scales by.
 
     # setup data
-    device = match.arg(device)
+    device = resolve_device(device)
     if(device == "gpu") device="cuda:0"
     self$device = device
     self$patch_size_ha = patch_size

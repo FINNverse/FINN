@@ -33,3 +33,29 @@ with respect to its inputs, per process and per species. This is the shared
 primitive behind \code{\link[=ALE]{ALE()}}, \code{\link[=averageConditionalEffects]{averageConditionalEffects()}} and the analytical
 variable importance in \code{\link[=summary.finn_class]{summary.finn_class()}}.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
+# variant is the same call with `hidden = c(10, 10)` on the process
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+
+# the marginal effect of each driver on each process, holding the others at their
+# observed values: one row per (species, variable, grid point)
+ce <- conditionalEffects(m)
+str(ce, max.level = 1)
+\dontshow{\}) # examplesIf}
+}

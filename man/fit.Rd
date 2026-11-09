@@ -255,7 +255,13 @@ in both modes.}
 
 \item{batchsize}{(\code{integer(1)})\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.}
 
-\item{device}{(\code{character(1)})\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
+synonym for \code{"gpu"}. Only NVIDIA cards are supported. A card does not always
+pay: the per-tree route (\code{loss_resolution = "tree"}, \code{loss_aggregation = "tree"})
+issues thousands of small kernels per simulated year and is bound by dispatch
+rather than arithmetic, so it can run at the same speed on either device with
+the card almost idle. Measure one configuration before committing a long fit to
+a GPU.}
 
 \item{update_step}{(\code{integer(1)})\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.}
 

@@ -30,7 +30,8 @@ existing calls run unchanged.}
 \item{patch_size}{(\code{numeric(1)})\cr Patch size. Defaults to the one the model
 was fitted with (\code{model$patch_size_ha}); pass a value only to override it.}
 
-\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}.}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
+synonym for \code{"gpu"}.}
 }
 \value{
 One row per row of \code{tree_data}, in the same order (\code{.row} records the
