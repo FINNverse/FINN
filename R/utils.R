@@ -96,6 +96,30 @@ np_runif = function(low, high, size) {
 }
 
 
+# Set torch's intra-op thread count for a fit (FINN#48). Returns the count to
+# restore on exit, or NULL when there is nothing to restore. With OpenMP the
+# count can change at any time; torch's native backend (macOS) accepts one change
+# per session, so there the count is set but not restored, and a refused change
+# is reported instead of silently running on another count.
+set_torch_threads = function(threads) {
+  if (is.null(threads)) return(NULL)
+  threads = as.integer(threads)
+  if (length(threads) != 1L || is.na(threads) || threads < 1L)
+    stop("`threads` must be NULL or one positive integer.", call. = FALSE)
+  old = torch::torch_get_num_threads()
+  if (old == threads) return(NULL)
+  torch::torch_set_num_threads(threads)
+  now = torch::torch_get_num_threads()
+  if (now != threads) {
+    message(sprintf(paste0("torch keeps %d intra-op threads: this session's thread count was already set ",
+                           "(torch's native backend allows one change per session). Restart R, or call ",
+                           "torch::torch_set_num_threads(%d) before any other, to fit on %d."),
+                    now, threads, threads))
+    return(NULL)
+  }
+  if (torch::backends_openmp_is_available()) old else NULL
+}
+
 check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), device="cpu", requires_grad = FALSE) {
   pointer_check <- tryCatch(torch::as_array(tensor), error = function(e) e)
   if(!is.null(attr(r_obj, "requires_grad"))) requires_grad = attr(r_obj, "requires_grad")

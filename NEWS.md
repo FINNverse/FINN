@@ -19,6 +19,21 @@
   `data` documentation no longer claims that `period_length` must be the same
   for every site.
 
+* `fit()` gains `threads`, torch's intra-op thread count during the fit. The
+  default `NULL` leaves torch's setting alone, so `OMP_NUM_THREADS` or
+  `torch_set_num_threads()` keep working. FINN's forward pass is a chain of
+  small tensor operations, and extra threads rarely pay (#48):
+  - on macOS one thread was up to 30 % faster at the size of a BWI calibration
+    batch (512 sites x 25 patches);
+  - on a 64-core Linux node the thread count changed little, and only a single
+    2000-site batch gained from 4 threads.
+
+  `threads = 1` is the considerate choice when several fits share a machine.
+  Where torch uses OpenMP the previous count is restored afterwards. torch's
+  native backend (macOS) allows one change per session, so there the session
+  keeps the count, and `fit()` says so when an earlier setting prevents the
+  change.
+
 # FINN 0.2.0
 
 This release adds the model features developed for the **FIA** (US Forest

@@ -42,6 +42,7 @@ fit(
   anchor_min_dbh = NULL,
   teacher_forcing = FALSE,
   loss_resolution = c("site", "tree"),
+  threads = NULL,
   ...
 )
 }
@@ -422,6 +423,21 @@ window's kills alone. Under \code{reanchor}/\code{teacher_forcing} the generatio
 restarts at every anchor, so \code{frac_ghost} is 0 by construction only where the
 anchors cover every census; a sparser anchor list carries ghosts like single
 shooting does.}
+
+\item{threads}{(\code{integer(1)} or \code{NULL})\cr torch's intra-op thread count
+during the fit. \code{NULL} (the default) leaves torch's setting alone, including
+one made through \code{OMP_NUM_THREADS} or \code{\link[torch:threads]{torch::torch_set_num_threads()}}.
+FINN's forward pass is a long chain of small tensor operations, so its cost
+is set by the number of operations, not by their arithmetic, and extra
+threads rarely pay. In the measurements behind FINNverse/FINN#48, one
+thread was up to 30 \% faster on macOS at the size of a 512-site,
+25-patch batch, and within a few per cent of the best setting on a 64-core
+Linux node, where only a single 2000-site batch gained from 4 threads.
+\code{threads = 1} is the considerate choice when several fits share a machine.
+The previous count is restored afterwards where torch allows it (OpenMP
+builds, e.g. Linux). torch's native backend (macOS) accepts one change per
+session, so there the session keeps the count \code{fit()} set, and a count fixed
+earlier in the session cannot be changed (\code{fit()} then says so).}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }

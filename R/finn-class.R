@@ -381,6 +381,20 @@ finn = function(N_species,
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
 #' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
+#' @param threads (`integer(1)` or `NULL`)\cr torch's intra-op thread count
+#'   during the fit. `NULL` (the default) leaves torch's setting alone, including
+#'   one made through `OMP_NUM_THREADS` or [torch::torch_set_num_threads()].
+#'   FINN's forward pass is a long chain of small tensor operations, so its cost
+#'   is set by the number of operations, not by their arithmetic, and extra
+#'   threads rarely pay. In the measurements behind FINNverse/FINN#48, one
+#'   thread was up to 30 % faster on macOS at the size of a 512-site,
+#'   25-patch batch, and within a few per cent of the best setting on a 64-core
+#'   Linux node, where only a single 2000-site batch gained from 4 threads.
+#'   `threads = 1` is the considerate choice when several fits share a machine.
+#'   The previous count is restored afterwards where torch allows it (OpenMP
+#'   builds, e.g. Linux). torch's native backend (macOS) accepts one change per
+#'   session, so there the session keeps the count `fit()` set, and a count fixed
+#'   earlier in the session cannot be changed (`fit()` then says so).
 #' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
 #' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
 #' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
@@ -650,7 +664,10 @@ fit = function(model,
                anchor_min_dbh = NULL,
                teacher_forcing = FALSE,
                loss_resolution = c("site", "tree"),
+               threads = NULL,
                ...) {
+  old_threads = set_torch_threads(threads)
+  if (!is.null(old_threads)) on.exit(torch::torch_set_num_threads(old_threads), add = TRUE)
   invisible(model$fit(data = data,
                       env = env,
                       disturbance = disturbance,
