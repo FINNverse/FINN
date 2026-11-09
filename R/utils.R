@@ -771,3 +771,11 @@ plot.finn_class = function(x, pars = c("process", "env"), env_names = NULL, spec
 # usage
 # plot(m1, pars = "env", env_names = env_scales_dt$variable)
 # plot(m1, pars = "process", species_names = species_dt$species_name)
+
+# `"cuda"` is what everyone who has used torch directly reaches for, and
+# match.arg()'s "should be one of cpu, gpu" does not say that it is accepted.
+resolve_device = function(device) {
+  if (is.character(device) && length(device) > 1L) device = device[1]
+  if (identical(device, "cuda")) device = "gpu"
+  match.arg(device, c("cpu", "gpu"))
+}

@@ -30,7 +30,8 @@
 
 \item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}.}
 
-\item{device}{(\code{character(1)})\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
+synonym for \code{"gpu"}. Only NVIDIA cards are supported.}
 
 \item{return_cohorts}{Controls whether the raw per-cohort state is returned in
 addition to the aggregated site output. Storing cohorts every timestep is
