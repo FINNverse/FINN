@@ -471,10 +471,13 @@ census, which is why the table scores year 2 only.
 A scatter shows the spread; it hides a systematic bias of the kind a fitted
 model develops when it compresses towards the mean. Binning the predictions into
 deciles and comparing the mean prediction of each bin with the mean observation
-in it is the calibration view, and it is cheap:
+in it is the calibration view, and it is cheap. Cells in which the species is
+absent from both the observation and the prediction are left out: they are most
+of the table and would pile the lower deciles onto zero.
 
 ```{r calibration, fig.width = 7.5, fig.height = 3.2}
-calib <- obs_pred[split == "holdout" & variable %in% c("ba", "trees") & is.finite(obs)]
+calib <- obs_pred[split == "holdout" & variable %in% c("ba", "trees") & is.finite(obs) &
+                  (obs > 0 | value > 0)]
 calib[, bin := cut(value, unique(quantile(value, 0:10 / 10)), include.lowest = TRUE),
       by = .(model, variable)]
 calib_dt <- calib[, .(pred = mean(value), obs = mean(obs), n = .N), by = .(model, variable, bin)]
