@@ -545,6 +545,7 @@ fit = function(model,
                loss_aggregation = NULL,
                tree_data = NULL,
                weights = "auto",
+               weight_scale = c("auto", "raw"),
                optimizer = optim_ignite_adam,
                batchsize = NULL,
                device = c("cpu", "gpu"),
@@ -580,6 +581,7 @@ fit = function(model,
                       loss_aggregation = loss_aggregation,
                       tree_data = tree_data,
                       weights = weights,
+                      weight_scale = weight_scale,
                       optimizer = optimizer,
                       batchsize = batchsize,
                       device = device,
@@ -2087,6 +2089,7 @@ finn_class = nn_module(
                  # (growth / mortality) and cohortID for loss_resolution = "tree".
                  tree_data = NULL,
                  weights = "auto",
+                 weight_scale = c("auto", "raw"),
                    optimizer = optim_ignite_adam,
                  batchsize = NULL,
                  device = c("cpu", "gpu"),
@@ -2220,15 +2223,14 @@ finn_class = nn_module(
               call. = FALSE)
     if (tree_res && any(vapply(self$loss_agg[c("growth", "mortality")], function(a) identical(a$type, "tree"), logical(1))))
       stop("`loss_resolution = \"tree\"` (the simulated cohort each tree started as) cannot be combined with `loss_aggregation = \"tree\"` for growth or mortality (the observed tree); choose one of the two ways of scoring individual trees.", call. = FALSE)
-    auto_weights = is.character(weights) && length(weights) == 1L && identical(weights, "auto")
-    if (auto_weights) {
-      weights = rep(1, 6)
-    } else {
-      if (!is.numeric(weights) || length(weights) != 6L) {
-        stop("`weights` must be \"auto\" or a numeric vector of length 6 (dbh, ba, trees, growth, mortality, regeneration).")
-      }
-      self$loss_weights = weights
-    }
+    weight_scale = match.arg(weight_scale, c("auto", "raw"))
+    auto_weights = identical(weight_scale, "auto")
+    if (is.character(weights) && length(weights) == 1L && identical(weights, "auto")) weights = rep(1, 6)
+    if (!is.numeric(weights) || length(weights) != 6L || !all(is.finite(weights)) || any(weights < 0))
+      stop("`weights` must be \"auto\" or a numeric vector of length 6 (dbh, ba, trees, growth, mortality, regeneration), non-negative and finite.",
+           call. = FALSE)
+    user_weights = weights
+    if (!auto_weights) self$loss_weights = weights
     # NOTE: the loss closures are built further down, AFTER the response tensor Y
     # exists - "auto" needs the observed responses to compute the intercept-only
     # baseline it scales by.
@@ -2366,8 +2368,16 @@ finn_class = nn_module(
     # the mean IS the variance - but it generalises to the Poisson, negative
     # binomial and binomial terms, where sd() is not the right scale.
     private$create_loss_functions(loss_spec, weights)   # unweighted for now
+    # computed in both modes: under weight_scale = "raw" it is not used for scaling,
+    # only to say what each response actually contributes (FINNverse/FINN#37)
+    base = if (auto_weights)
+      private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs, self$quant_obs)
+    else
+      # only used to report the shares, so a baseline we cannot compute is not worth
+      # a warning here - the scaled path still warns, because there it changes the fit
+      suppressWarnings(private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs, self$quant_obs))
+    self$loss_baseline = base
     if (auto_weights) {
-      base = private$compute_baseline_losses(Y, loss_spec, self$class_obs, self$tree_obs, self$quant_obs)
       # at tree resolution those two terms are scored over trees, so the null model they are
       # measured against is the intercept-only fit to the per-tree targets, not to the cells
       if (tree_res) base[c("growth", "mortality")] = sapply(c(growth = "growth", mortality = "mort"), function(r) {
@@ -2381,14 +2391,21 @@ finn_class = nn_module(
       })
       w = 1/base
       w[!is.finite(w) | w <= 0] = 1        # no data / degenerate -> leave alone
+      # the user's numbers multiply the scaled objective, they do not replace it:
+      # on the scaled objective a weight reads directly as that response's share,
+      # which is what a hand-set vector is almost always meant to say
+      w = w * user_weights
       names(w) = names(loss_spec)
       weights = w
       self$loss_baseline = base
       self$loss_weights  = w
       private$create_loss_functions(loss_spec, weights)
       cli::cli_alert_info(
-        "weights = 'auto': scaled by the intercept-only baseline ({paste(sprintf('%s=%.3g', names(w), w), collapse = ', ')})")
+        "weights: intercept-only baseline x your vector ({paste(sprintf('%s=%.3g', names(w), w), collapse = ', ')})")
     }
+    # what each response actually contributes at the baseline, which is the thing a
+    # hand-set vector is usually wrong about (see FINNverse/FINN#37)
+    private$report_loss_shares(loss_spec, weights, base, auto_weights)
 
     envs = private$extract_env_method(env)
 
@@ -3341,9 +3358,24 @@ finn_class = nn_module(
     # called with 2D [sites, species] tensors during fitting (the reg/nbinom one
     # sizes theta off pred$shape[1]), so Y's [sites, years, species] slices are
     # flattened to match.
+    # One line naming what each response actually contributes, because a hand-set
+    # weight vector acts on losses whose raw magnitudes differ by orders of
+    # magnitude and nothing used to say so (FINNverse/FINN#37).
+    report_loss_shares = function(loss_spec, weights, base, auto) {
+      if (is.null(base) || !any(is.finite(base))) return(invisible(NULL))
+      contrib = weights * base
+      ok = is.finite(contrib) & contrib > 0
+      if (!any(ok)) return(invisible(NULL))
+      share = contrib / sum(contrib[ok], na.rm = TRUE)
+      cli::cli_alert_info(
+        "share of the objective at the intercept-only baseline ({if (auto) 'scaled' else 'raw scale'}): {paste(sprintf('%s=%.2g%%', names(loss_spec)[ok], 100*share[ok]), collapse = ', ')}")
+      invisible(share)
+    },
+
     compute_baseline_losses = function(Y, loss_spec, class_obs = NULL, tree_obs = NULL, quant_obs = NULL) {
       nm  = names(loss_spec)
       out = stats::setNames(rep(NA_real_, 6), nm)
+      failed = list()
       # Responses whose observation does not live in Y need their own
       # intercept-only baseline, otherwise weights = "auto" silently falls back
       # to 1 for them and unbalances every other term.
@@ -3358,6 +3390,9 @@ finn_class = nn_module(
         alt$mortality = list(obs = tree_obs$died, f = self$loss_mortality_func)
       torch::with_no_grad({
         for (i in 1:6) {
+          # a response that is switched off has nothing to scale by, and saying so
+          # for every such response is noise rather than a warning
+          if (identical(as.character(loss_spec[[i]]), "none")) next
           out[i] = tryCatch({
             flat = function(t) t$reshape(c(-1, t$shape[length(t$shape)]))
             a    = alt[[nm[i]]]
@@ -3391,13 +3426,18 @@ finn_class = nn_module(
             as.numeric(v)
           }, error = function(e) {
             # A baseline we cannot compute must not silently become a weight of
-            # Inf/NaN; fall back to 1 (i.e. leave that term unscaled) and say so.
-            warning(sprintf("weights = 'auto': could not compute a baseline for '%s' (%s); leaving it unscaled.",
-                            nm[i], conditionMessage(e)), call. = FALSE)
+            # Inf/NaN; fall back to 1 (i.e. leave that term unscaled) and say so --
+            # once for all of them, because up to six separate warnings per fit is
+            # noise rather than information.
+            failed[[nm[i]]] <<- conditionMessage(e)
             NA_real_
           })
         }
       })
+      if (length(failed))
+        warning(sprintf("weights = 'auto': no baseline for %s; left unscaled.",
+                        paste(sprintf("'%s' (%s)", names(failed), unlist(failed)), collapse = ", ")),
+                call. = FALSE)
       out
     },
 

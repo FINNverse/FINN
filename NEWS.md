@@ -38,6 +38,7 @@ The two tables are the overview; the sections below them carry the detail.
 | Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
 | Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
 | A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
+| **A numeric `weights` vector multiplies the baseline-scaled objective instead of replacing it.** A default that does **not** reproduce 0.1.0 | `fit(weights = )`, `fit(weight_scale = )` | **`"auto"`**; `weight_scale = "raw"` restores the old meaning |
 | **Growth enters `mortality()` in %/yr.** A default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
 
 ### What was broken
@@ -203,6 +204,20 @@ someone who was affected.
   choice, which is why it changes a default instead of arriving as an option.
   `createProcess(light_mask = FALSE)` reproduces results published before 0.2.0.
   `continuous = TRUE` compares pairs and was never affected.
+
+* **A numeric `weights` vector multiplies the scaled objective, it no longer
+  replaces it.** `fit(weights = )` used to bypass the `"auto"` baseline scaling
+  entirely, so the six numbers acted on losses whose raw magnitudes differ by
+  three orders of magnitude. Measured on BCI with the weight vector of the
+  published configuration, `c(0.1, 10, 1, 1, 1, 1)`: the raw baseline MSEs stand
+  at dbh : ba : growth = 1246 : 26 : 1, so growth held 0.26 % of the objective
+  at the start and 4.5 % at convergence, and `ba`'s nominal factor of ten was a
+  factor of ten on a scale already 26x growth's. Weights now multiply the
+  baseline-scaled losses, where a weight reads directly as that response's
+  share. `fit(weight_scale = "raw")` restores the old behaviour exactly and is
+  what reproduces an analysis fitted before 0.2.0. Every fit now prints each
+  response's share of the objective at the intercept-only baseline, in both
+  modes -- the silence was the actual defect.
 
 * **Site, patch and species ids are radix-ordered, not locale-ordered.**
   `resolveSiteIDs()` assigned them through `as.factor()` and `sort()`, both of

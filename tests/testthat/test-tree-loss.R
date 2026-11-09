@@ -169,7 +169,9 @@ test_that("no recruit cohort enters the per-tree residual", {
              mort   = array(f$model$tree_pred$mort, dim = dims))
   score = function(td) {
     g = tl_model(d)
-    tl_fit(g, d, loss_resolution = "tree", weights = rep(1, 6),
+    # weight_scale = "raw": the assertion below is the hand-computed BCE, so the
+    # reported loss must not carry the baseline scaling
+    tl_fit(g, d, loss_resolution = "tree", weights = rep(1, 6), weight_scale = "raw",
            tree_data = tl_table(td, g$init, year = 2))
     as.numeric(g$model$history[[1]])[4:5]
   }
