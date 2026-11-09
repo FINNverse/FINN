@@ -8,9 +8,8 @@
 #' @param env_vars character Names of the environmental variable columns to extract.
 #' @return A numeric array of environmental values indexed by site, time and variable.
 #'   A combination of `siteID`, `year` (and `month`, `day` where present) that
-#'   appears more than once with different values is an error; exact duplicate
-#'   rows are collapsed.
-#'   A combination missing from the table is `NA` in the array.
+#'   appears more than once is an error, whether or not the rows are identical.
+#'   Missing (`siteID`, `year`) combinations become `NA` in the array.
 #' @export
 climateDF2array <- function(climate_dt, env_vars) {
   # Ensure data.table is used
@@ -62,21 +61,17 @@ climateDF2array <- function(climate_dt, env_vars) {
   climate_dt <- climate_dt[, required_cols, with = FALSE]
 
   # One row per cell: the array is filled row by row, so of two rows for the same
-  # (siteID, year[, month, day]) the last would silently win (#35). Exact copies
-  # of a row change nothing and are collapsed (the bundled fia_env_dt holds every
-  # row four times); copies that disagree are an error. A missing combination
-  # stays NA, which the response tables of fit() rely on.
+  # (siteID, year[, month, day]) the last would silently win (#35). Any duplicate
+  # is an error, identical or not. A missing combination stays NA, which the
+  # response tables of fit() rely on.
   key_cols <- setdiff(required_cols, env_vars)
-  if (anyDuplicated(climate_dt, by = key_cols)) {
-    climate_dt <- unique(climate_dt)
-    dup <- duplicated(climate_dt, by = key_cols)
-    if (any(dup)) {
-      d <- unique(climate_dt[dup, key_cols, with = FALSE])
-      ex <- apply(utils::head(d, 5L), 1, function(r) paste(paste(key_cols, trimws(r)), collapse = ", "))
-      stop(sprintf("climateDF2array(): %d (%s) combination(s) appear more than once with different values, e.g. %s. Each combination must appear once.",
-                   nrow(d), paste(key_cols, collapse = ", "), paste0("(", ex, ")", collapse = "; ")),
-           call. = FALSE)
-    }
+  dup <- duplicated(climate_dt, by = key_cols)
+  if (any(dup)) {
+    d <- unique(climate_dt[dup, key_cols, with = FALSE])
+    ex <- apply(utils::head(d, 5L), 1, function(r) paste(paste(key_cols, trimws(r)), collapse = ", "))
+    stop(sprintf("climateDF2array(): %d (%s) combination(s) appear more than once, e.g. %s. Each combination must appear once.",
+                 nrow(d), paste(key_cols, collapse = ", "), paste0("(", ex, ")", collapse = "; ")),
+         call. = FALSE)
   }
 
   # Ensure the data is sorted correctly based on time_resolution

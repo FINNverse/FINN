@@ -165,9 +165,12 @@ test_that("climateDF2array() stops on a duplicated (siteID, year) and names it (
   dt <- data.table(siteID = c(1L, 1L, 2L, 2L), year = c(1L, 2L, 1L, 2L), temp = c(10, 11, 20, 21))
   expect_identical(drop(climateDF2array(dt, "temp")), matrix(c(10, 20, 11, 21), 2))
   dup <- rbind(dt, data.table(siteID = 1L, year = 1L, temp = -999))
-  expect_error(climateDF2array(dup, "temp"), regexp = "more than once with different values, e.g. \\(siteID 1, year 1\\)")
-  # an exact copy changes nothing and is collapsed
-  expect_identical(drop(climateDF2array(rbind(dt, dt[1]), "temp")), matrix(c(10, 20, 11, 21), 2))
+  expect_error(climateDF2array(dup, "temp"), regexp = "appear more than once, e.g. \\(siteID 1, year 1\\)")
+  # an exact copy is a duplicate too
+  expect_error(climateDF2array(rbind(dt, dt[1]), "temp"), regexp = "appear more than once, e.g. \\(siteID 1, year 1\\)")
+  # the bundled climate tables hold one row per site x year
+  for (e in list(FINN::fia_env_dt, FINN::fia_env_test))
+    expect_equal(anyDuplicated(data.table::as.data.table(e), by = c("siteID", "year")), 0L)
   # a missing combination stays NA: the response tables of fit() rely on it
   a <- drop(climateDF2array(dt[!(siteID == 2L & year == 2L)], "temp"))
   expect_true(is.na(a[2, 2]))

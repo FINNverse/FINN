@@ -15,9 +15,8 @@ with \code{siteID}, a time column (e.g. \code{year}), and one column per variabl
 \value{
 A numeric array of environmental values indexed by site, time and variable.
 A combination of \code{siteID}, \code{year} (and \code{month}, \code{day} where present) that
-appears more than once with different values is an error; exact duplicate
-rows are collapsed.
-A combination missing from the table is \code{NA} in the array.
+appears more than once is an error, whether or not the rows are identical.
+Missing (\code{siteID}, \code{year}) combinations become \code{NA} in the array.
 }
 \description{
 Reshapes a long-format climate table into the site x year x variable array
