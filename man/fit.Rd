@@ -22,6 +22,7 @@ fit(
   loss_aggregation = NULL,
   tree_data = NULL,
   weights = "auto",
+  weight_scale = c("auto", "raw"),
   optimizer = optim_ignite_adam,
   batchsize = NULL,
   device = c("cpu", "gpu"),
@@ -211,14 +212,11 @@ misaligned table would silently score every tree against another one.
 \item{weights}{(\code{"auto"} or \code{numeric(6)})\cr Weights of the six losses, in the
 order \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
 
-\strong{Weights must account for the raw scale of each loss, not just its
-importance.} The six terms are summed, and their raw magnitudes differ by
-orders of magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~430
-at the start of training) while \code{growth} is an MSE on a ratio (~0.03) — a
-factor of ~1e4. Weights chosen by importance alone are therefore dominated
-by whichever response happens to have the largest units, and the rest
-receive too little gradient to learn from. With equal weights, \code{dbh} takes
-~87\% of the FIA objective and \code{growth} ~1\%; \code{growth} then never improves.
+The six terms are summed, and their raw magnitudes differ by orders of
+magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~430 at the
+start of training) while \code{growth} is an MSE on a ratio (~0.03), a factor of
+~1e4. On the raw scale, equal weights give \code{dbh} ~87\% of the FIA objective
+and \code{growth} ~1\%, and \code{growth} then never improves.
 
 \code{"auto"} (the default) fixes this without needing to know the units. Each
 loss is divided by its \strong{intercept-only baseline} — the loss you would get
@@ -236,10 +234,20 @@ the intercept, below \code{1} is better, above \code{1} is worse. The baselines 
 stored in \code{m$loss_baseline}, the resulting weights in \code{m$loss_weights}, and
 both are reported once when fitting starts.
 
-Passing a \code{numeric(6)} uses those weights as-is and disables the scaling.
-On the FIA example, balancing the objective is worth ~+0.24 Spearman on
-held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See the
-"Fitting FINN to forest inventory data" vignette.}
+A \code{numeric(6)} multiplies the baseline-scaled losses (since 0.2.0), so each
+number reads directly as that response's relative share: \code{c(1, 1, 1, 2, 1, 1)}
+gives \code{growth} twice the weight of every other response. Every fit reports
+each response's resulting share of the objective at the intercept-only
+baseline. On the FIA example, balancing the objective is worth ~+0.24
+Spearman on held-out \code{growth}, far more than tuning \code{lr} or \code{epochs}. See
+the "Fitting FINN to forest inventory data" vignette.}
+
+\item{weight_scale}{(\code{character(1)})\cr How a numeric \code{weights} vector acts.
+\code{"auto"} (default): it multiplies the baseline-scaled losses, as described
+under \code{weights}. \code{"raw"}: it multiplies the raw losses and the baseline
+scaling is off, which is the meaning \code{weights} had before 0.2.0 and
+reproduces analyses fitted with earlier versions. The shares are reported
+in both modes.}
 
 \item{optimizer}{(\code{torch_optimizer_generator})\cr Optimizer from the \code{torch} package.}
 

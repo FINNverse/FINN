@@ -313,14 +313,11 @@ finn = function(N_species,
 #' @param weights (`"auto"` or `numeric(6)`)\cr Weights of the six losses, in the
 #'   order `dbh`, `ba`, `trees`, `growth`, `mortality`, `regeneration`.
 #'
-#'   **Weights must account for the raw scale of each loss, not just its
-#'   importance.** The six terms are summed, and their raw magnitudes differ by
-#'   orders of magnitude: on the bundled FIA data `dbh` is an MSE in cm^2 (~430
-#'   at the start of training) while `growth` is an MSE on a ratio (~0.03) — a
-#'   factor of ~1e4. Weights chosen by importance alone are therefore dominated
-#'   by whichever response happens to have the largest units, and the rest
-#'   receive too little gradient to learn from. With equal weights, `dbh` takes
-#'   ~87% of the FIA objective and `growth` ~1%; `growth` then never improves.
+#'   The six terms are summed, and their raw magnitudes differ by orders of
+#'   magnitude: on the bundled FIA data `dbh` is an MSE in cm^2 (~430 at the
+#'   start of training) while `growth` is an MSE on a ratio (~0.03), a factor of
+#'   ~1e4. On the raw scale, equal weights give `dbh` ~87% of the FIA objective
+#'   and `growth` ~1%, and `growth` then never improves.
 #'
 #'   `"auto"` (the default) fixes this without needing to know the units. Each
 #'   loss is divided by its **intercept-only baseline** — the loss you would get
@@ -338,10 +335,19 @@ finn = function(N_species,
 #'   stored in `m$loss_baseline`, the resulting weights in `m$loss_weights`, and
 #'   both are reported once when fitting starts.
 #'
-#'   Passing a `numeric(6)` uses those weights as-is and disables the scaling.
-#'   On the FIA example, balancing the objective is worth ~+0.24 Spearman on
-#'   held-out `growth` — far more than tuning `lr` or `epochs`. See the
-#'   "Fitting FINN to forest inventory data" vignette.
+#'   A `numeric(6)` multiplies the baseline-scaled losses (since 0.2.0), so each
+#'   number reads directly as that response's relative share: `c(1, 1, 1, 2, 1, 1)`
+#'   gives `growth` twice the weight of every other response. Every fit reports
+#'   each response's resulting share of the objective at the intercept-only
+#'   baseline. On the FIA example, balancing the objective is worth ~+0.24
+#'   Spearman on held-out `growth`, far more than tuning `lr` or `epochs`. See
+#'   the "Fitting FINN to forest inventory data" vignette.
+#' @param weight_scale (`character(1)`)\cr How a numeric `weights` vector acts.
+#'   `"auto"` (default): it multiplies the baseline-scaled losses, as described
+#'   under `weights`. `"raw"`: it multiplies the raw losses and the baseline
+#'   scaling is off, which is the meaning `weights` had before 0.2.0 and
+#'   reproduces analyses fitted with earlier versions. The shares are reported
+#'   in both modes.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
 #' @param device (`character(1)`)\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.
