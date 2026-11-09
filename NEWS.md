@@ -323,6 +323,15 @@ someone who was affected.
   cohort ids are renumbered in radix order as well. Covered by
   `tests/testthat/test-site-sets.R`.
 
+* `climateDF2array()` stops on a (`siteID`, `year`[, `month`, `day`])
+  combination that appears more than once with different values, naming it
+  (#35); the last row used to win silently. Exact duplicate rows are collapsed,
+  as before in effect (the bundled `fia_env_dt` and `fia_env_test` hold every
+  row four times). A missing combination is still `NA`. Covered by
+  `tests/testthat/test-climateDF2array.R`. With it, `feature_importance()`
+  permutes over distinct rows: on duplicated rows the copies of a site-year got
+  different permuted values, of which the environment array kept one at random.
+
 # FINN 0.1.0
 
 First public release.

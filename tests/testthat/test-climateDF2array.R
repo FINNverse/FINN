@@ -160,3 +160,15 @@ test_that("climateDF2array places unordered rows and leaves missing site-years N
   expect_identical(a[, , 1], want)
 })
 
+
+test_that("climateDF2array() stops on a duplicated (siteID, year) and names it (#35)", {
+  dt <- data.table(siteID = c(1L, 1L, 2L, 2L), year = c(1L, 2L, 1L, 2L), temp = c(10, 11, 20, 21))
+  expect_identical(drop(climateDF2array(dt, "temp")), matrix(c(10, 20, 11, 21), 2))
+  dup <- rbind(dt, data.table(siteID = 1L, year = 1L, temp = -999))
+  expect_error(climateDF2array(dup, "temp"), regexp = "more than once with different values, e.g. \\(siteID 1, year 1\\)")
+  # an exact copy changes nothing and is collapsed
+  expect_identical(drop(climateDF2array(rbind(dt, dt[1]), "temp")), matrix(c(10, 20, 11, 21), 2))
+  # a missing combination stays NA: the response tables of fit() rely on it
+  a <- drop(climateDF2array(dt[!(siteID == 2L & year == 2L)], "temp"))
+  expect_true(is.na(a[2, 2]))
+})
