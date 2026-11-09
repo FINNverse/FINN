@@ -333,7 +333,10 @@ someone who was affected.
   (600 rows each). They repeated every row four times, once per patch of the
   source plot, all identical, so every environment array built from them is
   unchanged (`dev/make_extdata.R` now deduplicates; the two `.rda` files were
-  deduplicated in place).
+  deduplicated in place). The `env_autoscale` constants do move: the standard
+  deviation (n - 1 denominator) over 600 instead of 2400 rows is 0.063 % larger,
+  and a seeded fit on the z-scaled climate amplifies that, so the re-knitted
+  vignettes D and E report slightly different fits.
 
 * `feature_importance()` permutes over distinct `env` rows. On an `env` with
   repeated site-year rows the copies received different permuted values, of
