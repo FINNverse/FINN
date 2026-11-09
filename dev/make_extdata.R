@@ -164,11 +164,11 @@ save_dataset <- function(x, name) {
 }
 # --- train ---
 save_dataset(tr$obs,                   "fia_obs_dt")
-save_dataset(tr$env[, ..env_out_cols], "fia_env_dt")      # RAW units
+save_dataset(unique(tr$env[, ..env_out_cols]), "fia_env_dt")   # RAW units; one row per site x year (the source has one per patch, identical)
 save_dataset(tr$init,                  "fia_init_trees")
 # --- holdout (never seen during fitting) ---
 save_dataset(te$obs,                   "fia_obs_test")
-save_dataset(te$env[, ..env_out_cols], "fia_env_test")
+save_dataset(unique(te$env[, ..env_out_cols]), "fia_env_test")
 save_dataset(te$init,                  "fia_init_test")
 # --- shared species coding ---
 save_dataset(species_f,                "fia_species_dt")
