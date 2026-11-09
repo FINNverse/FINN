@@ -125,11 +125,17 @@ height = function(dbh, parHeight) {
 #' @param cohortHeights torch.Tensor (Optional) Pre-computed cohort heights. Defaults to NULL.
 #' @param n_quantiles integer Number of height quantiles used when `continuous = FALSE`. Defaults to 10.
 #' @param continuous logical Use the continuous competition formulation. Defaults to FALSE.
+#' @param light_mask logical Take the height quantiles over the live cohorts only
+#'   (`trees > 0.5`), leaving every cohort's real height as the bin query. Defaults
+#'   to TRUE since 0.2.0: unmasked, the padded cohort width is set by the widest
+#'   site in the batch, so the same stand's light depends on which other sites
+#'   happen to share its batch. `FALSE` reproduces earlier results. See
+#'   [FINN::createProcess()] for the measurement.
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
 #' @import torch
 #' @export
-competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE){
+competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE, light_mask = TRUE){
   parHeight = parComp[,1]
   parCompStr = parComp[,2]
   if(is.null(ba)) ba = BA_stand(dbh = dbh, trees = trees, patch_size_ha = patch_size_ha)*parCompStr[species]*0.1
@@ -142,8 +148,22 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
     } else {
       device = dbh$device
       quants = torch::torch_linspace(0, 1, steps = n_quantiles+1, dtype = dbh$dtype, device = device)
-      # Quantiles and their indices
-      cohortHeights_quant = torch::torch_quantile(cohortHeights, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
+      # Quantiles and their indices. `light_mask` takes the bin edges over the LIVE cohorts
+      # only: the cohort dimension is padded to the widest site x patch of the batch, and an
+      # empty slot has height 0.001, so with many of them every live cohort lands in the top
+      # bin, where nothing shades anything. Only the quantile INPUT is masked; the
+      # searchsorted query keeps every cohort's real height, so a dead-but-tracked cohort is
+      # still placed in a bin and still receives light.
+      hq = if(isTRUE(light_mask))
+             torch::torch_where(trees$gt(0.5)$unsqueeze(4), cohortHeights,
+                                torch::torch_full_like(cohortHeights, NaN))
+           else cohortHeights
+      cohortHeights_quant = if(isTRUE(light_mask))
+        # a patch whose cohorts are all dead has an all-NaN slice and no quantile;
+        # its basal area is zero, so edges of 0 put everything in the top bin and
+        # give the empty patch full light, which is the right answer.
+        torch::torch_nanquantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))$nan_to_num(nan = 0)
+        else torch::torch_quantile(hq, q = quants, dim = 3)$squeeze(4)$permute(c(2, 3, 1))
       indices = torch::torch_searchsorted(cohortHeights_quant$narrow(dim = 3, start = 2L, length = n_quantiles - 1L)$contiguous(), cohortHeights$squeeze(4), right = TRUE) + 1L
       # Calculation of comp
       cohortHeights_quant = cohortHeights_quant$unsqueeze(4)
@@ -207,11 +227,21 @@ mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_s
 #' @param base_steepness numeric Steepness of the shade-response sigmoid. Defaults to 5.
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #' @param growth torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.
+#' @param growth_scale numeric Growth enters the logit as `growth / growth_scale`.
+#'   The default 0.01 expresses the annual relative growth in %/yr (about one
+#'   standard deviation of observed growth), so that the growth coefficient
+#'   `parMort[, 3]` acts per 1 %/yr and its bounds of +-10 allow a meaningful
+#'   effect. With the raw rate (`growth_scale = 1`, the behaviour before 0.2.0)
+#'   the term spans only a few tenths on the logit between slow and fast trees
+#'   even at the bound. Set it for a fitted model through
+#'   `createProcess(func = FINN::mortality, growth_scale = 1)`, not through a
+#'   wrapper function: the kernel reads `self$record_raws` from its own
+#'   environment and a wrapper leaves that unbound.
 #'
 #' @return A `torch` tensor of per-cohort mortality probabilities; or, if
 #'   `debug = TRUE`, a list of the intermediate components.
 #' @export
-mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL) {
+mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL, growth_scale = 0.01) {
   if(is.null(growth)) growth = self$g
   if(self$record_raws) {
     self$raw_m = c(self$raw_m,  list(as_array( torch::torch_cat(list(dbh$unsqueeze(4),
@@ -221,7 +251,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
                                                                      species$unsqueeze(4)$float()), dim = 4)) ))
   }
 
-  environment = torch::torch_sigmoid(pred+growth*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
+  environment = torch::torch_sigmoid(pred+growth/growth_scale*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
   predM = environment
   if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM)
   else out = predM
@@ -412,6 +442,119 @@ regeneration_saturation = function(species, parReg, pred, light, debug = FALSE) 
   mean = K * mean / (K + mean)
 
   if(debug == TRUE) out = list(regP = regP, mean = mean) else out = mean
+  return(out)
+}
+
+#' Regeneration limited by conspecific adult density
+#'
+#' A mechanistic extension of [FINN::regeneration_saturation] in which
+#' recruitment needs a seed source: the mean recruitment of a species scales
+#' with the density of its own ADULTS on the site, the stems whose diameter
+#' exceeds an adult threshold `x`.
+#'
+#' For species `k` on a site,
+#' \deqn{A_k = \frac{1}{P a} \sum_{\mathrm{cohorts\ of\ } k} n \, \sigma\!\left(\frac{d - x_k}{\tau}\right)}{A_k = sum(n * sigmoid((d - x_k)/tau)) / (P * a)}
+#' is the conspecific adult density (stems ha^-1), pooled over the `P` patches
+#' of the site (area `a` each) because seeds disperse beyond one patch. The soft
+#' threshold (`tau` = 2 dbh units) keeps `x_k` differentiable; a hard `d > x`
+#' would give it no gradient. The seed-limitation term
+#' \deqn{f(A_k) = \frac{A_k}{A_k + A_{1/2,k}}}{f(A_k) = A_k / (A_k + A_half_k)}
+#' is 0 without adults and approaches 1 once adults are abundant, so the mean
+#' recruitment
+#' \deqn{m = r(\mathrm{light}) \, e^{\mathrm{env}} f(A) + \mathrm{reg\_floor}}{m = regP(light) * exp(env) * f(A) + reg_floor}
+#' falls to the floor (read it as immigration from outside the site) where the
+#' species has no adult, and rises to the light- and environment-driven
+#' potential of [FINN::regeneration] where adults are many. The result is capped
+#' with the same Beverton-Holt term as [FINN::regeneration_saturation],
+#' `K m / (K + m)`.
+#'
+#' Declare three extra parameters with `createProcess(custom_parameters = )`.
+#' As for `reg_logK`, a length-1 init gives one shared value and a
+#' length-`N_species` init one value per species:
+#' * `reg_logK`: the log Beverton-Holt cap, stems ha^-1 step^-1;
+#' * `reg_adult_logx`: the log adult threshold, `x = exp(reg_adult_logx)` in the
+#'   units of `dbh`. Once `x` falls below the smallest diameter present, every
+#'   stem counts as an adult and `x` stops receiving gradient;
+#' * `reg_adult_logA`: the log half-saturation adult density,
+#'   `A_half = exp(reg_adult_logA)` stems ha^-1.
+#'
+#' `forward()` passes `dbh` and `trees` to a regeneration function only when its
+#' signature has them, so the other regeneration functions are unaffected.
+#' Called without `dbh`/`trees` (as the ALE code in `xAI.R` does), the function
+#' returns recruitment with the seed source present (`f = 1`).
+#'
+#' @inheritParams regeneration_saturation
+#' @param dbh torch.Tensor cohort diameters, `[sites, patches, cohorts]`.
+#' @param trees torch.Tensor stems per cohort, `[sites, patches, cohorts]`.
+#'
+#' @return torch.Tensor mean recruitment, stems ha^-1 step^-1,
+#'   `[sites, patches, species]`. With `debug = TRUE`, a list that also holds
+#'   `adults` (A, stems ha^-1, `[sites, 1, species]`) and `seed` (f(A)).
+#'
+#' @seealso [FINN::regeneration_saturation], [FINN::createProcess()]
+#'
+#' @examples
+#' \dontrun{
+#' m <- finn(
+#'   N_species = Nsp,
+#'   regeneration_process = createProcess(
+#'     ~ temp + prec, FINN::regeneration_adult,
+#'     custom_parameters = list(reg_logK       = rep(log(50), Nsp),
+#'                              reg_adult_logx = rep(log(20), Nsp),   # adult from 20 cm
+#'                              reg_adult_logA = rep(log(20), Nsp)),  # f = 0.5 at 20 adults/ha
+#'     optimizeSpecies = TRUE, optimizeEnv = TRUE)
+#' )
+#' }
+#'
+#' @import torch
+#' @export
+regeneration_adult = function(species, parReg, pred, light, dbh = NULL, trees = NULL, debug = FALSE) {
+  needed = c("reg_logK", "reg_adult_logx", "reg_adult_logA")
+  missing_par = needed[vapply(needed, function(p) is.null(self[[p]]), logical(1))]
+  if(length(missing_par) > 0)
+    stop("`regeneration_adult` needs the parameter(s) ", paste(missing_par, collapse = ", "),
+         ". Add them in createProcess(custom_parameters = list(reg_logK = ..., ",
+         "reg_adult_logx = ..., reg_adult_logA = ...)) -- length 1 for a shared value, ",
+         "length N_species for one per species.", call. = FALSE)
+
+  if(self$record_raws) {
+    self$raw_r = c(self$raw_r,  list(as_array(light$unsqueeze(4))))
+  }
+
+  if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
+  environment = torch::torch_exp(pred) # Environmental inverse link function
+  regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
+  reg_floor = if(is.null(self$reg_floor)) 0.2 else self$reg_floor
+  potential = regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1))
+  n_sp = potential$shape[3]
+
+  if(is.null(dbh) || is.null(trees)) {
+    adults = NULL
+    seed = torch::torch_ones_like(potential)
+  } else {
+    tau = 2.0 # width of the soft adult threshold, in dbh units
+    x = torch::torch_exp(self$reg_adult_logx)$expand(n_sp)  # a length-1 init is shared
+    A_half = torch::torch_exp(self$reg_adult_logA)$reshape(c(1L, 1L, -1L))
+    if(dbh$shape[3] == 0) {
+      adults = torch::torch_zeros(potential$shape[1], 1L, n_sp, device = potential$device)
+    } else {
+      # adult weight of every cohort against its own species' threshold
+      w = torch::torch_sigmoid((dbh - x[species]) / tau)
+      zero = torch::torch_zeros(potential$shape[1], n_sp, device = potential$device)
+      # sum over cohorts AND patches -> [sites, species], then per ha of the site
+      adults = aggregate_results(species, list(trees * w), list(zero), sp_max = n_sp)[[1]]
+      adults = (adults / (species$shape[2] * self$patch_size_ha))$unsqueeze(2)
+    }
+    seed = adults / (adults + A_half)
+  }
+
+  mean = potential * seed + reg_floor
+
+  # Beverton-Holt cap, as in regeneration_saturation
+  K = torch::torch_exp(self$reg_logK)$reshape(c(1L, 1L, -1L))
+  mean = K * mean / (K + mean)
+
+  if(debug == TRUE) out = list(regP = regP, adults = adults, seed = seed, mean = mean) else out = mean
   return(out)
 }
 

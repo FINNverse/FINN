@@ -34,13 +34,16 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   siteID_dt <- merge(siteID_dt, unique(tree_dt[,.(siteName, year)]), by = c("siteName", "year"), all = FALSE)
   siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = FALSE)
 
-  siteID_dt[, siteID := as.integer(as.factor(siteName)),]
-  siteID_dt[, patchID := as.integer(as.factor(patchName)), by = siteID]
+  # Radix, not the locale's collation: `as.factor()` orders through LC_COLLATE, so the
+  # same file gives one numbering under C and another under de_DE, and the numbering
+  # indexes the fitted parameters.
+  siteID_dt[, siteID := match(siteName, sort(unique(siteName), method = "radix"))]
+  siteID_dt[, patchID := match(patchName, sort(unique(patchName), method = "radix")), by = siteID]
   siteID_dt[, period := as.integer(as.factor(year)), by = .(siteID, patchID)]
 
   tree_dt <- merge(tree_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = FALSE)
 
-  species_levels <- sort(unique(tree_dt$species_name))
+  species_levels <- sort(unique(tree_dt$species_name), method = "radix")
   species_levels <- c(species_levels[species_levels != "other"], "other")
 
   tree_dt[,species := as.integer(factor(species_name, levels = species_levels, labels = 1:length(species_levels))),]

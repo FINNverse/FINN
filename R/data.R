@@ -55,9 +55,9 @@
 #' Year 0 is the initial state and years 1 and 2 the two censuses, so every
 #' site x year in the observation tables is covered.
 #'
-#' @format A `data.table` with 2400 rows and 8 columns: 200 sites x 3 years,
-#'   each repeated 4 times (one row per patch of the source plot, all identical
-#'   -- climate is a site property). [fit()] only needs one row per site x year.
+#' @format A `data.table` with 600 rows and 8 columns: 200 sites x 3 years, one
+#'   row per site x year (climate is a site property; up to FINN 0.2.0 the
+#'   tables repeated every row once per patch of the source plot).
 #'   \describe{
 #'     \item{`siteID`, `year`}{site index and year (`0`, `1`, `2`).}
 #'     \item{`temp`, `tempmax`, `tempmin`}{annual mean, warmest-month maximum

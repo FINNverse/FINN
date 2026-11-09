@@ -16,9 +16,13 @@ fit(
   lr = 0.01,
   lr_scheduler = "none",
   lr_scheduler_params = list(),
-  loss = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
+  loss = NULL,
+  loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
     "binomial", regeneration = "nbinom"),
+  loss_aggregation = NULL,
+  tree_data = NULL,
   weights = "auto",
+  weight_scale = c("auto", "raw"),
   optimizer = optim_ignite_adam,
   batchsize = NULL,
   device = c("cpu", "gpu"),
@@ -31,13 +35,13 @@ fit(
   record_gradients = FALSE,
   env_autoscale = TRUE,
   clip_norm = 2,
+  nonfinite = c("drop_term", "skip_step"),
   reanchor = FALSE,
   anchor_cohorts = NULL,
   anchor_mode = "replace",
   anchor_min_dbh = NULL,
   teacher_forcing = FALSE,
   loss_resolution = c("site", "tree"),
-  tree_data = NULL,
   ...
 )
 }
@@ -61,7 +65,15 @@ filtering to a constant interval first.
 to weight the binomial term (see \code{weights}).
 \item \code{growth_n} — trees behind each observed \code{growth} mean; used to weight
 the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
-}}
+}
+
+On the per-site path (\code{period_length} differing between sites, or sites
+observed in different years) each response's loss of a batch is ONE mean
+over all units it scores in that batch — observed trees for
+\code{loss_aggregation = "tree"}, \code{n_at_risk} / \code{growth_n} for the weighted
+cell terms, cells otherwise — across all observation years: the mean of
+each observation year enters with weight \eqn{n_{year} / n_{batch}}. A
+batch that scores a single observation year is unaffected.}
 
 \item{env}{(\code{data.table|data.frame})\cr Data with environmental covariates must be passed as \code{data.table} or \code{data.frame}.}
 
@@ -73,7 +85,9 @@ the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
 
 \item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}}
 
-\item{epochs}{(\code{integer(1)})\cr Number of iteration steps.}
+\item{epochs}{(\code{integer(1)})\cr Number of iteration steps. \code{epochs = 0}
+runs the set-up only (data tensors, \code{loss_baseline}, \code{loss_weights} for
+\code{weights = "auto"}) and trains nothing; the parameters stay as they were.}
 
 \item{lr}{(\code{numeric(1)})\cr Learning rate of the optimizer.}
 
@@ -91,19 +105,118 @@ chosen via \code{lr_scheduler}, e.g. \code{list(step_size = 50, gamma = 0.5)} fo
 \code{"step"}, \code{list(T_max = 200)} for \code{"cosine"}, \code{list(factor = 0.5, patience = 20)} for \code{"plateau"}. Unset entries fall back to defaults scaled off
 \code{epochs}/\code{lr}.}
 
-\item{loss}{(\code{character(6)})\cr Named vector of the different losses. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, and \code{regeneration}. Supported losses are \code{mse}, \code{poisson}, \code{nbinom}, \code{gaussian}, and \code{binomial}. \code{binomial} is a Bernoulli/binomial negative log-likelihood intended for \code{mortality}; it expects both the prediction and the observation to be proportions in [0, 1].}
+\item{loss}{(deprecated)\cr Former name of \code{loss_family}. Still accepted, with
+a warning; it will be removed in a future release.}
+
+\item{loss_family}{(\code{character(6)})\cr Named vector giving the \strong{likelihood}
+used for each response. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth},
+\code{mortality}, and \code{regeneration}. Supported families are \code{mse}, \code{poisson},
+\code{nbinom}, \code{gaussian}, \code{binomial}, and \code{none}.
+
+\code{binomial} is a Bernoulli/binomial negative log-likelihood intended for
+\code{mortality}; it expects both the prediction and the observation to be
+proportions in [0, 1]. \code{nbinom} is implemented for \code{trees} and
+\code{regeneration} only. \code{none} switches a response off entirely — it
+contributes a constant zero and no gradient. Use it to retire a response
+whose information now enters through another term, for example setting
+\code{dbh = "none"} and \code{ba = "none"} when the size distribution is fitted
+through size-classed stem counts (see \code{loss_aggregation}).}
+
+\item{loss_aggregation}{(\code{character}|\code{list})\cr How the model's per-cohort
+quantities are reduced before they meet the observation, given per response
+as a named character vector or, when a type needs arguments, a named list.
+Anything not named keeps the default, so the argument only ever states what
+departs from it. Supported types:
+\itemize{
+\item \code{"mean"} — one value per site, year and species, the abundance-weighted
+mean over cohorts. The default for \code{dbh}, \code{growth} and \code{mortality}.
+\item \code{"sum"} — summed over cohorts. The default for \code{ba}, \code{trees} and
+\code{regeneration}.
+\item \code{"size_classes"} — stem counts binned by diameter, requiring
+\code{breaks} (the class boundaries in cm) and optionally \code{tau} (the
+softness of the bin edges in cm, default 1). \code{K} breaks give \code{K + 1}
+classes, and the observation is read from columns \code{n_class_1} …
+\code{n_class_K+1} of \code{data}. Only meaningful for \code{trees}.
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{  This is the size-distribution counterpart of the mean diameter: with a
+  `poisson` family it scores total abundance and size composition at
+  once, since independent Poisson class counts factorise into
+  `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
+  difference of sigmoids rather than a hard cut so the term stays
+  differentiable with respect to diameter; `tau` controls that softness
+  and small values approach hard binning.
+\\item `"quantiles"` — the abundance-weighted diameter quantiles of each
+  site and species instead of their mean, requiring `probs` (e.g.
+  `c(0.1, 0.5, 0.9)`) and optionally `tau` (the softness of the quantile
+  on the cumulative-abundance scale, default 0.05). The observation is
+  read from columns `dbh_q10`, `dbh_q50`, `dbh_q90` of `data`
+  (`<response>_q<100*p>`). Only meaningful for `dbh`.
+
+  Where `"size_classes"` asks how many stems fall in a diameter
+  interval, this asks how thick the stem at a given position of the
+  distribution is, which keeps the statement on the diameter scale: the
+  upper quantile speaks directly about the big trees that carry the
+  basal area, where a count likelihood weighs them the same as saplings.
+  The quantile is a soft selection along the cumulative abundance, so it
+  stays differentiable with respect to diameter; `tau` controls that
+  softness and small values approach the exact weighted quantile.
+\\item `"tree"` — no aggregation: the growth and mortality kernels are
+  evaluated on the **observed** trees at their observed diameters, with
+  light computed from the observed stand, and compared tree by tree. Only
+  available for `growth` and `mortality`, and requires `tree_data`. This
+  removes the compositional confound in a stand mean (relative growth
+  falls several-fold from the smallest to the largest trees, so a mean
+  moves when the size distribution moves), at the cost of teacher-forcing
+  those two responses onto observed stands rather than simulated ones.
+}\if{html}{\out{</div>}}
+
+}
+
+Example — score the size distribution through stem counts and the two rates
+per tree:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{fit(m, data = obs_dt, env = env, tree_data = tree_obs_dt,
+    loss_family      = c(dbh = "none", ba = "none", trees = "poisson",
+                         growth = "mse", mortality = "binomial",
+                         regeneration = "nbinom"),
+    loss_aggregation = list(trees  = list(type = "size_classes",
+                                         breaks = seq(20, 60, by = 10)),
+                            growth = "tree", mortality = "tree"))
+}\if{html}{\out{</div>}}}
+
+\item{tree_data}{(\code{data.table|data.frame})\cr Individual observed trees, one
+row per tree and census, required by both ways of scoring single trees
+(\code{loss_aggregation = "tree"} and \code{loss_resolution = "tree"}, see the section
+\emph{Scoring individual trees}). \code{year} is the census that CLOSES the tree's
+interval, i.e. the \code{year} the same interval carries in \code{data}. Columns:
+\itemize{
+\item always: \code{siteID}, \code{year}, \code{patchID}, \code{species}, \code{growth} (the
+observed relative growth rate per timestep, \code{NA} if unobserved) and
+\code{died} (0/1 over the interval, \code{NA} if unobserved);
+\item \code{loss_aggregation = "tree"}: additionally \code{dbh} (diameter at the
+START of the interval, cm), and optionally \code{trees} (stems the row
+stands for, default 1). The observed stand is rebuilt from these rows,
+so any \code{patchID} coding works.
+\item \code{loss_resolution = "tree"}: additionally \code{cohortID}, the id
+\code{\link[=makeInitCohorts]{makeInitCohorts()}} / \code{\link[=obsDF2arrays]{obsDF2arrays()}} assigned per (\code{siteID},
+\code{patchID}) to the cohort the tree started as — its position along the
+cohort dimension of \code{init_cohort} (\code{makeInitCohorts(treeID_table = TRUE)} returns the table that carries it), or of the anchor at the
+previous census under \code{reanchor}/\code{teacher_forcing}. \code{patchID} must be
+the patch index of that layout. \code{species} (and \code{dbh}, if present) are
+checked against the cohort, and a row that names a missing or already
+used cohort, a site or year that is not scored, or a tree that does not
+match its cohort stops the fit: the targets are keyed by position, so a
+misaligned table would silently score every tree against another one.
+}}
 
 \item{weights}{(\code{"auto"} or \code{numeric(6)})\cr Weights of the six losses, in the
 order \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
 
-\strong{Weights must account for the raw scale of each loss, not just its
-importance.} The six terms are summed, and their raw magnitudes differ by
-orders of magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~430
-at the start of training) while \code{growth} is an MSE on a ratio (~0.03) — a
-factor of ~1e4. Weights chosen by importance alone are therefore dominated
-by whichever response happens to have the largest units, and the rest
-receive too little gradient to learn from. With equal weights, \code{dbh} takes
-~87\% of the FIA objective and \code{growth} ~1\%; \code{growth} then never improves.
+The six terms are summed, and their raw magnitudes differ by orders of
+magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~430 at the
+start of training) while \code{growth} is an MSE on a ratio (~0.03), a factor of
+~1e4. On the raw scale, equal weights give \code{dbh} ~87\% of the FIA objective
+and \code{growth} ~1\%, and \code{growth} then never improves.
 
 \code{"auto"} (the default) fixes this without needing to know the units. Each
 loss is divided by its \strong{intercept-only baseline} — the loss you would get
@@ -121,10 +234,20 @@ the intercept, below \code{1} is better, above \code{1} is worse. The baselines 
 stored in \code{m$loss_baseline}, the resulting weights in \code{m$loss_weights}, and
 both are reported once when fitting starts.
 
-Passing a \code{numeric(6)} uses those weights as-is and disables the scaling.
-On the FIA example, balancing the objective is worth ~+0.24 Spearman on
-held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See the
-"Fitting FINN to forest inventory data" vignette.}
+A \code{numeric(6)} multiplies the baseline-scaled losses (since 0.2.0), so each
+number reads directly as that response's relative share: \code{c(1, 1, 1, 2, 1, 1)}
+gives \code{growth} twice the weight of every other response. Every fit reports
+each response's resulting share of the objective at the intercept-only
+baseline. On the FIA example, balancing the objective is worth ~+0.24
+Spearman on held-out \code{growth}, far more than tuning \code{lr} or \code{epochs}. See
+the "Fitting FINN to forest inventory data" vignette.}
+
+\item{weight_scale}{(\code{character(1)})\cr How a numeric \code{weights} vector acts.
+\code{"auto"} (default): it multiplies the baseline-scaled losses, as described
+under \code{weights}. \code{"raw"}: it multiplies the raw losses and the baseline
+scaling is off, which is the meaning \code{weights} had before 0.2.0 and
+reproduces analyses fitted with earlier versions. The shares are reported
+in both modes.}
 
 \item{optimizer}{(\code{torch_optimizer_generator})\cr Optimizer from the \code{torch} package.}
 
@@ -146,7 +269,7 @@ held-out \code{growth} — far more than tuning \code{lr} or \code{epochs}. See 
 
 \item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
 
-\item{env_autoscale}{\cr How to scale the environmental predictors in \code{env}.
+\item{env_autoscale}{How to scale the environmental predictors in \code{env}.
 The learned transformation is stored on the model and re-applied
 automatically at every \code{predict()}/\code{simulate()} call, so raw (untransformed)
 \code{env} can be passed for both calibration and prediction. Accepts:
@@ -171,6 +294,18 @@ loss-distribution nuisance parameters) rather than once globally across all
 parameters. A single number (default \code{2.0}) applies the same budget to
 every group; a named list/vector keyed by \code{"mechanistic"}/\code{"nn"}/\code{"loss"}
 overrides individual groups, e.g. \code{clip_norm = list(loss = 5, nn = 1)}.}
+
+\item{nonfinite}{(\code{character(1)})\cr What happens when one of the six loss
+terms is not finite at a scored timestep (an overflowing likelihood, a
+target outside the family's support). \code{"drop_term"} (default) leaves only
+that term out of the timestep's gradient and reported loss; the other
+responses are still backpropagated there, and the occurrences are counted
+per response in \code{model$nonfinite_counts} and summarised in a warning when
+the fit ends. \code{"skip_step"} discards the WHOLE timestep — none of the six
+terms is backpropagated or reported there — which is what every version
+before \code{drop_term} existed did; use it to reproduce such a fit. The
+difference only shows once a term overflows: with finite losses the two
+are identical.}
 
 \item{reanchor}{(\code{logical(1)})\cr Fit by \strong{multiple shooting} instead of single
 shooting. With the default \code{FALSE} the cohort state is initialised once from
@@ -241,46 +376,51 @@ so a teacher-forced model is still validated by single shooting.}
 \item{loss_resolution}{(\code{character(1)})\cr The resolution the \code{growth} and
 \code{mortality} terms are scored at. \code{"site"} (the default) is the validated path
 and is unchanged in every respect: both are per (site, census, species) cell.
-\code{"tree"} scores the same two responses per individual tree and \strong{replaces}
-the cell-resolution terms rather than adding to them — scoring one response
-twice under two independent weights is a redundancy the optimiser can trade
-against itself. Needs \code{tree_data}. The loss vector, \code{weights} and \verb{$history}
-keep their six positions and their meaning in both modes; only the resolution
-of positions 4 and 5 changes, and the likelihood family is the one \code{loss}
-names for them. \code{dbh}, \code{ba}, \code{trees} and \code{regeneration} are untouched —
-a recruit has no per-tree counterpart at all.
+\code{"tree"} scores the same two responses per individual SIMULATED tree and
+\strong{replaces} the cell-resolution terms rather than adding to them — scoring
+one response twice under two independent weights is a redundancy the
+optimiser can trade against itself. Needs \code{tree_data} with a \code{cohortID}
+column and an \code{init_cohort} with one cohort per tree (see the section
+\emph{Scoring individual trees} for how it differs from \code{loss_aggregation = "tree"}; the two cannot be combined). The loss vector, \code{weights} and
+\verb{$history} keep their six positions and their meaning in both modes; only
+the resolution of positions 4 and 5 changes, and the likelihood family is
+the one \code{loss_family} names for them. \code{dbh}, \code{ba}, \code{trees} and
+\code{regeneration} are untouched — a recruit has no per-tree counterpart at all.
 
-The correspondence is carried by the cohort ids: a cohort keeps the flat index
-of the slot it was created in, so cohort \emph{j} of a generation is tree \emph{j} of the
-list that generation started from. Recruits get ids above that block and can
-never enter a residual. A generation starts at \code{init_cohort} and restarts at
-every anchor under \code{reanchor}/\code{teacher_forcing}; \code{anchor_mode = "merge"} keeps
-the carried sub-threshold cohorts out of it, which the anchor never saw.
-Growth is scored over the interval exactly as the aggregate term is, mortality
-as the compounded probability \code{1 - prod(1 - m)} against the tree's 0/1 fate —
-never the sampled death, which at \code{trees = 1} is a coin flip.
+The correspondence is carried by the cohort ids: a cohort keeps the id of
+the slot it was created in, so cohort \emph{j} of a (site, patch) in a generation
+is tree \emph{j} of the list that generation started from. Recruits get ids above
+that block and can never enter a residual. A generation starts at
+\code{init_cohort} and restarts at every anchor under \code{reanchor}/\code{teacher_forcing};
+\code{anchor_mode = "merge"} keeps the carried sub-threshold cohorts out of it,
+which the anchor never saw. Growth is scored over the interval exactly as the
+aggregate term is, mortality as the compounded probability \code{1 - prod(1 - m)}
+against the tree's 0/1 fate — never the sampled death, which at \code{trees = 1}
+is a coin flip.
 
 The term does not depend on the fitting regime but its residual does: under
 \code{teacher_forcing} the kernel runs on the observed tree, so the residual is
 parameter error alone; under \code{reanchor} the cohort has drifted for at most one
-census interval; under single shooting for up to the whole horizon, and the
-tracked set shrinks with every simulated death. A cohort the model kills inside
-a window accumulates hazard over fewer years than the fate covers, which
-attenuates its predicted death probability; that is measured, not corrected —
-\verb{$tree_coverage} reports per census and epoch the fraction of target-bearing
-slots that survived the whole window, and \verb{$tree_pred$n} the per-slot years.}
+census interval; under single shooting for up to the whole horizon.
 
-\item{tree_data}{(\code{list()})\cr Per-tree targets, named by the simulation
-timesteps to score trees at (entries of the model's internal \code{year_sequence}).
-Each entry is a list of two numeric arrays, \code{growth} and \code{mort}, with the
-dimensions of the cohort state at the \strong{start} of the interval that ends at
-that timestep — \code{init_cohort} under single shooting, the previous census's
-anchor under \code{reanchor}/\code{teacher_forcing}. Element \verb{[s, p, c]} is the tree
-cohort \verb{[s, p, c]} was built from, \code{NA} a tree with no observation. \code{growth}
-is on the scale of the aggregate \code{growth} response, i.e. ANNUAL — the aggregate
-response evaluated on one tree — while \code{mort} is the 0/1 fate over the whole
-interval, matched against the compounded probability. Recruits the model
-simulates have no slot and are never scored; recruitment stays a count.}
+A cohort the simulation kills inside a window is \strong{kept} with \code{trees = 0} for
+as long as its generation lasts — to the next anchor under
+\code{reanchor}/\code{teacher_forcing}, which restart the generation there, and
+to the end of the horizon under single shooting, where \code{tree_live0} is rebuilt
+only at anchors. It shades nothing and contributes nothing to \code{dbh}, \code{ba} or
+\code{trees}, but its diameter and its hazard keep accumulating, because the
+observation it is scored against is the mean annual rate and the 0/1 fate over
+the whole interval. Both terms therefore score every tree, and the scored
+sample does not depend on the parameters. \verb{$tree_deaths} reports per census and
+epoch how often the simulation killed a tree the inventory found alive
+(\code{frac_killed}) and in which year (\code{mean_kill_year}) — a diagnostic, not a
+correction. A generation outlives a window under single shooting, so a slot
+killed in an earlier window enters the next one already dead; \code{frac_ghost}
+is that share and it is excluded from \code{frac_killed}, which counts this
+window's kills alone. Under \code{reanchor}/\code{teacher_forcing} the generation
+restarts at every anchor, so \code{frac_ghost} is 0 by construction only where the
+anchors cover every census; a sparser anchor list carries ghosts like single
+shooting does.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
@@ -342,3 +482,33 @@ was worse on every one — even when scored on the absolute scale — and about
 four times more seed-variable, because it couples the growth parameter to
 whichever trees happen to be present.
 }
+\section{Scoring individual trees}{
+
+By default, \code{growth} and \code{mortality} are scored per site, species and census,
+as means over cohorts. Two options score them per observed tree instead; both
+take the tree table in \code{tree_data}, but they ask different questions.
+
+\code{loss_aggregation = c(growth = "tree", mortality = "tree")} predicts each
+OBSERVED tree: the kernels run on its measured dbh at the interval start with
+light from the observed stand, and only the yearly environment changes across
+the interval. It measures the error of the growth and mortality functions
+alone. \code{loss_resolution = "tree"} predicts each SIMULATED cohort that started
+as an observed tree, along the model's own trajectory (simulated growth,
+competitors, light). It measures the error of the functions plus the drift of
+the simulated stand.\tabular{lll}{
+    \tab \code{loss_aggregation = "tree"} \tab \code{loss_resolution = "tree"} \cr
+   the tree is \tab observed: measured dbh, observed competitors, yearly environment \tab simulated: the cohort it started as, along the model's trajectory \cr
+   measures \tab the growth and mortality functions alone \tab the functions plus the drift of the simulated stand \cr
+   responses \tab chosen separately, e.g. only \code{mortality = "tree"} \tab growth and mortality together \cr
+   \code{init_cohort} \tab any, incl. binned (\code{makeInitCohorts(dbh_binsize = )}) \tab one cohort per tree (\code{makeInitCohorts()} without \code{dbh_binsize}) \cr
+   \code{tree_data} needs \tab \code{dbh} at the interval start \tab \code{cohortID} of the initial cohort \cr
+   combines with \tab the simulated \code{dbh}/\code{ba}/\code{trees}/\code{regeneration} terms \tab \code{reanchor} and \code{teacher_forcing} (under teacher forcing the trajectory is reset to the observed stand every year, which comes close to the first option) \cr
+   diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_deaths}, \verb{$tree_pred} \cr
+}
+
+
+Use the first to estimate the process functions from the trees as observed,
+the second to test whether simulated trajectories follow the real trees. The
+two cannot be combined in one fit.
+}
+

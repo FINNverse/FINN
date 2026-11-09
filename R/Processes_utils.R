@@ -86,10 +86,61 @@
 #' @param n_quantiles (`integer(1)`)\cr Number of height classes used to discretize
 #'   cohorts when computing shading/light availability. Only used when this
 #'   process is the competition process and `continuous = FALSE`.
+#' @param light_mask (`logical(1)`)\cr Take the height quantiles of the binned
+#'   competition over the LIVE cohorts only. The cohort dimension is padded to the
+#'   widest site x patch in the batch and an empty slot has height 0.001, so with
+#'   enough padding every live cohort is searchsorted into the top bin, where
+#'   nothing shades anything: measured on a 251 m2/ha stand of ten live cohorts,
+#'   100 padded slots put all ten at light 1.00. Only the quantile INPUT is masked,
+#'   so every cohort keeps its real height as the bin query. `TRUE` is the default
+#'   since 0.2.0, because the padded width is set by the widest site in the BATCH:
+#'   the same stand of ten cohorts gets light 1.00 throughout beside a neighbour
+#'   holding a hundred, and its correct gradient down to 0.159 beside a neighbour
+#'   holding ten. Batch composition is not part of the model, so the unmasked
+#'   quantile made the fitted objective depend on `batchsize`. `FALSE` reproduces
+#'   results published before 0.2.0. Ignored when `continuous = TRUE`, which
+#'   compares pairs and is correct at any padding.
 #' @param continuous (`logical(1)`)\cr Compute shading continuously for every pair
 #'   of cohorts (`TRUE`) instead of binning cohorts into `n_quantiles` height
 #'   classes (`FALSE`, default). Only used when this process is the competition
 #'   process.
+#' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn
+#'   from the cohort's mortality probability. Only used when this process is the
+#'   mortality process. `"gamma"` (default, the behaviour of every published FINN
+#'   result) matches a Gamma to the binomial's first two moments and `rsample()`s
+#'   it, which gives a pathwise gradient -- the hazard a discrete draw does not
+#'   cover -- but the forward pass rounds that draw straight-through, so the
+#'   gradient flows through a quantity the simulation discards and the rounded
+#'   count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
+#'   cohorts at annual probabilities of 0.01-0.10. `"poisson"` draws a Bernoulli
+#'   where the cohort holds one tree or fewer and a Poisson capped at the cohort
+#'   size otherwise: integer-valued,
+#'   exact in expectation for small `n*p`, no pathwise gradient. The Bernoulli
+#'   branch matters because capping a Poisson at a one-tree cohort delivers only
+#'   88% of the calibrated probability at the `p = 0.26` of a suppressed stem.
+#'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
+#'   stand.
+#' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
+#'   default of the process `func`. Only used when this process is the mortality
+#'   process and `func` declares that argument. `NULL` (the default) keeps the
+#'   function's own default, which for [FINN::mortality()] is `0.01` -- growth
+#'   enters the logit in %/yr. `growth_scale = 1` feeds it the raw annual relative
+#'   rate, the behaviour of 0.1.0. The value is set as the function's formal rather
+#'   than passed down the forward pass, so a custom mortality `func` without the
+#'   argument keeps working unchanged.
+#' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn from the
+#'   negative binomial. Only used when this process is the regeneration process and
+#'   `sample_regeneration = TRUE`. `"gaussian"` (default, the behaviour of every
+#'   published FINN result) offsets the Gamma draw by `+0.001`, clamps the
+#'   probability at `1e-4` and pushes the result through
+#'   `lambda + eps*sqrt(lambda)`. The offset and the clamp guard the Gaussian
+#'   branch against a negative draw and against a NaN gradient through `log(0)`;
+#'   together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
+#'   patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species -- over a pool of
+#'   a hundred-odd species, as large as a temperate inventory's whole ingrowth.
+#'   `"refined"` drops both (neither hazard applies to `torch_poisson`)
+#'   and samples exactly below `lambda = 2`. See
+#'   [FINN::rnbinom_torch_refined()].
 #' @param custom_parameters (`named list` or `NULL`)\cr Extra parameters that a
 #'   custom `func` needs, declared here so they are registered on the model by
 #'   [FINN::finn()], optimised jointly by [FINN::fit()] (when trainable), and
@@ -116,8 +167,21 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, custom_parameters = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
   out = list()
+  out$mortality_draw = match.arg(mortality_draw)
+  out$regeneration_sampler = match.arg(regeneration_sampler)
+  # `growth` enters the logit as a bare divisor, so a bad value is silent rather than loud:
+  # logical NA coerces to TRUE and divides by 1, which restores the pre-0.2.0 objective, and
+  # 0 saturates mortality to {0, 1} across the stand without a NaN reaching a live cohort.
+  if(!is.null(growth_scale) && !(is.numeric(growth_scale) && length(growth_scale) == 1L &&
+                                 is.finite(growth_scale) && growth_scale > 0))
+    stop("`growth_scale` must be a single positive finite number, or NULL.", call. = FALSE)
+  # the competition kernel gates on isTRUE(), so `light_mask = 1` would be accepted
+  # here and then silently leave the quantiles unmasked
+  if(!is.logical(light_mask) || length(light_mask) != 1L || is.na(light_mask))
+    stop("`light_mask` must be TRUE or FALSE.", call. = FALSE)
+  out$growth_scale = growth_scale
 
   # ---- custom (extra) process parameters -------------------------------------
   # A named list declaring extra parameters a custom `func` needs. Each element is
@@ -163,11 +227,12 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$dispersion_parameter = dispersion_parameter
   out$sample_regeneration = sample_regeneration
   out$NN = NN
-  out$upper = NULL
-  out$lower = NULL
+  out$upper = upper
+  out$lower = lower
   out$dropout = dropout
   out$n_quantiles = n_quantiles
   out$continuous = continuous
+  out$light_mask = light_mask
   if(!is.null(initEnv)) {
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
   }
@@ -247,6 +312,12 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #'   from the negative binomial regeneration distribution (`TRUE`), or only its
 #'   expectation used (`FALSE`)? Only used when this object is the regeneration
 #'   process.
+#' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
+#'   `"gamma"` (default) or `"poisson"`; see [FINN::createProcess()]. Only used
+#'   when this object is the mortality process.
+#' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn,
+#'   `"gaussian"` (default) or `"refined"`; see [FINN::createProcess()]. Only used
+#'   when this object is the regeneration process.
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
 #' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/
@@ -270,8 +341,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
 #'
 #' @export
-createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined")) {
   out = list()
+  out$mortality_draw = match.arg(mortality_draw)
+  out$regeneration_sampler = match.arg(regeneration_sampler)
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
@@ -355,6 +428,15 @@ compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))
   cols = cols[vapply(cols, function(cc) is.numeric(env[[cc]]), logical(1))]
   if (!length(cols)) return(NULL)
+
+  # a named entry that matches no predictor is a typo, and silently falling back to
+  # "auto" for the predictor the user meant to name is the worst possible answer
+  if (!is.logical(spec) && !is.null(names(spec))) {
+    unknown = setdiff(names(spec)[nzchar(names(spec))], cols)
+    if (length(unknown))
+      stop(sprintf("`env_autoscale` names '%s', which is not an environmental predictor in `env` (%s).",
+                   paste(unknown, collapse = "', '"), paste(cols, collapse = ", ")), call. = FALSE)
+  }
 
   resolve_mode = function(col, i) {
     if (is.logical(spec)) return(if (isTRUE(spec)) "auto" else "identity")
@@ -442,7 +524,7 @@ backward = function(value, upper, lower) {
 }
 forward =  function(value, upper, lower) torch::torch_sigmoid(value) * (upper - lower) + lower
 
-init_species_parameters = function(type, N_species){
+init_species_parameters = function(type, N_species, growth_scale = 1){
   initLight = stats::runif(N_species, 0.45, 0.55)
   if(type == "competition") {
     init =
@@ -455,10 +537,14 @@ init_species_parameters = function(type, N_species){
             stats::runif(N_species, min = 0.045, 0.055))
   }
   if(type == "mortality") {
+    # the third column multiplies growth / growth_scale, so the range has to move with
+    # growth_scale or the same draw means something 1/growth_scale times stronger: at the
+    # 0.01 default an untouched +-0.2 puts the logit up to 8 units into saturation on the
+    # FIA fixture, killing 93 to 99.9 % of a 25 cm stand in one year (FINNverse/FINN#39)
     init =
       cbind(stats::runif(N_species, min = -0.2, 0.2),
             stats::runif(N_species, min = -0.2, 0.2),
-            stats::runif(N_species, min = -0.2, 0.2))
+            stats::runif(N_species, min = -0.2, 0.2) * growth_scale)
   }
   if(type == "regeneration") {
     init = matrix(initLight, ncol = 1L)

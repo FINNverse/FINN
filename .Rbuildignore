@@ -24,3 +24,5 @@
 ^cran-comments\.md$
 ^CRAN-SUBMISSION$
 ^CLAUDE\.md$
+^CONTRIBUTING\.md$
+^README\.html$

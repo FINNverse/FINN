@@ -435,7 +435,11 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
   if(is.null(env))         stop("No `env` supplied and no training env is cached. Pass `env=` or fit the model first.")
   if(is.null(init_cohort)) init_cohort = .finn_train_ic(model)
 
-  env      = data.table::as.data.table(data.table::copy(env))
+  # Permute over distinct rows: exact copies of a site-year (the FIA env tables held
+  # every row four times up to 0.2.0) would receive different permuted values, of
+  # which the environment array used to keep one at random; climateDF2array()
+  # now rejects any duplicate (#35).
+  env      = unique(data.table::as.data.table(data.table::copy(env)))
   env_vars = setdiff(names(env), c("siteID", "year"))
 
   scaling = model$env_scaling
