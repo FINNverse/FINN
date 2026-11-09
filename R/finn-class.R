@@ -191,11 +191,12 @@ finn = function(N_species,
 #'     \item `period_length` — how many simulated timesteps each observation's
 #'       inventory interval spans. The rate responses (`growth`, `mortality`) are
 #'       then compared against the model's **mean** over that interval, and
-#'       `regeneration` against its **sum** (recruits accumulate). Absent or `NA`
-#'       means each observation is compared against a single timestep. NOTE: this
-#'       must currently be the SAME for every site — a per-site interval is not
-#'       supported yet, so inventories with varying remeasurement gaps need
-#'       filtering to a constant interval first.
+#'       `regeneration` against its **sum** (recruits accumulate). It may differ
+#'       between sites (see the per-site path below). Absent or `NA` means each
+#'       observation is compared against a single timestep, except on the
+#'       per-site path forced by `loss_aggregation = "tree"` or
+#'       `model$period_mode = "per_site"`: there every window is read from this
+#'       column, and `fit()` stops if it has no finite value.
 #'     \item `n_at_risk` — trees behind each observed `mortality` proportion; used
 #'       to weight the binomial term (see `weights`).
 #'     \item `growth_n` — trees behind each observed `growth` mean; used to weight
@@ -2569,6 +2570,14 @@ finn_class = nn_module(
       stop("period_mode = \"constant\" cannot be combined with loss_aggregation = \"tree\": the per-tree terms are only evaluated on the per-site path, and on the constant path the cell term would be scored under a weight taken from the per-tree null. Use period_mode = \"auto\" or \"per_site\", or drop the \"tree\" aggregation.", call. = FALSE)
     per_site = varies || tree_agg || identical(self$period_mode, "per_site")
     if(identical(self$period_mode, "constant")) per_site = FALSE
+    # The per-site path reads every site's window from period_length; with no
+    # finite value anywhere each window is empty and all six terms are zero, so
+    # the fit would run to the end without scoring anything (FINN#46).
+    if(per_site && !any(is.finite(pl)))
+      stop(paste0("`data` needs a `period_length` column with the observation interval (in timesteps): ",
+                  if(tree_agg) "loss_aggregation = \"tree\"" else "period_mode = \"per_site\"",
+                  " scores each site over its own window, and without period_length no window is scored."),
+           call. = FALSE)
     self$per_site_period = per_site
     if(per_site) cli::cli_alert_info(paste0(
       "Using per-site aggregation windows (one backward per batch): ",

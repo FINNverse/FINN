@@ -56,11 +56,12 @@ Optional columns that change how the responses are scored:
 \item \code{period_length} — how many simulated timesteps each observation's
 inventory interval spans. The rate responses (\code{growth}, \code{mortality}) are
 then compared against the model's \strong{mean} over that interval, and
-\code{regeneration} against its \strong{sum} (recruits accumulate). Absent or \code{NA}
-means each observation is compared against a single timestep. NOTE: this
-must currently be the SAME for every site — a per-site interval is not
-supported yet, so inventories with varying remeasurement gaps need
-filtering to a constant interval first.
+\code{regeneration} against its \strong{sum} (recruits accumulate). It may differ
+between sites (see the per-site path below). Absent or \code{NA} means each
+observation is compared against a single timestep, except on the
+per-site path forced by \code{loss_aggregation = "tree"} or
+\code{model$period_mode = "per_site"}: there every window is read from this
+column, and \code{fit()} stops if it has no finite value.
 \item \code{n_at_risk} — trees behind each observed \code{mortality} proportion; used
 to weight the binomial term (see \code{weights}).
 \item \code{growth_n} — trees behind each observed \code{growth} mean; used to weight

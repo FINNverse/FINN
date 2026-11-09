@@ -306,7 +306,7 @@ tree_data[, .(trees = .N, died = sum(died)), by = year]
 
 Two details of the set-up. The per-tree term is accumulated over each site's
 observation window, which `fit()` reads from a `period_length` column of `data`;
-without it nothing is scored on this path, so the column is set explicitly, to
+and `fit()` stops without it, so the column is set explicitly, to
 one timestep per census as everywhere in these vignettes. And the model is the
 mechanistic one from above, with the mortality term alone switched to the tree
 route:

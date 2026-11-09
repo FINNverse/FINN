@@ -90,6 +90,33 @@ test_that("period_mode = 'constant' is refused, not overridden, by a per-tree te
   expect_true(a$per_site_period)
 })
 
+test_that("the per-site path stops when data carries no period_length (FINN#46)", {
+  # without a finite period_length every per-site window is empty and all six terms
+  # used to be zero, so the fit ran to the end without scoring anything
+  obs5 <- mk_obs(list(c(5, 10), c(5, 10), c(5, 10)))
+  tt <- obs5[species == 1, .(siteID, year, patchID = 1L, species, dbh = 20, growth = 0.01, died = 0,
+                             period_length = 5L)]
+  go <- function(obs, mode, ...) {
+    FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
+    fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
+        loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+        optimizer = OPT, plot_progress = FALSE, device = "cpu", ...)
+    mm
+  }
+  no_pl <- copy(obs5)[, period_length := NULL]
+  na_pl <- copy(obs5)[, period_length := NA_integer_]
+  expect_error(go(no_pl, "auto", loss_aggregation = c(mortality = "tree"), tree_data = tt),
+               "needs a `period_length` column")
+  expect_error(go(na_pl, "auto", loss_aggregation = c(mortality = "tree"), tree_data = tt),
+               "needs a `period_length` column")
+  expect_error(go(no_pl, "per_site"), "period_mode = \"per_site\"")
+  # the constant path keeps its meaning of a missing period_length: one-year windows
+  expect_false(go(no_pl, "auto")$per_site_period)
+  # one site without an observation window is a schedule, not a missing column
+  part <- copy(obs5)[siteID == 1, period_length := NA_integer_]
+  expect_true(go(part, "per_site")$per_site_period)
+})
+
 test_that("mixed periods: gradients flow through the deferred backward", {
   obsm <- mk_obs(list(c(4), c(6), c(3, 7)))
   FINN.seed(99)

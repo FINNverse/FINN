@@ -12,6 +12,13 @@
   repeat each row once per patch, which `climateDF2array()` now rejects, so
   `fit()` failed on the output of the documented data-preparation pipeline.
 
+* `fit()` stops when the per-site path (`loss_aggregation = "tree"` or
+  `model$period_mode = "per_site"`) meets a `data` without a finite
+  `period_length`. Every site's window was then empty and all six loss terms
+  were zero, so the fit ran to the end without scoring anything (#46). The
+  `data` documentation no longer claims that `period_length` must be the same
+  for every site.
+
 # FINN 0.2.0
 
 This release adds the model features developed for the **FIA** (US Forest
