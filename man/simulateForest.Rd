@@ -62,3 +62,20 @@ Simulate from a fitted FINN model. This is a thin, backwards-compatible
 alias for \link{predict.finn_class}; new code should call
 \code{predict(model, ...)} directly.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+# identical to predict(m, ...), which is what new code should call
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites],
+                      init_cohort = init, patches = 4, patch_size = 0.06)
+head(sim$long$site)
+\dontshow{\}) # examplesIf}
+}

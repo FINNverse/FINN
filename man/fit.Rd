@@ -537,3 +537,26 @@ the second to test whether simulated trajectories follow the real trees. The
 two cannot be combined in one fit.
 }
 
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# three Oregon FIA sites over two epochs; a real calibration runs hundreds
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+
+# the per-response losses over the epochs, and the baselines they were
+# scaled by to make `weights = "auto"` comparable across responses
+tail(m$history, 2)
+m$loss_baseline
+\dontshow{\}) # examplesIf}
+}

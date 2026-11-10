@@ -393,6 +393,17 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #' @seealso \code{\link[FINN]{CohortMat}}
 #' @import data.table
 #' @export
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # one cohort per observed tree, which is what `loss_resolution = "tree"` needs
+#' init <- makeInitCohorts(fia_init_trees[siteID %in% 1:3],
+#'                         Nspecies = max(fia_obs_dt$species))
+#' dim(init$dbh)   # sites x patches x cohorts
+#'
+#' # 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation
+#' binned <- makeInitCohorts(fia_init_trees[siteID %in% 1:3], dbh_binsize = 5,
+#'                           Nspecies = max(fia_obs_dt$species))
+#' dim(binned$dbh)
 makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = FALSE, singleCohortTreeNames = NULL){
   # browser()
   if(!is.null(dbh_binsize)){

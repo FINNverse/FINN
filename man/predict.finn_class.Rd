@@ -61,3 +61,25 @@ Predict from a FINN model
 Simulate from a (fitted) FINN model. This is an S3 method for the
 \link[stats:predict]{stats::predict} generic, so it is dispatched as \code{predict(model, ...)}.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# simulate three Oregon FIA sites over the years in `env`, starting from the
+# observed stands. The model is unfitted here, so these are its priors.
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+sim <- predict(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init,
+               patches = 4, patch_size = 0.06, return_cohorts = "last")
+head(sim$long$site)
+
+# the raw per-cohort state of the final timestep, kept because of
+# `return_cohorts`; storing every timestep is expensive
+head(sim$long$cohort)
+\dontshow{\}) # examplesIf}
+}

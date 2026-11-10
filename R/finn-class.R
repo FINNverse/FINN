@@ -81,6 +81,16 @@
 #'   the COMPOUNDED period increment (`prod(1+g)-1`) rather than the mean of the
 #'   per-year rates, so a de-annualised period target aligns without collapsing
 #'   growth's variance. Default `FALSE` (mean of annual rates).
+#' @examplesIf torch::torch_is_installed()
+#' # the three demographic processes, each with a linear temperature and
+#' # precipitation response; ?createProcess for the hybrid and network variants
+#' Nsp <- max(fia_obs_dt$species)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' m
 finn = function(N_species,
                 mortality_process = NULL,
                 growth_process = NULL,
@@ -556,6 +566,26 @@ finn = function(N_species,
 #'   the returned object is the one passed in, now carrying the training results
 #'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`).
 #' @export
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # three Oregon FIA sites over two epochs; a real calibration runs hundreds
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#'
+#' # the per-response losses over the epochs, and the baselines they were
+#' # scaled by to make `weights = "auto"` comparable across responses
+#' tail(m$history, 2)
+#' m$loss_baseline
 fit = function(model,
                data = NULL,
                env,
@@ -670,6 +700,31 @@ fit = function(model,
 #'   Bind these onto `tree_data` directly rather than joining on
 #'   siteID/year/patchID, which would be many-to-many.
 #' @export
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # the growth and mortality kernels applied to the trees as observed, so the
+#' # error of the two functions alone, with no simulated stand in between
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#'
+#' # `fia_init_trees` is a pure initial state, so name the census the trees are
+#' # scored against and the interval, in timesteps, that reaches it
+#' trees <- fia_init_trees[siteID %in% sites,
+#'                         .(siteID, patchID, species, dbh, year = 1L,
+#'                           period_length = 1)]
+#' pred  <- predictTrees(m, tree_data = trees,
+#'                       env = fia_env_dt[siteID %in% sites], patch_size = 0.06)
+#' head(pred)
 predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
   model$predict_trees(tree_data = tree_data, env = env, patches = patches,
                       patch_size = patch_size, device = resolve_device(device))
@@ -709,6 +764,25 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   ...) for the requested timesteps.
 #' @method predict finn_class
 #' @export
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # simulate three Oregon FIA sites over the years in `env`, starting from the
+#' # observed stands. The model is unfitted here, so these are its priors.
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' sim <- predict(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
+#'                patches = 4, patch_size = 0.06, return_cohorts = "last")
+#' head(sim$long$site)
+#'
+#' # the raw per-cohort state of the final timestep, kept because of
+#' # `return_cohorts`; storing every timestep is expensive
+#' head(sim$long$cohort)
 predict.finn_class = function(object,
                               env,
                               disturbance = NULL,
@@ -764,6 +838,20 @@ predict.finn_class = function(object,
 #'   `return_cohorts` is set, `$long$cohort` / `$wide$cohort` hold the raw
 #'   per-cohort state for the requested timesteps.
 #' @export
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' m <- finn(
+#'   N_species            = Nsp, recruits_dbh = 12.9,
+#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
+#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' # identical to predict(m, ...), which is what new code should call
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites],
+#'                       init_cohort = init, patches = 4, patch_size = 0.06)
+#' head(sim$long$site)
 simulateForest = function(model,
                           env,
                           disturbance = NULL,
