@@ -40,5 +40,5 @@ test_that("a stand that should not die loses 1 %/yr at the default floor and not
     x[year == max(year), sum(trees)] / x[year == min(year), sum(trees)]
   }
   expect_lt(stems_kept(0.01, "gamma"), 0.95)     # nine years at the published floor of 1 %/yr
-  expect_equal(stems_kept(1e-6, "poisson"), 1)   # the predicted ~0 is kept
+  expect_gt(stems_kept(1e-3, "gamma"), 0.98)     # the default Gamma draw at the lowest recommended floor
 })
