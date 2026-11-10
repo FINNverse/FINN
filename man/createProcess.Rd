@@ -26,7 +26,8 @@ createProcess(
   custom_parameters = NULL,
   mortality_draw = c("gamma", "poisson"),
   regeneration_sampler = c("gaussian", "refined"),
-  growth_scale = NULL
+  growth_scale = NULL,
+  mortality_floor = 0.01
 )
 }
 \arguments{
@@ -158,6 +159,20 @@ enters the logit in \%/yr. \code{growth_scale = 1} feeds it the raw annual relat
 rate, the behaviour of 0.1.0. The value is set as the function's formal rather
 than passed down the forward pass, so a custom mortality \code{func} without the
 argument keeps working unchanged.}
+
+\item{mortality_floor}{(\code{numeric(1)})\cr Lower bound on the annual mortality
+probability with which the number of dead trees is drawn in the forward pass.
+Only used when this process is the mortality process. The default \code{0.01} is the
+behaviour of every published FINN result: no simulated cohort loses fewer than
+1 \% of its trees per year, whatever its predicted probability. The per-tree
+mortality loss is not bounded by it. A lower floor lets low-mortality stands
+keep their predicted rate with the default Gamma draw: down to \code{1e-4} the
+draw and its gradient stay finite and the mean gradient is unbiased, but
+single-draw gradients grow heavy-tailed as \code{n*p} shrinks (largest per-tree
+gradient ~10 times the default's at \code{1e-3}, ~100 times at \code{1e-4}), so
+\code{1e-3} is the lowest tested recommendation. The Gamma draw's deficit for
+small \code{n*p} (realised / expected deaths ~0.65-0.8, see
+\code{\link[=binomial_from_poisson]{binomial_from_poisson()}}) is the same below and above the default.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and
