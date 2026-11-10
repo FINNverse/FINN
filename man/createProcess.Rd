@@ -126,8 +126,15 @@ result) matches a Gamma to the binomial's first two moments and \code{rsample()}
 it, which gives a pathwise gradient -- the hazard a discrete draw does not
 cover -- but the forward pass rounds that draw straight-through, so the
 gradient flows through a quantity the simulation discards and the rounded
-count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
-cohorts at annual probabilities of 0.01-0.10. \code{"poisson"} draws a Bernoulli
+count under-delivers. The deficit depends on the \strong{expected deaths per cohort}
+\code{n*p}, not on \code{p} alone: at low \code{n*p} the Gamma's shape parameter is small, so
+the draw is strongly right-skewed and rounding sends the mass below 0.5 to
+zero. Measured, delivered over expected deaths (2e5 cohorts per cell):
+\code{n*p < 0.1} gives 0.63-0.75, \code{0.2-0.5} gives 0.76-0.88, \code{1} gives 0.96, and
+\verb{>= 2} gives 1.00; \code{"poisson"} is ~1 throughout because it returns integers
+and is never rounded. So the draw is trustworthy once a cohort expects a death
+or two per step and biased below that -- small cohorts, low rates, or both.
+\code{"poisson"} draws a Bernoulli
 where the cohort holds one tree or fewer and a Poisson capped at the cohort
 size otherwise: integer-valued,
 exact in expectation for small \code{n*p}, no pathwise gradient. The Bernoulli

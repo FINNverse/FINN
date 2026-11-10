@@ -488,6 +488,20 @@ was worse on every one — even when scored on the absolute scale — and about
 four times more seed-variable, because it couples the growth parameter to
 whichever trees happen to be present.
 }
+\section{Lower bound on simulated mortality}{
+
+The simulation clamps the per-cohort mortality probability to \verb{[0.01, 0.99]}
+before the death draw (\code{mortality_draw}), so \strong{however low the fitted mortality
+is, at least 1 \% of a cohort is at risk per model step}. The bound is per
+\emph{step}, not per year, so its annual equivalent is roughly \code{0.01 / dt}: 1 \%/yr on
+annual data, 0.2 \%/yr on five-year steps, 0.1 \%/yr on decadal ones. It exists
+because \code{binomial_from_gamma()}'s shape parameter \code{n*p/(1-p)} degenerates as
+\code{p -> 0}, and it is the reason a simulated low-mortality stand -- a mature
+unthinned stand, a slow-growing species, an equilibrium run -- loses stems the
+observations do not. The per-tree mortality loss is \strong{not} affected; it clamps
+at \code{1e-6}. So a fit can be correct while the trajectory it simulates is not.
+}
+
 \section{Scoring individual trees}{
 
 By default, \code{growth} and \code{mortality} are scored per site, species and census,
