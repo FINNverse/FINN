@@ -1,3 +1,13 @@
+# FINN (development, branch zoo-v02-mortfloor)
+
+* `createProcess(mortality_floor =)` and `createHybrid(mortality_floor =)`: the lower
+  bound on the annual probability with which the forward pass draws dead trees, until
+  now a fixed `0.01`. The default stays `0.01`, so every published result is
+  unchanged; a lower floor (e.g. `1e-6`, with `mortality_draw = "poisson"`) lets a
+  low-mortality stand keep its predicted rate. At the default, a stand whose predicted
+  mortality is ~0 loses about 1 % of its stems per year in simulation. The per-tree
+  mortality loss was never bounded by it.
+
 # FINN 0.2.0
 
 This release adds the model features developed for the **FIA** (US Forest

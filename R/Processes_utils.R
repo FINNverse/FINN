@@ -120,6 +120,15 @@
 #'   88% of the calibrated probability at the `p = 0.26` of a suppressed stem.
 #'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
 #'   stand.
+#' @param mortality_floor (`numeric(1)`)\cr Lower bound on the annual mortality
+#'   probability with which the number of dead trees is drawn in the forward pass.
+#'   Only used when this process is the mortality process. The default `0.01` is the
+#'   behaviour of every published FINN result: no simulated cohort loses fewer than
+#'   1 % of its trees per year, whatever its predicted probability, because the
+#'   Gamma draw degenerates as its shape `n*p/(1-p)` approaches zero. The per-tree
+#'   mortality loss is not bounded by it. A lower floor (e.g. `1e-6`) lets
+#'   low-mortality stands keep their predicted rate; use it with
+#'   `mortality_draw = "poisson"`, which is exact for small `n*p`.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
 #'   process and `func` declares that argument. `NULL` (the default) keeps the
@@ -167,9 +176,10 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL, mortality_floor = 0.01) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
+  out$mortality_floor = check_mortality_floor(mortality_floor)
   out$regeneration_sampler = match.arg(regeneration_sampler)
   # `growth` enters the logit as a bare divisor, so a bad value is silent rather than loud:
   # logical NA coerces to TRUE and divides by 1, which restores the pre-0.2.0 objective, and
@@ -315,6 +325,9 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
 #'   `"gamma"` (default) or `"poisson"`; see [FINN::createProcess()]. Only used
 #'   when this object is the mortality process.
+#' @param mortality_floor (`numeric(1)`)\cr Lower bound on the annual mortality
+#'   probability of the death draw, default `0.01`; see [FINN::createProcess()].
+#'   Only used when this object is the mortality process.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn,
 #'   `"gaussian"` (default) or `"refined"`; see [FINN::createProcess()]. Only used
 #'   when this object is the regeneration process.
@@ -341,9 +354,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
 #'
 #' @export
-createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined")) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), mortality_floor = 0.01) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
+  out$mortality_floor = check_mortality_floor(mortality_floor)
   out$regeneration_sampler = match.arg(regeneration_sampler)
   if(!is.null(formula)){
     mf = match.call()

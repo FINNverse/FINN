@@ -17,7 +17,8 @@ createHybrid(
   emb_dim = 20L,
   dim_feedforward = 256L,
   mortality_draw = c("gamma", "poisson"),
-  regeneration_sampler = c("gaussian", "refined")
+  regeneration_sampler = c("gaussian", "refined"),
+  mortality_floor = 0.01
 )
 }
 \arguments{
@@ -65,6 +66,10 @@ when this object is the mortality process.}
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,
 \code{"gaussian"} (default) or \code{"refined"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
+
+\item{mortality_floor}{(\code{numeric(1)})\cr Lower bound on the annual mortality
+probability of the death draw, default \code{0.01}; see \code{\link[=createProcess]{createProcess()}}.
+Only used when this object is the mortality process.}
 }
 \value{
 A list of class \code{"hybrid"} containing the process definition and
