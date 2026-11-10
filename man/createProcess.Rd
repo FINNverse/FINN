@@ -164,11 +164,15 @@ argument keeps working unchanged.}
 probability with which the number of dead trees is drawn in the forward pass.
 Only used when this process is the mortality process. The default \code{0.01} is the
 behaviour of every published FINN result: no simulated cohort loses fewer than
-1 \% of its trees per year, whatever its predicted probability, because the
-Gamma draw degenerates as its shape \code{n*p/(1-p)} approaches zero. The per-tree
-mortality loss is not bounded by it. A lower floor (e.g. \code{1e-6}) lets
-low-mortality stands keep their predicted rate; use it with
-\code{mortality_draw = "poisson"}, which is exact for small \code{n*p}.}
+1 \% of its trees per year, whatever its predicted probability. The per-tree
+mortality loss is not bounded by it. A lower floor lets low-mortality stands
+keep their predicted rate with the default Gamma draw: down to \code{1e-4} the
+draw and its gradient stay finite and the mean gradient is unbiased, but
+single-draw gradients grow heavy-tailed as \code{n*p} shrinks (largest per-tree
+gradient ~10 times the default's at \code{1e-3}, ~100 times at \code{1e-4}), so
+\code{1e-3} is the lowest tested recommendation. The Gamma draw's deficit for
+small \code{n*p} (realised / expected deaths ~0.65-0.8, see
+\code{\link[=binomial_from_poisson]{binomial_from_poisson()}}) is the same below and above the default.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and

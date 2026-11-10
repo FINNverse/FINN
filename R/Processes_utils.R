@@ -124,11 +124,15 @@
 #'   probability with which the number of dead trees is drawn in the forward pass.
 #'   Only used when this process is the mortality process. The default `0.01` is the
 #'   behaviour of every published FINN result: no simulated cohort loses fewer than
-#'   1 % of its trees per year, whatever its predicted probability, because the
-#'   Gamma draw degenerates as its shape `n*p/(1-p)` approaches zero. The per-tree
-#'   mortality loss is not bounded by it. A lower floor (e.g. `1e-6`) lets
-#'   low-mortality stands keep their predicted rate; use it with
-#'   `mortality_draw = "poisson"`, which is exact for small `n*p`.
+#'   1 % of its trees per year, whatever its predicted probability. The per-tree
+#'   mortality loss is not bounded by it. A lower floor lets low-mortality stands
+#'   keep their predicted rate with the default Gamma draw: down to `1e-4` the
+#'   draw and its gradient stay finite and the mean gradient is unbiased, but
+#'   single-draw gradients grow heavy-tailed as `n*p` shrinks (largest per-tree
+#'   gradient ~10 times the default's at `1e-3`, ~100 times at `1e-4`), so
+#'   `1e-3` is the lowest tested recommendation. The Gamma draw's deficit for
+#'   small `n*p` (realised / expected deaths ~0.65-0.8, see
+#'   [FINN::binomial_from_poisson()]) is the same below and above the default.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
 #'   process and `func` declares that argument. `NULL` (the default) keeps the
