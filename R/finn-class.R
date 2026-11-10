@@ -350,6 +350,29 @@ finn = function(N_species,
 #'   in both modes.
 #' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
 #' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
+#' @section What makes a fit faster, and what does not:
+#' A FINN fit is bound by the *number of tensor operations it dispatches*, not by the
+#' arithmetic in them: a simulated year issues thousands of small kernels, and a tiny
+#' operation costs tens of microseconds of dispatch whatever hardware runs it. Three
+#' consequences, each measured on a 32,190 site-period panel with 25 patches:
+#'
+#' * **A GPU need not help.** The per-tree route ran at 84 s/epoch on an RTX A5000
+#'   against 85-100 s/epoch on CPU under the same load, with the card at **3 %
+#'   utilisation and 653 MB**. Measure one configuration before committing a long fit
+#'   to a device.
+#' * **Intra-op threads do not help and eventually cost.** On a 64-core machine,
+#'   1/2/4/8/16 threads gave 4.59/4.77/4.68/4.73/**6.06** s/epoch on a comparable
+#'   problem; on an 8-core laptop one thread was fastest by 30 %. The knee moves with
+#'   the core count, the direction does not. `torch::torch_set_num_threads(1)` is the
+#'   considerate setting on a shared machine and costs nothing.
+#' * **Concurrency is what pays.** Seven fits side by side cost 13-33 % per epoch each
+#'   and roughly doubled total throughput, because the machine was never short of cores.
+#'   Run several fits at once rather than giving one fit more of the machine.
+#'
+#' What does shorten a fit is fewer epochs: read a convergence criterion off
+#' `$param_history` and stop when the parameters settle, rather than fixing a large
+#' `epochs` in advance.
+#'
 #' @section Lower bound on simulated mortality:
 #' The simulation clamps the per-cohort mortality probability to `[0.01, 0.99]`
 #' before the death draw (`mortality_draw`), so **however low the fitted mortality
