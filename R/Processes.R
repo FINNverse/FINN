@@ -474,7 +474,13 @@ regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
   }
 
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
-  environment = torch::torch_exp(pred) # Environmental inverse link function
+  # The cap below saturates, so nothing in the loss holds the network's output down:
+  # under Adam it drifts upward until exp() or the product K * mean overflows float32
+  # (pred ~ 83-89), which gives NaN gradients and then NaN recruits. At pred = 70 the
+  # capped mean is already K to the last float32 digit for any regP > 0 (regP is a
+  # difference of two float32 sigmoids, so its smallest non-zero value is ~1e-12) and
+  # any K below 1e11 per ha, so the clamp changes no finite result.
+  environment = torch::torch_exp(pred$clamp(max = 70)) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
   reg_floor = if(is.null(self$reg_floor)) 0.2 else self$reg_floor
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1)) + reg_floor)
