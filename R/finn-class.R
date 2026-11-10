@@ -999,7 +999,7 @@ reserved_model_fields = c(
   "class_obs", "class_tau", "conditional_effects", "continuous", "device", "dgtl_embedder",
   "dtype", "emb_dim", "env_embedder", "env_scaling", "fit_id", "gradients", "growth_period_scale",
   "history", "init_cohort", "light_mask", "loss_agg", "loss_baseline", "loss_raw",
-  "loss_resolution", "loss_weights", "mortality_draw", "n_quantiles", "nonfinite",
+  "loss_resolution", "loss_weights", "mortality_ceiling", "mortality_draw", "mortality_floor", "n_quantiles", "nonfinite",
   "nonfinite_counts", "num_species", "obs_rec", "optimizer", "optimizer_lr", "param_history",
   "patch_size_ha", "per_site_period", "period_mode", "perm_importance", "positional_encoding",
   "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
@@ -1494,7 +1494,11 @@ finn_class = nn_module(
         )
 
         n_at_risk = torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0)
-        m_draw = torch::torch_clamp(m, 0.01, 0.99)
+        # The floor guards the Gamma draw, whose shape n*p/(1-p) degenerates as p -> 0.
+        # NULL (a model saved before mortality_floor existed) keeps the published 0.01.
+        m_draw = torch::torch_clamp(m,
+                                    if(is.null(self$mortality_floor)) 0.01 else self$mortality_floor,
+                                    if(is.null(self$mortality_ceiling)) 0.99 else self$mortality_ceiling)
         # NULL (a model saved before mortality_draw existed, or a hybrid built elsewhere) is the default
         alive_mask = trees$ge(0.5)$float()
         trees_dead = (if(identical(self$mortality_draw, "poisson")) binomial_from_poisson(n_at_risk, m_draw)
@@ -4031,6 +4035,8 @@ finn_class = nn_module(
 
       if(type == "mortality") {
         self$mortality_draw = obj$mortality_draw
+        self$mortality_ceiling = obj$mortality_ceiling
+        self$mortality_floor = obj$mortality_floor
         # Set as the function's formal, not passed down forward(): the kernel reads
         # `self$record_raws` from its own environment, so a user wrapper around
         # FINN::mortality() cannot be rebound by set_environment() and is not a

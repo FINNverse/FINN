@@ -378,6 +378,13 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
   return(poisson_samples)
 }
 
+# `mortality_floor` of createProcess()/createHybrid(): one probability in (0, 0.99).
+check_mortality_limit = function(value, what) {
+  if (!is.numeric(value) || length(value) != 1L || is.na(value) || value <= 0 || value >= 1)
+    stop("`", what, "` must be one number in (0, 1).", call. = FALSE)
+  as.numeric(value)
+}
+
 #' Sample from binomial with gradient
 #'
 #' @param n number of trials

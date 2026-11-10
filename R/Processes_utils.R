@@ -121,6 +121,23 @@
 #'   cohorts at annual probabilities of 0.01-0.10.
 #'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
 #'   stand.
+#' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
+#'   per-cohort mortality probability is clamped to **per simulation step**,
+#'   before the death draw. Only used when this process is the mortality process;
+#'   the per-tree mortality loss is not bounded by either.
+#'
+#'   The defaults are `0.001` and `0.999` (0.1 % and 99.9 % per step). Until
+#'   0.2.0 the interval was hard-coded to `[0.01, 0.99]`, which is why a
+#'   simulated low-mortality stand -- a mature unthinned stand, a slow-growing
+#'   species, an equilibrium run -- lost stems the observations did not: at a
+#'   1 % floor it loses 1 % of every cohort per step however low the fitted rate.
+#'
+#'   The floor exists because `binomial_from_gamma()`'s shape `n*p/(1-p)`
+#'   degenerates as `p -> 0`. Measured with that draw, it stays finite with an
+#'   unbiased mean gradient down to `1e-4`, but single-draw gradients grow
+#'   heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
+#'   times the old default's at `1e-3` and about a hundred times at `1e-4` --
+#'   so `1e-3` is the lowest tested value and is the new default.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
 #'   process and `func` declares that argument. `NULL` (the default) keeps the
@@ -169,9 +186,14 @@
 #'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
-                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1) {
+                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
+                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
+  out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
+  out$mortality_ceiling = check_mortality_limit(mortality_ceiling, "mortality_ceiling")
+  if(out$mortality_floor >= out$mortality_ceiling)
+    stop("`mortality_floor` must be below `mortality_ceiling`.", call. = FALSE)
   out$regeneration_sampler = match.arg(regeneration_sampler)
   # `growth` enters the logit as a bare divisor, so a bad value is silent rather than loud:
   # logical NA coerces to TRUE and divides by 1, which restores the pre-0.2.0 objective, and
@@ -320,6 +342,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
 #'   `"poisson"` (default since 0.2.0) or `"gamma"`; see [FINN::createProcess()]. Only used
 #'   when this object is the mortality process.
+#' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
+#'   mortality probability is clamped to per simulation step before the death
+#'   draw, defaults `0.001` and `0.999`; see [FINN::createProcess()]. Only used
+#'   when this object is the mortality process.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn,
 #'   `"refined"` (default since 0.2.0) or `"gaussian"`; see [FINN::createProcess()]. Only used
 #'   when this object is the regeneration process.
@@ -347,9 +373,14 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #'
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
-                        cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1) {
+                        cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
+                        mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
+  out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
+  out$mortality_ceiling = check_mortality_limit(mortality_ceiling, "mortality_ceiling")
+  if(out$mortality_floor >= out$mortality_ceiling)
+    stop("`mortality_floor` must be below `mortality_ceiling`.", call. = FALSE)
   out$regeneration_sampler = match.arg(regeneration_sampler)
   if(!is.null(formula)){
     mf = match.call()
