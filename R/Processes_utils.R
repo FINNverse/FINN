@@ -106,18 +106,19 @@
 #'   process.
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn
 #'   from the cohort's mortality probability. Only used when this process is the
-#'   mortality process. `"gamma"` (default, the behaviour of every published FINN
-#'   result) matches a Gamma to the binomial's first two moments and `rsample()`s
+#'   mortality process. `"poisson"` (default since 0.2.0) draws a Bernoulli where
+#'   the cohort holds one tree or fewer and a Poisson capped at the cohort size
+#'   otherwise: integer-valued, exact in expectation for small `n*p`, and no
+#'   pathwise gradient -- which costs nothing now that `fit(rb_gradient = TRUE)`
+#'   takes the gradient through the expectation anyway. The Bernoulli branch
+#'   matters because capping a Poisson at a one-tree cohort delivers only 88 % of
+#'   the calibrated probability at the `p = 0.26` of a suppressed stem.
+#'   `"gamma"` (the behaviour of every published FINN result) matches a Gamma to the binomial's first two moments and `rsample()`s
 #'   it, which gives a pathwise gradient -- the hazard a discrete draw does not
 #'   cover -- but the forward pass rounds that draw straight-through, so the
 #'   gradient flows through a quantity the simulation discards and the rounded
 #'   count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
-#'   cohorts at annual probabilities of 0.01-0.10. `"poisson"` draws a Bernoulli
-#'   where the cohort holds one tree or fewer and a Poisson capped at the cohort
-#'   size otherwise: integer-valued,
-#'   exact in expectation for small `n*p`, no pathwise gradient. The Bernoulli
-#'   branch matters because capping a Poisson at a one-tree cohort delivers only
-#'   88% of the calibrated probability at the `p = 0.26` of a suppressed stem.
+#'   cohorts at annual probabilities of 0.01-0.10.
 #'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
 #'   stand.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
@@ -130,7 +131,10 @@
 #'   argument keeps working unchanged.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn from the
 #'   negative binomial. Only used when this process is the regeneration process and
-#'   `sample_regeneration = TRUE`. `"gaussian"` (default, the behaviour of every
+#'   `sample_regeneration = TRUE`. `"refined"` (default since 0.2.0) samples
+#'   exactly below `lambda = 2` and drops both guards below, neither of which
+#'   applies to `torch_poisson`; see [FINN::rnbinom_torch_refined()].
+#'   `"gaussian"` (the behaviour of every
 #'   published FINN result) offsets the Gamma draw by `+0.001`, clamps the
 #'   probability at `1e-4` and pushes the result through
 #'   `lambda + eps*sqrt(lambda)`. The offset and the clamp guard the Gaussian
@@ -138,9 +142,6 @@
 #'   together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
 #'   patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species -- over a pool of
 #'   a hundred-odd species, as large as a temperate inventory's whole ingrowth.
-#'   `"refined"` drops both (neither hazard applies to `torch_poisson`)
-#'   and samples exactly below `lambda = 2`. See
-#'   [FINN::rnbinom_torch_refined()].
 #' @param custom_parameters (`named list` or `NULL`)\cr Extra parameters that a
 #'   custom `func` needs, declared here so they are registered on the model by
 #'   [FINN::finn()], optimised jointly by [FINN::fit()] (when trainable), and
@@ -167,7 +168,7 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)
@@ -313,10 +314,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #'   expectation used (`FALSE`)? Only used when this object is the regeneration
 #'   process.
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
-#'   `"gamma"` (default) or `"poisson"`; see [FINN::createProcess()]. Only used
+#'   `"poisson"` (default since 0.2.0) or `"gamma"`; see [FINN::createProcess()]. Only used
 #'   when this object is the mortality process.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn,
-#'   `"gaussian"` (default) or `"refined"`; see [FINN::createProcess()]. Only used
+#'   `"refined"` (default since 0.2.0) or `"gaussian"`; see [FINN::createProcess()]. Only used
 #'   when this object is the regeneration process.
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
@@ -341,7 +342,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
 #'
 #' @export
-createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined")) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian")) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)

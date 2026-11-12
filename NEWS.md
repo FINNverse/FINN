@@ -42,11 +42,28 @@ negative. `FALSE` restores the previous path.
 Only fits that score `trees` are affected; a model scoring growth and mortality
 alone has no such term.
 
+### The death and recruit draws
+
+The two repaired samplers, in `main` since 0.2.0's development and opt-in until
+now, become the defaults. `createProcess(mortality_draw = "poisson")` draws a
+Bernoulli where the cohort holds one tree or fewer and a capped Poisson
+otherwise, which is integer-valued and exact in expectation for small `n*p`,
+where the moment-matched Gamma delivered a measured 0.68-0.72 of the calibrated
+deaths for one-tree cohorts. It has no pathwise gradient, which costs nothing
+now that `rb_gradient = TRUE` differentiates the expectation.
+`createProcess(regeneration_sampler = "refined")` samples exactly below
+`lambda = 2` and drops the `+0.001` offset and the `1e-4` clamp, which together
+imposed a recruitment floor of 0.0011 per cell-year -- at a 0.0168 ha patch,
+0.066 recruits per hectare and year **per species**. `"gamma"` and `"gaussian"`
+restore the previous draws.
+
 ### What is new since 0.1.0
 
 | what | where | default |
 |---|---|---|
 | Offset of the `trees` count likelihood where a simulated count is exactly zero | `fit(trees_offset = )` | `0.01`; **not** 0.1.0 behaviour, `NULL` restores it |
+| Exact integer death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = )`, `createHybrid()` | `"poisson"`; **not** 0.1.0 behaviour, `"gamma"` restores it |
+| Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = )`, `createHybrid()` | `"refined"`; **not** 0.1.0 behaviour, `"gaussian"` restores it |
 | Count gradients taken through the expected deaths and recruits instead of through the draw | `fit(rb_gradient = )` | `TRUE`; **not** 0.1.0 behaviour, `FALSE` restores it |
 | Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |
 | Per-response likelihood, renamed | `fit(loss_family = )` | as `loss` had it; `loss` still accepted, deprecated |

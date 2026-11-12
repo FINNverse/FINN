@@ -16,8 +16,8 @@ createHybrid(
   transformer = TRUE,
   emb_dim = 20L,
   dim_feedforward = 256L,
-  mortality_draw = c("gamma", "poisson"),
-  regeneration_sampler = c("gaussian", "refined")
+  mortality_draw = c("poisson", "gamma"),
+  regeneration_sampler = c("refined", "gaussian")
 )
 }
 \arguments{
@@ -59,11 +59,11 @@ sublayer within each transformer encoder layer. Only used when
 \code{transformer = TRUE}.}
 
 \item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn,
-\code{"gamma"} (default) or \code{"poisson"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+\code{"poisson"} (default since 0.2.0) or \code{"gamma"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the mortality process.}
 
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,
-\code{"gaussian"} (default) or \code{"refined"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+\code{"refined"} (default since 0.2.0) or \code{"gaussian"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
 }
 \value{
