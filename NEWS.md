@@ -5,16 +5,49 @@ Inventory and Analysis) and **BWI** (German Bundeswaldinventur) calibration
 projects. Every new argument defaults to the previous behaviour, with three
 exceptions that do not reproduce 0.1.0 and are marked in the table below:
 `mortality(growth_scale = 0.01)`, `createProcess(light_mask = TRUE)` and
-`finn(reg_floor = 1e-3)`. A fourth change reproduces 0.1.0 only on a machine
-whose `LC_COLLATE` was already `C`: `resolveSiteIDs()` now numbers sites,
+`finn(reg_floor = 1e-3)`. Two further exceptions repair the stem-count gradient
+and are on by default: `fit(trees_offset = 0.01)` and `fit(rb_gradient = TRUE)`,
+both described under *The stem-count gradient* below. One further change
+reproduces 0.1.0 only on a machine whose `LC_COLLATE` was already `C`: `resolveSiteIDs()` now numbers sites,
 patches and species by radix order instead of the collation locale's.
 
 The two tables are the overview; the sections below them carry the detail.
+
+### The stem-count gradient
+
+Two defects in how the `trees` term reached the parameters, both repaired here
+and both on by default (FINNverse/FINN#53).
+
+The count likelihood added a constant to the predicted stem count so that
+`log_prob` stays finite where a species' simulated count is exactly zero and the
+observed one is not. That constant was `1e-5` for `"poisson"` and `0.001` for
+`"nbinom"`, which leaves the value finite and the gradient at `y/offset` -- four
+orders of magnitude above every other term in the objective. Where the gradients
+are clipped per group, one such cell then rescales the whole mechanistic block.
+`fit(trees_offset = )` exposes the constant and defaults to `0.01`, on the scale
+of the predicted count. `NULL` restores the two historical values.
+
+The simulator draws deaths and recruits and rounds them, and the gradient ran
+through both the reparameterised draw and the rounding's straight-through
+surrogate, so the sampler's noise reached the parameters. On the German
+inventory 97 % of the mortality gradient was draw noise (signal-to-noise 0.52
+against 43 without it), which made a fit diverge or not depending on the host's
+float kernels. `fit(rb_gradient = TRUE)` keeps the drawn, rounded count in the
+forward pass -- a simulation is unchanged -- and takes the derivative through
+`n_at_risk * m` and the expected recruitment instead. Against a 200-draw
+reference gradient the repaired direction agrees to a cosine of 1.000 in every
+parameter block at `update_step = 1`, where the unrepaired objective's cosine is
+negative. `FALSE` restores the previous path.
+
+Only fits that score `trees` are affected; a model scoring growth and mortality
+alone has no such term.
 
 ### What is new since 0.1.0
 
 | what | where | default |
 |---|---|---|
+| Offset of the `trees` count likelihood where a simulated count is exactly zero | `fit(trees_offset = )` | `0.01`; **not** 0.1.0 behaviour, `NULL` restores it |
+| Count gradients taken through the expected deaths and recruits instead of through the draw | `fit(rb_gradient = )` | `TRUE`; **not** 0.1.0 behaviour, `FALSE` restores it |
 | Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |
 | Per-response likelihood, renamed | `fit(loss_family = )` | as `loss` had it; `loss` still accepted, deprecated |
 | How a response is reduced before it is scored: `"mean"`, `"sum"`, `"size_classes"`, `"quantiles"`, `"tree"` | `fit(loss_aggregation = )` | `NULL` (per-cell means) |

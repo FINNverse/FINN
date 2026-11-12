@@ -506,15 +506,16 @@ finn = function(N_species,
 #'   forward pass is unchanged to the bit -- the stand still dies and recruits
 #'   discretely -- but the reparameterised draw and the rounding's surrogate no
 #'   longer carry the sampler's noise into the gradient. On the German inventory
-#'   97 % of the mortality gradient was draw noise without it. Default `FALSE`,
-#'   which reproduces every earlier fit exactly. See FINNverse/FINN#53.
+#'   97 % of the mortality gradient was draw noise without it. Default `TRUE` since
+#'   0.2.0; set `FALSE` to reproduce a fit made before that. See FINNverse/FINN#53.
 #' @param trees_offset (`numeric(1)`)\cr Offset added to the predicted stem count
 #'   before the `trees` count likelihood, which is `-Inf` (poisson) or arbitrarily
 #'   steep (nbinom) where a species' simulated count is exactly zero and the
-#'   observed one is not. An offset of `1e-5` leaves the gradient at `y/1e-5`, four
-#'   orders above every other term; `0.01` is a sane value where simulated zeros
-#'   occur. `NULL` (default) keeps each family's historical constant -- `1e-5` for
-#'   `"poisson"`, `0.001` for `"nbinom"` -- and so reproduces every earlier fit.
+#'   observed one is not. On the scale of the predicted count, so per patch. The
+#'   default `0.01` keeps that cell's gradient comparable with every other term;
+#'   the historical `1e-5` (poisson) and `0.001` (nbinom) left it at `y/offset`,
+#'   four orders above the rest. `NULL` restores those two historical constants
+#'   and so reproduces a fit made before 0.2.0.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -585,8 +586,8 @@ fit = function(model,
                anchor_min_dbh = NULL,
                teacher_forcing = FALSE,
                loss_resolution = c("site", "tree"),
-               rb_gradient = FALSE,
-               trees_offset = NULL,
+               rb_gradient = TRUE,
+               trees_offset = 0.01,
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -2228,9 +2229,9 @@ finn_class = nn_module(
                  # Keep the drawn count in the forward pass and take the derivative
                  # through its expectation (FINNverse/FINN#53); FALSE reproduces the
                  # previous behaviour exactly.
-                 rb_gradient = FALSE,
+                 rb_gradient = TRUE,
                  # Offset keeping the count likelihoods finite at a simulated zero.
-                 trees_offset = NULL,
+                 trees_offset = 0.01,
                  # multiple shooting: restart the simulated cohort state from the observed
                  # cohorts in `anchor_cohorts` (named by simulation timestep) instead of
                  # running free from t = 0. FALSE is single shooting, i.e. unchanged.
