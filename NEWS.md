@@ -131,8 +131,11 @@ it: a cap fitted freely runs to whatever the calibration window supports, which
 on a national inventory is far above anything observed. The penalty is
 `prior_lambda * (log K - log prior)^2` per cap, the same form as the L2 pull of
 a staged calibration. `prior = "max_obs_recruits"` (the default) resolves it at
-the start of `fit()` from the maximum of the data's `reg` column, which is also
-the cap's starting value; a number sets it directly; `prior_lambda = 0` switches
+the start of the first `fit()` from the largest observed recruitment rate per
+timestep, `max(reg / period_length)` -- `reg` is the sum over an observation's
+interval while the cap bounds one timestep's mean -- which is also the cap's
+starting value; a later `fit()` continues from the trained cap rather than
+resetting it; a number sets the prior directly, on the same per-timestep scale; `prior_lambda = 0` switches
 it off. With `cap = "species"` the prior is hierarchical -- each species' log cap
 is pulled towards the differentiable mean of all of them, so it penalises how far
 the species spread apart and leaves the overall level to the data.

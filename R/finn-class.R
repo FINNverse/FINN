@@ -2554,8 +2554,16 @@ finn_class = nn_module(
     options(oldopts)
 
     Y = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
-    # The recruitment cap's prior needs the data, which finn() never sees.
-    private$resolve_cap_prior(if (!is.null(data$reg)) as.numeric(data$reg) else numeric(0))
+    # The recruitment cap's prior needs the data, which finn() never sees. `reg`
+    # is the SUM over an observation's interval while the cap bounds the mean of
+    # ONE timestep, so the observations are annualised before the maximum is
+    # taken - on a 10-year inventory the prior would otherwise sit 10x above
+    # anything the cap can bind.
+    private$resolve_cap_prior(if(is.null(data$reg)) numeric(0) else {
+      pl_obs = as.numeric(data$period_length)
+      pl_obs[!is.finite(pl_obs) | pl_obs <= 0] = 1
+      as.numeric(data$reg) / pl_obs
+    })
     # ---- constant vs per-site aggregation windows ----
     # The original path takes ONE period_length per data-year across all sites.
     # If sites observed in the same data-year carry different period_length
@@ -4087,6 +4095,10 @@ finn_class = nn_module(
     # and the cap's starting value (FINNverse/FINN#58).
     resolve_cap_prior = function(obs_reg_per_ha_yr) {
       if(is.null(self$reg_logK)) return(invisible(NULL))
+      # Resolve ONCE. fit() is called again to continue a calibration (cluster
+      # segments, a second call with more epochs), and re-resolving would throw
+      # the trained cap away and restart it at the prior.
+      if(!is.null(self$reg_prior_value)) return(invisible(self$reg_prior_value))
       prior = self$reg_prior
       if(identical(prior, "max_obs_recruits")) {
         if(length(obs_reg_per_ha_yr) == 0L || all(!is.finite(obs_reg_per_ha_yr)))

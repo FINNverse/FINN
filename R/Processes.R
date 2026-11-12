@@ -398,12 +398,19 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' baseline scaling, so `prior_lambda` means the same thing on every dataset.
 #'
 #' `createProcess(prior = "max_obs_recruits")`, the default, resolves the prior
-#' from the data at the start of [FINN::fit()]: the maximum of the `reg` column
-#' of `data`, i.e. observed recruitment on whatever scale you supply it, which is
-#' also the cap's starting value. A number sets it directly, on that same scale.
-#' `prior_lambda = 0` switches the prior off and leaves the cap to the data
-#' alone. Scoring no recruitment at all is an error rather than a silent default,
-#' because nothing else in the objective constrains a cap.
+#' from the data at the start of [FINN::fit()]: the largest observed recruitment
+#' rate per timestep, `max(reg / period_length)`. The division matters on any
+#' inventory with a remeasurement interval, because `reg` is the SUM over that
+#' interval while the cap bounds the mean of one timestep -- taking the column
+#' as supplied would place the prior a factor `period_length` too high, and the
+#' cap would never bind. A number sets the prior directly, on that same
+#' per-timestep scale. `prior_lambda = 0` switches the prior off and leaves the
+#' cap to the data alone. Scoring no recruitment at all is an error rather than
+#' a silent default, because nothing else in the objective constrains a cap.
+#'
+#' The resolved value is also the cap's starting value, and it is resolved only
+#' on the FIRST [FINN::fit()] of a model: a second call continues from the
+#' trained cap instead of resetting it to the prior.
 #'
 #' With `cap = "species"` the prior is **hierarchical**: each species' log cap is
 #' pulled towards the mean of all current log caps rather than towards a fixed
