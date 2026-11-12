@@ -1003,7 +1003,7 @@ reserved_model_fields = c(
   "nonfinite_counts", "num_species", "obs_rec", "optimizer", "optimizer_lr", "param_history",
   "patch_size_ha", "per_site_period", "period_mode", "perm_importance", "positional_encoding",
   "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
-  "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler",
+  "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler", "theta_floor",
   "rb_gradient", "trees_offset", "reg_cap", "reg_prior", "reg_prior_lambda", "reg_prior_value", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
   "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
 is_reserved_model_field = function(name) {
@@ -4039,6 +4039,8 @@ finn_class = nn_module(
       if(type == "regeneration") {
         self$sample_regeneration = obj$sample_regeneration
         self$regeneration_sampler = obj$regeneration_sampler
+        # before par_theta_recruits, whose getter reads it
+        self$theta_floor = obj$theta_floor
         self$par_theta_recruits = obj$dispersion_parameter
         # The Beverton-Holt cap is FINN's to create, not the user's to declare:
         # `cap` sets its resolution, and fit() replaces the placeholder start value
@@ -4220,7 +4222,12 @@ finn_class = nn_module(
 
     par_theta_recruits = function(value) {
       if(missing(value)) {
-        return(1.0/(torch::nnf_softplus(self$par_theta_recruits_raw)+0.0001))
+        theta = 1.0/(torch::nnf_softplus(self$par_theta_recruits_raw)+0.0001)
+        # Bounded here rather than at each use, so the draw and the likelihood
+        # cannot see different values. NULL = a model built before 0.2.0, left
+        # unbounded. See FINNverse/FINN#63 for why it collapses.
+        if(!is.null(self$theta_floor)) theta = theta$clamp(min = self$theta_floor)
+        return(theta)
       } else {
         value = 1.0 / value - 0.0001
         if(length(value) == 1) value = rep(value, self$N_species)

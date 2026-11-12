@@ -128,6 +128,21 @@
 #'   cohorts at annual probabilities of 0.01-0.10.
 #'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
 #'   stand.
+#' @param theta_floor (`numeric(1)`)\cr Lower bound on the negative-binomial
+#'   recruit dispersion `par_theta_recruits`, applied wherever it is read: the
+#'   recruit draw and the regeneration likelihood. Default `0.5` since 0.2.0;
+#'   `0` or `NULL` leaves it unbounded, as in 0.1.0. Only used when this object
+#'   is the regeneration process.
+#'
+#'   theta is trained, and it collapses, because lowering it widens the
+#'   regeneration likelihood and so cheapens that term without improving the
+#'   predicted mean. The same parameter sets the variance of the *simulated*
+#'   recruit draw, `mu + mu^2/theta`, which then turns bursty: on the German NFI
+#'   it reached 0.035 by epoch 50 and the simulated stand overshot observed
+#'   recruitment 133-fold, with basal-area and stem losses flat until epoch 25
+#'   and running away after. The Beverton-Holt cap does not prevent this -- it
+#'   bounds the mean, and the variance around a capped mean is still
+#'   `K + K^2/theta`.
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   per-cohort mortality probability is clamped to **per simulation step**,
 #'   before the death draw. Only used when this process is the mortality process;
@@ -194,6 +209,7 @@
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
                          cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
+                         theta_floor = 0.5,
                          mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
@@ -211,6 +227,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$cap = match.arg(cap)
   out$prior = validate_cap_prior(prior)
   out$prior_lambda = validate_prior_lambda(prior_lambda)
+  out$theta_floor = validate_theta_floor(theta_floor)
   # the competition kernel gates on isTRUE(), so `light_mask = 1` would be accepted
   # here and then silently leave the quantiles unmasked
   if(!is.logical(light_mask) || length(light_mask) != 1L || is.na(light_mask))
@@ -357,6 +374,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn,
 #'   `"refined"` (default since 0.2.0) or `"gaussian"`; see [FINN::createProcess()]. Only used
 #'   when this object is the regeneration process.
+#' @param theta_floor (`numeric(1)`)\cr Lower bound on the recruit dispersion
+#'   `par_theta_recruits`, default `0.5` since 0.2.0, `0` or `NULL` to leave it
+#'   unbounded as in 0.1.0; see [FINN::createProcess()]. Only used when this
+#'   object is the regeneration process.
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
 #' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/
@@ -382,6 +403,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
+                        theta_floor = 0.5,
                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
@@ -408,6 +430,7 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   out$cap = match.arg(cap)
   out$prior = validate_cap_prior(prior)
   out$prior_lambda = validate_prior_lambda(prior_lambda)
+  out$theta_floor = validate_theta_floor(theta_floor)
   out$dispersion_parameter = dispersion_parameter
   out$sample_regeneration = sample_regeneration
   out$NN = NN
@@ -636,6 +659,19 @@ validate_cap_prior = function(prior) {
   if(is.numeric(prior) && length(prior) == 1L && is.finite(prior) && prior > 0) return(as.numeric(prior))
   stop('`prior` must be "max_obs_recruits" or a single positive finite number ',
        '(recruits ha^-1 yr^-1).', call. = FALSE)
+}
+
+# A lower bound on the recruit dispersion, not an upper one: theta only ever
+# collapses, because lowering it cheapens the regeneration likelihood.
+validate_theta_floor = function(theta_floor) {
+  if(is.null(theta_floor)) return(NULL)
+  if(is.numeric(theta_floor) && length(theta_floor) == 1L &&
+     is.finite(theta_floor) && theta_floor >= 0) {
+    return(if(theta_floor > 0) as.numeric(theta_floor) else NULL)
+  }
+  stop("`theta_floor` must be a single finite number >= 0, or NULL ",
+       "(0 and NULL both leave the recruit dispersion unbounded, as in 0.1.0).",
+       call. = FALSE)
 }
 
 validate_prior_lambda = function(prior_lambda) {

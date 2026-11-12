@@ -30,6 +30,7 @@ createProcess(
   cap = c("all", "species"),
   prior = "max_obs_recruits",
   prior_lambda = 0.1,
+  theta_floor = 0.5,
   mortality_floor = 0.001,
   mortality_ceiling = 0.999
 )
@@ -171,6 +172,22 @@ enters the logit in \%/yr. \code{growth_scale = 1} feeds it the raw annual relat
 rate, the behaviour of 0.1.0. The value is set as the function's formal rather
 than passed down the forward pass, so a custom mortality \code{func} without the
 argument keeps working unchanged.}
+
+\item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the negative-binomial
+recruit dispersion \code{par_theta_recruits}, applied wherever it is read: the
+recruit draw and the regeneration likelihood. Default \code{0.5} since 0.2.0;
+\code{0} or \code{NULL} leaves it unbounded, as in 0.1.0. Only used when this object
+is the regeneration process.
+
+theta is trained, and it collapses, because lowering it widens the
+regeneration likelihood and so cheapens that term without improving the
+predicted mean. The same parameter sets the variance of the \emph{simulated}
+recruit draw, \code{mu + mu^2/theta}, which then turns bursty: on the German NFI
+it reached 0.035 by epoch 50 and the simulated stand overshot observed
+recruitment 133-fold, with basal-area and stem losses flat until epoch 25
+and running away after. The Beverton-Holt cap does not prevent this -- it
+bounds the mean, and the variance around a capped mean is still
+\code{K + K^2/theta}.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},
