@@ -4041,6 +4041,9 @@ finn_class = nn_module(
         self$regeneration_sampler = obj$regeneration_sampler
         # before par_theta_recruits, whose getter reads it
         self$theta_floor = obj$theta_floor
+        # FALSE keeps theta at dispersion_parameter (a buffer); NULL = a process
+        # built before the argument existed, trained as before
+        self$theta_optimized = !isFALSE(obj$optimizeTheta)
         self$par_theta_recruits = obj$dispersion_parameter
         # The Beverton-Holt cap is FINN's to create, not the user's to declare:
         # `cap` sets its resolution, and fit() replaces the placeholder start value
@@ -4231,7 +4234,9 @@ finn_class = nn_module(
       } else {
         value = 1.0 / value - 0.0001
         if(length(value) == 1) value = rep(value, self$N_species)
-        self$par_theta_recruits_raw = torch::nn_parameter( torch_tensor(log( exp(value) - 1.0 )) )
+        init = torch_tensor(log( exp(value) - 1.0 ))
+        if(isFALSE(self$theta_optimized)) self$register_buffer("par_theta_recruits_raw", init)
+        else self$par_theta_recruits_raw = torch::nn_parameter(init)
       }
     },
 

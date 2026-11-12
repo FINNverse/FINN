@@ -31,6 +31,7 @@ createProcess(
   prior = "max_obs_recruits",
   prior_lambda = 0.1,
   theta_floor = 0.5,
+  optimizeTheta = TRUE,
   mortality_floor = 0.001,
   mortality_ceiling = 0.999
 )
@@ -173,6 +174,14 @@ rate, the behaviour of 0.1.0. The value is set as the function's formal rather
 than passed down the forward pass, so a custom mortality \code{func} without the
 argument keeps working unchanged.}
 
+\item{cap, prior, prior_lambda}{The Beverton-Holt cap of
+\code{\link[=regeneration_capped]{regeneration_capped()}}: \code{cap = "all"} (default, one cap shared by all
+species) or \code{"species"}; \code{prior = "max_obs_recruits"} (default, the largest
+observed recruitment rate in the fitted data, recruits per ha and year) or a
+positive number; \code{prior_lambda} (default \code{0.1}) the strength of the pull of
+\verb{log K} towards \verb{log prior}. See \code{\link[=regeneration_capped]{regeneration_capped()}}. Only used
+when this process is the regeneration process and its \code{func} uses the cap.}
+
 \item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the negative-binomial
 recruit dispersion \code{par_theta_recruits}, applied wherever it is read: the
 recruit draw and the regeneration likelihood. Default \code{0.5} since 0.2.0;
@@ -188,6 +197,13 @@ recruitment 133-fold, with basal-area and stem losses flat until epoch 25
 and running away after. The Beverton-Holt cap does not prevent this -- it
 bounds the mean, and the variance around a capped mean is still
 \code{K + K^2/theta}.}
+
+\item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion
+\code{par_theta_recruits} be estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}.
+With \code{FALSE} it stays at \code{dispersion_parameter} for the whole fit (a buffer,
+not a parameter), in the recruit draw and in the regeneration likelihood
+alike; \code{theta_floor} still applies. Only used when this process is the
+regeneration process.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},

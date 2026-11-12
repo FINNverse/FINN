@@ -53,16 +53,13 @@ importFrom(Rcpp,evalCpp)
 importFrom(abind,abind)
 importFrom(coro,loop)
 importFrom(graphics,matplot)
-importFrom(stats,
-  model.matrix,
-  predict,
-  runif,
-  rweibull
-)
+importFrom(stats,model.matrix)
+importFrom(stats,predict)
+importFrom(stats,runif)
+importFrom(stats,rweibull)
 importFrom(torch,torch_sigmoid)
-importFrom(utils,
-  capture.output,
-  modifyList,
-  str
-)
+importFrom(utils,capture.output)
+importFrom(utils,getFromNamespace)
+importFrom(utils,modifyList)
+importFrom(utils,str)
 useDynLib(FINN, .registration = TRUE)

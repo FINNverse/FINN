@@ -1,14 +1,3 @@
-# FINN (development, branch zoo-v02-mortfloor)
-
-* `createProcess(mortality_floor =)` and `createHybrid(mortality_floor =)`: the lower
-  bound on the annual probability with which the forward pass draws dead trees, until
-  now a fixed `0.01`. The default stays `0.01`, so every published result is
-  unchanged; a lower floor (`1e-3` is the lowest tested recommendation) lets a
-  low-mortality stand keep its predicted rate with the default Gamma draw, which
-  stays finite with an unbiased mean gradient down to `1e-4`. At the default, a stand whose predicted
-  mortality is ~0 loses about 1 % of its stems per year in simulation. The per-tree
-  mortality loss was never bounded by it.
-
 # FINN 0.2.0
 
 This release adds the model features developed for the **FIA** (US Forest
@@ -152,6 +141,7 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = )`, `createHybrid()` | `"refined"`; **not** 0.1.0 behaviour, `"gaussian"` restores it |
 | Lower and upper limit of the mortality probability, per simulation step | `createProcess(mortality_floor =, mortality_ceiling =)`, `createHybrid()` | `0.001` / `0.999`; **not** 0.1.0 behaviour, `0.01` / `0.99` restores it |
 | Lower bound on the negative-binomial recruit dispersion, applied to the draw and the likelihood alike | `createProcess(theta_floor = )`, `createHybrid()` | `0.5`; **not** 0.1.0 behaviour, `0` or `NULL` restores it |
+| Recruit dispersion kept fixed at `dispersion_parameter` instead of estimated | `createProcess(optimizeTheta = )`, `createHybrid()` | `TRUE` (estimated, as in 0.1.0) |
 | Recruitment capped by a Beverton-Holt term, with a prior on the cap | `finn()`'s default regeneration process, `createProcess(cap =, prior =, prior_lambda =)` | `regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)`; **not** 0.1.0 behaviour, `FINN::regeneration` restores it |
 | Count gradients taken through the expected deaths and recruits instead of through the draw | `fit(rb_gradient = )` | `TRUE`; **not** 0.1.0 behaviour, `FALSE` restores it |
 | Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |

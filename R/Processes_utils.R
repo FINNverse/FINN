@@ -71,6 +71,19 @@
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
 #'   the negative binomial distribution used to sample recruits. Only used when
 #'   this process is the regeneration process.
+#' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion
+#'   `par_theta_recruits` be estimated during [FINN::fit()]? Default `TRUE`.
+#'   With `FALSE` it stays at `dispersion_parameter` for the whole fit (a buffer,
+#'   not a parameter), in the recruit draw and in the regeneration likelihood
+#'   alike; `theta_floor` still applies. Only used when this process is the
+#'   regeneration process.
+#' @param cap,prior,prior_lambda The Beverton-Holt cap of
+#'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
+#'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
+#'   observed recruitment rate in the fitted data, recruits per ha and year) or a
+#'   positive number; `prior_lambda` (default `0.1`) the strength of the pull of
+#'   `log K` towards `log prior`. See [FINN::regeneration_capped()]. Only used
+#'   when this process is the regeneration process and its `func` uses the cap.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the default
 #'   environmental-response network architecture.
 #' @param upper (`numeric()`)\cr Upper boundaries (natural scale) for the
@@ -209,9 +222,10 @@
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
                          cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
-                         theta_floor = 0.5,
+                         theta_floor = 0.5, optimizeTheta = TRUE,
                          mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
+  out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
   out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
   out$mortality_ceiling = check_mortality_limit(mortality_ceiling, "mortality_ceiling")
@@ -352,6 +366,13 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
 #'   the negative binomial distribution used to sample recruits. Only used when
 #'   this object is the regeneration process.
+#' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion be
+#'   estimated during [FINN::fit()]? Default `TRUE`; `FALSE` keeps it at
+#'   `dispersion_parameter`; see [FINN::createProcess()]. Only used when this
+#'   object is the regeneration process.
+#' @param cap,prior,prior_lambda The Beverton-Holt cap on recruitment; see
+#'   [FINN::createProcess()] and [FINN::regeneration_capped()]. Only used when
+#'   this object is the regeneration process.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the
 #'   default network architecture entirely.
 #' @param dropout (`numeric(1)`)\cr Dropout rate of the network.
@@ -403,9 +424,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
-                        theta_floor = 0.5,
+                        theta_floor = 0.5, optimizeTheta = TRUE,
                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
+  out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
   out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
   out$mortality_ceiling = check_mortality_limit(mortality_ceiling, "mortality_ceiling")
@@ -663,6 +685,12 @@ validate_cap_prior = function(prior) {
 
 # A lower bound on the recruit dispersion, not an upper one: theta only ever
 # collapses, because lowering it cheapens the regeneration likelihood.
+validate_optimize_theta = function(optimizeTheta) {
+  if(!is.logical(optimizeTheta) || length(optimizeTheta) != 1L || is.na(optimizeTheta))
+    stop("`optimizeTheta` must be TRUE or FALSE.", call. = FALSE)
+  optimizeTheta
+}
+
 validate_theta_floor = function(theta_floor) {
   if(is.null(theta_floor)) return(NULL)
   if(is.numeric(theta_floor) && length(theta_floor) == 1L &&

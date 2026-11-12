@@ -22,6 +22,7 @@ createHybrid(
   prior = "max_obs_recruits",
   prior_lambda = 0.1,
   theta_floor = 0.5,
+  optimizeTheta = TRUE,
   mortality_floor = 0.001,
   mortality_ceiling = 0.999
 )
@@ -73,9 +74,18 @@ when this object is the mortality process.}
 \code{"refined"} (default since 0.2.0) or \code{"gaussian"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
 
+\item{cap, prior, prior_lambda}{The Beverton-Holt cap on recruitment; see
+\code{\link[=createProcess]{createProcess()}} and \code{\link[=regeneration_capped]{regeneration_capped()}}. Only used when
+this object is the regeneration process.}
+
 \item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the recruit dispersion
 \code{par_theta_recruits}, default \code{0.5} since 0.2.0, \code{0} or \code{NULL} to leave it
 unbounded as in 0.1.0; see \code{\link[=createProcess]{createProcess()}}. Only used when this
+object is the regeneration process.}
+
+\item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion be
+estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}; \code{FALSE} keeps it at
+\code{dispersion_parameter}; see \code{\link[=createProcess]{createProcess()}}. Only used when this
 object is the regeneration process.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
