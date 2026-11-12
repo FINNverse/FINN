@@ -501,6 +501,18 @@ finn = function(N_species,
 #'   restarts at every anchor, so `frac_ghost` is 0 by construction only where the
 #'   anchors cover every census; a sparser anchor list carries ghosts like single
 #'   shooting does.
+#' @param rb_gradient (`logical(1)`)\cr Take the gradient of the drawn death and
+#'   recruitment counts through their expectation instead of through the draw. The
+#'   forward pass is unchanged to the bit -- the stand still dies and recruits
+#'   discretely -- but the reparameterised draw and the rounding's surrogate no
+#'   longer carry the sampler's noise into the gradient. On the German inventory
+#'   97 % of the mortality gradient was draw noise without it. Default `FALSE`,
+#'   which reproduces every earlier fit exactly. See FINNverse/FINN#53.
+#' @param trees_offset (`numeric(1)`)\cr Offset added to the predicted stem count
+#'   before the `"poisson"` count likelihood, which is `-Inf` where a species'
+#'   simulated count is exactly zero and the observed one is not. The default
+#'   `1e-5` makes the value finite and the gradient `y/1e-5`; raise it (e.g. `0.01`)
+#'   where simulated zeros are rare. Only used by `loss_family = c(trees = "poisson")`.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -571,6 +583,8 @@ fit = function(model,
                anchor_min_dbh = NULL,
                teacher_forcing = FALSE,
                loss_resolution = c("site", "tree"),
+               rb_gradient = FALSE,
+               trees_offset = 1e-5,
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -606,6 +620,8 @@ fit = function(model,
                       anchor_mode = anchor_mode,
                       anchor_min_dbh = anchor_min_dbh,
                       teacher_forcing = teacher_forcing,
+                      rb_gradient = rb_gradient,
+                      trees_offset = trees_offset,
                       loss_resolution = match.arg(loss_resolution),
                       ...))
 }
@@ -853,7 +869,7 @@ reserved_model_fields = c(
   "patch_size_ha", "per_site_period", "period_mode", "perm_importance", "positional_encoding",
   "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
   "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler",
-  "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
+  "rb_gradient", "trees_offset", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
   "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
 is_reserved_model_field = function(name) {
   name %in% reserved_model_fields ||
@@ -1345,9 +1361,20 @@ finn_class = nn_module(
         n_at_risk = torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0)
         m_draw = torch::torch_clamp(m, 0.01, 0.99)
         # NULL (a model saved before mortality_draw existed, or a hybrid built elsewhere) is the default
+        alive_mask = trees$ge(0.5)$float()
         trees_dead = (if(identical(self$mortality_draw, "poisson")) binomial_from_poisson(n_at_risk, m_draw)
-                      else binomial_from_gamma(n_at_risk, m_draw))*trees$ge(0.5)$float()
+                      else binomial_from_gamma(n_at_risk, m_draw))*alive_mask
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
+        # `rb_gradient`: keep the drawn, rounded count in the FORWARD pass -- the stand must
+        # die discretely -- but take the derivative through the expectation n_at_risk * m.
+        # The reparameterised draw and the rounding's surrogate both carry the sampler's
+        # noise into the gradient; measured on BWI, 97 % of the mortality gradient is draw
+        # noise (SNR 0.52) against 43 without it. The forward value is unchanged to the bit,
+        # so simulations and any fit with rb_gradient = FALSE reproduce exactly.
+        if (isTRUE(self$rb_gradient)) {
+          dead_exp   = n_at_risk * m_draw * alive_mask
+          trees_dead = dead_exp + (trees_dead - dead_exp)$detach()
+        }
         trees_before = trees
         trees = torch_clamp(trees - trees_dead, min = 0) #### TODO if trees = 0 then NA...prevent!
 
@@ -1423,6 +1450,10 @@ finn_class = nn_module(
       }
 
       r = r + r$round()$detach() - r$detach()
+      # the same split for recruitment: drawn forward, expectation backward (see the
+      # death draw above). The regeneration loss already scores r_mean_ha, so the
+      # recruitment parameters keep an analytic gradient of their own either way.
+      if (isTRUE(self$rb_gradient)) r = r_mean_patch + (r - r_mean_patch)$detach()
 
       # New recruits
       dbh_new = ((r-1+0.1)/1e-3)$sigmoid() + (self$recruits_dbh - 1.0) # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
@@ -2192,6 +2223,12 @@ finn_class = nn_module(
                  # other terms of that timestep, "skip_step" discards the whole timestep
                  # (the behaviour before drop_term existed).
                  nonfinite = c("drop_term", "skip_step"),
+                 # Keep the drawn count in the forward pass and take the derivative
+                 # through its expectation (FINNverse/FINN#53); FALSE reproduces the
+                 # previous behaviour exactly.
+                 rb_gradient = FALSE,
+                 # Offset keeping the count likelihoods finite at a simulated zero.
+                 trees_offset = 1e-5,
                  # multiple shooting: restart the simulated cohort state from the observed
                  # cohorts in `anchor_cohorts` (named by simulation timestep) instead of
                  # running free from t = 0. FALSE is single shooting, i.e. unchanged.
@@ -2453,6 +2490,9 @@ finn_class = nn_module(
     # better. For an MSE this is exactly Max's 1/sd(y)^2 - the loss of predicting
     # the mean IS the variance - but it generalises to the Poisson, negative
     # binomial and binomial terms, where sd() is not the right scale.
+    # set before the loss closures are built: they capture `self$trees_offset`
+    self$rb_gradient  = isTRUE(rb_gradient)
+    self$trees_offset = trees_offset
     private$create_loss_functions(loss_spec, weights)   # unweighted for now
     # computed in both modes: under weight_scale = "raw" it is not used for scaling,
     # only to say what each response actually contributes (FINNverse/FINN#37)
@@ -3655,9 +3695,12 @@ finn_class = nn_module(
             func = local({
                 local_l = l
                 local_weights = weights
+                # `trees_offset` keeps log_prob finite at a simulated zero. The default
+                # 1e-5 leaves the VALUE finite and the GRADIENT y/1e-5, see FINN#53.
+                local_offset = if (is.null(self$trees_offset)) 1e-5 else self$trees_offset
                 function(true, pred, n = NULL) {
                   mask = true$isnan()$bitwise_not()
-                  if(as.logical(mask$max()$data())) return(torch::distr_poisson(pred[mask] + 0.00001)$log_prob(true[mask])$negative()$mean()*local_weights[local_l])
+                  if(as.logical(mask$max()$data())) return(torch::distr_poisson(pred[mask] + local_offset)$log_prob(true[mask])$negative()$mean()*local_weights[local_l])
                   else return(0.0)
                 }
               })

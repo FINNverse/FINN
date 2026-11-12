@@ -42,6 +42,8 @@ fit(
   anchor_min_dbh = NULL,
   teacher_forcing = FALSE,
   loss_resolution = c("site", "tree"),
+  rb_gradient = FALSE,
+  trees_offset = 1e-05,
   ...
 )
 }
@@ -421,6 +423,20 @@ window's kills alone. Under \code{reanchor}/\code{teacher_forcing} the generatio
 restarts at every anchor, so \code{frac_ghost} is 0 by construction only where the
 anchors cover every census; a sparser anchor list carries ghosts like single
 shooting does.}
+
+\item{rb_gradient}{(\code{logical(1)})\cr Take the gradient of the drawn death and
+recruitment counts through their expectation instead of through the draw. The
+forward pass is unchanged to the bit -- the stand still dies and recruits
+discretely -- but the reparameterised draw and the rounding's surrogate no
+longer carry the sampler's noise into the gradient. On the German inventory
+97 \% of the mortality gradient was draw noise without it. Default \code{FALSE},
+which reproduces every earlier fit exactly. See FINNverse/FINN#53.}
+
+\item{trees_offset}{(\code{numeric(1)})\cr Offset added to the predicted stem count
+before the \code{"poisson"} count likelihood, which is \code{-Inf} where a species'
+simulated count is exactly zero and the observed one is not. The default
+\code{1e-5} makes the value finite and the gradient \code{y/1e-5}; raise it (e.g. \code{0.01})
+where simulated zeros are rare. Only used by \code{loss_family = c(trees = "poisson")}.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
