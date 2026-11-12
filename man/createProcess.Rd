@@ -26,7 +26,10 @@ createProcess(
   custom_parameters = NULL,
   mortality_draw = c("poisson", "gamma"),
   regeneration_sampler = c("refined", "gaussian"),
-  growth_scale = NULL
+  growth_scale = NULL,
+  cap = c("all", "species"),
+  prior = "max_obs_recruits",
+  prior_lambda = 0.1
 )
 }
 \arguments{

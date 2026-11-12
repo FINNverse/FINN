@@ -73,9 +73,12 @@ test_that("regeneration_saturation without reg_logK errors clearly", {
     competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
     regeneration_process = createProcess(~ temp + prec, FINN::regeneration_saturation,
                                          optimizeSpecies = TRUE, optimizeEnv = TRUE))
-  expect_error(
-    suppressMessages(
+  # Since 0.2.0 this is no longer an error: FINN creates the cap itself, so a
+  # process that reads reg_logK without declaring it is the normal case.
+  expect_false(is.null(m$reg_logK))
+  expect_equal(m$reg_logK$numel(), 1L)
+  expect_silent(suppressMessages(suppressWarnings(
       fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
-          epochs = 1L, patches = 2, patch_size = 0.06, plot_progress = FALSE)),
-    "reg_logK")
+          epochs = 1L, patches = 2, patch_size = 0.06, plot_progress = FALSE))))
+  expect_equal(m$reg_prior_value, max(d$obs$reg, na.rm = TRUE))
 })

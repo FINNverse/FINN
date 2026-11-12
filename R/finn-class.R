@@ -1004,7 +1004,7 @@ reserved_model_fields = c(
   "patch_size_ha", "per_site_period", "period_mode", "perm_importance", "positional_encoding",
   "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
   "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler",
-  "rb_gradient", "trees_offset", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
+  "rb_gradient", "trees_offset", "reg_cap", "reg_prior", "reg_prior_lambda", "reg_prior_value", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
   "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
 is_reserved_model_field = function(name) {
   name %in% reserved_model_fields ||
@@ -2539,6 +2539,8 @@ finn_class = nn_module(
     options(oldopts)
 
     Y = torch::torch_cat(lapply(response, function(x) torch::torch_tensor(x, dtype=torch::torch_float32(), device="cpu")$unsqueeze(4)), 4)
+    # The recruitment cap's prior needs the data, which finn() never sees.
+    private$resolve_cap_prior(if (!is.null(data$reg)) as.numeric(data$reg) else numeric(0))
     # ---- constant vs per-site aggregation windows ----
     # The original path takes ONE period_length per data-year across all sites.
     # If sites observed in the same data-year carry different period_length
@@ -2944,6 +2946,13 @@ finn_class = nn_module(
         # browser()
         pred = pred_tmp[[1]]
         loss = pred_tmp[[2]]
+        # The cap's prior is NOT a loss term: forward() backwards the weighted
+        # losses per step, so adding it there would put it through the
+        # weights = "auto" baseline scaling and make `prior_lambda` mean something
+        # different on every dataset. Backward it once per batch instead -- the
+        # gradients accumulate into the same step.
+        cap_pen = private$cap_prior_penalty()
+        if (!is.null(cap_pen)) cap_pen$backward()
         if(!is.null(pred_tmp$tree_deaths)) tree_cov[[length(tree_cov) + 1L]] = pred_tmp$tree_deaths
         # ---- Guard before gradient clipping ----
         # Safe gradient checker: skips NULL or undefined grads
@@ -3985,7 +3994,7 @@ finn_class = nn_module(
       }
 
       if(is.null(obj)) {
-        func = switch(type, mortality = { mortality }, growth = { growth }, regeneration = {regeneration}, competition = { competition })
+        func = switch(type, mortality = { mortality }, growth = { growth }, regeneration = {regeneration_capped}, competition = { competition })
         obj = createProcess(func = func)
       }
 
@@ -4000,6 +4009,24 @@ finn_class = nn_module(
         self$sample_regeneration = obj$sample_regeneration
         self$regeneration_sampler = obj$regeneration_sampler
         self$par_theta_recruits = obj$dispersion_parameter
+        # The Beverton-Holt cap is FINN's to create, not the user's to declare:
+        # `cap` sets its resolution, and fit() replaces the placeholder start value
+        # with the resolved prior (see resolve_cap_prior()).
+        if(private$uses_capped_regeneration(obj$func)) {
+          self$reg_cap = obj$cap
+          self$reg_prior = obj$prior
+          self$reg_prior_lambda = obj$prior_lambda
+          # setup_species_parameters() ran first, so a cap declared the old way
+          # through custom_parameters is already registered and stays authoritative
+          # -- regeneration_adult() still needs that route for its other parameters.
+          if(is.null(self$reg_logK)) {
+            n_cap = if(identical(obj$cap, "species")) self$N_species else 1L
+            self$register_parameter("reg_logK",
+              torch::nn_parameter(torch::torch_full(n_cap, log(800), dtype = torch::torch_float32())))
+          } else {
+            self$reg_cap = if(self$reg_logK$numel() > 1L) "species" else "all"
+          }
+        }
       }
 
       if(type == "mortality") {
@@ -4023,6 +4050,50 @@ finn_class = nn_module(
       }
 
     },
+    # A user may wrap or rename the process function, so identify the capped
+    # regeneration by the parameter it reads rather than by `identical()`.
+    uses_capped_regeneration = function(func) {
+      if(is.null(func)) return(FALSE)
+      any(grepl("reg_logK", deparse(body(func)), fixed = TRUE))
+    },
+
+    # `prior = "max_obs_recruits"` is resolved here and not in finn(), because the
+    # data only exist at fit() time. The resolved value is both the prior's centre
+    # and the cap's starting value (FINNverse/FINN#58).
+    resolve_cap_prior = function(obs_reg_per_ha_yr) {
+      if(is.null(self$reg_logK)) return(invisible(NULL))
+      prior = self$reg_prior
+      if(identical(prior, "max_obs_recruits")) {
+        if(length(obs_reg_per_ha_yr) == 0L || all(!is.finite(obs_reg_per_ha_yr)))
+          stop("regeneration_capped(prior = \"max_obs_recruits\") needs observed ",
+               "recruitment to resolve the prior, and this fit scores none. Pass a ",
+               "number instead, or score regeneration.", call. = FALSE)
+        prior = max(obs_reg_per_ha_yr[is.finite(obs_reg_per_ha_yr)])
+        if(!(prior > 0))
+          stop("regeneration_capped(prior = \"max_obs_recruits\") resolved to ", prior,
+               "; the observed recruitment is all zero, so the data cannot place the cap. ",
+               "Pass a number instead.", call. = FALSE)
+      }
+      self$reg_prior_value = as.numeric(prior)
+      self$reg_logK$set_data(torch::torch_full(self$reg_logK$shape, log(self$reg_prior_value),
+                                               dtype = torch::torch_float32()))
+      invisible(self$reg_prior_value)
+    },
+
+    # prior_lambda * (log K - log prior)^2 per cap, added AFTER the weights = "auto"
+    # baseline scaling so its strength does not depend on the data's null deviance.
+    # With cap = "species" the target is the differentiable mean of the current log
+    # caps, so the prior penalises how far the species spread and leaves the level
+    # to the data.
+    cap_prior_penalty = function() {
+      if(is.null(self$reg_logK) || is.null(self$reg_prior_value)) return(NULL)
+      lambda = if(is.null(self$reg_prior_lambda)) 0 else self$reg_prior_lambda
+      if(!(lambda > 0)) return(NULL)
+      target = if(identical(self$reg_cap, "species") && self$reg_logK$numel() > 1L)
+                 self$reg_logK$mean() else log(self$reg_prior_value)
+      lambda * (self$reg_logK - target)$pow(2)$sum()
+    },
+
     setup_species_parameters = function(obj, type, hybrid) {
       self[[paste0(type, "_func")]] = private$set_environment(obj$func)
       self[[paste0(type, "_formula")]] = obj$formula

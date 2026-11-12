@@ -57,6 +57,31 @@ imposed a recruitment floor of 0.0011 per cell-year -- at a 0.0168 ha patch,
 0.066 recruits per hectare and year **per species**. `"gamma"` and `"gaussian"`
 restore the previous draws.
 
+### The recruitment cap
+
+`regeneration_capped()` replaces `regeneration_saturation()` (kept as a
+deprecated alias for one release) and becomes the default regeneration process.
+`FINN::regeneration`, unbounded as before, stays available and is now the opt-in.
+
+Two things change beyond the name. The cap parameter `reg_logK` is **created by
+FINN**, so nothing has to be declared through `custom_parameters` any more;
+`createProcess(cap = )` sets its resolution, `"all"` for one cap shared by every
+species and `"species"` for one per species.
+
+And the cap carries a prior, because nothing else in the objective constrains
+it: a cap fitted freely runs to whatever the calibration window supports, which
+on a national inventory is far above anything observed. The penalty is
+`prior_lambda * (log K - log prior)^2` per cap, the same form as the L2 pull of
+a staged calibration. `prior = "max_obs_recruits"` (the default) resolves it at
+the start of `fit()` from the maximum of the data's `reg` column, which is also
+the cap's starting value; a number sets it directly; `prior_lambda = 0` switches
+it off. With `cap = "species"` the prior is hierarchical -- each species' log cap
+is pulled towards the differentiable mean of all of them, so it penalises how far
+the species spread apart and leaves the overall level to the data.
+
+The penalty is added **after** the `weights = "auto"` baseline scaling, so
+`prior_lambda` means the same thing on every dataset.
+
 ### What is new since 0.1.0
 
 | what | where | default |
@@ -64,6 +89,7 @@ restore the previous draws.
 | Offset of the `trees` count likelihood where a simulated count is exactly zero | `fit(trees_offset = )` | `0.01`; **not** 0.1.0 behaviour, `NULL` restores it |
 | Exact integer death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = )`, `createHybrid()` | `"poisson"`; **not** 0.1.0 behaviour, `"gamma"` restores it |
 | Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = )`, `createHybrid()` | `"refined"`; **not** 0.1.0 behaviour, `"gaussian"` restores it |
+| Recruitment capped by a Beverton-Holt term, with a prior on the cap | `finn()`'s default regeneration process, `createProcess(cap =, prior =, prior_lambda =)` | `regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)`; **not** 0.1.0 behaviour, `FINN::regeneration` restores it |
 | Count gradients taken through the expected deaths and recruits instead of through the draw | `fit(rb_gradient = )` | `TRUE`; **not** 0.1.0 behaviour, `FALSE` restores it |
 | Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |
 | Per-response likelihood, renamed | `fit(loss_family = )` | as `loss` had it; `loss` still accepted, deprecated |

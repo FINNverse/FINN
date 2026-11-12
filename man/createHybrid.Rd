@@ -17,7 +17,10 @@ createHybrid(
   emb_dim = 20L,
   dim_feedforward = 256L,
   mortality_draw = c("poisson", "gamma"),
-  regeneration_sampler = c("refined", "gaussian")
+  regeneration_sampler = c("refined", "gaussian"),
+  cap = c("all", "species"),
+  prior = "max_obs_recruits",
+  prior_lambda = 0.1
 )
 }
 \arguments{

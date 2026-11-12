@@ -39,6 +39,7 @@ export(pred2DF)
 export(predictTrees)
 export(regeneration)
 export(regeneration_adult)
+export(regeneration_capped)
 export(regeneration_saturation)
 export(resolveSiteIDs)
 export(rnbinom_torch_refined)
@@ -52,12 +53,16 @@ importFrom(Rcpp,evalCpp)
 importFrom(abind,abind)
 importFrom(coro,loop)
 importFrom(graphics,matplot)
-importFrom(stats,model.matrix)
-importFrom(stats,predict)
-importFrom(stats,runif)
-importFrom(stats,rweibull)
+importFrom(stats,
+  model.matrix,
+  predict,
+  runif,
+  rweibull
+)
 importFrom(torch,torch_sigmoid)
-importFrom(utils,capture.output)
-importFrom(utils,modifyList)
-importFrom(utils,str)
+importFrom(utils,
+  capture.output,
+  modifyList,
+  str
+)
 useDynLib(FINN, .registration = TRUE)

@@ -168,7 +168,8 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
+                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)
@@ -178,6 +179,9 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(growth_scale) && !(is.numeric(growth_scale) && length(growth_scale) == 1L &&
                                  is.finite(growth_scale) && growth_scale > 0))
     stop("`growth_scale` must be a single positive finite number, or NULL.", call. = FALSE)
+  out$cap = match.arg(cap)
+  out$prior = validate_cap_prior(prior)
+  out$prior_lambda = validate_prior_lambda(prior_lambda)
   # the competition kernel gates on isTRUE(), so `light_mask = 1` would be accepted
   # here and then silently leave the quantiles unmasked
   if(!is.logical(light_mask) || length(light_mask) != 1L || is.na(light_mask))
@@ -342,7 +346,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
 #'
 #' @export
-createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian")) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
+                        cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1) {
   out = list()
   out$mortality_draw = match.arg(mortality_draw)
   out$regeneration_sampler = match.arg(regeneration_sampler)
@@ -361,6 +366,9 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   out$custom = TRUE
   out$optimizeSpecies = FALSE
   out$optimizeEnv = optimize
+  out$cap = match.arg(cap)
+  out$prior = validate_cap_prior(prior)
+  out$prior_lambda = validate_prior_lambda(prior_lambda)
   out$dispersion_parameter = dispersion_parameter
   out$sample_regeneration = sample_regeneration
   out$NN = NN
@@ -580,4 +588,20 @@ get_par_boundary = function(obj, type, upper = TRUE) {
     }
     return(lower)
   }
+}
+
+# The recruitment cap's prior is specified identically on createProcess() and
+# createHybrid(); validating it in one place keeps the two from drifting apart.
+validate_cap_prior = function(prior) {
+  if(identical(prior, "max_obs_recruits")) return(prior)
+  if(is.numeric(prior) && length(prior) == 1L && is.finite(prior) && prior > 0) return(as.numeric(prior))
+  stop('`prior` must be "max_obs_recruits" or a single positive finite number ',
+       '(recruits ha^-1 yr^-1).', call. = FALSE)
+}
+
+validate_prior_lambda = function(prior_lambda) {
+  if(is.numeric(prior_lambda) && length(prior_lambda) == 1L &&
+     is.finite(prior_lambda) && prior_lambda >= 0) return(as.numeric(prior_lambda))
+  stop("`prior_lambda` must be a single finite number >= 0 (0 switches the prior off).",
+       call. = FALSE)
 }
