@@ -68,6 +68,27 @@ imposed a recruitment floor of 0.0011 per cell-year -- at a 0.0168 ha patch,
 0.066 recruits per hectare and year **per species**. `"gamma"` and `"gaussian"`
 restore the previous draws.
 
+### The mortality limits
+
+The simulation clamps the per-cohort mortality probability before the death
+draw. That interval was hard-coded to `[0.01, 0.99]`; it is now
+`createProcess(mortality_floor =, mortality_ceiling =)` and defaults to
+`[0.001, 0.999]`.
+
+The bound is per **simulation step**, not per year, and the old floor is why a
+simulated low-mortality stand -- a mature unthinned stand, a slow-growing
+species, an equilibrium run -- lost stems the observations did not: at a 1 %
+floor every cohort is at risk at 1 % per step however low the fitted rate says
+it should be. The per-tree mortality loss was never bounded by it, so a fit
+could be correct while the trajectory it simulated was not.
+
+The floor cannot simply be dropped: `binomial_from_gamma()`'s shape
+`n*p/(1-p)` degenerates as `p -> 0`. Measured with that draw it stays finite
+with an unbiased mean gradient down to `1e-4`, but single-draw gradients grow
+heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
+times the old default's at `1e-3` and about a hundred times at `1e-4` -- so
+`1e-3` is the lowest tested value and is the new default.
+
 ### The recruitment cap
 
 `regeneration_capped()` replaces `regeneration_saturation()` (kept as a
@@ -100,6 +121,7 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | Offset of the `trees` count likelihood where a simulated count is exactly zero | `fit(trees_offset = )` | `0.01`; **not** 0.1.0 behaviour, `NULL` restores it |
 | Exact integer death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = )`, `createHybrid()` | `"poisson"`; **not** 0.1.0 behaviour, `"gamma"` restores it |
 | Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = )`, `createHybrid()` | `"refined"`; **not** 0.1.0 behaviour, `"gaussian"` restores it |
+| Lower and upper limit of the mortality probability, per simulation step | `createProcess(mortality_floor =, mortality_ceiling =)`, `createHybrid()` | `0.001` / `0.999`; **not** 0.1.0 behaviour, `0.01` / `0.99` restores it |
 | Recruitment capped by a Beverton-Holt term, with a prior on the cap | `finn()`'s default regeneration process, `createProcess(cap =, prior =, prior_lambda =)` | `regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)`; **not** 0.1.0 behaviour, `FINN::regeneration` restores it |
 | Count gradients taken through the expected deaths and recruits instead of through the draw | `fit(rb_gradient = )` | `TRUE`; **not** 0.1.0 behaviour, `FALSE` restores it |
 | Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |

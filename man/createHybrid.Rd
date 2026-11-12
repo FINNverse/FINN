@@ -20,7 +20,9 @@ createHybrid(
   regeneration_sampler = c("refined", "gaussian"),
   cap = c("all", "species"),
   prior = "max_obs_recruits",
-  prior_lambda = 0.1
+  prior_lambda = 0.1,
+  mortality_floor = 0.001,
+  mortality_ceiling = 0.999
 )
 }
 \arguments{
@@ -68,6 +70,11 @@ when this object is the mortality process.}
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,
 \code{"refined"} (default since 0.2.0) or \code{"gaussian"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
+
+\item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
+mortality probability is clamped to per simulation step before the death
+draw, defaults \code{0.001} and \code{0.999}; see \code{\link[=createProcess]{createProcess()}}. Only used
+when this object is the mortality process.}
 }
 \value{
 A list of class \code{"hybrid"} containing the process definition and

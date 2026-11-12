@@ -29,7 +29,9 @@ createProcess(
   growth_scale = NULL,
   cap = c("all", "species"),
   prior = "max_obs_recruits",
-  prior_lambda = 0.1
+  prior_lambda = 0.1,
+  mortality_floor = 0.001,
+  mortality_ceiling = 0.999
 )
 }
 \arguments{
@@ -162,6 +164,24 @@ enters the logit in \%/yr. \code{growth_scale = 1} feeds it the raw annual relat
 rate, the behaviour of 0.1.0. The value is set as the function's formal rather
 than passed down the forward pass, so a custom mortality \code{func} without the
 argument keeps working unchanged.}
+
+\item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
+per-cohort mortality probability is clamped to \strong{per simulation step},
+before the death draw. Only used when this process is the mortality process;
+the per-tree mortality loss is not bounded by either.
+
+The defaults are \code{0.001} and \code{0.999} (0.1 \% and 99.9 \% per step). Until
+0.2.0 the interval was hard-coded to \verb{[0.01, 0.99]}, which is why a
+simulated low-mortality stand -- a mature unthinned stand, a slow-growing
+species, an equilibrium run -- lost stems the observations did not: at a
+1 \% floor it loses 1 \% of every cohort per step however low the fitted rate.
+
+The floor exists because \code{binomial_from_gamma()}'s shape \code{n*p/(1-p)}
+degenerates as \code{p -> 0}. Measured with that draw, it stays finite with an
+unbiased mean gradient down to \code{1e-4}, but single-draw gradients grow
+heavy-tailed as \code{n*p} shrinks -- the largest per-tree gradient is about ten
+times the old default's at \code{1e-3} and about a hundred times at \code{1e-4} --
+so \code{1e-3} is the lowest tested value and is the new default.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and
