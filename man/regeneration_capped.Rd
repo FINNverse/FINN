@@ -23,7 +23,10 @@ In general low values for high regeneration and high values for low regeneration
 \item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
 }
 \value{
-torch.Tensor Capped regeneration values for forest patches.
+torch.Tensor Mean recruitment, stems ha^-1 step^-1,
+\verb{[sites, patches, species]} -- a per-HECTARE rate, not a per-patch count.
+\code{forward()} multiplies it by \code{patch_size_ha} itself before the recruit draw
+(\code{R/finn-class.R:1591-1593}), and \code{reg} is scored on the per-hectare value.
 }
 \description{
 The default regeneration process since 0.2.0, and a drop-in alternative to

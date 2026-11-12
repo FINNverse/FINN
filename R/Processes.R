@@ -425,7 +425,10 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' @param light torch.Tensor Available light variable for calculation.
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #'
-#' @return torch.Tensor Capped regeneration values for forest patches.
+#' @return torch.Tensor Mean recruitment, stems ha^-1 step^-1,
+#'   `[sites, patches, species]` -- a per-HECTARE rate, not a per-patch count.
+#'   `forward()` multiplies it by `patch_size_ha` itself before the recruit draw
+#'   (`R/finn-class.R:1591-1593`), and `reg` is scored on the per-hectare value.
 #'
 #' @seealso [FINN::regeneration], [FINN::createProcess()]
 #'
