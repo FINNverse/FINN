@@ -509,10 +509,12 @@ finn = function(N_species,
 #'   97 % of the mortality gradient was draw noise without it. Default `FALSE`,
 #'   which reproduces every earlier fit exactly. See FINNverse/FINN#53.
 #' @param trees_offset (`numeric(1)`)\cr Offset added to the predicted stem count
-#'   before the `"poisson"` count likelihood, which is `-Inf` where a species'
-#'   simulated count is exactly zero and the observed one is not. The default
-#'   `1e-5` makes the value finite and the gradient `y/1e-5`; raise it (e.g. `0.01`)
-#'   where simulated zeros are rare. Only used by `loss_family = c(trees = "poisson")`.
+#'   before the `trees` count likelihood, which is `-Inf` (poisson) or arbitrarily
+#'   steep (nbinom) where a species' simulated count is exactly zero and the
+#'   observed one is not. An offset of `1e-5` leaves the gradient at `y/1e-5`, four
+#'   orders above every other term; `0.01` is a sane value where simulated zeros
+#'   occur. `NULL` (default) keeps each family's historical constant -- `1e-5` for
+#'   `"poisson"`, `0.001` for `"nbinom"` -- and so reproduces every earlier fit.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -584,7 +586,7 @@ fit = function(model,
                teacher_forcing = FALSE,
                loss_resolution = c("site", "tree"),
                rb_gradient = FALSE,
-               trees_offset = 1e-5,
+               trees_offset = NULL,
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -2228,7 +2230,7 @@ finn_class = nn_module(
                  # previous behaviour exactly.
                  rb_gradient = FALSE,
                  # Offset keeping the count likelihoods finite at a simulated zero.
-                 trees_offset = 1e-5,
+                 trees_offset = NULL,
                  # multiple shooting: restart the simulated cohort state from the observed
                  # cohorts in `anchor_cohorts` (named by simulation timestep) instead of
                  # running free from t = 0. FALSE is single shooting, i.e. unchanged.
@@ -3695,8 +3697,8 @@ finn_class = nn_module(
             func = local({
                 local_l = l
                 local_weights = weights
-                # `trees_offset` keeps log_prob finite at a simulated zero. The default
-                # 1e-5 leaves the VALUE finite and the GRADIENT y/1e-5, see FINN#53.
+                # `trees_offset` keeps log_prob finite at a simulated zero; the
+                # historical 1e-5 leaves the GRADIENT at y/1e-5, see FINN#53.
                 local_offset = if (is.null(self$trees_offset)) 1e-5 else self$trees_offset
                 function(true, pred, n = NULL) {
                   mask = true$isnan()$bitwise_not()
@@ -3716,10 +3718,11 @@ finn_class = nn_module(
                   local_tmp_loss_name = tmp_loss_name
                   local_l = l
                   local_weights = weights
+                  local_offset = if (is.null(self$trees_offset)) 0.001 else self$trees_offset
                   function(true, pred, n = NULL) {
                     mask = true$isnan()$bitwise_not()
                     theta = 1.0/torch::nnf_softplus( self[[paste0("par_loss_",local_tmp_loss_name, "_theta")]] )
-                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+0.001, true[mask], theta)$mean()*local_weights[local_l])
+                    if(as.logical(mask$max()$data())) return(dnbinom_torch(pred[mask]+local_offset, true[mask], theta)$mean()*local_weights[local_l])
                     else return(0.0)
                 }
               })

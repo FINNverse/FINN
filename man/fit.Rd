@@ -43,7 +43,7 @@ fit(
   teacher_forcing = FALSE,
   loss_resolution = c("site", "tree"),
   rb_gradient = FALSE,
-  trees_offset = 1e-05,
+  trees_offset = NULL,
   ...
 )
 }
@@ -433,10 +433,12 @@ longer carry the sampler's noise into the gradient. On the German inventory
 which reproduces every earlier fit exactly. See FINNverse/FINN#53.}
 
 \item{trees_offset}{(\code{numeric(1)})\cr Offset added to the predicted stem count
-before the \code{"poisson"} count likelihood, which is \code{-Inf} where a species'
-simulated count is exactly zero and the observed one is not. The default
-\code{1e-5} makes the value finite and the gradient \code{y/1e-5}; raise it (e.g. \code{0.01})
-where simulated zeros are rare. Only used by \code{loss_family = c(trees = "poisson")}.}
+before the \code{trees} count likelihood, which is \code{-Inf} (poisson) or arbitrarily
+steep (nbinom) where a species' simulated count is exactly zero and the
+observed one is not. An offset of \code{1e-5} leaves the gradient at \code{y/1e-5}, four
+orders above every other term; \code{0.01} is a sane value where simulated zeros
+occur. \code{NULL} (default) keeps each family's historical constant -- \code{1e-5} for
+\code{"poisson"}, \code{0.001} for \code{"nbinom"} -- and so reproduces every earlier fit.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
