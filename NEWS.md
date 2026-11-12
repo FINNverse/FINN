@@ -153,6 +153,7 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | Per census and epoch: `frac_killed`, `mean_kill_year`, `frac_ghost`; and the per-tree predictions | `$tree_deaths`, `$tree_pred` | under `loss_resolution = "tree"` |
 | Multiple shooting: rebuild the stand from the observed tree list at every anchor | `fit(reanchor = , anchor_cohorts = , anchor_mode = , anchor_min_dbh = )` | `FALSE`, `NULL`, `"replace"`, `NULL` |
 | Reset the stand to the observation every year | `fit(teacher_forcing = )` | `FALSE` |
+| Drive the stand with the observed recruitment (`reg / period_length` per ha and year in every year of its interval, drawn by the recruit sampler) instead of the regeneration process, which is frozen and unscored for that call: stage 2 of a staged calibration | `fit(recruits = )`; `simulateForest(recruits =, obs_recruits =)`, `predict()` | `"simulated"`, as in 0.1.0 |
 | Per-site aggregation windows for mixed remeasurement intervals | automatic from `period_length`; override with `model$period_mode` | `"auto"` |
 | A non-finite loss term drops that term, or the whole timestep; occurrences counted | `fit(nonfinite = )`, `$nonfinite_counts` | `"drop_term"` |
 | Set-up only, no training | `fit(epochs = 0)` | — |

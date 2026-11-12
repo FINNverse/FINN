@@ -44,6 +44,7 @@ fit(
   loss_resolution = c("site", "tree"),
   rb_gradient = TRUE,
   trees_offset = 0.01,
+  recruits = c("simulated", "observed"),
   ...
 )
 }
@@ -446,6 +447,52 @@ default \code{0.01} keeps that cell's gradient comparable with every other term;
 the historical \code{1e-5} (poisson) and \code{0.001} (nbinom) left it at \code{y/offset},
 four orders above the rest. \code{NULL} restores those two historical constants
 and so reproduces a fit made before 0.2.0.}
+
+\item{recruits}{(\code{character(1)})\cr Where the recruits of the simulated stand
+come from. \code{"simulated"} (the default) is the regeneration process, unchanged.
+\code{"observed"} drives the stand with the OBSERVED recruitment instead, while
+growth, mortality and competition run and are trained as usual: stage 2 of a
+staged calibration. An inventory samples small trees too sparsely for
+recruitment to be calibrated jointly with the rest -- a mis-fitted
+regeneration process feeds a wrong stand into every later interval, and growth
+and mortality compensate for it. So they are fitted on a stand that recruits
+what was observed, and the regeneration process is fitted afterwards in a call
+of its own (with the other processes' \code{optimizeSpecies}/\code{optimizeEnv} off, or
+through \code{weights}).
+
+The unit chain: \code{reg} in \code{data} (recruits per ha over the observation period,
+on the row of the interval's END year) divided by \code{period_length} is a rate
+per ha and year, and it is the expected recruitment \code{r_mean_ha} of EVERY
+simulated year of that interval, at that site and for that species. Times
+\code{patch_size} it is the expected recruitment per patch, which the model's
+recruit sampler draws from (or which is taken as is with
+\code{sample_regeneration = FALSE}) and rounds, as always. Drawing around the
+observed mean rather than rounding it keeps the low rates, most of which are
+below one recruit per patch and year: the observed mode inherits the sampler,
+and with \code{sample_regeneration = FALSE} the rounding delivers exactly zero
+recruits wherever the per-patch mean is below 0.5. The simulated years of an interval are
+exactly those whose simulated recruitment \code{fit()} sums to score that
+observation: an observation at timestep \code{t} with \code{period_length} \code{p} covers
+the timesteps \verb{t - p + 1, ..., t} on the constant and the per-site path alike,
+and the timestep \code{t} alone where the constant path has no \code{period_length}
+(timestep = position of the year among the years of \code{env}). The observed rate
+is a constant; no gradient flows from it.
+
+In such a call the regeneration term is weighted 0 (the other weights stay as
+given), and every parameter of the regeneration process -- its species
+parameters, its environment network, the cap \code{reg_logK}, the recruit
+dispersion and any custom parameters it declares -- is frozen; each gets its
+previous \code{requires_grad} back when \code{fit()} returns. Nothing on the model
+records the mode, so a later \code{fit(recruits = "simulated")} trains them again.
+
+Refused with an error: an \code{NA} \code{reg} in a cell an interval needs (0 stays 0);
+a simulated year lying in two intervals, or before or between a site's
+intervals (give the first census a \code{period_length} that reaches back to the
+first year of \code{env}, or start \code{env} there); \code{reanchor} and \code{teacher_forcing},
+which replace the free-running stand the fed recruitment is defined for. Years
+after a site's last census get no recruits: nothing after it enters the
+objective. A model fitted this way still simulates with its own regeneration
+process; \link{simulateForest} can feed it the observed recruitment instead.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }

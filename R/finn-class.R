@@ -567,6 +567,51 @@ finn = function(N_species,
 #'   the historical `1e-5` (poisson) and `0.001` (nbinom) left it at `y/offset`,
 #'   four orders above the rest. `NULL` restores those two historical constants
 #'   and so reproduces a fit made before 0.2.0.
+#' @param recruits (`character(1)`)\cr Where the recruits of the simulated stand
+#'   come from. `"simulated"` (the default) is the regeneration process, unchanged.
+#'   `"observed"` drives the stand with the OBSERVED recruitment instead, while
+#'   growth, mortality and competition run and are trained as usual: stage 2 of a
+#'   staged calibration. An inventory samples small trees too sparsely for
+#'   recruitment to be calibrated jointly with the rest -- a mis-fitted
+#'   regeneration process feeds a wrong stand into every later interval, and growth
+#'   and mortality compensate for it. So they are fitted on a stand that recruits
+#'   what was observed, and the regeneration process is fitted afterwards in a call
+#'   of its own (with the other processes' `optimizeSpecies`/`optimizeEnv` off, or
+#'   through `weights`).
+#'
+#'   The unit chain: `reg` in `data` (recruits per ha over the observation period,
+#'   on the row of the interval's END year) divided by `period_length` is a rate
+#'   per ha and year, and it is the expected recruitment `r_mean_ha` of EVERY
+#'   simulated year of that interval, at that site and for that species. Times
+#'   `patch_size` it is the expected recruitment per patch, which the model's
+#'   recruit sampler draws from (or which is taken as is with
+#'   `sample_regeneration = FALSE`) and rounds, as always. Drawing around the
+#'   observed mean rather than rounding it keeps the low rates, most of which are
+#'   below one recruit per patch and year: the observed mode inherits the sampler,
+#'   and with `sample_regeneration = FALSE` the rounding delivers exactly zero
+#'   recruits wherever the per-patch mean is below 0.5. The simulated years of an interval are
+#'   exactly those whose simulated recruitment `fit()` sums to score that
+#'   observation: an observation at timestep `t` with `period_length` `p` covers
+#'   the timesteps `t - p + 1, ..., t` on the constant and the per-site path alike,
+#'   and the timestep `t` alone where the constant path has no `period_length`
+#'   (timestep = position of the year among the years of `env`). The observed rate
+#'   is a constant; no gradient flows from it.
+#'
+#'   In such a call the regeneration term is weighted 0 (the other weights stay as
+#'   given), and every parameter of the regeneration process -- its species
+#'   parameters, its environment network, the cap `reg_logK`, the recruit
+#'   dispersion and any custom parameters it declares -- is frozen; each gets its
+#'   previous `requires_grad` back when `fit()` returns. Nothing on the model
+#'   records the mode, so a later `fit(recruits = "simulated")` trains them again.
+#'
+#'   Refused with an error: an `NA` `reg` in a cell an interval needs (0 stays 0);
+#'   a simulated year lying in two intervals, or before or between a site's
+#'   intervals (give the first census a `period_length` that reaches back to the
+#'   first year of `env`, or start `env` there); `reanchor` and `teacher_forcing`,
+#'   which replace the free-running stand the fed recruitment is defined for. Years
+#'   after a site's last census get no recruits: nothing after it enters the
+#'   objective. A model fitted this way still simulates with its own regeneration
+#'   process; [FINN::simulateForest] can feed it the observed recruitment instead.
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -659,6 +704,7 @@ fit = function(model,
                loss_resolution = c("site", "tree"),
                rb_gradient = TRUE,
                trees_offset = 0.01,
+               recruits = c("simulated", "observed"),
                ...) {
   invisible(model$fit(data = data,
                       env = env,
@@ -697,6 +743,7 @@ fit = function(model,
                       rb_gradient = rb_gradient,
                       trees_offset = trees_offset,
                       loss_resolution = match.arg(loss_resolution),
+                      recruits = match.arg(recruits),
                       ...))
 }
 
@@ -797,6 +844,7 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   `value`). When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
 #'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
 #'   ...) for the requested timesteps.
+#' @inheritParams simulateForest
 #' @method predict finn_class
 #' @export
 #' @examplesIf torch::torch_is_installed()
@@ -827,6 +875,8 @@ predict.finn_class = function(object,
                               device = c("cpu", "gpu"),
                               return_cohorts = FALSE,
                               debug = FALSE,
+                              recruits = c("simulated", "observed"),
+                              obs_recruits = NULL,
                               ...) {
   object$simulate(env = env,
                   disturbance = disturbance,
@@ -836,6 +886,8 @@ predict.finn_class = function(object,
                   device = device,
                   return_cohorts = return_cohorts,
                   debug = debug,
+                  recruits = match.arg(recruits),
+                  obs_recruits = obs_recruits,
                   ...)
 }
 
@@ -862,6 +914,28 @@ predict.finn_class = function(object,
 #'   of timesteps to store just those. Recorded cohorts appear as `$long$cohort`
 #'   / `$wide$cohort`.
 #' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
+#' @param recruits (`character(1)`)\cr Where the recruits come from. `"simulated"`
+#'   (the default) is the model's regeneration process, as before. `"observed"`
+#'   feeds the observed recruitment in `obs_recruits` instead, as
+#'   `fit(recruits = "observed")` does: the `reg` of each site, species and
+#'   observation interval (recruits per ha over the interval, on the row of its
+#'   END year) divided by `period_length` is the expected recruitment per ha and
+#'   year in every simulated year of that interval; times `patch_size` it is drawn
+#'   per patch by the recruit sampler (or taken as the mean with
+#'   `sample_regeneration = FALSE`, where the rounding then delivers no recruit
+#'   wherever the per-patch mean is below 0.5). Growth, mortality and competition run as
+#'   usual. Meant for checking a model calibrated that way on the intervals it was
+#'   calibrated on: with observed recruitment the model is **not an autonomous
+#'   simulator**, so every simulated year must lie in an observed interval, and a
+#'   bare-ground, succession or projection run beyond them is refused. Such runs
+#'   need the fitted regeneration process (`"simulated"`).
+#' @param obs_recruits (`data.table|data.frame`)\cr The observed recruitment for
+#'   `recruits = "observed"`, required there and refused otherwise: a table like
+#'   `fit()`'s `data` with `siteID`, `year`, `species`, `reg` and `period_length`,
+#'   rows for every species (0 where none recruited), the sites of `env` and years
+#'   among those of `env`. Intervals map to simulated years exactly as in
+#'   [FINN::fit]. An `NA` `reg` in an interval, a year in two intervals and a year
+#'   in none are errors.
 #' @param ... Advanced options forwarded to the internal simulator, chiefly
 #'   `batchsize` (split the sites into batches of this many to cap memory for very
 #'   large runs). The default processes all sites in one batch and is what almost
@@ -896,6 +970,8 @@ simulateForest = function(model,
                           device = c("cpu", "gpu"),
                           return_cohorts = FALSE,
                           debug = FALSE,
+                          recruits = c("simulated", "observed"),
+                          obs_recruits = NULL,
                           ...) {
   predict(model,
           env = env,
@@ -906,6 +982,8 @@ simulateForest = function(model,
           device = device,
           return_cohorts = return_cohorts,
           debug = debug,
+          recruits = match.arg(recruits),
+          obs_recruits = obs_recruits,
           ...)
 }
 
@@ -1151,7 +1229,8 @@ finn_class = nn_module(
                      anchor_min_dbh = NULL,
                      teacher_forcing = FALSE,
                      loss_resolution = c("site", "tree"),
-                     tree_data = NULL){
+                     tree_data = NULL,
+                     obs_recruits = NULL){
 
     nonfinite = match.arg(nonfinite)
     anchor_mode = match.arg(anchor_mode, c("replace", "merge"))
@@ -1554,41 +1633,51 @@ finn_class = nn_module(
         }
       }
 
-      ### Competition 3 ####
-      # start reg
-      AL_reg = self$competition_func( # must have dimension = n species in last dim
-        dbh = dbh,
-        species = species,
-        trees = trees,
-        parComp = self$par_competition,
-        h = 1,
-        # minLight = self$minLight,
-        patch_size_ha = self$patch_size_ha,
-        ba = NULL,
-        cohortHeights = NULL,
-        n_quantiles = self$n_quantiles,
-        continuous = self$continuous,
-        light_mask = isTRUE(self$light_mask)
-      )
+      if(!is.null(obs_recruits)) {
+        ### Observed recruitment (fit/simulate with recruits = "observed") ####
+        # The expected recruitment of this year is the OBSERVED rate of the interval
+        # the year belongs to, per ha and year ([sites, species], built by
+        # private$observed_recruitment_rates()), the same in every patch. It is a
+        # constant: the regeneration process is not evaluated and nothing flows back
+        # from it. Drawing (or the mean) and rounding below are unchanged.
+        r_mean_ha = obs_recruits[,i,]$to(dtype = self$dtype, device = self$device)$unsqueeze(2L)$expand(c(-1L, patches, -1L))
+      } else {
+        ### Competition 3 ####
+        # start reg
+        AL_reg = self$competition_func( # must have dimension = n species in last dim
+          dbh = dbh,
+          species = species,
+          trees = trees,
+          parComp = self$par_competition,
+          h = 1,
+          # minLight = self$minLight,
+          patch_size_ha = self$patch_size_ha,
+          ba = NULL,
+          cohortHeights = NULL,
+          n_quantiles = self$n_quantiles,
+          continuous = self$continuous,
+          light_mask = isTRUE(self$light_mask)
+        )
 
-      # browser()
-      ### Regeneration ####
-      if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
-      else pred = env[["reg"]][,i,]
+        # browser()
+        ### Regeneration ####
+        if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
+        else pred = env[["reg"]][,i,]
 
-      ## Density dependence (e.g. a Beverton-Holt cap) is now the responsibility
-      ## of the regeneration process function itself -- see FINN::regeneration
-      ## (unbounded) vs FINN::regeneration_saturation (capped, with its own
-      ## reg_logK parameter declared via createProcess(custom_parameters=)).
-      ## The stand itself (dbh, trees) goes only to functions that ask for it,
-      ## e.g. FINN::regeneration_adult (seed source = conspecific adults).
-      reg_args = list(species = species,
-                      parReg = self$par_regeneration[,1],
-                      pred = pred,
-                      light = AL_reg)
-      if(all(c("dbh", "trees") %in% names(formals(self$regeneration_func))))
-        reg_args = c(reg_args, list(dbh = dbh, trees = trees))
-      r_mean_ha = do.call(self$regeneration_func, reg_args)
+        ## Density dependence (e.g. a Beverton-Holt cap) is now the responsibility
+        ## of the regeneration process function itself -- see FINN::regeneration
+        ## (unbounded) vs FINN::regeneration_saturation (capped, with its own
+        ## reg_logK parameter declared via createProcess(custom_parameters=)).
+        ## The stand itself (dbh, trees) goes only to functions that ask for it,
+        ## e.g. FINN::regeneration_adult (seed source = conspecific adults).
+        reg_args = list(species = species,
+                        parReg = self$par_regeneration[,1],
+                        pred = pred,
+                        light = AL_reg)
+        if(all(c("dbh", "trees") %in% names(formals(self$regeneration_func))))
+          reg_args = c(reg_args, list(dbh = dbh, trees = trees))
+        r_mean_ha = do.call(self$regeneration_func, reg_args)
+      }
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
 
@@ -2209,8 +2298,15 @@ finn_class = nn_module(
                       batchsize = NULL,
                       device = c("cpu", "gpu"),
                       return_cohorts = FALSE,
-                      debug = FALSE
+                      debug = FALSE,
+                      recruits = c("simulated", "observed"),
+                      obs_recruits = NULL
                       ) {
+    recruits = match.arg(recruits)
+    if(identical(recruits, "simulated") && !is.null(obs_recruits))
+      stop("`obs_recruits` is only used with `recruits = \"observed\"`; with the default \"simulated\" the regeneration process sets the recruitment.", call. = FALSE)
+    if(identical(recruits, "observed") && is.null(obs_recruits))
+      stop("`recruits = \"observed\"` needs `obs_recruits`, the observed recruitment (a table like fit()'s `data` with siteID, year, species, reg and period_length). Without it there is no recruitment to feed: a model calibrated with fit(recruits = \"observed\") simulates with its own regeneration process only after that process has been fitted.", call. = FALSE)
     device = resolve_device(device)
     if(device == "gpu") device="cuda:0"
     self$device = device
@@ -2233,6 +2329,16 @@ finn_class = nn_module(
 
     if(is.null(batchsize)) batchsize = nrow(envs[[1]])
     sites =  nrow(envs[[1]])
+
+    # recruits = "observed": one rate per (site, simulated year, species), and every
+    # simulated year must lie in an observed interval -- a simulation has no
+    # objective that could make a year without one harmless (see fit()).
+    recruit_rates = NULL
+    if(identical(recruits, "observed")) {
+      check_site_sets(env, data = obs_recruits, caller = "predict(recruits = \"observed\")")
+      recruit_rates = private$observed_recruitment_from_table(obs_recruits, env, n_time = dim(envs[[1]])[2],
+                                                              allow_trailing = FALSE)
+    }
 
     sp <- self$N_species
     local_init <- if (is.null(init_cohort)) {
@@ -2284,7 +2390,9 @@ finn_class = nn_module(
                               disturbance = dist,
                               verbose = TRUE,
                               return_cohorts = return_cohorts,
-                              debug = debug)
+                              debug = debug,
+                              obs_recruits = if(is.null(recruit_rates)) NULL
+                                             else recruit_rates$to(device = self$device)[ind, , ])
       pred = pred_tmp[[1]]
       long_b = pred2DF(list(Predictions = pred), "long")
       wide_b = pred2DF(list(Predictions = pred), "wide")
@@ -2396,7 +2504,22 @@ finn_class = nn_module(
                  # the resolution growth and mortality are scored at: per (site, year, species)
                  # cell, or per individual tree. "site" is the validated, bit-for-bit path.
                  loss_resolution = c("site", "tree"),
+                 # "observed": the stand recruits the OBSERVED recruitment of each interval
+                 # instead of the regeneration process, whose parameters are frozen and
+                 # whose loss term is weighted 0 for this call (stage 2 of a staged fit).
+                 recruits = c("simulated", "observed"),
                  ...) {
+
+    recruits = match.arg(recruits)
+    observed_recruits = identical(recruits, "observed")
+    if(observed_recruits) {
+      if(is.null(data))
+        stop("`recruits = \"observed\"` needs `data`: the observed recruitment comes from its `reg` column.", call. = FALSE)
+      if(isTRUE(reanchor) || isTRUE(teacher_forcing))
+        stop("`recruits = \"observed\"` cannot be combined with `reanchor` or `teacher_forcing`: both replace the simulated stand by an observed one, and the fed recruitment is defined for a stand that runs free over the whole interval.", call. = FALSE)
+      if(!"reg" %in% colnames(data))
+        stop("`recruits = \"observed\"` needs a `reg` column in `data` (recruits per ha over the observation period).", call. = FALSE)
+    }
 
     # Only touch the global graphics state when we actually draw the training
     # curve. Capturing par(no.readonly = TRUE) and restoring it otherwise is a
@@ -2503,6 +2626,9 @@ finn_class = nn_module(
     if (!is.numeric(weights) || length(weights) != 6L || !all(is.finite(weights)) || any(weights < 0))
       stop("`weights` must be \"auto\" or a numeric vector of length 6 (dbh, ba, trees, growth, mortality, regeneration), non-negative and finite.",
            call. = FALSE)
+    # recruits = "observed": the simulated recruitment IS the observation, so the
+    # regeneration term is not scored in this call; the other five keep the user's weights
+    if (observed_recruits) weights[6] = 0
     user_weights = weights
     if (!auto_weights) self$loss_weights = weights
     # NOTE: the loss closures are built further down, AFTER the response tensor Y
@@ -2573,11 +2699,7 @@ finn_class = nn_module(
     # "per_site") overrides the detection.
     pl = array(response$period_length[,,1], dim = dim(response$period_length)[1:2])
     agg_types = vapply(self$loss_agg, function(a) a$type, character(1))
-    varies = FALSE
-    for(k in seq_len(ncol(pl))) {
-      v = pl[,k]; nn = v[!is.na(v)]
-      if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) { varies = TRUE; break }
-    }
+    varies = private$period_varies(pl)
     # The per-tree terms are only evaluated on the per-site path, while
     # compute_baseline_losses() measures their null on the per-tree observation
     # regardless. On a constant period that combination does not fall back to
@@ -2679,7 +2801,8 @@ finn_class = nn_module(
     # kept the recruitment loss from moving (FINNverse/FINN#43). The loss can lack an
     # observed recruitment in two ways: the term is switched off, or the family is set but
     # the scored data carry no finite value for it.
-    if (isTRUE(self$par_regeneration_optimized) || isTRUE(self$env_regeneration_optimized)) {
+    # (not under recruits = "observed": the regeneration process is frozen for the call)
+    if (!observed_recruits && (isTRUE(self$par_regeneration_optimized) || isTRUE(self$env_regeneration_optimized))) {
       reg_off = identical(as.character(loss_spec[["regeneration"]]), "none")
       reg_empty = !reg_off && torch::with_no_grad({
         m = Y[,,,6]$isnan()$bitwise_not()
@@ -2737,6 +2860,35 @@ finn_class = nn_module(
     private$create_nn(self$process_mortality, "mortality", dim(envs$mortality_env)[3])
     private$create_nn(self$process_growth, "growth", dim(envs$growth_env)[3])
     private$create_nn(self$process_regeneration, "regeneration", dim(envs$regeneration_env)[3])
+
+    # ---- recruits = "observed": feed the observed recruitment, freeze regeneration ----
+    # The rates are built from the SAME arrays and windows the regeneration term is
+    # scored on (`response$reg`, `pl`, `year_sequence`, `per_site`), so each simulated
+    # year receives the rate of the observation whose window sums it. Kept in this call
+    # only: nothing on the model records the mode.
+    recruit_rates = NULL
+    frozen_reg = list()
+    if(observed_recruits) {
+      recruit_rates = private$observed_recruitment_rates(
+        reg = response$reg, pl = pl, year_sequence = year_sequence,
+        n_time = dim(envs[[1]])[2], per_site = per_site, allow_trailing = TRUE,
+        site_ids = site_ids_user, time_labels = levels(as.factor(env$year)))
+      # Every parameter of the regeneration process stops learning for this call and
+      # gets its previous requires_grad back on exit, so a later
+      # fit(recruits = "simulated") trains it again. The values are also put back
+      # after every optimizer step: a parameter still carrying a gradient or Adam
+      # moments from an earlier fit() would otherwise keep moving.
+      frozen_reg = private$regeneration_parameters()
+      frozen_rg = vapply(frozen_reg, function(p) isTRUE(p$requires_grad), logical(1))
+      frozen_val = lapply(frozen_reg, function(p) p$detach()$clone())
+      set_frozen = function(on) for(j in seq_along(frozen_reg))
+        frozen_reg[[j]]$requires_grad_(if(on) FALSE else frozen_rg[[j]])
+      set_frozen(TRUE)
+      on.exit(set_frozen(FALSE), add = TRUE)
+      cli::cli_alert_info(paste0(
+        "recruits = \"observed\": the observed recruitment drives the stand; ",
+        length(frozen_reg), " regeneration parameter tensor(s) frozen and the regeneration term weighted 0 in this call"))
+    }
 
     if(is.null(batchsize)) batchsize = nrow(envs[[1]])
     sites =  nrow(envs[[1]])
@@ -2972,7 +3124,9 @@ finn_class = nn_module(
                                 anchor_min_dbh = anchor_min_dbh,
                                 teacher_forcing = teacher_forcing,
                                 loss_resolution = loss_resolution,
-                                tree_data = tree_targets)
+                                tree_data = tree_targets,
+                                obs_recruits = if(is.null(recruit_rates)) NULL
+                                               else recruit_rates$to(device = self$device, non_blocking = TRUE)[ind, , ])
 
         # browser()
         pred = pred_tmp[[1]]
@@ -2982,7 +3136,8 @@ finn_class = nn_module(
         # weights = "auto" baseline scaling and make `prior_lambda` mean something
         # different on every dataset. Backward it once per batch instead -- the
         # gradients accumulate into the same step.
-        cap_pen = private$cap_prior_penalty()
+        # (under recruits = "observed" the cap is frozen, so it has no prior to obey)
+        cap_pen = if (observed_recruits) NULL else private$cap_prior_penalty()
         if (!is.null(cap_pen)) cap_pen$backward()
         if(!is.null(pred_tmp$tree_deaths)) tree_cov[[length(tree_cov) + 1L]] = pred_tmp$tree_deaths
         # ---- Guard before gradient clipping ----
@@ -3046,6 +3201,9 @@ finn_class = nn_module(
           # budget (private$clip_grad_norm_grouped()) instead.
           private$clip_grad_norm_grouped(self$parameters, clip_norm)
           self$optimizer$step()
+          # recruits = "observed": the frozen regeneration parameters stay where they were
+          if (length(frozen_reg)) torch::with_no_grad(
+            for (j in seq_along(frozen_reg)) frozen_reg[[j]]$copy_(frozen_val[[j]]))
         }
 
         batch_loss[counter, ] =  as.numeric(loss$data()$cpu())
@@ -3145,7 +3303,10 @@ finn_class = nn_module(
         if(epoch %% checkpoints == 0) {
           final = paste0(folder, "/", "epoch_", epoch, "model.pt")
           tmp   = paste0(folder, "/.epoch_", epoch, "model.pt.tmp", Sys.getpid())
+          # a checkpoint carries the caller's requires_grad, not the call's freeze
+          if (length(frozen_reg)) set_frozen(FALSE)
           torch::torch_save(self$clone(deep=FALSE), path = tmp)
+          if (length(frozen_reg)) set_frozen(TRUE)
           if(!file.rename(tmp, final)) {
             unlink(tmp)
             warning(sprintf("could not write the checkpoint for epoch %d to '%s'.", epoch, final), call. = FALSE)
@@ -3185,6 +3346,136 @@ finn_class = nn_module(
 
     # The tensor entries of build_tree_obs()'s result (the rest is bookkeeping).
     TREE_OBS_TENSORS = c("dbh", "trees", "species", "growth", "died"),
+
+    # Does any observation year carry different period_length values between sites,
+    # or a missing one next to a finite one? Then each site needs its own aggregation
+    # window (the per-site path of forward()). `pl` is [sites, observation years].
+    period_varies = function(pl) {
+      for(k in seq_len(ncol(pl))) {
+        v = pl[,k]; nn = v[!is.na(v)]
+        if(length(nn) && (anyNA(v) || length(unique(nn)) > 1L)) return(TRUE)
+      }
+      FALSE
+    },
+
+    # ---- recruits = "observed" ----------------------------------------------------
+    # The length, in timesteps, of the window over which forward() aggregates the
+    # simulated recruitment for observation k of site s ([sites, observation years];
+    # 0 = no window). Observation k sits at timestep t_k = year_sequence[k] and its
+    # window is the timesteps t with t_k - w < t <= t_k (and t >= 1): the mask
+    # M[s, t] = 1 for t in (i - p_s, i] of the per-site path, and the slice
+    # (i - period + 1):i of the constant path. A missing period_length is no window
+    # on the per-site path, which skips that site, and a window of one timestep on
+    # the constant path when no site has one in that year (it then scores the
+    # observation against that timestep alone).
+    observation_windows = function(pl, per_site) {
+      w = pl
+      w[!is.finite(w) | w <= 0] = 0
+      if(!per_site) for(k in seq_len(ncol(pl))) if(!any(is.finite(pl[,k]))) w[,k] = 1
+      w
+    },
+
+    # The observed recruitment as a rate per ha and year for every (site, timestep,
+    # species): reg / w over each observation's window, so the window sums back to
+    # the observed `reg`. `reg` is [sites, observation years, species] in recruits per
+    # ha per observation period, as fit() builds it from `data`. Refuses a needed NA,
+    # a timestep two windows claim, and a timestep no window covers before a site's
+    # last observation; after it, a timestep is fed 0 if `allow_trailing` (fit():
+    # nothing after a site's last census enters the objective), else refused
+    # (a simulation would report it). Returns a CPU tensor [sites, n_time, species].
+    observed_recruitment_rates = function(reg, pl, year_sequence, n_time, per_site,
+                                          allow_trailing, site_ids = NULL, time_labels = NULL) {
+      n_sites = dim(reg)[1]
+      if(is.null(site_ids)) site_ids = seq_len(n_sites)
+      if(is.null(time_labels)) time_labels = seq_len(n_time)
+      w = private$observation_windows(pl, per_site)
+      rate = array(0, dim = c(n_sites, n_time, dim(reg)[3]))
+      n_cover = matrix(0L, n_sites, n_time)
+      last_obs = rep(0L, n_sites)
+      n_na = 0
+      for(k in seq_along(year_sequence)) {
+        t_k = year_sequence[k]
+        has = w[,k] > 0
+        if(!any(has)) next
+        n_na = n_na + sum(!is.finite(reg[has, k, , drop = FALSE]))
+        last_obs[has] = pmax(last_obs[has], t_k)
+        for(t in seq_len(min(t_k, n_time))) {
+          in_win = has & (t > t_k - w[,k])
+          if(!any(in_win)) next
+          rate[in_win, t, ] = reg[in_win, k, , drop = FALSE][, 1, ] / w[in_win, k]
+          n_cover[in_win, t] = n_cover[in_win, t] + 1L
+        }
+      }
+      show = function(idx) {
+        idx = idx[order(idx[,1], idx[,2]), , drop = FALSE]
+        paste0(paste(sprintf("site %s, year %s", site_ids[idx[,1]], time_labels[idx[,2]])[seq_len(min(5L, nrow(idx)))],
+                     collapse = "; "), if(nrow(idx) > 5L) sprintf("; ... (%d in all)", nrow(idx)) else "")
+      }
+      if(n_na > 0)
+        stop(sprintf("recruits = \"observed\": %d site x species x interval cell(s) of `reg` are NA where an observed interval needs them. The fed recruitment cannot be missing (0 stays 0); fill them or drop those sites.",
+                     as.integer(n_na)), call. = FALSE)
+      overlap = which(n_cover > 1L, arr.ind = TRUE)
+      if(nrow(overlap))
+        stop(sprintf("recruits = \"observed\": %d simulated year(s) lie in more than one observed interval, so they have no single observed recruitment (%s). Check `period_length`: an interval may not reach back past the previous census.",
+                     nrow(overlap), show(overlap)), call. = FALSE)
+      before_last = outer(last_obs, seq_len(n_time), ">=")
+      gap = which(n_cover == 0L & before_last, arr.ind = TRUE)
+      if(nrow(gap))
+        stop(sprintf("recruits = \"observed\": %d simulated year(s) lie before or between a site's observed intervals, so no observed recruitment exists for them (%s). Every year from the first simulated one to a site's last census must be covered: give the first census a `period_length` reaching back to the first year of `env`, or start `env` at the first year of the first interval.",
+                     nrow(gap), show(gap)), call. = FALSE)
+      trailing = which(n_cover == 0L & !before_last, arr.ind = TRUE)
+      if(nrow(trailing)) {
+        if(!allow_trailing)
+          stop(sprintf("recruits = \"observed\": %d simulated year(s) lie after a site's last observed interval (%s). With observed recruitment the model is not an autonomous simulator; a run beyond the observed intervals (bare ground, succession, projection) needs the fitted regeneration process: use recruits = \"simulated\".",
+                       nrow(trailing), show(trailing)), call. = FALSE)
+        cli::cli_alert_info(sprintf("recruits = \"observed\": %d site-year(s) after a site's last census get no recruits; nothing after a site's last census enters the objective.",
+                                    nrow(trailing)))
+      }
+      torch::torch_tensor(rate, dtype = torch::torch_float32(), device = "cpu")
+    },
+
+    # The same rates from a table like fit()'s `data` (siteID, year, species, reg,
+    # period_length), for predict()/simulateForest(). The arrays are built exactly as
+    # fit() builds `response$reg` and `pl`, and the timesteps as its `year_sequence`.
+    observed_recruitment_from_table = function(tab, env, n_time, allow_trailing) {
+      if(!is.data.frame(tab))
+        stop("`obs_recruits` must be a data.frame / data.table like fit()'s `data` (siteID, year, species, reg, period_length).", call. = FALSE)
+      tab = data.table::as.data.table(tab)
+      miss = setdiff(c("siteID", "year", "species", "reg"), colnames(tab))
+      if(length(miss))
+        stop(sprintf("`obs_recruits` lacks the column(s) %s; it needs siteID, year, species, reg (recruits per ha over the observation period) and period_length.",
+                     paste(miss, collapse = ", ")), call. = FALSE)
+      if(!"period_length" %in% colnames(tab)) tab$period_length = NA_real_
+      env_years = levels(as.factor(env$year))
+      bad = setdiff(levels(as.factor(tab$year)), env_years)
+      if(length(bad))
+        stop(sprintf("`obs_recruits` has year(s) %s that are not in `env`.", paste(bad, collapse = ", ")), call. = FALSE)
+      sp = self$N_species
+      if(!all(seq_len(sp) %in% tab$species))
+        stop(sprintf("`obs_recruits` must have rows for every species 1..%d (0 where none recruited).", sp), call. = FALSE)
+      oldopts = options(na.action = "na.pass")
+      on.exit(options(oldopts), add = TRUE)
+      reg = abind::abind(lapply(seq_len(sp), function(i) extract_env(~0+reg, tab[tab$species == i, ])), along = 3L)
+      pl_a = abind::abind(lapply(seq_len(sp), function(i) extract_env(~0+period_length, tab[tab$species == i, ])), along = 3L)
+      pl = array(pl_a[,,1], dim = dim(pl_a)[1:2])
+      year_sequence = which(env_years %in% levels(as.factor(tab$year)))
+      per_site = (private$period_varies(pl) || identical(self$period_mode, "per_site")) &&
+                 !identical(self$period_mode, "constant")
+      private$observed_recruitment_rates(reg = reg, pl = pl, year_sequence = year_sequence,
+                                         n_time = n_time, per_site = per_site,
+                                         allow_trailing = allow_trailing,
+                                         site_ids = sort(unique(tab$siteID)), time_labels = env_years)
+    },
+
+    # Every trainable tensor of the regeneration process: its species parameters, its
+    # environment network (or the hybrid's), the recruitment cap, the recruit
+    # dispersion, and any custom parameters the process declared.
+    regeneration_parameters = function() {
+      p = self$parameters
+      nm = names(p)
+      own = c("reg_logK", "par_theta_recruits_raw", names(self$process_regeneration$custom_parameters))
+      p[grepl("^par_regeneration", nm) | grepl("^nn_regeneration[.]", nm) | nm %in% own]
+    },
 
     # Does `opt` still step on this model's own parameter tensors? FALSE for an
     # optimizer restored by torch_load(): an ignite optimizer is then a dead
