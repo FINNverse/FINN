@@ -1045,12 +1045,18 @@ finn_class = nn_module(
 
     # if y (response) is null -> simulation mode, gradients are not required (not neccessary to set them to zero but it is cleaner)
     if(is.null(y)) {
+      # Restore the state we found, not TRUE: a frozen parameter (a hybrid process
+      # built with optimize = FALSE, a stage frozen by a staged calibration) must
+      # still be frozen after a simulation. on.exit() so an error later in this
+      # function (e.g. the "Light values > 1" guard) cannot leave the model frozen.
+      prev_requires_grad = vapply(self$parameters, function(p) p$requires_grad, logical(1))
       lapply(self$parameters, function(p) p$requires_grad_(FALSE) )
-      # make sure parameters are always re-enabled for gradient tracking, even if
-      # an error is thrown later in this function (e.g. the "Light values > 1" guard
-      # below) - otherwise the model is left permanently frozen and a later fit()
-      # call will silently fail to learn.
-      on.exit(lapply(self$parameters, function(p) p$requires_grad_(TRUE)), add = TRUE)
+      on.exit({
+        pars = self$parameters
+        for (nm in names(prev_requires_grad)) {
+          if (!is.null(pars[[nm]])) pars[[nm]]$requires_grad_(prev_requires_grad[[nm]])
+        }
+      }, add = TRUE)
     }
 
     # send data to correct devices (and dtypes) TODO: unncessary?
