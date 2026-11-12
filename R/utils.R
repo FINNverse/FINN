@@ -793,3 +793,10 @@ resolve_device = function(device) {
   if (identical(device, "cuda")) device = "gpu"
   match.arg(device, c("cpu", "gpu"))
 }
+
+# torch's binomial is exact in both moments at constant memory but is not exported
+# from torch and has no derivative: "derivative for aten::binomial is not
+# implemented". Only reachable where the draw is detached anyway (rb_gradient).
+torch_binomial_exact = function(n, p) {
+  getFromNamespace("torch_binomial", "torch")(n, p$detach())
+}

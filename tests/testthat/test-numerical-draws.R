@@ -12,11 +12,11 @@ library(data.table)
 N <- 2e5
 
 test_that("the defaults are the repaired draws and both arguments reach the model", {
-  expect_equal(createProcess(func = FINN::mortality)$mortality_draw, "poisson")
+  expect_equal(createProcess(func = FINN::mortality)$mortality_draw, "binomial")
   expect_equal(createProcess(func = FINN::regeneration)$regeneration_sampler, "refined")
-  expect_equal(createHybrid()$mortality_draw, "poisson")
+  expect_equal(createHybrid()$mortality_draw, "binomial")
   d <- finn(N_species = 2)
-  expect_equal(d$mortality_draw, "poisson")
+  expect_equal(d$mortality_draw, "binomial")
   expect_equal(d$regeneration_sampler, "refined")
   # the published behaviour is still reachable, which is what makes an old fit reproducible
   m <- finn(N_species = 2,
@@ -24,7 +24,7 @@ test_that("the defaults are the repaired draws and both arguments reach the mode
             regeneration_process = createProcess(~1, func = FINN::regeneration, regeneration_sampler = "gaussian"))
   expect_equal(m$mortality_draw, "gamma")
   expect_equal(m$regeneration_sampler, "gaussian")
-  expect_error(createProcess(func = FINN::mortality, mortality_draw = "binomial"))
+  expect_error(createProcess(func = FINN::mortality, mortality_draw = "negbinom"))
 })
 
 test_that("a one-tree cohort is a Bernoulli trial, not a capped Poisson", {

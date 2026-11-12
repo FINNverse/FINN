@@ -16,7 +16,7 @@ createHybrid(
   transformer = TRUE,
   emb_dim = 20L,
   dim_feedforward = 256L,
-  mortality_draw = c("poisson", "gamma"),
+  mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"),
   regeneration_sampler = c("refined", "gaussian"),
   cap = c("all", "species"),
   prior = "max_obs_recruits",
@@ -64,7 +64,8 @@ sublayer within each transformer encoder layer. Only used when
 \code{transformer = TRUE}.}
 
 \item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn,
-\code{"poisson"} (default since 0.2.0) or \code{"gamma"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+\code{"binomial"} (default since 0.2.0), \code{"poisson"} or \code{"gamma"}; see
+\code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the mortality process.}
 
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,

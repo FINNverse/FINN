@@ -53,16 +53,42 @@ negative. `FALSE` restores the previous path.
 Only fits that score `trees` are affected; a model scoring growth and mortality
 alone has no such term.
 
-### The death and recruit draws
+### The death draw
 
-The two repaired samplers, in `main` since 0.2.0's development and opt-in until
-now, become the defaults. `createProcess(mortality_draw = "poisson")` draws a
-Bernoulli where the cohort holds one tree or fewer and a capped Poisson
-otherwise, which is integer-valued and exact in expectation for small `n*p`,
-where the moment-matched Gamma delivered a measured 0.68-0.72 of the calibrated
-deaths for one-tree cohorts. It has no pathwise gradient, which costs nothing
-now that `rb_gradient = TRUE` differentiates the expectation.
-`createProcess(regeneration_sampler = "refined")` samples exactly below
+`mortality_draw` gains `"binomial"`, which is the new default, and `"bernoulli"`.
+
+`"binomial"` is the exact binomial, and it resolves by whether the draw has to
+carry a gradient. With `rb_gradient = TRUE` (also the new default) the drawn
+count is detached and the derivative comes from the expectation, so the draw is
+torch's own binomial: exact in both moments at constant memory, and
+non-differentiable, which no longer matters. With `rb_gradient = FALSE` the
+gradient reaches the mortality parameters *through the state* -- deaths enter
+`trees`, `trees` enters `ba` -- so the draw must be differentiable, and it
+resolves to the moment-matched Gamma instead. Measured on that state path, the
+Gamma gives -39.36 against the expectation's -39.32, while a straight-through
+Bernoulli gives -22.59 and the capped Poisson gives exactly 0.
+
+Consequence worth knowing: under `"binomial"`, switching `rb_gradient` changes
+the sampler as well as the gradient, so the two no longer simulate the same
+stand. Hold `mortality_draw` fixed to compare them.
+
+`"poisson"` (a Bernoulli for one-tree cohorts, otherwise a capped Poisson) stays
+available. It is integer-valued and exact in expectation for small `n*p`, but
+its variance is `n*p` rather than `n*p*(1-p)` -- measured 12.044 against 8.400 at
+`n = 40`, `p = 0.3` -- and it has no pathwise gradient. Combining it with
+`rb_gradient = FALSE` leaves the mortality parameters with exactly zero gradient,
+so that combination is now refused rather than silently fitted.
+
+`"bernoulli"` is `binomial_from_bernoulli()`, repaired in this release
+(FINNverse/FINN#62): it returned exactly zero for every input, through an
+inverted trial mask and a reparameterised draw that was passed to a second
+`torch_bernoulli()`. It is exact in both moments and keeps a gradient path, but
+expands each cell to the largest cohort in the batch, so its memory grows with
+the largest `trees` value in the data.
+
+### The recruit draw
+
+`createProcess(regeneration_sampler = "refined")` becomes the default. It samples exactly below
 `lambda = 2` and drops the `+0.001` offset and the `1e-4` clamp, which together
 imposed a recruitment floor of 0.0011 per cell-year -- at a 0.0168 ha patch,
 0.066 recruits per hectare and year **per species**. `"gamma"` and `"gaussian"`
@@ -119,7 +145,7 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | what | where | default |
 |---|---|---|
 | Offset of the `trees` count likelihood where a simulated count is exactly zero | `fit(trees_offset = )` | `0.01`; **not** 0.1.0 behaviour, `NULL` restores it |
-| Exact integer death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = )`, `createHybrid()` | `"poisson"`; **not** 0.1.0 behaviour, `"gamma"` restores it |
+| Exact binomial death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = )`, `createHybrid()` | `"binomial"`; **not** 0.1.0 behaviour, `"gamma"` restores it |
 | Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = )`, `createHybrid()` | `"refined"`; **not** 0.1.0 behaviour, `"gaussian"` restores it |
 | Lower and upper limit of the mortality probability, per simulation step | `createProcess(mortality_floor =, mortality_ceiling =)`, `createHybrid()` | `0.001` / `0.999`; **not** 0.1.0 behaviour, `0.01` / `0.99` restores it |
 | Recruitment capped by a Beverton-Holt term, with a prior on the cap | `finn()`'s default regeneration process, `createProcess(cap =, prior =, prior_lambda =)` | `regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)`; **not** 0.1.0 behaviour, `FINN::regeneration` restores it |

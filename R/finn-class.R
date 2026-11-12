@@ -1501,8 +1501,19 @@ finn_class = nn_module(
                                     if(is.null(self$mortality_ceiling)) 0.99 else self$mortality_ceiling)
         # NULL (a model saved before mortality_draw existed, or a hybrid built elsewhere) is the default
         alive_mask = trees$ge(0.5)$float()
-        trees_dead = (if(identical(self$mortality_draw, "poisson")) binomial_from_poisson(n_at_risk, m_draw)
-                      else binomial_from_gamma(n_at_risk, m_draw))*alive_mask
+        # "binomial" resolves by whether the draw has to carry a gradient at all.
+        # With rb_gradient the draw is detached and the derivative comes from the
+        # expectation, so torch's exact binomial is free to be non-differentiable;
+        # without it the gradient reaches the mortality parameters THROUGH the state
+        # (deaths -> trees -> ba), and the draw must be differentiable, where the
+        # moment-matched Gamma gives -39.36 against the expectation's -39.32 while
+        # the straight-through Bernoulli gives -22.59. See FINNverse/FINN#62.
+        trees_dead = (switch(if(is.null(self$mortality_draw)) "gamma" else self$mortality_draw,
+                             binomial  = if(isTRUE(self$rb_gradient)) torch_binomial_exact(n_at_risk, m_draw)
+                                         else binomial_from_gamma(n_at_risk, m_draw),
+                             bernoulli = binomial_from_bernoulli(n_at_risk, m_draw),
+                             poisson   = binomial_from_poisson(n_at_risk, m_draw),
+                             gamma     = binomial_from_gamma(n_at_risk, m_draw)))*alive_mask
         trees_dead = trees_dead + trees_dead$round()$detach() - trees_dead$detach()
         # `rb_gradient`: keep the drawn, rounded count in the FORWARD pass -- the stand must
         # die discretely -- but take the derivative through the expectation n_at_risk * m.
@@ -2633,6 +2644,14 @@ finn_class = nn_module(
     # the mean IS the variance - but it generalises to the Poisson, negative
     # binomial and binomial terms, where sd() is not the right scale.
     # set before the loss closures are built: they capture `self$trees_offset`
+    # A draw without a pathwise gradient, with the expectation gradient switched off,
+    # leaves the mortality parameters with EXACTLY zero gradient -- measured -- and
+    # nothing warns, because the other loss terms keep falling.
+    if(!isTRUE(rb_gradient) && identical(self$mortality_draw, "poisson"))
+      stop('mortality_draw = "poisson" has no pathwise gradient, so with rb_gradient = FALSE the ',
+           'mortality parameters receive exactly zero gradient. Use rb_gradient = TRUE, or ',
+           'mortality_draw = "gamma" (exact moments and the right gradient) or "bernoulli".',
+           call. = FALSE)
     self$rb_gradient  = isTRUE(rb_gradient)
     self$trees_offset = trees_offset
     private$create_loss_functions(loss_spec, weights)   # unweighted for now
