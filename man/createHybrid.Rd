@@ -16,8 +16,15 @@ createHybrid(
   transformer = TRUE,
   emb_dim = 20L,
   dim_feedforward = 256L,
-  mortality_draw = c("gamma", "poisson"),
-  regeneration_sampler = c("gaussian", "refined")
+  mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"),
+  regeneration_sampler = c("refined", "gaussian"),
+  cap = c("all", "species"),
+  prior = "max_obs_recruits",
+  prior_lambda = 0.1,
+  theta_floor = 0.5,
+  optimizeTheta = TRUE,
+  mortality_floor = 0.001,
+  mortality_ceiling = 0.999
 )
 }
 \arguments{
@@ -59,12 +66,32 @@ sublayer within each transformer encoder layer. Only used when
 \code{transformer = TRUE}.}
 
 \item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn,
-\code{"gamma"} (default) or \code{"poisson"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+\code{"binomial"} (default since 0.2.0), \code{"poisson"} or \code{"gamma"}; see
+\code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the mortality process.}
 
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,
-\code{"gaussian"} (default) or \code{"refined"}; see \code{\link[=createProcess]{createProcess()}}. Only used
+\code{"refined"} (default since 0.2.0) or \code{"gaussian"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
+
+\item{cap, prior, prior_lambda}{The Beverton-Holt cap on recruitment; see
+\code{\link[=createProcess]{createProcess()}} and \code{\link[=regeneration_capped]{regeneration_capped()}}. Only used when
+this object is the regeneration process.}
+
+\item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the recruit dispersion
+\code{par_theta_recruits}, default \code{0.5} since 0.2.0, \code{0} or \code{NULL} to leave it
+unbounded as in 0.1.0; see \code{\link[=createProcess]{createProcess()}}. Only used when this
+object is the regeneration process.}
+
+\item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion be
+estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}; \code{FALSE} keeps it at
+\code{dispersion_parameter}; see \code{\link[=createProcess]{createProcess()}}. Only used when this
+object is the regeneration process.}
+
+\item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
+mortality probability is clamped to per simulation step before the death
+draw, defaults \code{0.001} and \code{0.999}; see \code{\link[=createProcess]{createProcess()}}. Only used
+when this object is the mortality process.}
 }
 \value{
 A list of class \code{"hybrid"} containing the process definition and

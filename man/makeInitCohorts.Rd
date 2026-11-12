@@ -74,6 +74,20 @@ Key fields of the resulting R6 object:
 \item \code{obsDF2arrays}: method converting \code{obs_df} into arrays.
 }
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# one cohort per observed tree, which is what `loss_resolution = "tree"` needs
+init <- makeInitCohorts(fia_init_trees[siteID \%in\% 1:3],
+                        Nspecies = max(fia_obs_dt$species))
+dim(init$dbh)   # sites x patches x cohorts
+
+# 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation
+binned <- makeInitCohorts(fia_init_trees[siteID \%in\% 1:3], dbh_binsize = 5,
+                          Nspecies = max(fia_obs_dt$species))
+dim(binned$dbh)
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 \code{\link[FINN]{CohortMat}}
 }

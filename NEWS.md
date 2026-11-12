@@ -5,16 +5,145 @@ Inventory and Analysis) and **BWI** (German Bundeswaldinventur) calibration
 projects. Every new argument defaults to the previous behaviour, with three
 exceptions that do not reproduce 0.1.0 and are marked in the table below:
 `mortality(growth_scale = 0.01)`, `createProcess(light_mask = TRUE)` and
-`finn(reg_floor = 1e-3)`. A fourth change reproduces 0.1.0 only on a machine
-whose `LC_COLLATE` was already `C`: `resolveSiteIDs()` now numbers sites,
+`finn(reg_floor = 1e-3)`. Two further exceptions repair the stem-count gradient
+and are on by default: `fit(trees_offset = 0.01)` and `fit(rb_gradient = TRUE)`,
+both described under *The stem-count gradient* below. One further change
+reproduces 0.1.0 only on a machine whose `LC_COLLATE` was already `C`: `resolveSiteIDs()` now numbers sites,
 patches and species by radix order instead of the collation locale's.
 
 The two tables are the overview; the sections below them carry the detail.
+
+### The stem-count gradient
+
+Two defects in how the `trees` term reached the parameters, both repaired here
+and both on by default (FINNverse/FINN#53).
+
+The count likelihood added a constant to the predicted stem count so that
+`log_prob` stays finite where a species' simulated count is exactly zero and the
+observed one is not. That constant was `1e-5` for `"poisson"` and `0.001` for
+`"nbinom"`, which leaves the value finite and the gradient at `y/offset` -- four
+orders of magnitude above every other term in the objective. Where the gradients
+are clipped per group, one such cell then rescales the whole mechanistic block.
+`fit(trees_offset = )` exposes the constant and defaults to `0.01`, on the scale
+of the predicted count. `NULL` restores the two historical values.
+
+The simulator draws deaths and recruits and rounds them, and the gradient ran
+through both the reparameterised draw and the rounding's straight-through
+surrogate, so the sampler's noise reached the parameters. On the German
+inventory 97 % of the mortality gradient was draw noise (signal-to-noise 0.52
+against 43 without it), which made a fit diverge or not depending on the host's
+float kernels. `fit(rb_gradient = TRUE)` keeps the drawn, rounded count in the
+forward pass -- a simulation is unchanged -- and takes the derivative through
+`n_at_risk * m` and the expected recruitment instead. Against a 200-draw
+reference gradient the repaired direction agrees to a cosine of 1.000 in every
+parameter block at `update_step = 1`, where the unrepaired objective's cosine is
+negative. `FALSE` restores the previous path.
+
+Only fits that score `trees` are affected; a model scoring growth and mortality
+alone has no such term.
+
+### The death draw
+
+`mortality_draw` gains `"binomial"`, which is the new default, and `"bernoulli"`.
+
+`"binomial"` is the exact binomial, and it resolves by whether the draw has to
+carry a gradient. With `rb_gradient = TRUE` (also the new default) the drawn
+count is detached and the derivative comes from the expectation, so the draw is
+torch's own binomial: exact in both moments at constant memory, and
+non-differentiable, which no longer matters. With `rb_gradient = FALSE` the
+gradient reaches the mortality parameters *through the state* -- deaths enter
+`trees`, `trees` enters `ba` -- so the draw must be differentiable, and it
+resolves to the moment-matched Gamma instead. Measured on that state path, the
+Gamma gives -39.36 against the expectation's -39.32, while a straight-through
+Bernoulli gives -22.59 and the capped Poisson gives exactly 0.
+
+Consequence worth knowing: under `"binomial"`, switching `rb_gradient` changes
+the sampler as well as the gradient, so the two no longer simulate the same
+stand. Hold `mortality_draw` fixed to compare them.
+
+`"poisson"` (a Bernoulli for one-tree cohorts, otherwise a capped Poisson) stays
+available. It is integer-valued and exact in expectation for small `n*p`, but
+its variance is `n*p` rather than `n*p*(1-p)` -- measured 12.044 against 8.400 at
+`n = 40`, `p = 0.3` -- and it has no pathwise gradient. Combining it with
+`rb_gradient = FALSE` leaves the mortality parameters with exactly zero gradient,
+so that combination is now refused rather than silently fitted.
+
+`"bernoulli"` is `binomial_from_bernoulli()`, repaired in this release
+(FINNverse/FINN#62): it returned exactly zero for every input, through an
+inverted trial mask and a reparameterised draw that was passed to a second
+`torch_bernoulli()`. It is exact in both moments and keeps a gradient path, but
+expands each cell to the largest cohort in the batch, so its memory grows with
+the largest `trees` value in the data.
+
+### The recruit draw
+
+`createProcess(regeneration_sampler = "refined")` becomes the default. It samples exactly below
+`lambda = 2` and drops the `+0.001` offset and the `1e-4` clamp, which together
+imposed a recruitment floor of 0.0011 per cell-year -- at a 0.0168 ha patch,
+0.066 recruits per hectare and year **per species**. `"gamma"` and `"gaussian"`
+restore the previous draws.
+
+### The mortality limits
+
+The simulation clamps the per-cohort mortality probability before the death
+draw. That interval was hard-coded to `[0.01, 0.99]`; it is now
+`createProcess(mortality_floor =, mortality_ceiling =)` and defaults to
+`[0.001, 0.999]`.
+
+The bound is per **simulation step**, not per year, and the old floor is why a
+simulated low-mortality stand -- a mature unthinned stand, a slow-growing
+species, an equilibrium run -- lost stems the observations did not: at a 1 %
+floor every cohort is at risk at 1 % per step however low the fitted rate says
+it should be. The per-tree mortality loss was never bounded by it, so a fit
+could be correct while the trajectory it simulated was not.
+
+The floor cannot simply be dropped: `binomial_from_gamma()`'s shape
+`n*p/(1-p)` degenerates as `p -> 0`. Measured with that draw it stays finite
+with an unbiased mean gradient down to `1e-4`, but single-draw gradients grow
+heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
+times the old default's at `1e-3` and about a hundred times at `1e-4` -- so
+`1e-3` is the lowest tested value and is the new default.
+
+### The recruitment cap
+
+`regeneration_capped()` replaces `regeneration_saturation()` (kept as a
+deprecated alias for one release) and becomes the default regeneration process.
+`FINN::regeneration`, unbounded as before, stays available and is now the opt-in.
+
+Two things change beyond the name. The cap parameter `reg_logK` is **created by
+FINN**, so nothing has to be declared through `custom_parameters` any more;
+`createProcess(cap = )` sets its resolution, `"all"` for one cap shared by every
+species and `"species"` for one per species.
+
+And the cap carries a prior, because nothing else in the objective constrains
+it: a cap fitted freely runs to whatever the calibration window supports, which
+on a national inventory is far above anything observed. The penalty is
+`prior_lambda * (log K - log prior)^2` per cap, the same form as the L2 pull of
+a staged calibration. `prior = "max_obs_recruits"` (the default) resolves it at
+the start of the first `fit()` from the largest observed recruitment rate per
+timestep, `max(reg / period_length)` -- `reg` is the sum over an observation's
+interval while the cap bounds one timestep's mean -- which is also the cap's
+starting value; a later `fit()` continues from the trained cap rather than
+resetting it; a number sets the prior directly, on the same per-timestep scale; `prior_lambda = 0` switches
+it off. With `cap = "species"` the prior is hierarchical -- each species' log cap
+is pulled towards the differentiable mean of all of them, so it penalises how far
+the species spread apart and leaves the overall level to the data.
+
+The penalty is added **after** the `weights = "auto"` baseline scaling, so
+`prior_lambda` means the same thing on every dataset.
 
 ### What is new since 0.1.0
 
 | what | where | default |
 |---|---|---|
+| Offset of the `trees` count likelihood where a simulated count is exactly zero | `fit(trees_offset = )` | `0.01`; **not** 0.1.0 behaviour, `NULL` restores it |
+| Exact binomial death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = )`, `createHybrid()` | `"binomial"`; **not** 0.1.0 behaviour, `"gamma"` restores it |
+| Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = )`, `createHybrid()` | `"refined"`; **not** 0.1.0 behaviour, `"gaussian"` restores it |
+| Lower and upper limit of the mortality probability, per simulation step | `createProcess(mortality_floor =, mortality_ceiling =)`, `createHybrid()` | `0.001` / `0.999`; **not** 0.1.0 behaviour, `0.01` / `0.99` restores it |
+| Lower bound on the negative-binomial recruit dispersion, applied to the draw and the likelihood alike | `createProcess(theta_floor = )`, `createHybrid()` | `0.5`; **not** 0.1.0 behaviour, `0` or `NULL` restores it |
+| Recruit dispersion kept fixed at `dispersion_parameter` instead of estimated | `createProcess(optimizeTheta = )`, `createHybrid()` | `TRUE` (estimated, as in 0.1.0) |
+| Recruitment capped by a Beverton-Holt term, with a prior on the cap | `finn()`'s default regeneration process, `createProcess(cap =, prior =, prior_lambda =)` | `regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)`; **not** 0.1.0 behaviour, `FINN::regeneration` restores it |
+| Count gradients taken through the expected deaths and recruits instead of through the draw | `fit(rb_gradient = )` | `TRUE`; **not** 0.1.0 behaviour, `FALSE` restores it |
 | Oregon FIA calibration sample as lazy-loaded datasets | `fia_obs_dt`, `fia_env_dt`, `fia_init_trees`, `fia_obs_test`, `fia_env_test`, `fia_init_test`, `fia_species_dt` | — |
 | Per-response likelihood, renamed | `fit(loss_family = )` | as `loss` had it; `loss` still accepted, deprecated |
 | How a response is reduced before it is scored: `"mean"`, `"sum"`, `"size_classes"`, `"quantiles"`, `"tree"` | `fit(loss_aggregation = )` | `NULL` (per-cell means) |
@@ -24,6 +153,7 @@ The two tables are the overview; the sections below them carry the detail.
 | Per census and epoch: `frac_killed`, `mean_kill_year`, `frac_ghost`; and the per-tree predictions | `$tree_deaths`, `$tree_pred` | under `loss_resolution = "tree"` |
 | Multiple shooting: rebuild the stand from the observed tree list at every anchor | `fit(reanchor = , anchor_cohorts = , anchor_mode = , anchor_min_dbh = )` | `FALSE`, `NULL`, `"replace"`, `NULL` |
 | Reset the stand to the observation every year | `fit(teacher_forcing = )` | `FALSE` |
+| Drive the stand with the observed recruitment (`reg / period_length` per ha and year in every year of its interval, drawn by the recruit sampler) instead of the regeneration process, which is frozen and unscored for that call: stage 2 of a staged calibration | `fit(recruits = )`; `simulateForest(recruits =, obs_recruits =)`, `predict()` | `"simulated"`, as in 0.1.0 |
 | Per-site aggregation windows for mixed remeasurement intervals | automatic from `period_length`; override with `model$period_mode` | `"auto"` |
 | A non-finite loss term drops that term, or the whole timestep; occurrences counted | `fit(nonfinite = )`, `$nonfinite_counts` | `"drop_term"` |
 | Set-up only, no training | `fit(epochs = 0)` | — |

@@ -14,6 +14,8 @@ simulateForest(
   device = c("cpu", "gpu"),
   return_cohorts = FALSE,
   debug = FALSE,
+  recruits = c("simulated", "observed"),
+  obs_recruits = NULL,
   ...
 )
 }
@@ -30,7 +32,8 @@ simulateForest(
 
 \item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}.}
 
-\item{device}{(\code{character(1)})\cr Should the simulation run on the CPU or the GPU (Graphics card). Support is only available for NVIDIA GPUs.}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
+synonym for \code{"gpu"}. Only NVIDIA cards are supported.}
 
 \item{return_cohorts}{Controls whether the raw per-cohort state is returned in
 addition to the aggregated site output. Storing cohorts every timestep is
@@ -40,6 +43,30 @@ of timesteps to store just those. Recorded cohorts appear as \verb{$long$cohort}
 / \verb{$wide$cohort}.}
 
 \item{debug}{(\code{logical(1)})\cr Debug modus or not. If \code{TRUE}, individual tree states are stored.}
+
+\item{recruits}{(\code{character(1)})\cr Where the recruits come from. \code{"simulated"}
+(the default) is the model's regeneration process, as before. \code{"observed"}
+feeds the observed recruitment in \code{obs_recruits} instead, as
+\code{fit(recruits = "observed")} does: the \code{reg} of each site, species and
+observation interval (recruits per ha over the interval, on the row of its
+END year) divided by \code{period_length} is the expected recruitment per ha and
+year in every simulated year of that interval; times \code{patch_size} it is drawn
+per patch by the recruit sampler (or taken as the mean with
+\code{sample_regeneration = FALSE}, where the rounding then delivers no recruit
+wherever the per-patch mean is below 0.5). Growth, mortality and competition run as
+usual. Meant for checking a model calibrated that way on the intervals it was
+calibrated on: with observed recruitment the model is \strong{not an autonomous
+simulator}, so every simulated year must lie in an observed interval, and a
+bare-ground, succession or projection run beyond them is refused. Such runs
+need the fitted regeneration process (\code{"simulated"}).}
+
+\item{obs_recruits}{(\code{data.table|data.frame})\cr The observed recruitment for
+\code{recruits = "observed"}, required there and refused otherwise: a table like
+\code{fit()}'s \code{data} with \code{siteID}, \code{year}, \code{species}, \code{reg} and \code{period_length},
+rows for every species (0 where none recruited), the sites of \code{env} and years
+among those of \code{env}. Intervals map to simulated years exactly as in
+\link{fit}. An \code{NA} \code{reg} in an interval, a year in two intervals and a year
+in none are errors.}
 
 \item{...}{Advanced options forwarded to the internal simulator, chiefly
 \code{batchsize} (split the sites into batches of this many to cap memory for very
@@ -60,4 +87,21 @@ Simulate
 Simulate from a fitted FINN model. This is a thin, backwards-compatible
 alias for \link{predict.finn_class}; new code should call
 \code{predict(model, ...)} directly.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+# identical to predict(m, ...), which is what new code should call
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites],
+                      init_cohort = init, patches = 4, patch_size = 0.06)
+head(sim$long$site)
+\dontshow{\}) # examplesIf}
 }

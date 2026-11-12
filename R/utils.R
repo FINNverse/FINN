@@ -378,6 +378,13 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
   return(poisson_samples)
 }
 
+# `mortality_floor` of createProcess()/createHybrid(): one probability in (0, 0.99).
+check_mortality_limit = function(value, what) {
+  if (!is.numeric(value) || length(value) != 1L || is.na(value) || value <= 0 || value >= 1)
+    stop("`", what, "` must be one number in (0, 1).", call. = FALSE)
+  as.numeric(value)
+}
+
 #' Sample from binomial with gradient
 #'
 #' @param n number of trials
@@ -457,13 +464,20 @@ binomial_from_bernoulli = function(n, p) {
   logistic_samples = torch_log(u / (1 - u))
   logits = torch_log(p / (1 - p))$unsqueeze(-1)
   scaled_samples = logits + logistic_samples
-  probabilities = torch_sigmoid(scaled_samples)
-  #binomial_samples = torch_sum(torch_bernoulli(probabilities$expand(c(n, p$shape))), dim=1)
 
-  # Generate binomial samples by summing up to the number of trials for each element
-  bernoulli_samples = torch_bernoulli(probabilities)
-  #mask = torch_arange(1, max_trials)$unsqueeze(1)$unsqueeze(1)$expand_as(bernoulli_samples) < n$unsqueeze(-1)
-  mask = torch_sigmoid((torch_arange(1, max_trials)$unsqueeze(1)$unsqueeze(1)$expand_as(bernoulli_samples) - n$unsqueeze(-1) - 0.1)/1e-3 )
+  # THRESHOLD the reparameterised draw; do not feed it to a second torch_bernoulli().
+  # With L ~ Logistic(0,1), P(logit(p) + L > 0) = p exactly, which is the trial. The
+  # old code drew a second Bernoulli with probability sigmoid(logit(p) + L), whose
+  # mean is not p -- measured 0.181 against 0.100 at p = 0.1 (FINNverse/FINN#62).
+  # The sigmoid surrogate keeps a gradient path to `p`.
+  hard = (scaled_samples > 0)$to(dtype = scaled_samples$dtype)
+  soft = torch_sigmoid(scaled_samples / 1e-3)
+  bernoulli_samples = soft + (hard - soft)$detach()
+  # Keep trial k while k <= n. The sign used to be the other way round, which kept
+  # exactly the trials that should be dropped and made the sum identically zero for
+  # every input (FINNverse/FINN#62). The sigmoid rather than a hard `<=` is what lets
+  # a gradient reach `n`.
+  mask = torch_sigmoid((n$unsqueeze(-1) + 0.1 - torch_arange(1, max_trials)$unsqueeze(1)$unsqueeze(1)$expand_as(bernoulli_samples))/1e-3)
 
   masked_samples = bernoulli_samples * mask
 
@@ -771,3 +785,18 @@ plot.finn_class = function(x, pars = c("process", "env"), env_names = NULL, spec
 # usage
 # plot(m1, pars = "env", env_names = env_scales_dt$variable)
 # plot(m1, pars = "process", species_names = species_dt$species_name)
+
+# `"cuda"` is what everyone who has used torch directly reaches for, and
+# match.arg()'s "should be one of cpu, gpu" does not say that it is accepted.
+resolve_device = function(device) {
+  if (is.character(device) && length(device) > 1L) device = device[1]
+  if (identical(device, "cuda")) device = "gpu"
+  match.arg(device, c("cpu", "gpu"))
+}
+
+# torch's binomial is exact in both moments at constant memory but is not exported
+# from torch and has no derivative: "derivative for aten::binomial is not
+# implemented". Only reachable where the draw is detached anyway (rb_gradient).
+torch_binomial_exact = function(n, p) {
+  getFromNamespace("torch_binomial", "torch")(n, p$detach())
+}

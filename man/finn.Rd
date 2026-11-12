@@ -102,6 +102,19 @@ are estimated yet. Use \link{fit} to calibrate the returned object against
 observed data, and \link{predict.finn_class}/\link{simulateForest} to
 simulate forest dynamics from a (fitted) model.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the three demographic processes, each with a linear temperature and
+# precipitation response; ?createProcess for the hybrid and network variants
+Nsp <- max(fia_obs_dt$species)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+m
+\dontshow{\}) # examplesIf}
+}
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
 models using hybrid modelling. \emph{Methods in Ecology and Evolution}.

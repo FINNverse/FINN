@@ -30,7 +30,8 @@ existing calls run unchanged.}
 \item{patch_size}{(\code{numeric(1)})\cr Patch size. Defaults to the one the model
 was fitted with (\code{model$patch_size_ha}); pass a value only to override it.}
 
-\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}.}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
+synonym for \code{"gpu"}.}
 }
 \value{
 One row per row of \code{tree_data}, in the same order (\code{.row} records the
@@ -53,4 +54,32 @@ the complement of the product of annual survivals.
 
 It is the same code path \code{fit(..., loss_aggregation = c(growth = "tree", mortality = "tree"))} scores, so a validation report cannot drift from the
 objective it is validating.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# the growth and mortality kernels applied to the trees as observed, so the
+# error of the two functions alone, with no simulated stand in between
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+
+# `fia_init_trees` is a pure initial state, so name the census the trees are
+# scored against and the interval, in timesteps, that reaches it
+trees <- fia_init_trees[siteID \%in\% sites,
+                        .(siteID, patchID, species, dbh, year = 1L,
+                          period_length = 1)]
+pred  <- predictTrees(m, tree_data = trees,
+                      env = fia_env_dt[siteID \%in\% sites], patch_size = 0.06)
+head(pred)
+\dontshow{\}) # examplesIf}
 }

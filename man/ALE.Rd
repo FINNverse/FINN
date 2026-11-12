@@ -55,3 +55,35 @@ every driver (\code{var}) across its observed range (\code{x}), per \code{specie
 \description{
 Calculates accumulated local effects (ALE) for the three processes
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
+# variant is the same call with `hidden = c(10, 10)` on the process
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+
+# accumulated local effects of every driver, per process and species. `env` and
+# `init_cohort` default to the ones fit() cached, so the curves are read over
+# exactly the range the model was trained on.
+ale <- ALE(m, plot = FALSE)
+head(ale$growth)
+
+# `scale = TRUE` divides each curve by the SD of its process x species rate, so
+# growth in cm/yr and mortality on the probability scale become comparable
+ale_s <- ALE(m, plot = FALSE, scale = TRUE)
+vapply(ale_s, function(d) max(abs(d$ale)), numeric(1))
+\dontshow{\}) # examplesIf}
+}

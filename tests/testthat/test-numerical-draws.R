@@ -1,7 +1,9 @@
-## The two opt-in numerical repairs: createProcess(mortality_draw = "poisson") and
+## The two numerical repairs, default since 0.2.0:
+## createProcess(mortality_draw = "poisson") and
 ## createProcess(regeneration_sampler = "refined"). The defaults are guarded by
 ## test-identity.R (config `sample_reg` draws recruits); here the repaired paths
-## themselves are exercised.
+## themselves are exercised, and that "gamma"/"gaussian" still restore the
+## published behaviour.
 skip_if_not_installed("torch")
 skip_if_not(torch::torch_is_installed())
 library(torch)
@@ -9,19 +11,20 @@ library(data.table)
 
 N <- 2e5
 
-test_that("the defaults are the published behaviour and the arguments reach the model", {
-  expect_equal(createProcess(func = FINN::mortality)$mortality_draw, "gamma")
-  expect_equal(createProcess(func = FINN::regeneration)$regeneration_sampler, "gaussian")
-  expect_equal(createHybrid()$mortality_draw, "gamma")
-  m <- finn(N_species = 2,
-            mortality_process    = createProcess(~1, func = FINN::mortality, mortality_draw = "poisson"),
-            regeneration_process = createProcess(~1, func = FINN::regeneration, regeneration_sampler = "refined"))
-  expect_equal(m$mortality_draw, "poisson")
-  expect_equal(m$regeneration_sampler, "refined")
+test_that("the defaults are the repaired draws and both arguments reach the model", {
+  expect_equal(createProcess(func = FINN::mortality)$mortality_draw, "binomial")
+  expect_equal(createProcess(func = FINN::regeneration)$regeneration_sampler, "refined")
+  expect_equal(createHybrid()$mortality_draw, "binomial")
   d <- finn(N_species = 2)
-  expect_equal(d$mortality_draw, "gamma")
-  expect_equal(d$regeneration_sampler, "gaussian")
-  expect_error(createProcess(func = FINN::mortality, mortality_draw = "binomial"))
+  expect_equal(d$mortality_draw, "binomial")
+  expect_equal(d$regeneration_sampler, "refined")
+  # the published behaviour is still reachable, which is what makes an old fit reproducible
+  m <- finn(N_species = 2,
+            mortality_process    = createProcess(~1, func = FINN::mortality, mortality_draw = "gamma"),
+            regeneration_process = createProcess(~1, func = FINN::regeneration, regeneration_sampler = "gaussian"))
+  expect_equal(m$mortality_draw, "gamma")
+  expect_equal(m$regeneration_sampler, "gaussian")
+  expect_error(createProcess(func = FINN::mortality, mortality_draw = "negbinom"))
 })
 
 test_that("a one-tree cohort is a Bernoulli trial, not a capped Poisson", {
@@ -89,4 +92,20 @@ test_that("both repaired paths run end to end and move the simulated stand", {
   base <- sim("gamma", "gaussian"); rep_ <- sim("poisson", "refined")
   expect_true(is.finite(base) && is.finite(rep_))
   expect_false(isTRUE(all.equal(base, rep_)))
+})
+
+## binomial_from_bernoulli() returned exactly zero for every input until 0.2.0
+## (FINNverse/FINN#62): the trial mask was inverted, and the reparameterised draw
+## was fed to a second torch_bernoulli() instead of being thresholded. Both moments
+## are asserted so neither can come back silently.
+test_that("binomial_from_bernoulli matches the binomial in both moments", {
+  skip_if_not(torch::torch_is_installed())
+  FINN.seed(1)
+  for (nn in c(1, 10, 40)) for (pp in c(0.1, 0.3)) {
+    n <- torch::torch_full(c(400L, 100L, 1L), nn)
+    p <- torch::torch_full(c(400L, 100L, 1L), pp)
+    b <- binomial_from_bernoulli(n, p)
+    expect_equal(as.numeric(b$mean()), nn * pp, tolerance = 0.02)
+    expect_equal(as.numeric(b$var()), nn * pp * (1 - pp), tolerance = 0.05)
+  }
 })

@@ -374,23 +374,48 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
   r = self$nn_regeneration(light = light, species = species, env = pred)$clamp(max = 10)$exp()
 }
 
-#' Regeneration with Beverton-Holt density saturation
+#' Regeneration with a Beverton-Holt recruitment cap
 #'
-#' A drop-in alternative to [FINN::regeneration] that caps the otherwise
+#' The default regeneration process since 0.2.0, and a drop-in alternative to
+#' the uncapped [FINN::regeneration]. It caps the otherwise
 #' unbounded mean recruitment with a Beverton-Holt density dependence,
 #' `recruits = K * m / (K + m)`, where `m` is the mechanistic mean recruitment
 #' (identical to [FINN::regeneration]) and `K` is a fitted carrying capacity
 #' (stems ha^-1 step^-1). As `m` grows, recruitment saturates towards `K`.
 #'
-#' Unlike the other process functions, whose species parameters come from the
-#' built-in `par_regeneration` table, this function needs one extra parameter,
-#' the log carrying capacity `reg_logK` (`K = exp(reg_logK)`). Declare it with
-#' `createProcess(custom_parameters = list(reg_logK = ...))`; FINN then registers
-#' it as a trainable parameter, optimises it in [FINN::fit()] and round-trips it
-#' through `torch_save`/`torch_load`. The **length of the init decides the
-#' resolution**: a length-1 init gives one shared `K` for all species; a
-#' length-`N_species` init gives a per-species `K`. Read the fitted value back
-#' with `exp(as.numeric(m$reg_logK))`.
+#' The cap is the parameter `reg_logK` (`K = exp(reg_logK)`), which **FINN
+#' creates itself** -- there is nothing to declare. `createProcess(cap = )`
+#' decides its resolution: `"all"` (the default) gives one cap shared by every
+#' species, `"species"` one cap per species. Read the fitted value back with
+#' `exp(as.numeric(m$reg_logK))`.
+#'
+#' @section The prior on the cap:
+#' A cap that only the data constrain runs to whatever the fitted window
+#' supports, which on a national inventory is far above anything observed. So
+#' the cap carries a prior, added to the objective as
+#' `prior_lambda * (log K - log prior)^2` per cap -- the same form as the L2
+#' pull of a staged calibration. It is added **after** the `weights = "auto"`
+#' baseline scaling, so `prior_lambda` means the same thing on every dataset.
+#'
+#' `createProcess(prior = "max_obs_recruits")`, the default, resolves the prior
+#' from the data at the start of [FINN::fit()]: the largest observed recruitment
+#' rate per timestep, `max(reg / period_length)`. The division matters on any
+#' inventory with a remeasurement interval, because `reg` is the SUM over that
+#' interval while the cap bounds the mean of one timestep -- taking the column
+#' as supplied would place the prior a factor `period_length` too high, and the
+#' cap would never bind. A number sets the prior directly, on that same
+#' per-timestep scale. `prior_lambda = 0` switches the prior off and leaves the
+#' cap to the data alone. Scoring no recruitment at all is an error rather than
+#' a silent default, because nothing else in the objective constrains a cap.
+#'
+#' The resolved value is also the cap's starting value, and it is resolved only
+#' on the FIRST [FINN::fit()] of a model: a second call continues from the
+#' trained cap instead of resetting it to the prior.
+#'
+#' With `cap = "species"` the prior is **hierarchical**: each species' log cap is
+#' pulled towards the mean of all current log caps rather than towards a fixed
+#' value, so the prior penalises how far the species spread apart and leaves the
+#' overall level to the data. Every species still starts at the observed maximum.
 #'
 #' @param species torch.Tensor species information.
 #' @param parReg torch.Tensor Regeneration parameters. 0 <= parReg <= 1
@@ -400,29 +425,32 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' @param light torch.Tensor Available light variable for calculation.
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #'
-#' @return torch.Tensor Saturated regeneration values for forest patches.
+#' @return torch.Tensor Mean recruitment, stems ha^-1 step^-1,
+#'   `[sites, patches, species]` -- a per-HECTARE rate, not a per-patch count.
+#'   `forward()` multiplies it by `patch_size_ha` itself before the recruit draw
+#'   (`R/finn-class.R:1591-1593`), and `reg` is scored on the per-hectare value.
 #'
 #' @seealso [FINN::regeneration], [FINN::createProcess()]
 #'
 #' @examples
 #' \dontrun{
-#' m <- finn(
-#'   N_species = Nsp,
-#'   regeneration_process = createProcess(
-#'     ~ temp + prec, FINN::regeneration_saturation,
-#'     custom_parameters = list(reg_logK = rep(log(800), Nsp)), # per-species K
-#'     optimizeSpecies = TRUE, optimizeEnv = TRUE)
-#' )
+#' # the default: one cap for all species, prior from the data
+#' m <- finn(N_species = Nsp)
+#'
+#' # one cap per species, a fixed prior, a stronger pull
+#' m <- finn(N_species = Nsp, regeneration_process = createProcess(
+#'   ~ temp + prec, FINN::regeneration_capped,
+#'   cap = "species", prior = 500, prior_lambda = 1))
 #' }
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
-regeneration_saturation = function(species, parReg, pred, light, debug = FALSE) {
+regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
   if(is.null(self$reg_logK))
-    stop("`regeneration_saturation` needs a `reg_logK` parameter. Add it in ",
-         "createProcess(custom_parameters = list(reg_logK = rep(log(800), N_species))) ",
-         "-- length 1 for a shared K, length N_species for a per-species K.",
+    stop("`regeneration_capped` needs the cap parameter `reg_logK`, which finn() ",
+         "creates from createProcess(cap = ). This model has none, so it was built ",
+         "before 0.2.0 or with a custom func; rebuild it with finn().",
          call. = FALSE)
 
   if(self$record_raws) {
@@ -436,8 +464,8 @@ regeneration_saturation = function(species, parReg, pred, light, debug = FALSE) 
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1)) + reg_floor)
 
   # Beverton-Holt cap: K = exp(reg_logK), reshaped to broadcast along the species
-  # (last) dimension of `mean`. A length-1 reg_logK -> (1,1,1) -> shared K; a
-  # length-N_species reg_logK -> (1,1,N_species) -> per-species K.
+  # (last) dimension of `mean`. cap = "all" -> length 1 -> (1,1,1); cap =
+  # "species" -> length N_species -> (1,1,N_species).
   K = torch::torch_exp(self$reg_logK)$reshape(c(1L, 1L, -1L))
   mean = K * mean / (K + mean)
 
@@ -560,3 +588,14 @@ regeneration_adult = function(species, parReg, pred, light, dbh = NULL, trees = 
 
 
 
+
+#' @rdname regeneration_capped
+#' @export
+regeneration_saturation = regeneration_capped
+# Share the body rather than call through: a process function is rebound to the
+# model by set_environment(), and a wrapper that calls regeneration_capped() by
+# name resolves it in the namespace, where there is no `self`.
+body(regeneration_saturation) = bquote({
+  .Deprecated("regeneration_capped")
+  .(body(regeneration_capped))
+})

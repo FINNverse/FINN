@@ -71,6 +71,19 @@
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
 #'   the negative binomial distribution used to sample recruits. Only used when
 #'   this process is the regeneration process.
+#' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion
+#'   `par_theta_recruits` be estimated during [FINN::fit()]? Default `TRUE`.
+#'   With `FALSE` it stays at `dispersion_parameter` for the whole fit (a buffer,
+#'   not a parameter), in the recruit draw and in the regeneration likelihood
+#'   alike; `theta_floor` still applies. Only used when this process is the
+#'   regeneration process.
+#' @param cap,prior,prior_lambda The Beverton-Holt cap of
+#'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
+#'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
+#'   observed recruitment rate in the fitted data, recruits per ha and year) or a
+#'   positive number; `prior_lambda` (default `0.1`) the strength of the pull of
+#'   `log K` towards `log prior`. See [FINN::regeneration_capped()]. Only used
+#'   when this process is the regeneration process and its `func` uses the cap.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the default
 #'   environmental-response network architecture.
 #' @param upper (`numeric()`)\cr Upper boundaries (natural scale) for the
@@ -106,20 +119,60 @@
 #'   process.
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn
 #'   from the cohort's mortality probability. Only used when this process is the
-#'   mortality process. `"gamma"` (default, the behaviour of every published FINN
-#'   result) matches a Gamma to the binomial's first two moments and `rsample()`s
+#'   mortality process. `"binomial"` (default since 0.2.0) is the exact binomial:
+#'   each tree in the cohort gets its own reparameterised Bernoulli trial, which is
+#'   integer-valued, matches the binomial in both moments -- measured 12.011 / 8.387
+#'   against an exact 12.000 / 8.400 at `n = 40`, `p = 0.3` -- and keeps a gradient
+#'   path to `p` through a straight-through sigmoid. It expands each cell to the
+#'   largest cohort in the batch, so its memory grows with the largest `trees` value
+#'   in the data.
+#'   `"poisson"` draws a Bernoulli where
+#'   the cohort holds one tree or fewer and a Poisson capped at the cohort size
+#'   otherwise: integer-valued, exact in expectation for small `n*p`, and no
+#'   pathwise gradient -- which costs nothing now that `fit(rb_gradient = TRUE)`
+#'   takes the gradient through the expectation anyway. The Bernoulli branch
+#'   matters because capping a Poisson at a one-tree cohort delivers only 88 % of
+#'   the calibrated probability at the `p = 0.26` of a suppressed stem.
+#'   `"gamma"` (the behaviour of every published FINN result) matches a Gamma to the binomial's first two moments and `rsample()`s
 #'   it, which gives a pathwise gradient -- the hazard a discrete draw does not
 #'   cover -- but the forward pass rounds that draw straight-through, so the
 #'   gradient flows through a quantity the simulation discards and the rounded
 #'   count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
-#'   cohorts at annual probabilities of 0.01-0.10. `"poisson"` draws a Bernoulli
-#'   where the cohort holds one tree or fewer and a Poisson capped at the cohort
-#'   size otherwise: integer-valued,
-#'   exact in expectation for small `n*p`, no pathwise gradient. The Bernoulli
-#'   branch matters because capping a Poisson at a one-tree cohort delivers only
-#'   88% of the calibrated probability at the `p = 0.26` of a suppressed stem.
+#'   cohorts at annual probabilities of 0.01-0.10.
 #'   See [FINN::binomial_from_poisson()] for the measured effect on the simulated
 #'   stand.
+#' @param theta_floor (`numeric(1)`)\cr Lower bound on the negative-binomial
+#'   recruit dispersion `par_theta_recruits`, applied wherever it is read: the
+#'   recruit draw and the regeneration likelihood. Default `0.5` since 0.2.0;
+#'   `0` or `NULL` leaves it unbounded, as in 0.1.0. Only used when this object
+#'   is the regeneration process.
+#'
+#'   theta is trained, and it collapses, because lowering it widens the
+#'   regeneration likelihood and so cheapens that term without improving the
+#'   predicted mean. The same parameter sets the variance of the *simulated*
+#'   recruit draw, `mu + mu^2/theta`, which then turns bursty: on the German NFI
+#'   it reached 0.035 by epoch 50 and the simulated stand overshot observed
+#'   recruitment 133-fold, with basal-area and stem losses flat until epoch 25
+#'   and running away after. The Beverton-Holt cap does not prevent this -- it
+#'   bounds the mean, and the variance around a capped mean is still
+#'   `K + K^2/theta`.
+#' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
+#'   per-cohort mortality probability is clamped to **per simulation step**,
+#'   before the death draw. Only used when this process is the mortality process;
+#'   the per-tree mortality loss is not bounded by either.
+#'
+#'   The defaults are `0.001` and `0.999` (0.1 % and 99.9 % per step). Until
+#'   0.2.0 the interval was hard-coded to `[0.01, 0.99]`, which is why a
+#'   simulated low-mortality stand -- a mature unthinned stand, a slow-growing
+#'   species, an equilibrium run -- lost stems the observations did not: at a
+#'   1 % floor it loses 1 % of every cohort per step however low the fitted rate.
+#'
+#'   The floor exists because `binomial_from_gamma()`'s shape `n*p/(1-p)`
+#'   degenerates as `p -> 0`. Measured with that draw, it stays finite with an
+#'   unbiased mean gradient down to `1e-4`, but single-draw gradients grow
+#'   heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
+#'   times the old default's at `1e-3` and about a hundred times at `1e-4` --
+#'   so `1e-3` is the lowest tested value and is the new default.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
 #'   process and `func` declares that argument. `NULL` (the default) keeps the
@@ -130,7 +183,10 @@
 #'   argument keeps working unchanged.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn from the
 #'   negative binomial. Only used when this process is the regeneration process and
-#'   `sample_regeneration = TRUE`. `"gaussian"` (default, the behaviour of every
+#'   `sample_regeneration = TRUE`. `"refined"` (default since 0.2.0) samples
+#'   exactly below `lambda = 2` and drops both guards below, neither of which
+#'   applies to `torch_poisson`; see [FINN::rnbinom_torch_refined()].
+#'   `"gaussian"` (the behaviour of every
 #'   published FINN result) offsets the Gamma draw by `+0.001`, clamps the
 #'   probability at `1e-4` and pushes the result through
 #'   `lambda + eps*sqrt(lambda)`. The offset and the clamp guard the Gaussian
@@ -138,9 +194,6 @@
 #'   together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
 #'   patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species -- over a pool of
 #'   a hundred-odd species, as large as a temperate inventory's whole ingrowth.
-#'   `"refined"` drops both (neither hazard applies to `torch_poisson`)
-#'   and samples exactly below `lambda = 2`. See
-#'   [FINN::rnbinom_torch_refined()].
 #' @param custom_parameters (`named list` or `NULL`)\cr Extra parameters that a
 #'   custom `func` needs, declared here so they are registered on the model by
 #'   [FINN::finn()], optimised jointly by [FINN::fit()] (when trainable), and
@@ -167,9 +220,17 @@
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
 #' @export
-createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined"), growth_scale = NULL) {
+createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
+                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
+                         theta_floor = 0.5, optimizeTheta = TRUE,
+                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
+  out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
+  out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
+  out$mortality_ceiling = check_mortality_limit(mortality_ceiling, "mortality_ceiling")
+  if(out$mortality_floor >= out$mortality_ceiling)
+    stop("`mortality_floor` must be below `mortality_ceiling`.", call. = FALSE)
   out$regeneration_sampler = match.arg(regeneration_sampler)
   # `growth` enters the logit as a bare divisor, so a bad value is silent rather than loud:
   # logical NA coerces to TRUE and divides by 1, which restores the pre-0.2.0 objective, and
@@ -177,6 +238,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(growth_scale) && !(is.numeric(growth_scale) && length(growth_scale) == 1L &&
                                  is.finite(growth_scale) && growth_scale > 0))
     stop("`growth_scale` must be a single positive finite number, or NULL.", call. = FALSE)
+  out$cap = match.arg(cap)
+  out$prior = validate_cap_prior(prior)
+  out$prior_lambda = validate_prior_lambda(prior_lambda)
+  out$theta_floor = validate_theta_floor(theta_floor)
   # the competition kernel gates on isTRUE(), so `light_mask = 1` would be accepted
   # here and then silently leave the quantiles unmasked
   if(!is.logical(light_mask) || length(light_mask) != 1L || is.na(light_mask))
@@ -301,6 +366,13 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
 #'   the negative binomial distribution used to sample recruits. Only used when
 #'   this object is the regeneration process.
+#' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion be
+#'   estimated during [FINN::fit()]? Default `TRUE`; `FALSE` keeps it at
+#'   `dispersion_parameter`; see [FINN::createProcess()]. Only used when this
+#'   object is the regeneration process.
+#' @param cap,prior,prior_lambda The Beverton-Holt cap on recruitment; see
+#'   [FINN::createProcess()] and [FINN::regeneration_capped()]. Only used when
+#'   this object is the regeneration process.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the
 #'   default network architecture entirely.
 #' @param dropout (`numeric(1)`)\cr Dropout rate of the network.
@@ -313,11 +385,20 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #'   expectation used (`FALSE`)? Only used when this object is the regeneration
 #'   process.
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
-#'   `"gamma"` (default) or `"poisson"`; see [FINN::createProcess()]. Only used
+#'   `"binomial"` (default since 0.2.0), `"poisson"` or `"gamma"`; see
+#'   [FINN::createProcess()]. Only used
+#'   when this object is the mortality process.
+#' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
+#'   mortality probability is clamped to per simulation step before the death
+#'   draw, defaults `0.001` and `0.999`; see [FINN::createProcess()]. Only used
 #'   when this object is the mortality process.
 #' @param regeneration_sampler (`character(1)`)\cr How recruits are drawn,
-#'   `"gaussian"` (default) or `"refined"`; see [FINN::createProcess()]. Only used
+#'   `"refined"` (default since 0.2.0) or `"gaussian"`; see [FINN::createProcess()]. Only used
 #'   when this object is the regeneration process.
+#' @param theta_floor (`numeric(1)`)\cr Lower bound on the recruit dispersion
+#'   `par_theta_recruits`, default `0.5` since 0.2.0, `0` or `NULL` to leave it
+#'   unbounded as in 0.1.0; see [FINN::createProcess()]. Only used when this
+#'   object is the regeneration process.
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
 #' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/
@@ -341,9 +422,17 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
 #'
 #' @export
-createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("gamma", "poisson"), regeneration_sampler = c("gaussian", "refined")) {
+createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
+                        cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
+                        theta_floor = 0.5, optimizeTheta = TRUE,
+                        mortality_floor = 0.001, mortality_ceiling = 0.999) {
   out = list()
+  out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
+  out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
+  out$mortality_ceiling = check_mortality_limit(mortality_ceiling, "mortality_ceiling")
+  if(out$mortality_floor >= out$mortality_ceiling)
+    stop("`mortality_floor` must be below `mortality_ceiling`.", call. = FALSE)
   out$regeneration_sampler = match.arg(regeneration_sampler)
   if(!is.null(formula)){
     mf = match.call()
@@ -360,6 +449,10 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   out$custom = TRUE
   out$optimizeSpecies = FALSE
   out$optimizeEnv = optimize
+  out$cap = match.arg(cap)
+  out$prior = validate_cap_prior(prior)
+  out$prior_lambda = validate_prior_lambda(prior_lambda)
+  out$theta_floor = validate_theta_floor(theta_floor)
   out$dispersion_parameter = dispersion_parameter
   out$sample_regeneration = sample_regeneration
   out$NN = NN
@@ -579,4 +672,39 @@ get_par_boundary = function(obj, type, upper = TRUE) {
     }
     return(lower)
   }
+}
+
+# The recruitment cap's prior is specified identically on createProcess() and
+# createHybrid(); validating it in one place keeps the two from drifting apart.
+validate_cap_prior = function(prior) {
+  if(identical(prior, "max_obs_recruits")) return(prior)
+  if(is.numeric(prior) && length(prior) == 1L && is.finite(prior) && prior > 0) return(as.numeric(prior))
+  stop('`prior` must be "max_obs_recruits" or a single positive finite number ',
+       '(recruits ha^-1 yr^-1).', call. = FALSE)
+}
+
+# A lower bound on the recruit dispersion, not an upper one: theta only ever
+# collapses, because lowering it cheapens the regeneration likelihood.
+validate_optimize_theta = function(optimizeTheta) {
+  if(!is.logical(optimizeTheta) || length(optimizeTheta) != 1L || is.na(optimizeTheta))
+    stop("`optimizeTheta` must be TRUE or FALSE.", call. = FALSE)
+  optimizeTheta
+}
+
+validate_theta_floor = function(theta_floor) {
+  if(is.null(theta_floor)) return(NULL)
+  if(is.numeric(theta_floor) && length(theta_floor) == 1L &&
+     is.finite(theta_floor) && theta_floor >= 0) {
+    return(if(theta_floor > 0) as.numeric(theta_floor) else NULL)
+  }
+  stop("`theta_floor` must be a single finite number >= 0, or NULL ",
+       "(0 and NULL both leave the recruit dispersion unbounded, as in 0.1.0).",
+       call. = FALSE)
+}
+
+validate_prior_lambda = function(prior_lambda) {
+  if(is.numeric(prior_lambda) && length(prior_lambda) == 1L &&
+     is.finite(prior_lambda) && prior_lambda >= 0) return(as.numeric(prior_lambda))
+  stop("`prior_lambda` must be a single finite number >= 0 (0 switches the prior off).",
+       call. = FALSE)
 }

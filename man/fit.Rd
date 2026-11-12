@@ -42,6 +42,9 @@ fit(
   anchor_min_dbh = NULL,
   teacher_forcing = FALSE,
   loss_resolution = c("site", "tree"),
+  rb_gradient = TRUE,
+  trees_offset = 0.01,
+  recruits = c("simulated", "observed"),
   ...
 )
 }
@@ -253,7 +256,13 @@ in both modes.}
 
 \item{batchsize}{(\code{integer(1)})\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.}
 
-\item{device}{(\code{character(1)})\cr Should the model be fitted on the CPU or the GPU (Graphic card). Support is only for NVIDIA GPUs available.}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
+synonym for \code{"gpu"}. Only NVIDIA cards are supported. A card does not always
+pay: the per-tree route (\code{loss_resolution = "tree"}, \code{loss_aggregation = "tree"})
+issues thousands of small kernels per simulated year and is bound by dispatch
+rather than arithmetic, so it can run at the same speed on either device with
+the card almost idle. Measure one configuration before committing a long fit to
+a GPU.}
 
 \item{update_step}{(\code{integer(1)})\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.}
 
@@ -422,6 +431,69 @@ restarts at every anchor, so \code{frac_ghost} is 0 by construction only where t
 anchors cover every census; a sparser anchor list carries ghosts like single
 shooting does.}
 
+\item{rb_gradient}{(\code{logical(1)})\cr Take the gradient of the drawn death and
+recruitment counts through their expectation instead of through the draw. The
+forward pass is unchanged to the bit -- the stand still dies and recruits
+discretely -- but the reparameterised draw and the rounding's surrogate no
+longer carry the sampler's noise into the gradient. On the German inventory
+97 \% of the mortality gradient was draw noise without it. Default \code{TRUE} since
+0.2.0; set \code{FALSE} to reproduce a fit made before that. See FINNverse/FINN#53.}
+
+\item{trees_offset}{(\code{numeric(1)})\cr Offset added to the predicted stem count
+before the \code{trees} count likelihood, which is \code{-Inf} (poisson) or arbitrarily
+steep (nbinom) where a species' simulated count is exactly zero and the
+observed one is not. On the scale of the predicted count, so per patch. The
+default \code{0.01} keeps that cell's gradient comparable with every other term;
+the historical \code{1e-5} (poisson) and \code{0.001} (nbinom) left it at \code{y/offset},
+four orders above the rest. \code{NULL} restores those two historical constants
+and so reproduces a fit made before 0.2.0.}
+
+\item{recruits}{(\code{character(1)})\cr Where the recruits of the simulated stand
+come from. \code{"simulated"} (the default) is the regeneration process, unchanged.
+\code{"observed"} drives the stand with the OBSERVED recruitment instead, while
+growth, mortality and competition run and are trained as usual: stage 2 of a
+staged calibration. An inventory samples small trees too sparsely for
+recruitment to be calibrated jointly with the rest -- a mis-fitted
+regeneration process feeds a wrong stand into every later interval, and growth
+and mortality compensate for it. So they are fitted on a stand that recruits
+what was observed, and the regeneration process is fitted afterwards in a call
+of its own (with the other processes' \code{optimizeSpecies}/\code{optimizeEnv} off, or
+through \code{weights}).
+
+The unit chain: \code{reg} in \code{data} (recruits per ha over the observation period,
+on the row of the interval's END year) divided by \code{period_length} is a rate
+per ha and year, and it is the expected recruitment \code{r_mean_ha} of EVERY
+simulated year of that interval, at that site and for that species. Times
+\code{patch_size} it is the expected recruitment per patch, which the model's
+recruit sampler draws from (or which is taken as is with
+\code{sample_regeneration = FALSE}) and rounds, as always. Drawing around the
+observed mean rather than rounding it keeps the low rates, most of which are
+below one recruit per patch and year: the observed mode inherits the sampler,
+and with \code{sample_regeneration = FALSE} the rounding delivers exactly zero
+recruits wherever the per-patch mean is below 0.5. The simulated years of an interval are
+exactly those whose simulated recruitment \code{fit()} sums to score that
+observation: an observation at timestep \code{t} with \code{period_length} \code{p} covers
+the timesteps \verb{t - p + 1, ..., t} on the constant and the per-site path alike,
+and the timestep \code{t} alone where the constant path has no \code{period_length}
+(timestep = position of the year among the years of \code{env}). The observed rate
+is a constant; no gradient flows from it.
+
+In such a call the regeneration term is weighted 0 (the other weights stay as
+given), and every parameter of the regeneration process -- its species
+parameters, its environment network, the cap \code{reg_logK}, the recruit
+dispersion and any custom parameters it declares -- is frozen; each gets its
+previous \code{requires_grad} back when \code{fit()} returns. Nothing on the model
+records the mode, so a later \code{fit(recruits = "simulated")} trains them again.
+
+Refused with an error: an \code{NA} \code{reg} in a cell an interval needs (0 stays 0);
+a simulated year lying in two intervals, or before or between a site's
+intervals (give the first census a \code{period_length} that reaches back to the
+first year of \code{env}, or start \code{env} there); \code{reanchor} and \code{teacher_forcing},
+which replace the free-running stand the fed recruitment is defined for. Years
+after a site's last census get no recruits: nothing after it enters the
+objective. A model fitted this way still simulates with its own regeneration
+process; \link{simulateForest} can feed it the observed recruitment instead.}
+
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
 \value{
@@ -482,6 +554,46 @@ was worse on every one — even when scored on the absolute scale — and about
 four times more seed-variable, because it couples the growth parameter to
 whichever trees happen to be present.
 }
+\section{What makes a fit faster, and what does not}{
+
+A FINN fit is bound by the \emph{number of tensor operations it dispatches}, not by the
+arithmetic in them: a simulated year issues thousands of small kernels, and a tiny
+operation costs tens of microseconds of dispatch whatever hardware runs it. Three
+consequences, each measured on a 32,190 site-period panel with 25 patches:
+\itemize{
+\item \strong{A GPU need not help.} The per-tree route ran at 84 s/epoch on an RTX A5000
+against 85-100 s/epoch on CPU under the same load, with the card at \strong{3 \%
+utilisation and 653 MB}. Measure one configuration before committing a long fit
+to a device.
+\item \strong{Intra-op threads do not help and eventually cost.} On a 64-core machine,
+1/2/4/8/16 threads gave 4.59/4.77/4.68/4.73/\strong{6.06} s/epoch on a comparable
+problem; on an 8-core laptop one thread was fastest by 30 \%. The knee moves with
+the core count, the direction does not. \code{torch::torch_set_num_threads(1)} is the
+considerate setting on a shared machine and costs nothing.
+\item \strong{Concurrency is what pays.} Seven fits side by side cost 13-33 \% per epoch each
+and roughly doubled total throughput, because the machine was never short of cores.
+Run several fits at once rather than giving one fit more of the machine.
+}
+
+What does shorten a fit is fewer epochs: read a convergence criterion off
+\verb{$param_history} and stop when the parameters settle, rather than fixing a large
+\code{epochs} in advance.
+}
+
+\section{Lower bound on simulated mortality}{
+
+The simulation clamps the per-cohort mortality probability to \verb{[0.01, 0.99]}
+before the death draw (\code{mortality_draw}), so \strong{however low the fitted mortality
+is, at least 1 \% of a cohort is at risk per model step}. The bound is per
+\emph{step}, not per year, so its annual equivalent is roughly \code{0.01 / dt}: 1 \%/yr on
+annual data, 0.2 \%/yr on five-year steps, 0.1 \%/yr on decadal ones. It exists
+because \code{binomial_from_gamma()}'s shape parameter \code{n*p/(1-p)} degenerates as
+\code{p -> 0}, and it is the reason a simulated low-mortality stand -- a mature
+unthinned stand, a slow-growing species, an equilibrium run -- loses stems the
+observations do not. The per-tree mortality loss is \strong{not} affected; it clamps
+at \code{1e-6}. So a fit can be correct while the trajectory it simulates is not.
+}
+
 \section{Scoring individual trees}{
 
 By default, \code{growth} and \code{mortality} are scored per site, species and census,
@@ -512,3 +624,26 @@ the second to test whether simulated trajectories follow the real trees. The
 two cannot be combined in one fit.
 }
 
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# three Oregon FIA sites over two epochs; a real calibration runs hundreds
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+
+# the per-response losses over the epochs, and the baselines they were
+# scaled by to make `weights = "auto"` comparable across responses
+tail(m$history, 2)
+m$loss_baseline
+\dontshow{\}) # examplesIf}
+}
