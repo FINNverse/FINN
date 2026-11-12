@@ -93,3 +93,19 @@ test_that("both repaired paths run end to end and move the simulated stand", {
   expect_true(is.finite(base) && is.finite(rep_))
   expect_false(isTRUE(all.equal(base, rep_)))
 })
+
+## binomial_from_bernoulli() returned exactly zero for every input until 0.2.0
+## (FINNverse/FINN#62): the trial mask was inverted, and the reparameterised draw
+## was fed to a second torch_bernoulli() instead of being thresholded. Both moments
+## are asserted so neither can come back silently.
+test_that("binomial_from_bernoulli matches the binomial in both moments", {
+  skip_if_not(torch::torch_is_installed())
+  FINN.seed(1)
+  for (nn in c(1, 10, 40)) for (pp in c(0.1, 0.3)) {
+    n <- torch::torch_full(c(400L, 100L, 1L), nn)
+    p <- torch::torch_full(c(400L, 100L, 1L), pp)
+    b <- binomial_from_bernoulli(n, p)
+    expect_equal(as.numeric(b$mean()), nn * pp, tolerance = 0.02)
+    expect_equal(as.numeric(b$var()), nn * pp * (1 - pp), tolerance = 0.05)
+  }
+})
