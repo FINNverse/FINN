@@ -188,17 +188,17 @@ intercept-only baseline, the loss of predicting the single best constant, so
 each term starts at 1 and the six shares are equal. The baselines are kept in
 `m$loss_baseline`, the weights in `m$loss_weights`.
 
-A numeric `weights` vector multiplies these scaled losses (since 0.2.0), so a
+A numeric `loss_weights` vector multiplies these scaled losses (since 0.2.0), so a
 number reads directly as a share: `c(1, 1, 1, 2, 1, 1)` gives growth twice the
 weight of every other response, and the report says so.
 
 ```{r loss-shares-numeric, message = TRUE}
 fit(m, env = env_dt, data = obs_dt, init_cohort = init_cohorts, epochs = 0L,
     patches = 4, patch_size = 0.06, plot_progress = FALSE,
-    weights = c(1, 1, 1, 2, 1, 1))
+    loss_weights = c(1, 1, 1, 2, 1, 1))
 ```
 
-`weight_scale = "raw"` applies the same vector to the unscaled losses, which is
+`weight_scale = FALSE` applies the same vector to the unscaled losses, which is
 what `weights` meant before 0.2.0 and what reproduces an analysis fitted with an
 earlier version. The report is printed in that mode too, and it shows why the
 scaling is the default:
@@ -206,7 +206,7 @@ scaling is the default:
 ```{r loss-shares-raw, message = TRUE}
 fit(m, env = env_dt, data = obs_dt, init_cohort = init_cohorts, epochs = 0L,
     patches = 4, patch_size = 0.06, plot_progress = FALSE,
-    weights = c(1, 1, 1, 2, 1, 1), weight_scale = "raw")
+    loss_weights = c(1, 1, 1, 2, 1, 1), weight_scale = FALSE)
 ```
 
 On the raw scale the diameter term is the objective and the nominal factor of
@@ -315,7 +315,7 @@ dcast(steps[, max_step := round(max_step, 3)], block ~ epoch, value.var = "max_s
 At a constant learning rate no block comes to rest: every parameter group still
 steps by a few tenths between checkpoints while the losses have been flat for
 hundreds of epochs. Part of that is the jitter of mini-batch Adam, which a
-learning-rate schedule (`lr_scheduler = "step"` or `"cosine"`) damps at the
+learning-rate schedule (`control = finnControl(lr_scheduler = "step")` or `"cosine"`) damps at the
 end of a fit; the rest is drift along directions the objective does not care
 about, and the regeneration blocks, which step most over the first 200 epochs,
 are the first suspects. Two seeds, or two checkpoints, compared on the holdout

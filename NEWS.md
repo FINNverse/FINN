@@ -1,7 +1,85 @@
-# FINN (development version)
+# FINN 0.2.0
+
+## The interface of `finn()` and `fit()`
+
+Agreed for the release so that the two central functions read for an
+ecologist who does not know modelling terms. Every renamed or moved argument
+is still accepted under its old name, with a warning that names the new form,
+and gives the same result.
+
+* `finn()` writes its default processes in the signature instead of `NULL`:
+  `createProcess(func = mortality)`, `createProcess(func = growth)`,
+  `createProcess(func = regeneration_capped)` and
+  `createProcess(func = competition)`. They are exactly what `NULL` used to
+  build, and `NULL` is still accepted. `?finn` carries the model overview
+  figure, says which equation each default is, that competition cannot depend
+  on the environment, and has a complete build-estimate-simulate example.
+
+* `finn(growth_rate = c("annual", "period"))` replaces
+  `finn(growth_period_scale = )`: it says what the `growth` column of the data
+  is -- the mean annual relative growth rate (default; `TRUE` was `"period"`,
+  the relative increment over the whole interval).
+
+* The recruitment floor moves to the regeneration process:
+  `createProcess(reg_floor = 1e-3)`. `finn(reg_floor = )` is accepted with a
+  warning and overrides the process' value.
+
+* `finn(recruit_obs_weight = )` is the last argument; it matters only for
+  sampling designs that do not count recruits per hectare, and its
+  explanation lives in `?recruitment`.
+
+* `fit()` is titled *Estimate the parameters of a FINN model* and says that
+  all processes are calibrated jointly. Its loss arguments stand together,
+  each with one line and a link to the new help page `?finn_loss`
+  (likelihoods, aggregation, resolution, weights, the per-tree routes,
+  `loss_recruit`); the input tables have the new help page `?finn_data`
+  (mandatory columns, missing values, incomplete series, what FINN fills in,
+  `env`, `disturbance`, `init_cohort`, `tree_data`, the helpers).
+
+* `fit(loss_weights = )` replaces `fit(weights = )`, so the name says these
+  are the weights of the loss terms. `fit(weight_scale = )` also takes `TRUE`
+  (= `"auto"`, the default) and `FALSE` (= `"raw"`).
+
+* `fit(loss_recruit = )` replaces `fit(recruits = )`; `predict()` and
+  `simulateForest()` keep `recruits =`, where it is not a loss setting.
+
+* `fit(control = finnControl())` collects the optimizer settings:
+  `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` and extra
+  optimizer arguments such as `weight_decay`. `lr`, `epochs` and `batchsize`
+  stay arguments of `fit()`. The four are still accepted as arguments of
+  `fit()` with a warning.
+
+* `fit(loss = )` is deprecated in favour of `loss_family`; it is kept as the
+  last formal argument so that it does not partially match the `loss_*`
+  arguments. `loss_family` also takes a partial named vector
+  (`c(trees = "nbinom")` keeps the other five defaults).
+
+* `fit()` checks its input before anything runs and says what is wrong: a
+  missing key or response column of `data` (a response with
+  `loss_family = "none"` may be absent), species codes outside
+  `1..N_species`, duplicated rows, a plain `data.frame` is accepted; `env`
+  without a predictor column (#64), with a missing value, with sites that
+  do not share the same years, or without a year that `data` observes;
+  `disturbance` without `intensity`, with values outside `[0, 1]`, or over
+  other sites and years than `env`. `fit()` and `predict()` warn when
+  `patches` is given with `init_cohort` and differs (it is ignored, #66),
+  and when `patch_size` differs from the one the model was last fitted or
+  simulated with; `predict()`/`simulateForest()` default `patch_size` to the
+  fitted one. `fit(start_time = )` warns that it has no effect in 0.2.0.
+
+* The progress plot of `fit(plot_progress = TRUE)` shows every loss term
+  over the whole range: it is redrawn each epoch with the y-axis fitted to
+  the data, so a term that rises above its starting value is no longer cut
+  off, and a term that is switched off is left out.
+
+* `predict()`/`simulateForest()` share one help page with a description;
+  their examples fit two epochs first, so they run on the bundled data
+  (an unfitted model has no environment scaling yet).
+
+## Documentation and data preparation
 
 * Examples for the fitting workflow (`finn()`, `fit()`, `predict()`,
-  `simulateForest()`, `predictTrees()`, `regeneration_saturation()`,
+  `simulateForest()`, `predictTrees()`, `regeneration_capped()`,
   `regeneration_adult()`, gated on an installed torch backend) and for the data
   helpers (`makeObsData()`, `resolveSiteIDs()`, `makeInitCohorts()`,
   `climateDF2array()`); the fitting vignettes gain sections on loss balancing,
@@ -34,14 +112,14 @@
   keeps the count, and `fit()` says so when an earlier setting prevents the
   change.
 
-# FINN 0.2.0
+## The release in detail
 
 This release adds the model features developed for the **FIA** (US Forest
 Inventory and Analysis) and **BWI** (German Bundeswaldinventur) calibration
 projects. Every new argument defaults to the previous behaviour, with three
 exceptions that do not reproduce 0.1.0 and are marked in the table below:
 `mortality(growth_scale = 0.01)`, `createProcess(light_mask = TRUE)` and
-`finn(reg_floor = 1e-3)`. Two further exceptions repair the stem-count gradient
+`createProcess(reg_floor = 1e-3)`. Two further exceptions repair the stem-count gradient
 and are on by default: `fit(trees_offset = 0.01)` and `fit(rb_gradient = TRUE)`,
 both described under *The stem-count gradient* below. One further change
 reproduces 0.1.0 only on a machine whose `LC_COLLATE` was already `C`: `resolveSiteIDs()` now numbers sites,
@@ -165,7 +243,7 @@ it off. With `cap = "species"` the prior is hierarchical -- each species' log ca
 is pulled towards the differentiable mean of all of them, so it penalises how far
 the species spread apart and leaves the overall level to the data.
 
-The penalty is added **after** the `weights = "auto"` baseline scaling, so
+The penalty is added **after** the `loss_weights = "auto"` baseline scaling, so
 `prior_lambda` means the same thing on every dataset.
 
 ### What is new since 0.1.0
@@ -189,7 +267,7 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | Per census and epoch: `frac_killed`, `mean_kill_year`, `frac_ghost`; and the per-tree predictions | `$tree_deaths`, `$tree_pred` | under `loss_resolution = "tree"` |
 | Multiple shooting: rebuild the stand from the observed tree list at every anchor | `fit(reanchor = , anchor_cohorts = , anchor_mode = , anchor_min_dbh = )` | `FALSE`, `NULL`, `"replace"`, `NULL` |
 | Reset the stand to the observation every year | `fit(teacher_forcing = )` | `FALSE` |
-| Drive the stand with the observed recruitment (`reg / period_length` per ha and year in every year of its interval, drawn by the recruit sampler) instead of the regeneration process, which is frozen and unscored for that call: stage 2 of a staged calibration | `fit(recruits = )`; `simulateForest(recruits =, obs_recruits =)`, `predict()` | `"simulated"`, as in 0.1.0 |
+| Drive the stand with the observed recruitment (`reg / period_length` per ha and year in every year of its interval, drawn by the recruit sampler) instead of the regeneration process, which is frozen and unscored for that call: stage 2 of a staged calibration | `fit(loss_recruit = )`; `simulateForest(recruits =, obs_recruits =)`, `predict()` | `"simulated"`, as in 0.1.0 |
 | Per-site aggregation windows for mixed remeasurement intervals | automatic from `period_length`; override with `model$period_mode` | `"auto"` |
 | A non-finite loss term drops that term, or the whole timestep; occurrences counted | `fit(nonfinite = )`, `$nonfinite_counts` | `"drop_term"` |
 | Set-up only, no training | `fit(epochs = 0)` | — |
@@ -197,14 +275,14 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | Beverton-Holt cap on recruitment | `regeneration_saturation()` | new export |
 | Recruitment limited by conspecific adults | `regeneration_adult()` | new export |
 | A process function declares and calibrates its own named parameters | `createProcess(custom_parameters = )` | `NULL` |
-| **Additive recruitment floor, was hard-coded at 0.2.** A default that does **not** reproduce 0.1.0 — see below | `finn(reg_floor = )` | **`1e-3`** (was 0.2) |
+| **Additive recruitment floor, was hard-coded at 0.2.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(reg_floor = )` on the regeneration process | **`1e-3`** (was 0.2) |
 | Observation operator mapping predicted and observed recruitment per ha into the tallied-count space of the sampling design (applied under the `"nbinom"` regeneration likelihood only, #65) | `finn(recruit_obs_weight = )` | `1.0` |
-| Score growth over the whole remeasurement interval | `finn(growth_period_scale = )` | `FALSE` |
+| Score growth over the whole remeasurement interval | `finn(growth_rate = )` | `"annual"` |
 | **Binned competition takes its height quantiles over the live cohorts only.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(light_mask = )` | **`TRUE`** (was unmasked) |
 | Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
 | Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
 | A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
-| **A numeric `weights` vector multiplies the baseline-scaled objective instead of replacing it.** A default that does **not** reproduce 0.1.0 | `fit(weights = )`, `fit(weight_scale = )` | **`"auto"`**; `weight_scale = "raw"` restores the old meaning |
+| **A numeric `weights` vector multiplies the baseline-scaled objective instead of replacing it.** A default that does **not** reproduce 0.1.0 | `fit(loss_weights = )`, `fit(weight_scale = )` | **`"auto"`**; `weight_scale = FALSE` restores the old meaning |
 | **Growth enters `mortality()` in %/yr.** A default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
 
 ### What was broken
@@ -338,7 +416,7 @@ someone who was affected.
   that the likelihood scores the counts a sampling design actually tallies. In
   0.2.0 it is applied under `loss_family["regeneration"] = "nbinom"` only (#65).
 
-* **Period-scale growth scoring (`finn(growth_period_scale = )`).** Scores growth
+* **Period-scale growth scoring (`finn(growth_rate = "period")`).** Scores growth
   over a multi-year remeasurement interval rather than a single step, for
   inventories whose growth is only observed between remeasurements.
 
@@ -352,12 +430,12 @@ someone who was affected.
 
 ## Behaviour changes
 
-* **The recruitment floor is `1e-3`, not 0.2.** `finn(reg_floor = )` replaces a
+* **The recruitment floor is `1e-3`, not 0.2.** `createProcess(reg_floor = )` replaces a
   hard-coded additive floor of 0.2 on the expected recruitment of every species
   in every cell-year. At 0.2 the floor alone delivered about 13 stems per hectare
   per year over a 65-species FIA pool, against roughly 0.7 observed -- the floor
   was the recruitment. It exists to keep the negative-binomial likelihood away
-  from a zero mean, which `1e-3` does. `finn(reg_floor = 0.2)` restores 0.1.0.
+  from a zero mean, which `1e-3` does. `createProcess(reg_floor = 0.2)` on the regeneration process restores 0.1.0.
 
 * **The binned competition masks padding out of its height quantiles.**
   `createProcess(light_mask = )` now defaults to `TRUE`. The cohort dimension is
@@ -382,7 +460,7 @@ someone who was affected.
   at the start and 4.5 % at convergence, and `ba`'s nominal factor of ten was a
   factor of ten on a scale already 26x growth's. Weights now multiply the
   baseline-scaled losses, where a weight reads directly as that response's
-  share. `fit(weight_scale = "raw")` restores the old behaviour exactly and is
+  share. `fit(weight_scale = FALSE)` restores the old behaviour exactly and is
   what reproduces an analysis fitted before 0.2.0. Every fit now prints each
   response's share of the objective at the intercept-only baseline, in both
   modes -- the silence was the actual defect.
@@ -415,7 +493,7 @@ someone who was affected.
   the trees carried 75 % of the mortality objective, the drought half 3 %). The
   loss is now one mean over all units scored in the batch (each year's mean
   weighted by its share of trees / `n_at_risk` / `growth_n` / cells), which is
-  also what the `weights = "auto"` baselines measure; the reported history is
+  also what the `loss_weights = "auto"` baselines measure; the reported history is
   that pooled mean. A batch that scores one observation year is bit-identical
   to before; the constant-period path is unchanged.
 
@@ -454,7 +532,7 @@ someone who was affected.
   stand. Anything but a single positive finite number, or `NULL`, is now an error
   at `createProcess()` time. Saved models are unaffected.
 
-* `weights = "auto"` no longer explodes on a response that is constant over the
+* `loss_weights = "auto"` no longer explodes on a response that is constant over the
   scored cells. The intercept-only baseline is then a few float ulps rather than
   zero, so `1/baseline` passed the `<= 0` guard and produced weights of order
   1e17 on a package fixture. Such a response is now left unscaled, with a
@@ -465,7 +543,7 @@ someone who was affected.
 
 * Arguments that gate on `isTRUE()` are validated as logicals: `fit(reanchor = )`,
   `fit(teacher_forcing = )` and `createProcess(light_mask = )` accepted `1` and
-  then silently behaved as `FALSE`. `finn(reg_floor = )` is validated the way
+  then silently behaved as `FALSE`. `createProcess(reg_floor = )` is validated the way
   `growth_scale` is. `fit(loss_aggregation = )` rejects a response named twice
   instead of keeping the first entry, and `fit(env_autoscale = )` rejects a named
   entry that matches no predictor instead of silently scaling that predictor
@@ -587,7 +665,7 @@ Highlights of the current interface:
 * Per-response likelihoods: Gaussian (`"mse"`/`"gaussian"`), Poisson, negative
   binomial, and a `"binomial"` likelihood for mortality that takes a
   closed-cohort count pair (`n_at_risk`, `n_died`).
-* `weights = "auto"` (the default in `fit()`) scales each loss by its
+* `loss_weights = "auto"` (the default in `fit()`) scales each loss by its
   intercept-only baseline, so the six responses are commensurable and every term
   reads as a fraction of its own null deviance.
 * Data helpers `makeObsData()`, `resolveSiteIDs()` and `makeInitCohorts()` turn a
