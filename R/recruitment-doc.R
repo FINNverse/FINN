@@ -89,14 +89,19 @@
 #' therefore run away (FINNverse/FINN#63).
 #'
 #' What the floor does: it keeps the fit stable, and in a fit run to
-#' convergence it costs nothing. On the German national forest inventory, a full
-#' model fitted for 2000 epochs with the floor predicted the recruitment level on
-#' a spatially blocked holdout at 1.06 times the observed, a fixed `theta` of 1
-#' (`optimizeTheta = FALSE`) at 1.04, and the two scored the same recruitment
-#' likelihood and the same skill on every other response. The difference is in
-#' how fast they get there: after 50 epochs a floored `theta` still put the level
-#' about 12 times too high, a fixed `theta` 2 to 3 times, and a free `theta` had
-#' run away by four orders of magnitude. So read the recruitment level only once
+#' convergence it costs nothing we could resolve. In one converged pair of fits
+#' on the German national forest inventory (2000 epochs, about 126 000 optimizer
+#' steps), the model with the floor predicted the recruitment level on a
+#' spatially blocked holdout at 1.06 times the observed and the one with a fixed
+#' `theta` of 1 (`optimizeTheta = FALSE`) at 1.04; their recruitment likelihoods
+#' were within 0.003 of each other (0.897 and 0.894 relative to an
+#' intercept-only null), and they agreed on basal area, stem numbers, growth and
+#' the mortality AUC to three decimals. Early in a fit the two settings differ:
+#' after 50 of those 2000 epochs (3 150 optimizer steps on that inventory) a
+#' floored `theta` still put the level about 12 times too high, a fixed `theta`
+#' 2 to 3 times, and a free `theta` had run away by four orders of magnitude.
+#' Count the budget in optimizer steps, not epochs: on a small data set 50
+#' epochs can be 50 steps. So read the recruitment level only once
 #' the parameters have settled (`$param_history`), whichever setting you use; for
 #' short fits, a fixed `theta` gets the level right sooner.
 #'

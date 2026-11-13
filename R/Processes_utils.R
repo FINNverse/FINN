@@ -84,8 +84,9 @@
 #'   recruitment data, and with the floor (`theta_floor`) the level is right
 #'   only once the fit has converged, while a fixed `theta` gets there sooner.
 #'   `dispersion_parameter = 1` is FINN's start value; on the German national
-#'   forest inventory it matched the floored `theta` at convergence. See
-#'   [recruitment].
+#'   forest inventory it matched the floored `theta` at convergence. A higher
+#'   value such as `50` brings the recruit draw close to a Poisson draw (the
+#'   variance `mu + mu^2/theta` approaches `mu`). See [recruitment].
 #' @param cap,prior,prior_lambda The Beverton-Holt cap of
 #'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
 #'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
@@ -170,13 +171,14 @@
 #'   bounds the mean, and the variance around a capped mean is still
 #'   `K + K^2/theta`.
 #'
-#'   The floor keeps the fit stable, and a fit run to convergence with it
-#'   calibrates the recruitment level as well as a fixed `theta`: on the German
-#'   national forest inventory, out of sample on a spatially blocked holdout,
-#'   1.06 times the observed level after 2000 epochs against 1.04 for
-#'   `optimizeTheta = FALSE`. A fit stopped early is different: after 50 epochs
-#'   the floored `theta` still put the level about 12 times too high, a fixed
-#'   `theta` 2 to 3 times. Read the level only once the parameters have settled,
+#'   The floor keeps the fit stable, and in one converged pair of fits on the
+#'   German national forest inventory it calibrated the recruitment level as
+#'   well as a fixed `theta`: out of sample on a spatially blocked holdout, 1.06
+#'   times the observed level after 2000 epochs (about 126 000 optimizer steps)
+#'   against 1.04 for `optimizeTheta = FALSE`. A fit stopped early is
+#'   different: after 50 of those epochs (3 150 optimizer steps) the floored
+#'   `theta` still put the level about 12 times too high, a fixed `theta` 2 to 3
+#'   times. Read the level only once the parameters have settled,
 #'   or fix `theta` for short fits. See [recruitment].
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   per-cohort mortality probability is clamped to **per simulation step**,
@@ -444,9 +446,11 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param theta_floor (`numeric(1)`)\cr Lower bound on the recruit dispersion
 #'   `par_theta_recruits`, default `0.5` since 0.2.0, `0` or `NULL` to leave it
 #'   unbounded as in 0.1.0; see [FINN::createProcess()]. Only used when this
-#'   object is the regeneration process. The floor keeps the fit stable; the
-#'   recruitment level is right once the fit has converged, and for short fits
-#'   a fixed `theta` (`optimizeTheta = FALSE`) gets there sooner. See
+#'   object is the regeneration process. The floor keeps the fit stable. In
+#'   one converged pair of fits on the German national forest inventory it
+#'   calibrated the recruitment level as well as a fixed `theta`, but only after
+#'   the parameters had settled; read the level once `$param_history` shows
+#'   them settled, or fix `theta` (`optimizeTheta = FALSE`) for short fits. See
 #'   [recruitment].
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).

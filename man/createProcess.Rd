@@ -204,13 +204,14 @@ and running away after. The Beverton-Holt cap does not prevent this -- it
 bounds the mean, and the variance around a capped mean is still
 \code{K + K^2/theta}.
 
-The floor keeps the fit stable, and a fit run to convergence with it
-calibrates the recruitment level as well as a fixed \code{theta}: on the German
-national forest inventory, out of sample on a spatially blocked holdout,
-1.06 times the observed level after 2000 epochs against 1.04 for
-\code{optimizeTheta = FALSE}. A fit stopped early is different: after 50 epochs
-the floored \code{theta} still put the level about 12 times too high, a fixed
-\code{theta} 2 to 3 times. Read the level only once the parameters have settled,
+The floor keeps the fit stable, and in one converged pair of fits on the
+German national forest inventory it calibrated the recruitment level as
+well as a fixed \code{theta}: out of sample on a spatially blocked holdout, 1.06
+times the observed level after 2000 epochs (about 126 000 optimizer steps)
+against 1.04 for \code{optimizeTheta = FALSE}. A fit stopped early is
+different: after 50 of those epochs (3 150 optimizer steps) the floored
+\code{theta} still put the level about 12 times too high, a fixed \code{theta} 2 to 3
+times. Read the level only once the parameters have settled,
 or fix \code{theta} for short fits. See \link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion
@@ -225,8 +226,9 @@ depend on how long the fit runs: a trained \code{theta} falls on sparse
 recruitment data, and with the floor (\code{theta_floor}) the level is right
 only once the fit has converged, while a fixed \code{theta} gets there sooner.
 \code{dispersion_parameter = 1} is FINN's start value; on the German national
-forest inventory it matched the floored \code{theta} at convergence. See
-\link{recruitment}.}
+forest inventory it matched the floored \code{theta} at convergence. A higher
+value such as \code{50} brings the recruit draw close to a Poisson draw (the
+variance \code{mu + mu^2/theta} approaches \code{mu}). See \link{recruitment}.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},

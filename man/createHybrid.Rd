@@ -84,9 +84,11 @@ cap of the mechanistic process.}
 \item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the recruit dispersion
 \code{par_theta_recruits}, default \code{0.5} since 0.2.0, \code{0} or \code{NULL} to leave it
 unbounded as in 0.1.0; see \code{\link[=createProcess]{createProcess()}}. Only used when this
-object is the regeneration process. The floor keeps the fit stable; the
-recruitment level is right once the fit has converged, and for short fits
-a fixed \code{theta} (\code{optimizeTheta = FALSE}) gets there sooner. See
+object is the regeneration process. The floor keeps the fit stable. In
+one converged pair of fits on the German national forest inventory it
+calibrated the recruitment level as well as a fixed \code{theta}, but only after
+the parameters had settled; read the level once \verb{$param_history} shows
+them settled, or fix \code{theta} (\code{optimizeTheta = FALSE}) for short fits. See
 \link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion be
