@@ -525,6 +525,13 @@ someone who was affected.
 
 ## Bug fixes
 
+* A model that never went through `fit()` simulated with the 0.1.0 Gamma death
+  draw instead of the `mortality_draw = "binomial"` default, because the flag
+  that selects the exact binomial (`rb_gradient`) was set only inside `fit()`.
+  `finn()` now sets it to `fit()`'s default, so `simulateForest()` on a freshly
+  built model, and a model rebuilt from saved parameters, draw deaths as a fitted
+  model does (#70).
+
 * `fit(epochs = 0)` ran two epochs (`1:0`); it now runs the set-up only
   (data tensors, `loss_baseline` / `loss_weights`) and trains nothing.
 

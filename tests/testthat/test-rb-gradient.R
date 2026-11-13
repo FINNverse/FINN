@@ -59,3 +59,33 @@ test_that("trees_offset reaches both count losses and NULL keeps the historical 
   expect_equal(loss1(NULL), loss1(1e-5))
   expect_equal(loss1(NULL, "nbinom"), loss1(0.001, "nbinom"))
 })
+
+test_that("a model that never went through fit() uses the same death draw as a fitted one (#70)", {
+  skip_if_not(torch::torch_is_installed())
+  library(data.table)
+  sites <- 1:3
+  Nsp   <- max(fia_obs_dt$species)
+  init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+  # an unfitted model has learned no climate scaling, so give it z-scored climate
+  env   <- copy(fia_env_dt[siteID %in% sites])[, `:=`(temp = as.numeric(scale(temp)), prec = as.numeric(scale(prec)))]
+  mk <- function() {
+    FINN.seed(1)
+    finn(N_species = Nsp, recruits_dbh = 12.9,
+         growth_process       = createProcess(~ temp + prec, FINN::growth),
+         mortality_process    = createProcess(~ temp + prec, FINN::mortality),   # default mortality_draw = "binomial"
+         regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+  }
+  sim <- function(m) {
+    FINN.seed(2)
+    as.data.table(simulateForest(m, env = env, init_cohort = init, patches = 4, patch_size = 0.06)$wide$site)
+  }
+  m <- mk()
+  expect_true(isTRUE(m$rb_gradient))   # the default of fit(rb_gradient =), set at build time
+
+  # the unfitted model simulates exactly as with the flag set by hand (the exact binomial) ...
+  m_true <- mk(); m_true$rb_gradient <- TRUE
+  expect_equal(sim(m), sim(m_true))
+  # ... and not as the Gamma draw that a missing flag used to select
+  m_gamma <- mk(); m_gamma$rb_gradient <- FALSE
+  expect_false(isTRUE(all.equal(sim(m)$trees, sim(m_gamma)$trees)))
+})

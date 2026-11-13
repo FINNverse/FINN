@@ -1228,6 +1228,12 @@ finn_class = nn_module(
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
     self$recruit_obs_weight = recruit_obs_weight
+    ## the default of fit(rb_gradient = ): the forward pass reads it to pick the
+    ## death draw (mortality_draw = "binomial" is torch's exact binomial only when
+    ## it is TRUE), so a model that never went through fit() must carry it too, or
+    ## it simulates with the Gamma draw of 0.1.0 (FINNverse/FINN#70). fit()
+    ## overwrites it with its own argument.
+    self$rb_gradient = TRUE
     ## additive recruitment floor (stems ha^-1 step^-1 per species) used by the
     ## mechanistic regeneration functions. It lives on the regeneration process
     ## (createProcess(reg_floor = )) and is copied here by add_process(); a
