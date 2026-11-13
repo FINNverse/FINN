@@ -15,9 +15,10 @@ rnbinom_torch_refined(pred, theta)
 A \code{torch} tensor of recruit counts.
 }
 \description{
-The alternative regeneration sampler, selected with
-\code{createProcess(regeneration_sampler = "refined")}; \code{rnbinom_torch()} stays the
-default. Three differences: the probability clamp is \code{1e-10} instead of \code{1e-4},
+The default regeneration sampler since 0.2.0, selected with
+\code{createProcess(regeneration_sampler = "refined")}; \code{rnbinom_torch()}
+(\code{regeneration_sampler = "gaussian"}) reproduces results published before
+0.2.0. Three differences: the probability clamp is \code{1e-10} instead of \code{1e-4},
 the Gamma draw is clamped at that same \code{eps} instead of taking \code{+0.001} and an
 absolute value, and the draw goes through \code{sample_poisson_refined()} (an exact
 \code{torch_poisson} below \code{lambda = 2}, the Gaussian approximation above) instead of

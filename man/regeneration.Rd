@@ -25,3 +25,8 @@ torch.Tensor Regeneration values for forest patches.
 \description{
 This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 }
+\seealso{
+\code{\link[=regeneration_capped]{regeneration_capped()}} (the default regeneration process since
+0.2.0), \code{\link[=regeneration_adult]{regeneration_adult()}}, \link{recruitment} for the recruitment
+options and how to combine them
+}

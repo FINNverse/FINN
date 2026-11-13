@@ -123,7 +123,14 @@ proportions in [0, 1]. \code{nbinom} is implemented for \code{trees} and
 contributes a constant zero and no gradient. Use it to retire a response
 whose information now enters through another term, for example setting
 \code{dbh = "none"} and \code{ba = "none"} when the size distribution is fitted
-through size-classed stem counts (see \code{loss_aggregation}).}
+through size-classed stem counts (see \code{loss_aggregation}).
+
+For \code{regeneration}, \code{"nbinom"} (the default) uses the recruit dispersion
+\code{theta} of the regeneration process and applies
+\code{finn(recruit_obs_weight = )}; \code{"poisson"} has no dispersion parameter, so
+it cannot collapse, but in 0.2.0 it ignores \code{recruit_obs_weight} and scores
+per-hectare values (FINNverse/FINN#65), with \code{trees_offset} added to the
+prediction. See \link{recruitment}.}
 
 \item{loss_aggregation}{(\code{character}|\code{list})\cr How the model's per-cohort
 quantities are reduced before they meet the observation, given per response
@@ -492,7 +499,11 @@ first year of \code{env}, or start \code{env} there); \code{reanchor} and \code{
 which replace the free-running stand the fed recruitment is defined for. Years
 after a site's last census get no recruits: nothing after it enters the
 objective. A model fitted this way still simulates with its own regeneration
-process; \link{simulateForest} can feed it the observed recruitment instead.}
+process; \link{simulateForest} can feed it the observed recruitment instead.
+
+The fed count is itself a noisy estimate and is re-sampled as if it were the
+mean, so the observation noise of a sparse small-tree count enters the
+simulated stand. See \link{recruitment}.}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
@@ -646,4 +657,8 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
 tail(m$history, 2)
 m$loss_baseline
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\link{recruitment} for the recruitment options (\code{recruits}, the
+regeneration likelihood) and how to combine them
 }

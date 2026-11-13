@@ -58,7 +58,7 @@ usual. Meant for checking a model calibrated that way on the intervals it was
 calibrated on: with observed recruitment the model is \strong{not an autonomous
 simulator}, so every simulated year must lie in an observed interval, and a
 bare-ground, succession or projection run beyond them is refused. Such runs
-need the fitted regeneration process (\code{"simulated"}).}
+need the fitted regeneration process (\code{"simulated"}). See \link{recruitment}.}
 
 \item{obs_recruits}{(\code{data.table|data.frame})\cr The observed recruitment for
 \code{recruits = "observed"}, required there and refused otherwise: a table like
@@ -108,4 +108,8 @@ head(sim$long$site)
 # `return_cohorts`; storing every timestep is expensive
 head(sim$long$cohort)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\link{recruitment} for the recruitment options (\code{recruits},
+\code{obs_recruits}) and how to combine them
 }

@@ -58,7 +58,7 @@ usual. Meant for checking a model calibrated that way on the intervals it was
 calibrated on: with observed recruitment the model is \strong{not an autonomous
 simulator}, so every simulated year must lie in an observed interval, and a
 bare-ground, succession or projection run beyond them is refused. Such runs
-need the fitted regeneration process (\code{"simulated"}).}
+need the fitted regeneration process (\code{"simulated"}). See \link{recruitment}.}
 
 \item{obs_recruits}{(\code{data.table|data.frame})\cr The observed recruitment for
 \code{recruits = "observed"}, required there and refused otherwise: a table like
@@ -104,4 +104,8 @@ sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites],
                       init_cohort = init, patches = 4, patch_size = 0.06)
 head(sim$long$site)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=predict.finn_class]{predict.finn_class()}}, \link{recruitment} for the recruitment
+options (\code{recruits}, \code{obs_recruits}) and how to combine them
 }

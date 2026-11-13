@@ -29,7 +29,14 @@ finn(
 
 \item{regeneration_process}{(\code{function})\cr Regeneration process, created by
 \link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
-\code{NULL} (default), the default mechanistic regeneration process is used.}
+\code{NULL} (default), the default mechanistic regeneration process is used,
+which since 0.2.0 is \code{\link[=regeneration_capped]{regeneration_capped()}} (recruitment with a
+Beverton-Holt cap). The other mechanistic choices are
+\code{\link[=regeneration]{regeneration()}} (unbounded, the default before 0.2.0) and
+\code{\link[=regeneration_adult]{regeneration_adult()}} (recruitment limited by the density of
+conspecific adults); \code{regeneration_saturation()} is the older, deprecated
+name of \code{regeneration_capped()}. See \link{recruitment} for how to combine the
+recruitment options.}
 
 \item{competition_process}{(\code{function})\cr Competition (light availability)
 process, created by \link{createProcess}. If \code{NULL} (default), the default
@@ -41,7 +48,14 @@ mechanistic competition process is used.}
 weight applied to both predicted and observed regeneration before the loss
 (maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
 space, e.g. \code{g(recruit_dbh)/BAF} for an angle-count inventory). \code{1.0} (default)
-is the per-hectare behaviour.}
+is the per-hectare behaviour. It is not a weight of the regeneration term in
+the objective. For a fixed-radius small-tree plot that counts stems in a
+diameter band below the recruitment threshold, \code{w} = plot area (ha) x
+residence time in the band (years) / observation period (years), so one
+tallied stem stands for \code{1 / w} recruits per ha over the period. In 0.2.0 it
+is applied only under \code{fit(loss_family = c(regeneration = "nbinom"))}, the
+default; under \code{"poisson"}, \code{"mse"} or \code{"gaussian"} the per-hectare values are
+scored and the weight has no effect (FINNverse/FINN#65). See \link{recruitment}.}
 
 \item{growth_period_scale}{(\code{logical(1)})\cr If \code{TRUE}, growth is scored against
 the COMPOUNDED period increment (\code{prod(1+g)-1}) rather than the mean of the
@@ -50,7 +64,7 @@ growth's variance. Default \code{FALSE} (mean of annual rates).}
 
 \item{reg_floor}{(\code{numeric(1)})\cr Additive floor on the expected recruitment of
 every species in every patch, in stems ha^-1 per time step, used by
-\code{\link[=regeneration]{regeneration()}} and \code{\link[=regeneration_saturation]{regeneration_saturation()}}:
+\code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}} and \code{\link[=regeneration_adult]{regeneration_adult()}}:
 \code{mean = regP * exp(env) + reg_floor}. It keeps the negative-binomial
 likelihood finite where the light gate closes. Default \code{1e-3}. Earlier versions
 hard-coded \code{0.2}, which with many species adds a large climate-independent
@@ -119,4 +133,7 @@ m
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
 models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 \doi{10.1111/2041-210x.70347}
+}
+\seealso{
+\link{recruitment} for the recruitment options and how to combine them
 }

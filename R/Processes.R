@@ -341,6 +341,10 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #'
 #' @return torch.Tensor Regeneration values for forest patches.
 #'
+#' @seealso [FINN::regeneration_capped()] (the default regeneration process since
+#'   0.2.0), [FINN::regeneration_adult()], [recruitment] for the recruitment
+#'   options and how to combine them
+#'
 #' @import torch
 #' @importFrom torch torch_sigmoid
 #' @export
@@ -382,6 +386,8 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' `recruits = K * m / (K + m)`, where `m` is the mechanistic mean recruitment
 #' (identical to [FINN::regeneration]) and `K` is a fitted carrying capacity
 #' (stems ha^-1 step^-1). As `m` grows, recruitment saturates towards `K`.
+#' `regeneration_saturation()` is the same function under its older name, kept
+#' as a deprecated alias for one release.
 #'
 #' The cap is the parameter `reg_logK` (`K = exp(reg_logK)`), which **FINN
 #' creates itself** -- there is nothing to declare. `createProcess(cap = )`
@@ -430,7 +436,9 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #'   `forward()` multiplies it by `patch_size_ha` itself before the recruit draw
 #'   (`R/finn-class.R:1591-1593`), and `reg` is scored on the per-hectare value.
 #'
-#' @seealso [FINN::regeneration], [FINN::createProcess()]
+#' @seealso [FINN::regeneration], [FINN::regeneration_adult()],
+#'   [FINN::createProcess()], [recruitment] for the recruitment options and how
+#'   to combine them
 #'
 #' @examples
 #' \dontrun{
@@ -475,7 +483,7 @@ regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
 
 #' Regeneration limited by conspecific adult density
 #'
-#' A mechanistic extension of [FINN::regeneration_saturation] in which
+#' A mechanistic extension of [FINN::regeneration_capped] in which
 #' recruitment needs a seed source: the mean recruitment of a species scales
 #' with the density of its own ADULTS on the site, the stems whose diameter
 #' exceeds an adult threshold `x`.
@@ -493,13 +501,19 @@ regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
 #' falls to the floor (read it as immigration from outside the site) where the
 #' species has no adult, and rises to the light- and environment-driven
 #' potential of [FINN::regeneration] where adults are many. The result is capped
-#' with the same Beverton-Holt term as [FINN::regeneration_saturation],
+#' with the same Beverton-Holt term as [FINN::regeneration_capped],
 #' `K m / (K + m)`.
 #'
-#' Declare three extra parameters with `createProcess(custom_parameters = )`.
-#' As for `reg_logK`, a length-1 init gives one shared value and a
-#' length-`N_species` init one value per species:
-#' * `reg_logK`: the log Beverton-Holt cap, stems ha^-1 step^-1;
+#' The cap `reg_logK` is created by [FINN::finn()] as for
+#' [FINN::regeneration_capped], with its resolution from `createProcess(cap = )`
+#' and its prior from `prior`/`prior_lambda`, so it need not be declared. A
+#' `reg_logK` declared in `custom_parameters` (as in the example) is kept and
+#' sets the resolution by its length, but its start value is replaced by the
+#' resolved prior at the first [FINN::fit()]. Declare the two adult parameters
+#' with `createProcess(custom_parameters = )`; a length-1 init gives one shared
+#' value and a length-`N_species` init one value per species:
+#' * `reg_logK` (optional, see above): the log Beverton-Holt cap, stems ha^-1
+#'   step^-1;
 #' * `reg_adult_logx`: the log adult threshold, `x = exp(reg_adult_logx)` in the
 #'   units of `dbh`. Once `x` falls below the smallest diameter present, every
 #'   stem counts as an adult and `x` stops receiving gradient;
@@ -511,7 +525,7 @@ regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
 #' Called without `dbh`/`trees` (as the ALE code in `xAI.R` does), the function
 #' returns recruitment with the seed source present (`f = 1`).
 #'
-#' @inheritParams regeneration_saturation
+#' @inheritParams regeneration_capped
 #' @param dbh torch.Tensor cohort diameters, `[sites, patches, cohorts]`.
 #' @param trees torch.Tensor stems per cohort, `[sites, patches, cohorts]`.
 #'
@@ -519,7 +533,8 @@ regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
 #'   `[sites, patches, species]`. With `debug = TRUE`, a list that also holds
 #'   `adults` (A, stems ha^-1, `[sites, 1, species]`) and `seed` (f(A)).
 #'
-#' @seealso [FINN::regeneration_saturation], [FINN::createProcess()]
+#' @seealso [FINN::regeneration_capped], [FINN::createProcess()],
+#'   [recruitment] for the recruitment options and how to combine them
 #'
 #' @examples
 #' \dontrun{
