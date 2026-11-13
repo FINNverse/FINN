@@ -45,32 +45,32 @@ build_NN = function(input_shape,
 
 
 
-visualize.training <- function(losses,epoch,max_epoch = 100L, main, new = FALSE, baseline = NULL){
-  if (epoch==1|new){
-
-    graphics::plot(c(),c(),xlim=c(1, max_epoch),ylim=c(0,1.0),
-                   main= main,
-                   xlab= "epoch",
-                   ylab= "Loss in %",
-                   las = 1)
-
-      graphics::legend("topright", pch = 15, bty = "n", col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-                                    legend = c("dbh", "ba", "trees", "growth", "mort", "reg"))
-
-      matplot(losses[,1:6,drop=FALSE], type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-              lwd = 1.5,
-              las = 1, add = TRUE,
-              pch = 16)
-
-  } else{
-
-    matplot(c(epoch-1,epoch),
-            losses[(epoch-1):(epoch),1:6, drop = FALSE],
-            type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-            lwd = 1.5,
-            las = 1, add = TRUE,
-            pch = 16)
-  }
+# The progress plot of fit(plot_progress = TRUE): the six loss terms per epoch,
+# each as a fraction of its first-epoch value. The whole plot is redrawn every
+# epoch with the y-axis fitted to the data, so a term that rises above its
+# starting value is not cut off (the previous version fixed ylim at [0, 1] and
+# only appended the last segment); a term that is switched off ("none") or has
+# no data is NaN here and is simply not drawn.
+visualize.training <- function(losses, epoch, max_epoch = 100L, main, new = FALSE, baseline = NULL){
+  cols = c("#de324c", "#9656a2", "#95cf92", "#f4895f", "#000000", "#369acc")
+  lab  = c("dbh", "ba", "trees", "growth", "mort", "reg")
+  y = losses[, 1:6, drop = FALSE]
+  y[!is.finite(y)] = NA
+  shown = colSums(!is.na(y)) > 0
+  top = suppressWarnings(max(y, na.rm = TRUE))
+  if (!is.finite(top) || top <= 0) top = 1
+  graphics::plot(c(), c(), xlim = c(1, max(max_epoch, 2)), ylim = c(0, top * 1.05),
+                 main = main,
+                 xlab = "epoch",
+                 ylab = "loss relative to epoch 1",
+                 las = 1)
+  graphics::abline(h = 1, col = "grey80", lty = 2)
+  if (any(shown))
+    graphics::matplot(seq_len(nrow(y)), y[, shown, drop = FALSE], type = "l", lty = 1,
+                      col = cols[shown], lwd = 1.5, add = TRUE)
+  graphics::legend("topright", pch = 15, bty = "n", col = cols[shown],
+                   legend = if (any(shown)) lab[shown] else character(0))
+  invisible(NULL)
 }
 
 
