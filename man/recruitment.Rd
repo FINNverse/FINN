@@ -181,9 +181,10 @@ stem-count column, which costs accuracy in the simulated stem counts.
 
 \itemize{
 \item \strong{Default settings} (\code{regeneration_capped}, trained \code{theta} with
-\code{theta_floor = 0.5}, \code{"nbinom"}): the fit is stable, and once it has
-converged the recruitment level is calibrated as well as with a fixed
-\code{theta}. Do not read the level from a fit stopped early.
+\code{theta_floor = 0.5}, \code{"nbinom"}): the fit is stable, and in one converged
+pair of fits on the German national forest inventory the recruitment level
+was calibrated as well as with a fixed \code{theta}. Do not read the level from a
+fit stopped early; check that \verb{$param_history} has settled.
 \item \strong{For short fits}, or when the recruitment level should not depend on how
 long the fit runs: keep \code{theta} fixed (\code{createProcess(optimizeTheta = FALSE)}, with \code{dispersion_parameter} 1 or higher), or use
 \code{fit(loss_family = c(..., regeneration = "poisson"))}. Mind that

@@ -227,8 +227,12 @@ recruitment data, and with the floor (\code{theta_floor}) the level is right
 only once the fit has converged, while a fixed \code{theta} gets there sooner.
 \code{dispersion_parameter = 1} is FINN's start value; on the German national
 forest inventory it matched the floored \code{theta} at convergence. A higher
-value such as \code{50} brings the recruit draw close to a Poisson draw (the
-variance \code{mu + mu^2/theta} approaches \code{mu}). See \link{recruitment}.}
+value such as \code{50} brings the recruit draw close to a Poisson draw: the
+variance \code{mu + mu^2/theta} approaches \code{mu} while the expected count per
+patch \code{mu} stays small against \code{theta} (at \code{theta = 50} the excess is 2 \%
+of the mean at \code{mu = 1} and 20 \% at \code{mu = 10}). Per-patch recruit counts
+are usually small enough for that; larger counts need a larger value. See
+\link{recruitment}.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},

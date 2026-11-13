@@ -162,9 +162,10 @@
 #'
 #' @section Choosing:
 #' * **Default settings** (`regeneration_capped`, trained `theta` with
-#'   `theta_floor = 0.5`, `"nbinom"`): the fit is stable, and once it has
-#'   converged the recruitment level is calibrated as well as with a fixed
-#'   `theta`. Do not read the level from a fit stopped early.
+#'   `theta_floor = 0.5`, `"nbinom"`): the fit is stable, and in one converged
+#'   pair of fits on the German national forest inventory the recruitment level
+#'   was calibrated as well as with a fixed `theta`. Do not read the level from a
+#'   fit stopped early; check that `$param_history` has settled.
 #' * **For short fits**, or when the recruitment level should not depend on how
 #'   long the fit runs: keep `theta` fixed (`createProcess(optimizeTheta =
 #'   FALSE)`, with `dispersion_parameter` 1 or higher), or use

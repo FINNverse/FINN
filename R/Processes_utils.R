@@ -85,8 +85,12 @@
 #'   only once the fit has converged, while a fixed `theta` gets there sooner.
 #'   `dispersion_parameter = 1` is FINN's start value; on the German national
 #'   forest inventory it matched the floored `theta` at convergence. A higher
-#'   value such as `50` brings the recruit draw close to a Poisson draw (the
-#'   variance `mu + mu^2/theta` approaches `mu`). See [recruitment].
+#'   value such as `50` brings the recruit draw close to a Poisson draw: the
+#'   variance `mu + mu^2/theta` approaches `mu` while the expected count per
+#'   patch `mu` stays small against `theta` (at `theta = 50` the excess is 2 %
+#'   of the mean at `mu = 1` and 20 % at `mu = 10`). Per-patch recruit counts
+#'   are usually small enough for that; larger counts need a larger value. See
+#'   [recruitment].
 #' @param cap,prior,prior_lambda The Beverton-Holt cap of
 #'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
 #'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
