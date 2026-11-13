@@ -69,14 +69,22 @@
 #' @param outputNN (`integer(1)`)\cr Output dimension of the environmental-response
 #'   network. Default `NULL` uses the number of species.
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
-#'   the negative binomial distribution used to sample recruits. Only used when
-#'   this process is the regeneration process.
+#'   the negative binomial distribution used to sample recruits (the size
+#'   `theta`), or its fixed value with `optimizeTheta = FALSE`. Only used when
+#'   this process is the regeneration process. See [recruitment].
 #' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion
 #'   `par_theta_recruits` be estimated during [FINN::fit()]? Default `TRUE`.
 #'   With `FALSE` it stays at `dispersion_parameter` for the whole fit (a buffer,
 #'   not a parameter), in the recruit draw and in the regeneration likelihood
 #'   alike; `theta_floor` still applies. Only used when this process is the
 #'   regeneration process.
+#'
+#'   Use `FALSE` when the recruitment level is to be calibrated: a trained
+#'   `theta` falls on sparse recruitment data and leaves the level biased (see
+#'   `theta_floor`). `dispersion_parameter = 1` is FINN's start value and held
+#'   in tests on the German national forest inventory; a higher value such as
+#'   `50` brings the draw close to a Poisson draw and gave the lowest holdout
+#'   error there. See [recruitment].
 #' @param cap,prior,prior_lambda The Beverton-Holt cap of
 #'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
 #'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
@@ -95,7 +103,9 @@
 #' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
 #'   from the negative binomial regeneration distribution (`TRUE`), or only its
 #'   expectation used (`FALSE`)? Only used when this process is the regeneration
-#'   process.
+#'   process. With `FALSE` the expected number of recruits per patch is rounded,
+#'   so wherever it is below 0.5 no recruit enters at all: a silent zero for
+#'   sparse species on small patches. See [recruitment].
 #' @param n_quantiles (`integer(1)`)\cr Number of height classes used to discretize
 #'   cohorts when computing shading/light availability. Only used when this
 #'   process is the competition process and `continuous = FALSE`.
@@ -156,6 +166,15 @@
 #'   and running away after. The Beverton-Holt cap does not prevent this -- it
 #'   bounds the mean, and the variance around a capped mean is still
 #'   `K + K^2/theta`.
+#'
+#'   The floor guarantees stability only. It does not calibrate the recruitment
+#'   level: on the German national forest inventory, out of sample on a
+#'   spatially blocked holdout, a floored `theta` left the predicted recruitment
+#'   level about 12 times too high, while a fixed `theta` (`optimizeTheta =
+#'   FALSE`) or a Poisson regeneration likelihood (`fit(loss_family = )`) gave 2
+#'   to 2.8 times. The floor is a guard rail for users who set nothing, not the
+#'   recommended setting for calibrating the recruitment level; use
+#'   `optimizeTheta = FALSE` or `loss_family` for that. See [recruitment].
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   per-cohort mortality probability is clamped to **per simulation step**,
 #'   before the death draw. Only used when this process is the mortality process;
@@ -214,7 +233,8 @@
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
-#' @seealso [FINN::createHybrid()], [FINN::finn()]
+#' @seealso [FINN::createHybrid()], [FINN::finn()], [recruitment] for the
+#'   recruitment options and how to combine them
 #'
 #' @examples
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
@@ -364,15 +384,18 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param optimize (`logical(1)`)\cr Should the network's weights be estimated
 #'   during [FINN::fit()]? Default `TRUE`.
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
-#'   the negative binomial distribution used to sample recruits. Only used when
-#'   this object is the regeneration process.
+#'   the negative binomial distribution used to sample recruits, or its fixed
+#'   value with `optimizeTheta = FALSE`. Only used when this object is the
+#'   regeneration process. See [recruitment].
 #' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion be
 #'   estimated during [FINN::fit()]? Default `TRUE`; `FALSE` keeps it at
-#'   `dispersion_parameter`; see [FINN::createProcess()]. Only used when this
-#'   object is the regeneration process.
-#' @param cap,prior,prior_lambda The Beverton-Holt cap on recruitment; see
-#'   [FINN::createProcess()] and [FINN::regeneration_capped()]. Only used when
-#'   this object is the regeneration process.
+#'   `dispersion_parameter`, which is the choice when the recruitment level is
+#'   to be calibrated; see [FINN::createProcess()] and [recruitment]. Only used
+#'   when this object is the regeneration process.
+#' @param cap,prior,prior_lambda Accepted for symmetry with
+#'   [FINN::createProcess()], but not used in 0.2.0: the hybrid regeneration
+#'   network has no Beverton-Holt cap. See [FINN::regeneration_capped()] for the
+#'   cap of the mechanistic process.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the
 #'   default network architecture entirely.
 #' @param dropout (`numeric(1)`)\cr Dropout rate of the network.
@@ -383,7 +406,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
 #'   from the negative binomial regeneration distribution (`TRUE`), or only its
 #'   expectation used (`FALSE`)? Only used when this object is the regeneration
-#'   process.
+#'   process. With `FALSE` the expected number of recruits per patch is rounded,
+#'   so wherever it is below 0.5 no recruit enters at all. See [recruitment].
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
 #'   `"binomial"` (default since 0.2.0), `"poisson"` or `"gamma"`; see
 #'   [FINN::createProcess()]. Only used
@@ -398,7 +422,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param theta_floor (`numeric(1)`)\cr Lower bound on the recruit dispersion
 #'   `par_theta_recruits`, default `0.5` since 0.2.0, `0` or `NULL` to leave it
 #'   unbounded as in 0.1.0; see [FINN::createProcess()]. Only used when this
-#'   object is the regeneration process.
+#'   object is the regeneration process. The floor guarantees stability only;
+#'   it leaves the recruitment level biased upward and is not the recommended
+#'   setting for calibrating it (use `optimizeTheta = FALSE` or
+#'   `fit(loss_family = )`). See [recruitment].
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
 #' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/
@@ -416,7 +443,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
-#' @seealso [FINN::createProcess()], [FINN::finn()]
+#' @seealso [FINN::createProcess()], [FINN::finn()], [recruitment]
 #'
 #' @examples
 #' growth_process <- createHybrid(formula = ~temperature + precipitation)
