@@ -168,6 +168,54 @@ m <- finn(
 )
 ```
 
+### Balancing the six losses
+
+The objective is the sum of six terms, one per response, and their raw
+magnitudes have nothing to do with each other: `dbh` is a squared error in
+cm², `growth` a squared error on a ratio, `trees` a Poisson deviance. Before
+anything is trained it is worth seeing what each term would contribute.
+`fit(epochs = 0)` runs the set-up only, the data tensors, the intercept-only
+baselines and the weights derived from them, and reports each response's share
+of the objective; nothing is trained and the parameters stay as they were.
+
+```{r loss-shares, message = TRUE}
+fit(m, env = env_dt, data = obs_dt, init_cohort = init_cohorts, epochs = 0L,
+    patches = 4, patch_size = 0.06, plot_progress = FALSE)
+```
+
+With the default `weights = "auto"` every loss is divided by its own
+intercept-only baseline, the loss of predicting the single best constant, so
+each term starts at 1 and the six shares are equal. The baselines are kept in
+`m$loss_baseline`, the weights in `m$loss_weights`.
+
+A numeric `weights` vector multiplies these scaled losses (since 0.2.0), so a
+number reads directly as a share: `c(1, 1, 1, 2, 1, 1)` gives growth twice the
+weight of every other response, and the report says so.
+
+```{r loss-shares-numeric, message = TRUE}
+fit(m, env = env_dt, data = obs_dt, init_cohort = init_cohorts, epochs = 0L,
+    patches = 4, patch_size = 0.06, plot_progress = FALSE,
+    weights = c(1, 1, 1, 2, 1, 1))
+```
+
+`weight_scale = "raw"` applies the same vector to the unscaled losses, which is
+what `weights` meant before 0.2.0 and what reproduces an analysis fitted with an
+earlier version. The report is printed in that mode too, and it shows why the
+scaling is the default:
+
+```{r loss-shares-raw, message = TRUE}
+fit(m, env = env_dt, data = obs_dt, init_cohort = init_cohorts, epochs = 0L,
+    patches = 4, patch_size = 0.06, plot_progress = FALSE,
+    weights = c(1, 1, 1, 2, 1, 1), weight_scale = "raw")
+```
+
+On the raw scale the diameter term is the objective and the nominal factor of
+two on growth is a factor of two on a share that was already negligible. Read
+the printed shares at the start of every fit; a response that holds a fraction
+of a percent of the objective is a response the fit will not learn.
+
+### The fit
+
 ```{r fit-process, results = "hide"}
 fit(m,
   env         = env_dt,      # raw climate
@@ -180,6 +228,7 @@ fit(m,
   patch_size  = 0.06,
   lr          = 0.01,
   env_autoscale   = TRUE,        # default
+  checkpoints     = 50L,         # record every parameter every 50 epochs (m$param_history)
   plot_progress   = FALSE        # the convergence plot below is the readable one
 )
 ```
@@ -244,6 +293,33 @@ ggplot(melt(hist_dt, id.vars = "epoch", variable.name = "response"),
 The structural responses drop well below 1 within a few epochs. The per-tree rates
 sit much closer to it; they are only weakly constrained by two inventories, which
 is the honest picture and the reason for the caveat further down.
+
+A flat loss is necessary for convergence, not sufficient: the objective can be
+flat along a direction in which the parameters are still moving, which is what a
+poorly identified parameter looks like. `checkpoints = 50` recorded every
+parameter block every 50 epochs in `m$param_history` (with `folder = "<dir>"`
+the whole model is also written there at each checkpoint, as
+`epoch_<k>model.pt`, to resume from with `torch::torch_load()` and a further
+`fit()`, or to compare). The largest step any parameter of a block took between
+two consecutive checkpoints, on the unconstrained scale the optimiser works on:
+
+```{r param-history}
+ph <- m$param_history
+steps <- rbindlist(lapply(seq_along(ph)[-1], function(i)
+  data.table(epoch = i * 50L, block = names(ph[[i]]),
+             max_step = sapply(names(ph[[i]]), function(nm)
+               max(abs(ph[[i]][[nm]] - ph[[i - 1]][[nm]]))))))
+dcast(steps[, max_step := round(max_step, 3)], block ~ epoch, value.var = "max_step")
+```
+
+At a constant learning rate no block comes to rest: every parameter group still
+steps by a few tenths between checkpoints while the losses have been flat for
+hundreds of epochs. Part of that is the jitter of mini-batch Adam, which a
+learning-rate schedule (`lr_scheduler = "step"` or `"cosine"`) damps at the
+end of a fit; the rest is drift along directions the objective does not care
+about, and the regeneration blocks, which step most over the first 200 epochs,
+are the first suspects. Two seeds, or two checkpoints, compared on the holdout
+tell whether the drift reaches the predictions.
 
 ## What the model learned: `summary()`
 
@@ -342,6 +418,345 @@ the target in every panel regardless of the units on it.
 > what carry the comparison. `mort` is the extreme case and gets a vignette of
 > its own (**Mortality: a binomial response and a neural-network process**)
 > because rank correlation is the wrong tool for a response that is mostly zeros.
+
+### Score what the loss scores
+
+The merge above is on site × year × species, which is the cell the loss is
+computed on: `fit()` compares the patch-mean of each site, year and species with
+the observation, and so does the table. Aggregating the predictions differently
+before scoring (summing species to a stand total, averaging the two censuses,
+pooling sites into regions) asks a different and usually easier question, and
+the number it returns is not the skill of the fitted objective. If a stand total
+is what matters, score it as well, but say so; and for a count-weighted response
+weight the metric the way the loss does. The mortality vignette carries this
+through for the binomial term, whose AUC is weighted by `n_at_risk` exactly as
+the likelihood is.
+
+### A model-free reference: persistence
+
+A Spearman of 0.8 on basal area sounds good until it is compared with the
+simplest forecast available: the previous census of the same site and species,
+unchanged. On a ten-year interval that *persistence* forecast is strong for the
+state variables, and a model has to beat it before it can claim to have learned
+dynamics rather than inertia. The second census of the holdout sites predicted
+by the first, next to the two models scored on the same cells:
+
+```{r persistence}
+# the year-1 observation stands in as the prediction for year 2
+persist <- merge(test_long[year == 2],
+                 test_long[year == 1, .(siteID, species, variable, value = obs)],
+                 by = c("siteID", "species", "variable"))
+ref <- rbind(persist[, .(siteID, species, variable, obs, value, model = "Persistence (year 1 as is)")],
+             obs_pred[split == "holdout" & year == 2, .(siteID, species, variable, obs, value, model)])
+ref[variable %in% c("dbh", "ba", "trees") & is.finite(obs) & is.finite(value),
+    .(spearman = round(cor(obs, value, method = "spearman"), 2),
+      rmse     = round(sqrt(mean((obs - value)^2)), 2)),
+    by = .(variable, model)][order(variable, model)]
+```
+
+Persistence wins on all three state variables, and not narrowly. That is the
+expected result for a ten-year interval in mature stands: most of the basal area
+present at the second census was already there at the first, and the models
+are at a disadvantage here, they start from the year-0 tree list and never see
+the year-1 census, so their year-2 prediction carries two intervals of
+compounded simulation error. The lesson is not that the models are poor but
+that a holdout Spearman on `dbh`, `ba` or `trees` is mostly a statement about
+the initial cohorts. The processes are tested by the rates, and by what the
+model does over horizons where persistence has nothing to say, the
+**Simulating succession** vignette. Persistence has no prediction for the first
+census, which is why the table scores year 2 only.
+
+### Calibration: predicted against observed by decile
+
+A scatter shows the spread; it hides a systematic bias of the kind a fitted
+model develops when it compresses towards the mean. Binning the predictions into
+deciles and comparing the mean prediction of each bin with the mean observation
+in it is the calibration view, and it is cheap. Cells in which the species is
+absent from both the observation and the prediction are left out: they are most
+of the table and would pile the lower deciles onto zero.
+
+```{r calibration, fig.width = 7.5, fig.height = 3.2}
+calib <- obs_pred[split == "holdout" & variable %in% c("ba", "trees") & is.finite(obs) &
+                  (obs > 0 | value > 0)]
+calib[, bin := cut(value, unique(quantile(value, 0:10 / 10)), include.lowest = TRUE),
+      by = .(model, variable)]
+calib_dt <- calib[, .(pred = mean(value), obs = mean(obs), n = .N), by = .(model, variable, bin)]
+ggplot(calib_dt, aes(pred, obs, colour = model)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
+  geom_line(alpha = 0.6) + geom_point(size = 1.6) +
+  facet_wrap(~variable, scales = "free") +
+  scale_colour_manual(values = model_cols) +
+  labs(x = "mean prediction in decile", y = "mean observation in decile", colour = NULL) +
+  theme_minimal() + theme(legend.position = "top")
+```
+
+Points on the diagonal are calibrated; a slope below one means the model
+under-predicts the dense stands and over-predicts the sparse ones, a slope above
+one the reverse. A rank correlation is blind to either.
+
+### A blocked holdout
+
+The 200 holdout sites are a random draw from the same region as the training
+sites, so every holdout site has training neighbours in climate space, and
+nearly so in geographic space. That split measures interpolation. The question
+usually asked of a calibrated model, how it does in conditions or places it was
+not trained on, needs a holdout that is *blocked*: with coordinates, hold out
+whole spatial blocks (grid cells, or clusters of plots); without them, hold out
+a block of the environmental gradient. The bundled sample carries no
+coordinates, so the block here is environmental, but the recipe is the same.
+We hold out the warmest fifth of the training sites, fit the same model on the
+other 160, and score it on the 40 blocked sites and, for comparison, on the 200
+random holdout sites.
+
+```{r blocked-fit, results = "hide"}
+site_temp <- env_dt[, .(temp = mean(temp)), by = siteID]
+warm      <- site_temp[temp > quantile(temp, 0.8), siteID]      # the blocked holdout
+cool      <- setdiff(site_temp$siteID, warm)                    # the training block
+
+FINN.seed(42)
+m_block <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_block,
+  env = env_dt[siteID %in% cool], data = obs_dt[siteID %in% cool],
+  init_cohort = makeInitCohorts(init_trees[siteID %in% cool], Nspecies = Nsp),
+  device = "cpu", epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06,
+  lr = 0.01, plot_progress = FALSE
+)
+```
+
+```{r blocked-score}
+FINN.seed(1)
+blocked <- rbind(
+  pred_of(m_block, "random holdout (200 sites)", env_test, init_cohorts_test, test_long, "holdout"),
+  pred_of(m_block, "blocked holdout (40 warmest sites)", env_dt[siteID %in% warm],
+          makeInitCohorts(init_trees[siteID %in% warm], Nspecies = Nsp),
+          obs_long[siteID %in% warm], "holdout"))
+blocked[variable %in% c("dbh", "ba", "trees", "growth") & is.finite(obs) & is.finite(value),
+        .(spearman = round(cor(obs, value, method = "spearman"), 2),
+          rmse     = round(sqrt(mean((obs - value)^2)), 2), n = .N),
+        by = .(variable, holdout = model)][order(variable, holdout)]
+```
+
+The blocked rows are the transfer skill, and they are the ones to report when
+the model is meant to be applied beyond the sampled conditions. Here the rank
+correlations hold up on the warm block while the errors do not: the basal-area
+RMSE doubles and the stem and growth errors rise by a quarter to a half. The
+model orders the warm sites correctly but misplaces their level, which is what
+an environmental response that is extrapolating looks like, and a random
+holdout cannot show it. It is also the reason to keep the climate formula
+small: a response curve fitted to two collinear drivers can fit the training
+block and still extrapolate in opposite directions.
+
+## Two fitting strategies for regeneration
+
+Regeneration is the response with the least information in it: 86% of the
+site × census × species cells record no recruit at all, and a recruit enters at
+12.9 cm, so over a ten-year interval it adds little to basal area. In a joint
+fit the regeneration parameters are free to do something else instead: fill a
+stem deficit that too much mortality created, or absorb a growth bias, because
+the stem count and basal-area terms are indifferent to *which* process closes
+the gap. Two strategies keep regeneration honest.
+
+### Staged calibration: regeneration last
+
+Fit the processes the data constrain well first, with recruitment switched off,
+then fit regeneration alone against the recruitment observations with
+everything else frozen. `createProcess(optimizeSpecies = , optimizeEnv = )`
+does the freezing, and `initSpecies` / `initEnv` carry the stage-1 estimates
+over.
+
+One mistake is easy to make at stage 1, and `fit()` now refuses to make it
+silently: switching the regeneration term off (`loss_family["regeneration"] =
+"none"`) while leaving the regeneration process trainable. No other response
+can train it, a recruit reaches `dbh` through a near-step sigmoid and `trees`
+through a rounding that is zero below half a recruit per patch and species, so
+the parameters would drift on no gradient at all (FINNverse/FINN#43):
+
+```{r stage1-warning, warning = TRUE}
+m_wrong <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_wrong, env = env_dt, data = obs_dt, init_cohort = init_cohorts, epochs = 0L,
+    patches = 4, patch_size = 0.06, plot_progress = FALSE,
+    loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse",
+                    mortality = "binomial", regeneration = "none"))
+```
+
+The same warning comes when the family is set but the scored cells carry no
+finite `reg`. Stage 1 proper freezes the regeneration process at a fixed,
+near-zero recruitment. `initEnv` is the weight matrix of the linear
+environmental response, one row per species and one column per term of the
+formula (intercept, `temp`, `prec`); an intercept of `log(1e-3)` makes the
+expected recruitment vanish, so the ten-year dynamics are carried by growth and
+mortality of the trees already present.
+
+```{r stage1, results = "hide"}
+FINN.seed(42)
+m_s1 <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       initEnv = list(cbind(rep(log(1e-3), Nsp), 0, 0)),
+                                       optimizeSpecies = FALSE, optimizeEnv = FALSE)   # frozen
+)
+fit(m_s1,
+  env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+  epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06, lr = 0.01,
+  loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse",
+                  mortality = "binomial", regeneration = "none"),
+  plot_progress = FALSE
+)
+```
+
+Stage 2 rebuilds the model with the stage-1 estimates as fixed values and only
+the regeneration process trainable. The species parameters are read back on
+their natural scale (`m$par_growth`, ...) and go in through `initSpecies`; the
+environmental weights (`m$nn_growth$parameters`, ...) through `initEnv`. Both
+stages see the same `env`, so the standardisation constants `fit()` derives are
+identical and the weights carry over unchanged. The loss is the full default
+one again: the state terms cannot move the frozen processes, and they tell
+regeneration how many stems its recruits have to account for.
+
+```{r stage2, results = "hide"}
+species_pars <- function(model, process)
+  as.matrix(model[[paste0("par_", process)]]$detach()$cpu())
+env_weights  <- function(model, process)
+  lapply(model[[paste0("nn_", process)]]$parameters, function(w) as_array(w$detach()$cpu()))
+
+FINN.seed(42)
+m_s2 <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,
+                                       initSpecies = species_pars(m_s1, "competition"), optimizeSpecies = FALSE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       initSpecies = species_pars(m_s1, "growth"), initEnv = env_weights(m_s1, "growth"),
+                                       optimizeSpecies = FALSE, optimizeEnv = FALSE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       initSpecies = species_pars(m_s1, "mortality"), initEnv = env_weights(m_s1, "mortality"),
+                                       optimizeSpecies = FALSE, optimizeEnv = FALSE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_s2,
+  env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+  epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06, lr = 0.01,
+  plot_progress = FALSE
+)
+```
+
+### A cap on recruitment
+
+The mechanistic regeneration function is unbounded: its mean rises as
+`exp(env)`, so a steep climate coefficient can turn a warm, wet site into a
+recruitment burst of hundreds of stems in one step. `FINN::regeneration_saturation`
+adds a Beverton-Holt cap, `K m / (K + m)`, with the carrying capacity `K`
+(stems ha⁻¹ per step) declared as a custom parameter and fitted like any other.
+A length-1 init gives one shared `K`, a length-`Nsp` init one per species. The
+rest of the model is the joint fit above, so the two differ in the cap alone.
+
+```{r cap-fit, results = "hide"}
+FINN.seed(42)
+m_cap <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_saturation,
+                                       custom_parameters = list(reg_logK = rep(log(100), Nsp)),  # per-species K
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_cap,
+  env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+  epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06, lr = 0.01,
+  plot_progress = FALSE
+)
+```
+
+```{r cap-K}
+# the fitted carrying capacities, recruits per hectare and step
+data.table(species_dt, K = round(exp(as.numeric(m_cap$reg_logK)), 1))
+```
+
+The fitted `K` spans three orders of magnitude, from a few recruits per hectare
+and step for the firs and hemlocks to several hundred for Douglas fir, ponderosa
+pine and the pooled rest. Where `K` is small the cap is binding, so the
+recruitment of those species is now set by the cap rather than by the climate
+response; a `K` that lands on a value the inventory cannot support is the first
+thing to check against the observed recruitment of that species.
+
+### How the three compare, and why stem counts hinge on a few bursts
+
+All three are scored on the 200 holdout sites exactly as above. On this sample
+they are not distinguishable there: the differences between the rows are of the
+size a change of seed produces (see below), and that too is a result. Two
+censuses ten years apart, with no recruit in 86% of the cells, contain little to
+separate a recruitment model that is capped from one that is not, or one fitted
+jointly from one fitted last. The regeneration models differ where the holdout
+does not look, in the simulated stand, which is the next point.
+
+```{r reg-strategies-score}
+FINN.seed(1)
+strategies <- rbind(
+  obs_pred[split == "holdout" & model == "Process (mechanistic)"][, model := "Joint"],
+  pred_of(m_s2,  "Staged (regeneration last)", env_test, init_cohorts_test, test_long, "holdout"),
+  pred_of(m_cap, "Joint + recruitment cap",    env_test, init_cohorts_test, test_long, "holdout"))
+strategies[is.finite(obs) & is.finite(value),
+           .(spearman = round(cor(obs, value, method = "spearman"), 2),
+             rmse     = round(sqrt(mean((obs - value)^2)), 2)),
+           by = .(variable, model)][order(variable, model)]
+```
+
+The stem count deserves a closer look, because its skill is the least stable of
+the three state variables. Recruits are *sampled* from the fitted negative
+binomial at prediction time (`createProcess(sample_regeneration = TRUE)`, the
+default), so a cell whose expected recruitment is large can receive a burst in
+one simulation and nothing in the next. The same model predicted five times
+with different seeds:
+
+```{r reg-bursts}
+reps <- rbindlist(lapply(1:5, function(s) {
+  FINN.seed(s)
+  pred_of(m, "Joint", env_test, init_cohorts_test, test_long, "holdout")[, seed := s]
+}))
+trees_by_seed <- reps[variable == "trees" & is.finite(obs),
+  .(spearman = round(cor(obs, value, method = "spearman"), 3),
+    rmse     = round(sqrt(mean((obs - value)^2)), 3)), by = seed]
+trees_by_seed
+
+# which cells carry the stem error? those whose predicted recruitment is in the
+# top 1 % of the same simulation
+burst <- merge(reps[variable == "trees", .(siteID, year, species, seed, obs, trees = value)],
+               reps[variable == "reg",   .(siteID, year, species, seed, reg = value)],
+               by = c("siteID", "year", "species", "seed"))
+burst <- burst[is.finite(obs)]
+burst[, top := reg >= quantile(reg, 0.99), by = seed]
+total_sq_error <- burst[, sum((obs - trees)^2)]
+burst[, .(cells = .N, share_of_sq_error = round(sum((obs - trees)^2) / total_sq_error, 2),
+          max_reg = round(max(reg), 1)), by = .(top_1pct_recruitment = top)]
+```
+
+One percent of the cells carries about a tenth of the squared stem error, and
+the seed-to-seed spread in the stem metrics, a hundredth in Spearman and a few
+hundredths in RMSE, is the same mechanism at work: a site that receives a burst
+in one draw and not in the next. That is why a single stems R² on a holdout
+should not decide between two models whose regeneration differs; compare
+several seeds, or score the *expected* stand (`sample_regeneration = FALSE` at
+prediction time), and look at the largest predicted recruitment. The cap acts
+on exactly that tail:
+
+```{r cap-tail}
+strategies[variable == "reg", .(max_predicted_reg = round(max(value), 1),
+                                p99 = round(quantile(value, 0.99), 1)), by = model]
+```
 
 ## Interpreting the growth process with ALE
 

@@ -72,6 +72,7 @@
 #'
 #' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
 #'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
+#'
 #' @export
 #' @param reg_floor (`numeric(1)`)\cr Additive floor on the expected recruitment of
 #'   every species in every patch, in stems ha^-1 per time step, used by
@@ -188,11 +189,12 @@ finn = function(N_species,
 #'     \item `period_length` — how many simulated timesteps each observation's
 #'       inventory interval spans. The rate responses (`growth`, `mortality`) are
 #'       then compared against the model's **mean** over that interval, and
-#'       `regeneration` against its **sum** (recruits accumulate). Absent or `NA`
-#'       means each observation is compared against a single timestep. NOTE: this
-#'       must currently be the SAME for every site — a per-site interval is not
-#'       supported yet, so inventories with varying remeasurement gaps need
-#'       filtering to a constant interval first.
+#'       `regeneration` against its **sum** (recruits accumulate). It may differ
+#'       between sites (see the per-site path below). Absent or `NA` means each
+#'       observation is compared against a single timestep, except on the
+#'       per-site path forced by `loss_aggregation = "tree"` or
+#'       `model$period_mode = "per_site"`: there every window is read from this
+#'       column, and `fit()` stops if it has no finite value.
 #'     \item `n_at_risk` — trees behind each observed `mortality` proportion; used
 #'       to weight the binomial term (see `weights`).
 #'     \item `growth_n` — trees behind each observed `growth` mean; used to weight
@@ -425,6 +427,20 @@ finn = function(N_species,
 #'   rather than arithmetic, so it can run at the same speed on either device with
 #'   the card almost idle. Measure one configuration before committing a long fit to
 #'   a GPU.
+#' @param threads (`integer(1)` or `NULL`)\cr torch's intra-op thread count
+#'   during the fit. `NULL` (the default) leaves torch's setting alone, including
+#'   one made through `OMP_NUM_THREADS` or [torch::torch_set_num_threads()].
+#'   FINN's forward pass is a long chain of small tensor operations, so its cost
+#'   is set by the number of operations, not by their arithmetic, and extra
+#'   threads rarely pay. In the measurements behind FINNverse/FINN#48, one
+#'   thread was up to 30 % faster on macOS at the size of a 512-site,
+#'   25-patch batch, and within a few per cent of the best setting on a 64-core
+#'   Linux node, where only a single 2000-site batch gained from 4 threads.
+#'   `threads = 1` is the considerate choice when several fits share a machine.
+#'   The previous count is restored afterwards where torch allows it (OpenMP
+#'   builds, e.g. Linux). torch's native backend (macOS) accepts one change per
+#'   session, so there the session keeps the count `fit()` set, and a count fixed
+#'   earlier in the session cannot be changed (`fit()` then says so).
 #' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
 #' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
 #' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
@@ -734,7 +750,10 @@ fit = function(model,
                rb_gradient = TRUE,
                trees_offset = 0.01,
                recruits = c("simulated", "observed"),
+               threads = NULL,
                ...) {
+  old_threads = set_torch_threads(threads)
+  if (!is.null(old_threads)) on.exit(torch::torch_set_num_threads(old_threads), add = TRUE)
   invisible(model$fit(data = data,
                       env = env,
                       disturbance = disturbance,
@@ -810,6 +829,7 @@ fit = function(model,
 #'   the interval) and `mort_pred` (probability of dying during the interval).
 #'   Bind these onto `tree_data` directly rather than joining on
 #'   siteID/year/patchID, which would be many-to-many.
+#'
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -2750,6 +2770,14 @@ finn_class = nn_module(
       stop("period_mode = \"constant\" cannot be combined with loss_aggregation = \"tree\": the per-tree terms are only evaluated on the per-site path, and on the constant path the cell term would be scored under a weight taken from the per-tree null. Use period_mode = \"auto\" or \"per_site\", or drop the \"tree\" aggregation.", call. = FALSE)
     per_site = varies || tree_agg || identical(self$period_mode, "per_site")
     if(identical(self$period_mode, "constant")) per_site = FALSE
+    # The per-site path reads every site's window from period_length; with no
+    # finite value anywhere each window is empty and all six terms are zero, so
+    # the fit would run to the end without scoring anything (FINN#46).
+    if(per_site && !any(is.finite(pl)))
+      stop(paste0("`data` needs a `period_length` column with the observation interval (in timesteps): ",
+                  if(tree_agg) "loss_aggregation = \"tree\"" else "period_mode = \"per_site\"",
+                  " scores each site over its own window, and without period_length no window is scored."),
+           call. = FALSE)
     self$per_site_period = per_site
     if(per_site) cli::cli_alert_info(paste0(
       "Using per-site aggregation windows (one backward per batch): ",

@@ -1,3 +1,39 @@
+# FINN (development version)
+
+* Examples for the fitting workflow (`finn()`, `fit()`, `predict()`,
+  `simulateForest()`, `predictTrees()`, `regeneration_saturation()`,
+  `regeneration_adult()`, gated on an installed torch backend) and for the data
+  helpers (`makeObsData()`, `resolveSiteIDs()`, `makeInitCohorts()`,
+  `climateDF2array()`); the fitting vignettes gain sections on loss balancing,
+  convergence checks, persistence and blocked holdouts, staged calibration, the
+  recruitment cap and per-tree mortality scoring.
+
+* `resolveSiteIDs()` returns `env_dt` with one row per site and year; it used to
+  repeat each row once per patch, which `climateDF2array()` now rejects, so
+  `fit()` failed on the output of the documented data-preparation pipeline.
+
+* `fit()` stops when the per-site path (`loss_aggregation = "tree"` or
+  `model$period_mode = "per_site"`) meets a `data` without a finite
+  `period_length`. Every site's window was then empty and all six loss terms
+  were zero, so the fit ran to the end without scoring anything (#46). The
+  `data` documentation no longer claims that `period_length` must be the same
+  for every site.
+
+* `fit()` gains `threads`, torch's intra-op thread count during the fit. The
+  default `NULL` leaves torch's setting alone, so `OMP_NUM_THREADS` or
+  `torch_set_num_threads()` keep working. FINN's forward pass is a chain of
+  small tensor operations, and extra threads rarely pay (#48):
+  - on macOS one thread was up to 30 % faster at the size of a BWI calibration
+    batch (512 sites x 25 patches);
+  - on a 64-core Linux node the thread count changed little, and only a single
+    2000-site batch gained from 4 threads.
+
+  `threads = 1` is the considerate choice when several fits share a machine.
+  Where torch uses OpenMP the previous count is restored afterwards. torch's
+  native backend (macOS) allows one change per session, so there the session
+  keeps the count, and `fit()` says so when an earlier setting prevents the
+  change.
+
 # FINN 0.2.0
 
 This release adds the model features developed for the **FIA** (US Forest

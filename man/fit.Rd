@@ -45,6 +45,7 @@ fit(
   rb_gradient = TRUE,
   trees_offset = 0.01,
   recruits = c("simulated", "observed"),
+  threads = NULL,
   ...
 )
 }
@@ -59,11 +60,12 @@ Optional columns that change how the responses are scored:
 \item \code{period_length} — how many simulated timesteps each observation's
 inventory interval spans. The rate responses (\code{growth}, \code{mortality}) are
 then compared against the model's \strong{mean} over that interval, and
-\code{regeneration} against its \strong{sum} (recruits accumulate). Absent or \code{NA}
-means each observation is compared against a single timestep. NOTE: this
-must currently be the SAME for every site — a per-site interval is not
-supported yet, so inventories with varying remeasurement gaps need
-filtering to a constant interval first.
+\code{regeneration} against its \strong{sum} (recruits accumulate). It may differ
+between sites (see the per-site path below). Absent or \code{NA} means each
+observation is compared against a single timestep, except on the
+per-site path forced by \code{loss_aggregation = "tree"} or
+\code{model$period_mode = "per_site"}: there every window is read from this
+column, and \code{fit()} stops if it has no finite value.
 \item \code{n_at_risk} — trees behind each observed \code{mortality} proportion; used
 to weight the binomial term (see \code{weights}).
 \item \code{growth_n} — trees behind each observed \code{growth} mean; used to weight
@@ -504,6 +506,21 @@ process; \link{simulateForest} can feed it the observed recruitment instead.
 The fed count is itself a noisy estimate and is re-sampled as if it were the
 mean, so the observation noise of a sparse small-tree count enters the
 simulated stand. See \link{recruitment}.}
+
+\item{threads}{(\code{integer(1)} or \code{NULL})\cr torch's intra-op thread count
+during the fit. \code{NULL} (the default) leaves torch's setting alone, including
+one made through \code{OMP_NUM_THREADS} or \code{\link[torch:threads]{torch::torch_set_num_threads()}}.
+FINN's forward pass is a long chain of small tensor operations, so its cost
+is set by the number of operations, not by their arithmetic, and extra
+threads rarely pay. In the measurements behind FINNverse/FINN#48, one
+thread was up to 30 \% faster on macOS at the size of a 512-site,
+25-patch batch, and within a few per cent of the best setting on a 64-core
+Linux node, where only a single 2000-site batch gained from 4 threads.
+\code{threads = 1} is the considerate choice when several fits share a machine.
+The previous count is restored afterwards where torch allows it (OpenMP
+builds, e.g. Linux). torch's native backend (macOS) accepts one change per
+session, so there the session keeps the count \code{fit()} set, and a count fixed
+earlier in the session cannot be changed (\code{fit()} then says so).}
 
 \item{...}{Additional arguments passed to \code{optimizer}.}
 }
