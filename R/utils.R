@@ -663,9 +663,10 @@ rnbinom_torch = function(pred, theta) {
 #' Negative-binomial recruit draw without the recruitment floor
 #'
 #' @description
-#' The alternative regeneration sampler, selected with
-#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()` stays the
-#' default. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
+#' The default regeneration sampler since 0.2.0, selected with
+#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()`
+#' (`regeneration_sampler = "gaussian"`) reproduces results published before
+#' 0.2.0. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
 #' the Gamma draw is clamped at that same `eps` instead of taking `+0.001` and an
 #' absolute value, and the draw goes through `sample_poisson_refined()` (an exact
 #' `torch_poisson` below `lambda = 2`, the Gaussian approximation above) instead of

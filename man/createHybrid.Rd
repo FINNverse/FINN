@@ -36,8 +36,9 @@ environmental covariates).}
 during \code{\link[=fit]{fit()}}? Default \code{TRUE}.}
 
 \item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
-the negative binomial distribution used to sample recruits. Only used when
-this object is the regeneration process.}
+the negative binomial distribution used to sample recruits, or its fixed
+value with \code{optimizeTheta = FALSE}. Only used when this object is the
+regeneration process. See \link{recruitment}.}
 
 \item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the
 default network architecture entirely.}
@@ -53,7 +54,8 @@ Only used when \code{transformer = FALSE}.}
 \item{sample_regeneration}{(\code{logical(1)})\cr Should recruits actually be sampled
 from the negative binomial regeneration distribution (\code{TRUE}), or only its
 expectation used (\code{FALSE})? Only used when this object is the regeneration
-process.}
+process. With \code{FALSE} the expected number of recruits per patch is rounded,
+so wherever it is below 0.5 no recruit enters at all. See \link{recruitment}.}
 
 \item{transformer}{(\code{logical(1)})\cr Use a transformer encoder architecture
 (\code{TRUE}, default) or a feed-forward network (\code{FALSE}).}
@@ -74,19 +76,24 @@ when this object is the mortality process.}
 \code{"refined"} (default since 0.2.0) or \code{"gaussian"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
 
-\item{cap, prior, prior_lambda}{The Beverton-Holt cap on recruitment; see
-\code{\link[=createProcess]{createProcess()}} and \code{\link[=regeneration_capped]{regeneration_capped()}}. Only used when
-this object is the regeneration process.}
+\item{cap, prior, prior_lambda}{Accepted for symmetry with
+\code{\link[=createProcess]{createProcess()}}, but not used in 0.2.0: the hybrid regeneration
+network has no Beverton-Holt cap. See \code{\link[=regeneration_capped]{regeneration_capped()}} for the
+cap of the mechanistic process.}
 
 \item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the recruit dispersion
 \code{par_theta_recruits}, default \code{0.5} since 0.2.0, \code{0} or \code{NULL} to leave it
 unbounded as in 0.1.0; see \code{\link[=createProcess]{createProcess()}}. Only used when this
-object is the regeneration process.}
+object is the regeneration process. The floor guarantees stability only;
+it leaves the recruitment level biased upward and is not the recommended
+setting for calibrating it (use \code{optimizeTheta = FALSE} or
+\code{fit(loss_family = )}). See \link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion be
 estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}; \code{FALSE} keeps it at
-\code{dispersion_parameter}; see \code{\link[=createProcess]{createProcess()}}. Only used when this
-object is the regeneration process.}
+\code{dispersion_parameter}, which is the choice when the recruitment level is
+to be calibrated; see \code{\link[=createProcess]{createProcess()}} and \link{recruitment}. Only used
+when this object is the regeneration process.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 mortality probability is clamped to per simulation step before the death
@@ -153,5 +160,5 @@ models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 \doi{10.1111/2041-210x.70347}
 }
 \seealso{
-\code{\link[=createProcess]{createProcess()}}, \code{\link[=finn]{finn()}}
+\code{\link[=createProcess]{createProcess()}}, \code{\link[=finn]{finn()}}, \link{recruitment}
 }

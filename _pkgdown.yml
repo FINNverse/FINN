@@ -46,6 +46,7 @@ reference:
   - createProcess
   - createHybrid
   - CohortMat
+  - recruitment
 
 - title: Fitting and prediction
   desc: Calibrate every component jointly, end-to-end, then simulate.
@@ -61,6 +62,8 @@ reference:
   - growth
   - mortality
   - regeneration
+  - regeneration_capped
+  - regeneration_adult
   - competition
   - height
   - BA_stand

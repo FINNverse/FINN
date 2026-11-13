@@ -162,7 +162,7 @@ The penalty is added **after** the `weights = "auto"` baseline scaling, so
 | Recruitment limited by conspecific adults | `regeneration_adult()` | new export |
 | A process function declares and calibrates its own named parameters | `createProcess(custom_parameters = )` | `NULL` |
 | **Additive recruitment floor, was hard-coded at 0.2.** A default that does **not** reproduce 0.1.0 — see below | `finn(reg_floor = )` | **`1e-3`** (was 0.2) |
-| Weight of the regeneration term in the loss | `finn(recruit_obs_weight = )` | `1.0` |
+| Observation operator mapping predicted and observed recruitment per ha into the tallied-count space of the sampling design (applied under the `"nbinom"` regeneration likelihood only, #65) | `finn(recruit_obs_weight = )` | `1.0` |
 | Score growth over the whole remeasurement interval | `finn(growth_period_scale = )` | `FALSE` |
 | **Binned competition takes its height quantiles over the live cohorts only.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(light_mask = )` | **`TRUE`** (was unmasked) |
 | Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
@@ -296,9 +296,11 @@ someone who was affected.
   (unreleased) `finn(regeneration_saturation = )` model-level option, so the cap
   now composes like any other process rather than as a special case.
 
-* **Recruitment observation weight (`finn(recruit_obs_weight = )`).** Scales the
-  regeneration term in the loss so recruitment observations can be up- or
-  down-weighted relative to the other responses during calibration.
+* **Recruitment observation weight (`finn(recruit_obs_weight = )`).** An
+  observation operator, not a weight of the loss term: it multiplies predicted
+  and observed recruitment per ha alike before the regeneration likelihood, so
+  that the likelihood scores the counts a sampling design actually tallies. In
+  0.2.0 it is applied under `loss_family["regeneration"] = "nbinom"` only (#65).
 
 * **Period-scale growth scoring (`finn(growth_period_scale = )`).** Scores growth
   over a multi-year remeasurement interval rather than a single step, for
@@ -520,6 +522,14 @@ someone who was affected.
   `light_mask`, used to pass, became a trainable nobody read, and turned the
   later assignment into a silent no-op. Covered by
   `tests/testthat/test-processes.R`.
+
+## Documentation
+
+* New help topic `?recruitment`: the recruitment processes, the recruit draw,
+  the dispersion `theta` and its floor, the regeneration likelihood and
+  `recruit_obs_weight`, feeding observed recruitment, and a guide to which
+  options to combine; the recruitment arguments of `createProcess()`,
+  `createHybrid()`, `finn()`, `fit()` and `simulateForest()` point to it.
 
 
 # FINN 0.1.0

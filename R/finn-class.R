@@ -50,7 +50,14 @@
 #'   `NULL` (default), the default mechanistic growth process is used.
 #' @param regeneration_process (`function`)\cr Regeneration process, created by
 #'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
-#'   `NULL` (default), the default mechanistic regeneration process is used.
+#'   `NULL` (default), the default mechanistic regeneration process is used,
+#'   which since 0.2.0 is [FINN::regeneration_capped()] (recruitment with a
+#'   Beverton-Holt cap). The other mechanistic choices are
+#'   [FINN::regeneration()] (unbounded, the default before 0.2.0) and
+#'   [FINN::regeneration_adult()] (recruitment limited by the density of
+#'   conspecific adults); `regeneration_saturation()` is the older, deprecated
+#'   name of `regeneration_capped()`. See [recruitment] for how to combine the
+#'   recruitment options.
 #' @param competition_process (`function`)\cr Competition (light availability)
 #'   process, created by [FINN::createProcess]. If `NULL` (default), the default
 #'   mechanistic competition process is used.
@@ -61,12 +68,14 @@
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
+#' @seealso [recruitment] for the recruitment options and how to combine them
+#'
 #' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
 #'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
 #' @export
 #' @param reg_floor (`numeric(1)`)\cr Additive floor on the expected recruitment of
 #'   every species in every patch, in stems ha^-1 per time step, used by
-#'   [regeneration()] and [regeneration_saturation()]:
+#'   [regeneration()], [regeneration_capped()] and [regeneration_adult()]:
 #'   `mean = regP * exp(env) + reg_floor`. It keeps the negative-binomial
 #'   likelihood finite where the light gate closes. Default `1e-3`. Earlier versions
 #'   hard-coded `0.2`, which with many species adds a large climate-independent
@@ -76,7 +85,14 @@
 #'   weight applied to both predicted and observed regeneration before the loss
 #'   (maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
 #'   space, e.g. `g(recruit_dbh)/BAF` for an angle-count inventory). `1.0` (default)
-#'   is the per-hectare behaviour.
+#'   is the per-hectare behaviour. It is not a weight of the regeneration term in
+#'   the objective. For a fixed-radius small-tree plot that counts stems in a
+#'   diameter band below the recruitment threshold, `w` = plot area (ha) x
+#'   residence time in the band (years) / observation period (years), so one
+#'   tallied stem stands for `1 / w` recruits per ha over the period. In 0.2.0 it
+#'   is applied only under `fit(loss_family = c(regeneration = "nbinom"))`, the
+#'   default; under `"poisson"`, `"mse"` or `"gaussian"` the per-hectare values are
+#'   scored and the weight has no effect (FINNverse/FINN#65). See [recruitment].
 #' @param growth_period_scale (`logical(1)`)\cr If `TRUE`, growth is scored against
 #'   the COMPOUNDED period increment (`prod(1+g)-1`) rather than the mean of the
 #'   per-year rates, so a de-annualised period target aligns without collapsing
@@ -227,6 +243,13 @@ finn = function(N_species,
 #'   whose information now enters through another term, for example setting
 #'   `dbh = "none"` and `ba = "none"` when the size distribution is fitted
 #'   through size-classed stem counts (see `loss_aggregation`).
+#'
+#'   For `regeneration`, `"nbinom"` (the default) uses the recruit dispersion
+#'   `theta` of the regeneration process and applies
+#'   `finn(recruit_obs_weight = )`; `"poisson"` has no dispersion parameter, so
+#'   it cannot collapse, but in 0.2.0 it ignores `recruit_obs_weight` and scores
+#'   per-hectare values (FINNverse/FINN#65), with `trees_offset` added to the
+#'   prediction. See [recruitment].
 #' @param loss_aggregation (`character`|`list`)\cr How the model's per-cohort
 #'   quantities are reduced before they meet the observation, given per response
 #'   as a named character vector or, when a type needs arguments, a named list.
@@ -612,6 +635,10 @@ finn = function(N_species,
 #'   after a site's last census get no recruits: nothing after it enters the
 #'   objective. A model fitted this way still simulates with its own regeneration
 #'   process; [FINN::simulateForest] can feed it the observed recruitment instead.
+#'
+#'   The fed count is itself a noisy estimate and is re-sampled as if it were the
+#'   mean, so the observation noise of a sparse small-tree count enters the
+#'   simulated stand. See [recruitment].
 #' @param ... Additional arguments passed to `optimizer`.
 #'
 #' @section Scoring individual trees:
@@ -645,6 +672,8 @@ finn = function(N_species,
 #' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
 #'   the returned object is the one passed in, now carrying the training results
 #'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`).
+#' @seealso [recruitment] for the recruitment options (`recruits`, the
+#'   regeneration likelihood) and how to combine them
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -845,6 +874,8 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
 #'   ...) for the requested timesteps.
 #' @inheritParams simulateForest
+#' @seealso [recruitment] for the recruitment options (`recruits`,
+#'   `obs_recruits`) and how to combine them
 #' @method predict finn_class
 #' @export
 #' @examplesIf torch::torch_is_installed()
@@ -928,7 +959,7 @@ predict.finn_class = function(object,
 #'   calibrated on: with observed recruitment the model is **not an autonomous
 #'   simulator**, so every simulated year must lie in an observed interval, and a
 #'   bare-ground, succession or projection run beyond them is refused. Such runs
-#'   need the fitted regeneration process (`"simulated"`).
+#'   need the fitted regeneration process (`"simulated"`). See [recruitment].
 #' @param obs_recruits (`data.table|data.frame`)\cr The observed recruitment for
 #'   `recruits = "observed"`, required there and refused otherwise: a table like
 #'   `fit()`'s `data` with `siteID`, `year`, `species`, `reg` and `period_length`,
@@ -946,6 +977,8 @@ predict.finn_class = function(object,
 #'   (long format: `siteID`, `year`, `species`, `variable`, `value`). When
 #'   `return_cohorts` is set, `$long$cohort` / `$wide$cohort` hold the raw
 #'   per-cohort state for the requested timesteps.
+#' @seealso [FINN::predict.finn_class()], [recruitment] for the recruitment
+#'   options (`recruits`, `obs_recruits`) and how to combine them
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)

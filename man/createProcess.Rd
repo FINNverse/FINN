@@ -71,8 +71,9 @@ network. Default \code{NULL} infers it from \code{formula}/\code{env}.}
 network. Default \code{NULL} uses the number of species.}
 
 \item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
-the negative binomial distribution used to sample recruits. Only used when
-this process is the regeneration process.}
+the negative binomial distribution used to sample recruits (the size
+\code{theta}), or its fixed value with \code{optimizeTheta = FALSE}. Only used when
+this process is the regeneration process. See \link{recruitment}.}
 
 \item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the default
 environmental-response network architecture.}
@@ -89,7 +90,9 @@ network. Ignored unless \code{hidden} is set.}
 \item{sample_regeneration}{(\code{logical(1)})\cr Should recruits actually be sampled
 from the negative binomial regeneration distribution (\code{TRUE}), or only its
 expectation used (\code{FALSE})? Only used when this process is the regeneration
-process.}
+process. With \code{FALSE} the expected number of recruits per patch is rounded,
+so wherever it is below 0.5 no recruit enters at all: a silent zero for
+sparse species on small patches. See \link{recruitment}.}
 
 \item{n_quantiles}{(\code{integer(1)})\cr Number of height classes used to discretize
 cohorts when computing shading/light availability. Only used when this
@@ -196,14 +199,29 @@ it reached 0.035 by epoch 50 and the simulated stand overshot observed
 recruitment 133-fold, with basal-area and stem losses flat until epoch 25
 and running away after. The Beverton-Holt cap does not prevent this -- it
 bounds the mean, and the variance around a capped mean is still
-\code{K + K^2/theta}.}
+\code{K + K^2/theta}.
+
+The floor guarantees stability only. It does not calibrate the recruitment
+level: on the German national forest inventory, out of sample on a
+spatially blocked holdout, a floored \code{theta} left the predicted recruitment
+level about 12 times too high, while a fixed \code{theta} (\code{optimizeTheta = FALSE}) or a Poisson regeneration likelihood (\code{fit(loss_family = )}) gave 2
+to 2.8 times. The floor is a guard rail for users who set nothing, not the
+recommended setting for calibrating the recruitment level; use
+\code{optimizeTheta = FALSE} or \code{loss_family} for that. See \link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion
 \code{par_theta_recruits} be estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}.
 With \code{FALSE} it stays at \code{dispersion_parameter} for the whole fit (a buffer,
 not a parameter), in the recruit draw and in the regeneration likelihood
 alike; \code{theta_floor} still applies. Only used when this process is the
-regeneration process.}
+regeneration process.
+
+Use \code{FALSE} when the recruitment level is to be calibrated: a trained
+\code{theta} falls on sparse recruitment data and leaves the level biased (see
+\code{theta_floor}). \code{dispersion_parameter = 1} is FINN's start value and held
+in tests on the German national forest inventory; a higher value such as
+\code{50} brings the draw close to a Poisson draw and gave the lowest holdout
+error there. See \link{recruitment}.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},
@@ -283,5 +301,6 @@ models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 \doi{10.1111/2041-210x.70347}
 }
 \seealso{
-\code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}}
+\code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}}, \link{recruitment} for the
+recruitment options and how to combine them
 }

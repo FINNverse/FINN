@@ -37,7 +37,7 @@ torch.Tensor mean recruitment, stems ha^-1 step^-1,
 \code{adults} (A, stems ha^-1, \verb{[sites, 1, species]}) and \code{seed} (f(A)).
 }
 \description{
-A mechanistic extension of \link{regeneration_saturation} in which
+A mechanistic extension of \link{regeneration_capped} in which
 recruitment needs a seed source: the mean recruitment of a species scales
 with the density of its own ADULTS on the site, the stems whose diameter
 exceeds an adult threshold \code{x}.
@@ -56,14 +56,20 @@ recruitment
 falls to the floor (read it as immigration from outside the site) where the
 species has no adult, and rises to the light- and environment-driven
 potential of \link{regeneration} where adults are many. The result is capped
-with the same Beverton-Holt term as \link{regeneration_saturation},
+with the same Beverton-Holt term as \link{regeneration_capped},
 \verb{K m / (K + m)}.
 
-Declare three extra parameters with \code{createProcess(custom_parameters = )}.
-As for \code{reg_logK}, a length-1 init gives one shared value and a
-length-\code{N_species} init one value per species:
+The cap \code{reg_logK} is created by \code{\link[=finn]{finn()}} as for
+\link{regeneration_capped}, with its resolution from \code{createProcess(cap = )}
+and its prior from \code{prior}/\code{prior_lambda}, so it need not be declared. A
+\code{reg_logK} declared in \code{custom_parameters} (as in the example) is kept and
+sets the resolution by its length, but its start value is replaced by the
+resolved prior at the first \code{\link[=fit]{fit()}}. Declare the two adult parameters
+with \code{createProcess(custom_parameters = )}; a length-1 init gives one shared
+value and a length-\code{N_species} init one value per species:
 \itemize{
-\item \code{reg_logK}: the log Beverton-Holt cap, stems ha^-1 step^-1;
+\item \code{reg_logK} (optional, see above): the log Beverton-Holt cap, stems ha^-1
+step^-1;
 \item \code{reg_adult_logx}: the log adult threshold, \code{x = exp(reg_adult_logx)} in the
 units of \code{dbh}. Once \code{x} falls below the smallest diameter present, every
 stem counts as an adult and \code{x} stops receiving gradient;
@@ -91,5 +97,6 @@ m <- finn(
 
 }
 \seealso{
-\link{regeneration_saturation}, \code{\link[=createProcess]{createProcess()}}
+\link{regeneration_capped}, \code{\link[=createProcess]{createProcess()}},
+\link{recruitment} for the recruitment options and how to combine them
 }

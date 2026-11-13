@@ -35,6 +35,8 @@ unbounded mean recruitment with a Beverton-Holt density dependence,
 \code{recruits = K * m / (K + m)}, where \code{m} is the mechanistic mean recruitment
 (identical to \link{regeneration}) and \code{K} is a fitted carrying capacity
 (stems ha^-1 step^-1). As \code{m} grows, recruitment saturates towards \code{K}.
+\code{regeneration_saturation()} is the same function under its older name, kept
+as a deprecated alias for one release.
 }
 \details{
 The cap is the parameter \code{reg_logK} (\code{K = exp(reg_logK)}), which \strong{FINN
@@ -86,5 +88,7 @@ m <- finn(N_species = Nsp, regeneration_process = createProcess(
 
 }
 \seealso{
-\link{regeneration}, \code{\link[=createProcess]{createProcess()}}
+\link{regeneration}, \code{\link[=regeneration_adult]{regeneration_adult()}},
+\code{\link[=createProcess]{createProcess()}}, \link{recruitment} for the recruitment options and how
+to combine them
 }
