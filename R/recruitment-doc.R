@@ -88,16 +88,17 @@
 #' the same small `theta` makes the simulated draws bursty. A free `theta` can
 #' therefore run away (FINNverse/FINN#63).
 #'
-#' What the floor does and does not do: it guarantees that the fit stays
-#' stable, but it does not calibrate the recruitment level. On the German
-#' national forest inventory, out of sample on a spatially blocked holdout, a
-#' floored `theta` left the predicted recruitment level about 12 times too high,
-#' with an error 2.8 times that of predicting the mean. A fixed `theta` (1 or 50,
-#' `optimizeTheta = FALSE`) or a Poisson regeneration likelihood gave a level 2
-#' to 2.8 times too high and an error at the level of the mean, and a free
-#' `theta` ran away by four orders of magnitude. The floor is a guard rail for
-#' users who set nothing, not the recommended setting for calibrating the
-#' recruitment level.
+#' What the floor does: it keeps the fit stable, and in a fit run to
+#' convergence it costs nothing. On the German national forest inventory, a full
+#' model fitted for 2000 epochs with the floor predicted the recruitment level on
+#' a spatially blocked holdout at 1.06 times the observed, a fixed `theta` of 1
+#' (`optimizeTheta = FALSE`) at 1.04, and the two scored the same recruitment
+#' likelihood and the same skill on every other response. The difference is in
+#' how fast they get there: after 50 epochs a floored `theta` still put the level
+#' about 12 times too high, a fixed `theta` 2 to 3 times, and a free `theta` had
+#' run away by four orders of magnitude. So read the recruitment level only once
+#' the parameters have settled (`$param_history`), whichever setting you use; for
+#' short fits, a fixed `theta` gets the level right sooner.
 #'
 #' @section The likelihood and the observation operator:
 #' `fit(loss_family = c(regeneration = ))` chooses the regeneration likelihood.
@@ -156,12 +157,14 @@
 #'
 #' @section Choosing:
 #' * **Default settings** (`regeneration_capped`, trained `theta` with
-#'   `theta_floor = 0.5`, `"nbinom"`): the fit is stable, but do not read the
-#'   fitted recruitment level as calibrated.
-#' * **For a calibrated recruitment level**: keep `theta` fixed
-#'   (`createProcess(optimizeTheta = FALSE)`, with `dispersion_parameter` 1 or
-#'   higher), or use `fit(loss_family = c(..., regeneration = "poisson"))`.
-#'   Mind that `recruit_obs_weight` is ignored under `"poisson"` (above).
+#'   `theta_floor = 0.5`, `"nbinom"`): the fit is stable, and once it has
+#'   converged the recruitment level is calibrated as well as with a fixed
+#'   `theta`. Do not read the level from a fit stopped early.
+#' * **For short fits**, or when the recruitment level should not depend on how
+#'   long the fit runs: keep `theta` fixed (`createProcess(optimizeTheta =
+#'   FALSE)`, with `dispersion_parameter` 1 or higher), or use
+#'   `fit(loss_family = c(..., regeneration = "poisson"))`. Mind that
+#'   `recruit_obs_weight` is ignored under `"poisson"` (above).
 #' * **When small trees are sampled too sparsely**, and in particular when the
 #'   spatial pattern of recruitment is not predictable from the predictors (on
 #'   the German national forest inventory no configuration ranked sites better

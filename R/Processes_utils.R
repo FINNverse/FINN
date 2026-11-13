@@ -79,12 +79,13 @@
 #'   alike; `theta_floor` still applies. Only used when this process is the
 #'   regeneration process.
 #'
-#'   Use `FALSE` when the recruitment level is to be calibrated: a trained
-#'   `theta` falls on sparse recruitment data and leaves the level biased (see
-#'   `theta_floor`). `dispersion_parameter = 1` is FINN's start value and held
-#'   in tests on the German national forest inventory; a higher value such as
-#'   `50` brings the draw close to a Poisson draw and gave the lowest holdout
-#'   error there. See [recruitment].
+#'   Use `FALSE` for short fits, or when the recruitment level should not
+#'   depend on how long the fit runs: a trained `theta` falls on sparse
+#'   recruitment data, and with the floor (`theta_floor`) the level is right
+#'   only once the fit has converged, while a fixed `theta` gets there sooner.
+#'   `dispersion_parameter = 1` is FINN's start value; on the German national
+#'   forest inventory it matched the floored `theta` at convergence. See
+#'   [recruitment].
 #' @param cap,prior,prior_lambda The Beverton-Holt cap of
 #'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
 #'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
@@ -169,14 +170,14 @@
 #'   bounds the mean, and the variance around a capped mean is still
 #'   `K + K^2/theta`.
 #'
-#'   The floor guarantees stability only. It does not calibrate the recruitment
-#'   level: on the German national forest inventory, out of sample on a
-#'   spatially blocked holdout, a floored `theta` left the predicted recruitment
-#'   level about 12 times too high, while a fixed `theta` (`optimizeTheta =
-#'   FALSE`) or a Poisson regeneration likelihood (`fit(loss_family = )`) gave 2
-#'   to 2.8 times. The floor is a guard rail for users who set nothing, not the
-#'   recommended setting for calibrating the recruitment level; use
-#'   `optimizeTheta = FALSE` or `loss_family` for that. See [recruitment].
+#'   The floor keeps the fit stable, and a fit run to convergence with it
+#'   calibrates the recruitment level as well as a fixed `theta`: on the German
+#'   national forest inventory, out of sample on a spatially blocked holdout,
+#'   1.06 times the observed level after 2000 epochs against 1.04 for
+#'   `optimizeTheta = FALSE`. A fit stopped early is different: after 50 epochs
+#'   the floored `theta` still put the level about 12 times too high, a fixed
+#'   `theta` 2 to 3 times. Read the level only once the parameters have settled,
+#'   or fix `theta` for short fits. See [recruitment].
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   per-cohort mortality probability is clamped to **per simulation step**,
 #'   before the death draw. Only used when this process is the mortality process;
@@ -443,10 +444,10 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param theta_floor (`numeric(1)`)\cr Lower bound on the recruit dispersion
 #'   `par_theta_recruits`, default `0.5` since 0.2.0, `0` or `NULL` to leave it
 #'   unbounded as in 0.1.0; see [FINN::createProcess()]. Only used when this
-#'   object is the regeneration process. The floor guarantees stability only;
-#'   it leaves the recruitment level biased upward and is not the recommended
-#'   setting for calibrating it (use `optimizeTheta = FALSE` or
-#'   `fit(loss_family = )`). See [recruitment].
+#'   object is the regeneration process. The floor keeps the fit stable; the
+#'   recruitment level is right once the fit has converged, and for short fits
+#'   a fixed `theta` (`optimizeTheta = FALSE`) gets there sooner. See
+#'   [recruitment].
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
 #' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/

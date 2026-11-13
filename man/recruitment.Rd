@@ -100,16 +100,17 @@ likelihood and so lowers the loss without improving the predicted mean, and
 the same small \code{theta} makes the simulated draws bursty. A free \code{theta} can
 therefore run away (FINNverse/FINN#63).
 
-What the floor does and does not do: it guarantees that the fit stays
-stable, but it does not calibrate the recruitment level. On the German
-national forest inventory, out of sample on a spatially blocked holdout, a
-floored \code{theta} left the predicted recruitment level about 12 times too high,
-with an error 2.8 times that of predicting the mean. A fixed \code{theta} (1 or 50,
-\code{optimizeTheta = FALSE}) or a Poisson regeneration likelihood gave a level 2
-to 2.8 times too high and an error at the level of the mean, and a free
-\code{theta} ran away by four orders of magnitude. The floor is a guard rail for
-users who set nothing, not the recommended setting for calibrating the
-recruitment level.
+What the floor does: it keeps the fit stable, and in a fit run to
+convergence it costs nothing. On the German national forest inventory, a full
+model fitted for 2000 epochs with the floor predicted the recruitment level on
+a spatially blocked holdout at 1.06 times the observed, a fixed \code{theta} of 1
+(\code{optimizeTheta = FALSE}) at 1.04, and the two scored the same recruitment
+likelihood and the same skill on every other response. The difference is in
+how fast they get there: after 50 epochs a floored \code{theta} still put the level
+about 12 times too high, a fixed \code{theta} 2 to 3 times, and a free \code{theta} had
+run away by four orders of magnitude. So read the recruitment level only once
+the parameters have settled (\verb{$param_history}), whichever setting you use; for
+short fits, a fixed \code{theta} gets the level right sooner.
 }
 
 \section{The likelihood and the observation operator}{
@@ -175,12 +176,13 @@ stem-count column, which costs accuracy in the simulated stem counts.
 
 \itemize{
 \item \strong{Default settings} (\code{regeneration_capped}, trained \code{theta} with
-\code{theta_floor = 0.5}, \code{"nbinom"}): the fit is stable, but do not read the
-fitted recruitment level as calibrated.
-\item \strong{For a calibrated recruitment level}: keep \code{theta} fixed
-(\code{createProcess(optimizeTheta = FALSE)}, with \code{dispersion_parameter} 1 or
-higher), or use \code{fit(loss_family = c(..., regeneration = "poisson"))}.
-Mind that \code{recruit_obs_weight} is ignored under \code{"poisson"} (above).
+\code{theta_floor = 0.5}, \code{"nbinom"}): the fit is stable, and once it has
+converged the recruitment level is calibrated as well as with a fixed
+\code{theta}. Do not read the level from a fit stopped early.
+\item \strong{For short fits}, or when the recruitment level should not depend on how
+long the fit runs: keep \code{theta} fixed (\code{createProcess(optimizeTheta = FALSE)}, with \code{dispersion_parameter} 1 or higher), or use
+\code{fit(loss_family = c(..., regeneration = "poisson"))}. Mind that
+\code{recruit_obs_weight} is ignored under \code{"poisson"} (above).
 \item \strong{When small trees are sampled too sparsely}, and in particular when the
 spatial pattern of recruitment is not predictable from the predictors (on
 the German national forest inventory no configuration ranked sites better

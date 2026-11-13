@@ -204,13 +204,14 @@ and running away after. The Beverton-Holt cap does not prevent this -- it
 bounds the mean, and the variance around a capped mean is still
 \code{K + K^2/theta}.
 
-The floor guarantees stability only. It does not calibrate the recruitment
-level: on the German national forest inventory, out of sample on a
-spatially blocked holdout, a floored \code{theta} left the predicted recruitment
-level about 12 times too high, while a fixed \code{theta} (\code{optimizeTheta = FALSE}) or a Poisson regeneration likelihood (\code{fit(loss_family = )}) gave 2
-to 2.8 times. The floor is a guard rail for users who set nothing, not the
-recommended setting for calibrating the recruitment level; use
-\code{optimizeTheta = FALSE} or \code{loss_family} for that. See \link{recruitment}.}
+The floor keeps the fit stable, and a fit run to convergence with it
+calibrates the recruitment level as well as a fixed \code{theta}: on the German
+national forest inventory, out of sample on a spatially blocked holdout,
+1.06 times the observed level after 2000 epochs against 1.04 for
+\code{optimizeTheta = FALSE}. A fit stopped early is different: after 50 epochs
+the floored \code{theta} still put the level about 12 times too high, a fixed
+\code{theta} 2 to 3 times. Read the level only once the parameters have settled,
+or fix \code{theta} for short fits. See \link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion
 \code{par_theta_recruits} be estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}.
@@ -219,12 +220,13 @@ not a parameter), in the recruit draw and in the regeneration likelihood
 alike; \code{theta_floor} still applies. Only used when this process is the
 regeneration process.
 
-Use \code{FALSE} when the recruitment level is to be calibrated: a trained
-\code{theta} falls on sparse recruitment data and leaves the level biased (see
-\code{theta_floor}). \code{dispersion_parameter = 1} is FINN's start value and held
-in tests on the German national forest inventory; a higher value such as
-\code{50} brings the draw close to a Poisson draw and gave the lowest holdout
-error there. See \link{recruitment}.}
+Use \code{FALSE} for short fits, or when the recruitment level should not
+depend on how long the fit runs: a trained \code{theta} falls on sparse
+recruitment data, and with the floor (\code{theta_floor}) the level is right
+only once the fit has converged, while a fixed \code{theta} gets there sooner.
+\code{dispersion_parameter = 1} is FINN's start value; on the German national
+forest inventory it matched the floored \code{theta} at convergence. See
+\link{recruitment}.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},
