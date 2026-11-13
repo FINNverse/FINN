@@ -2,138 +2,198 @@
 % Please edit documentation in R/finn-class.R
 \name{finn}
 \alias{finn}
-\title{Forest Informed Neural Network}
+\title{Build a FINN forest model}
 \usage{
 finn(
   N_species,
-  mortality_process = NULL,
-  growth_process = NULL,
-  regeneration_process = NULL,
-  competition_process = NULL,
+  mortality_process = createProcess(func = mortality),
+  growth_process = createProcess(func = growth),
+  regeneration_process = createProcess(func = regeneration_capped),
+  competition_process = createProcess(func = competition),
   recruits_dbh = 1,
+  growth_rate = c("annual", "period"),
   recruit_obs_weight = 1,
-  growth_period_scale = FALSE,
-  reg_floor = 0.001
+  ...
 )
 }
 \arguments{
-\item{N_species}{(\code{integer(1)})\cr Number of species.}
+\item{N_species}{(\code{integer(1)})\cr Number of species in the data. Species are
+coded \verb{1, ..., N_species} in every table (\code{\link[=resolveSiteIDs]{resolveSiteIDs()}} does
+the coding).}
 
-\item{mortality_process}{(\code{function})\cr Mortality process, created by
-\link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
-\code{NULL} (default), the default mechanistic mortality process is used.}
+\item{mortality_process}{(\code{process})\cr How trees die. Default
+\code{createProcess(func = mortality)}, the mortality equation of
+\code{\link[=mortality]{mortality()}} with a logistic response to every environment column.
+Build your own with \code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.}
 
-\item{growth_process}{(\code{function})\cr Growth process, created by
-\link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
-\code{NULL} (default), the default mechanistic growth process is used.}
+\item{growth_process}{(\code{process})\cr How trees grow in diameter. Default
+\code{createProcess(func = growth)}, the growth equation of \code{\link[=growth]{growth()}}
+with a linear response to every environment column. Build your own with
+\code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.}
 
-\item{regeneration_process}{(\code{function})\cr Regeneration process, created by
-\link{createProcess} (mechanistic) or \link{createHybrid} (DNN-based). If
-\code{NULL} (default), the default mechanistic regeneration process is used,
-which since 0.2.0 is \code{\link[=regeneration_capped]{regeneration_capped()}} (recruitment with a
-Beverton-Holt cap). The other mechanistic choices are
-\code{\link[=regeneration]{regeneration()}} (unbounded, the default before 0.2.0) and
-\code{\link[=regeneration_adult]{regeneration_adult()}} (recruitment limited by the density of
-conspecific adults); \code{regeneration_saturation()} is the older, deprecated
-name of \code{regeneration_capped()}. See \link{recruitment} for how to combine the
-recruitment options.}
+\item{regeneration_process}{(\code{process})\cr How new trees appear. Default
+\code{createProcess(func = regeneration_capped)}: the regeneration equation of
+\code{\link[=regeneration_capped]{regeneration_capped()}}, whose expected recruitment is capped
+(new in 0.2.0). Alternatives: \code{\link[=regeneration]{regeneration()}} (no cap, the equation
+of the paper) and \code{\link[=regeneration_adult]{regeneration_adult()}} (recruitment limited by the
+adults of the same species on the site). See \link{recruitment} for the
+recruitment options and how they act together. Build your own with
+\code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.}
 
-\item{competition_process}{(\code{function})\cr Competition (light availability)
-process, created by \link{createProcess}. If \code{NULL} (default), the default
-mechanistic competition process is used.}
+\item{competition_process}{(\code{process})\cr How trees shade each other.
+Default \code{createProcess(func = competition)}, the light model of
+\code{\link[=competition]{competition()}}. Only \code{\link[=createProcess]{createProcess()}} is accepted here, and
+competition cannot depend on the environment in this version.}
 
-\item{recruits_dbh}{(\code{numeric(1)})\cr Starting dbh for recruits. Has value 1.0 as default.}
+\item{recruits_dbh}{(\code{numeric(1)})\cr Diameter (cm) at which new trees enter
+the simulation. Default \code{1}. Set it to the smallest diameter your
+inventory records (12.9 cm for the bundled FIA data), so that simulated
+recruits are the trees the inventory counts as recruits.}
 
-\item{recruit_obs_weight}{(\code{numeric(1)})\cr Observation-operator inclusion
-weight applied to both predicted and observed regeneration before the loss
-(maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
-space, e.g. \code{g(recruit_dbh)/BAF} for an angle-count inventory). \code{1.0} (default)
-is the per-hectare behaviour. It is not a weight of the regeneration term in
-the objective. For a fixed-radius small-tree plot that counts stems in a
-diameter band below the recruitment threshold, \code{w} = plot area (ha) x
-residence time in the band (years) / observation period (years), so one
-tallied stem stands for \code{1 / w} recruits per ha over the period. In 0.2.0 it
-is applied only under \code{fit(loss_family = c(regeneration = "nbinom"))}, the
-default; under \code{"poisson"}, \code{"mse"} or \code{"gaussian"} the per-hectare values are
-scored and the weight has no effect (FINNverse/FINN#65). See \link{recruitment}.}
+\item{growth_rate}{(\code{character(1)})\cr What the \code{growth} column of the data
+is, so that \code{\link[=fit]{fit()}} compares it with the right simulated quantity.
+\code{"annual"} (default): a rate per time step -- with annual steps the mean
+annual relative growth rate over the observation interval (each year's
+\code{dbh / dbh_before - 1}, averaged). FINN compares it with the mean of its
+simulated per-step rates over the interval. \code{"period"}: the relative
+diameter increment over the whole observation interval
+(\code{dbh_end / dbh_start - 1}), which compounds the per-step rates; FINN then
+compounds its simulated rates the same way. The two only differ when an
+observation interval spans several time steps (\code{period_length} in the
+data). If unsure, keep the default: with annual time steps it is the
+annual growth rate. \code{\link[=makeObsData]{makeObsData()}} returns the increment between
+two censuses, which is the per-step rate when one step is one census
+interval (as in the bundled FIA data); with annual steps and an interval
+of several years, annualise it or choose \code{"period"}. The terms follow
+Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from the
+change over a census interval.}
 
-\item{growth_period_scale}{(\code{logical(1)})\cr If \code{TRUE}, growth is scored against
-the COMPOUNDED period increment (\code{prod(1+g)-1}) rather than the mean of the
-per-year rates, so a de-annualised period target aligns without collapsing
-growth's variance. Default \code{FALSE} (mean of annual rates).}
+\item{recruit_obs_weight}{(\code{numeric(1)})\cr Only for inventories that do not
+count recruits per hectare (angle-count sampling, small-tree subplots):
+the factor that turns a recruitment density into the counts such a design
+tallies. Default \code{1}, which leaves per-hectare data as they are. See
+\link{recruitment}.}
 
-\item{reg_floor}{(\code{numeric(1)})\cr Additive floor on the expected recruitment of
-every species in every patch, in stems ha^-1 per time step, used by
-\code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}} and \code{\link[=regeneration_adult]{regeneration_adult()}}:
-\code{mean = regP * exp(env) + reg_floor}. It keeps the negative-binomial
-likelihood finite where the light gate closes. Default \code{1e-3}. Earlier versions
-hard-coded \code{0.2}, which with many species adds a large climate-independent
-recruitment (65 species x 0.2 = 13 stems ha^-1 yr^-1); models saved before this
-argument existed keep that value when reloaded.}
+\item{...}{Arguments of earlier versions, still accepted with a warning:
+\code{reg_floor} (now \code{createProcess(reg_floor = )} of the regeneration process)
+and \code{growth_period_scale} (\code{TRUE} is now \code{growth_rate = "period"}).}
 }
 \value{
-An object of class \code{finn_class} (a \link[torch:nn_module]{torch::nn_module}): an assembled
-but un-fitted FINN model, ready to pass to \code{\link[=fit]{fit()}} or \code{\link[=simulateForest]{simulateForest()}}.
+An object of class \code{finn_class} (a \link[torch:nn_module]{torch::nn_module}): the
+assembled, not yet fitted model, ready for \code{\link[=fit]{fit()}} or \code{\link[=simulateForest]{simulateForest()}}.
 }
 \description{
-Creates a Forest Informed Neural Network (FINN), a differentiable, cohort-based
-dynamic forest (gap) model in the tradition of JABOWA/ForClim-style models, in
-which any of the four demographic processes (growth, mortality, regeneration,
-competition for light) can either be specified mechanistically or replaced by a
-deep neural network (DNN). Mechanistic and DNN-based processes are calibrated
-jointly, end-to-end, via gradient descent (see \link{fit}).
+Builds a FINN (Forest Informed Neural Network) model: a forest simulator that
+follows groups of similar trees (cohorts) on small patches of forest through
+time, year by year, and that can learn its parameters from forest inventory
+data. Each of the four demographic processes -- competition for light,
+growth, mortality and regeneration -- is either a classic, interpretable
+equation (\code{\link[=createProcess]{createProcess()}}) or a neural network
+(\code{\link[=createHybrid]{createHybrid()}}). Whatever the mix, all processes are estimated
+together, in one go, by \code{\link[=fit]{fit()}}.
+
+\code{finn()} only assembles the model. Nothing is estimated yet: pass the result
+to \code{\link[=fit]{fit()}} to estimate the parameters from your data, and to
+\code{\link[=simulateForest]{simulateForest()}} to simulate forest development.
 }
 \details{
-FINN represents the forest as cohorts of trees, grouped by site, patch and
-cohort, each characterized by diameter at breast height (dbh), number of trees,
-and species identity. Starting from an initial state, FINN simulates the forest
-forward in discrete annual time steps by sequentially applying the four
-demographic processes: competition (light availability, based on basal area
-and species-specific shading), growth (diameter increment as a function of
-light, size and environment), mortality (binomial death of trees as a function
-of growth, light, size and environment) and regeneration (recruitment of new
-cohorts as a function of light and environment, drawn from a negative binomial
-distribution). Each process additionally depends on a species- and
-process-specific environmental-response function that maps site-level
-environmental predictors to a scalar effect on the process.
+The defaults work for a first model: \code{finn(N_species = 11)} builds a model
+whose four processes are the package's own equations, with every column of
+the environment table as a predictor. Pass a process built with
+\code{\link[=createProcess]{createProcess()}} to choose the predictors (its \code{formula}), to change
+the equation (its \code{func}), or to fix parameters; pass one built with
+\code{\link[=createHybrid]{createHybrid()}} to replace the whole process by a neural network.
 
-Every process and its environmental-response function can be configured in one
-of two ways: (1) mechanistically, with an explicit functional form and
-interpretable parameters (e.g. light-response thresholds, allometric
-coefficients), created via \link{createProcess}; or (2) as a hybrid process, in
-which the environmental-response function or the entire process equation is
-replaced by a DNN, created via \link{createHybrid}. The remaining mechanistic
-processes constrain the DNN to ecologically plausible behaviour, while the DNN
-absorbs misalignments and structural simplifications that would otherwise bias
-the mechanistic processes; both are estimated jointly rather than calibrated in
-isolation and plugged in afterwards. If a process argument is left at its
-default \code{NULL}, the corresponding default mechanistic process (as described in
-Pichler & Käber, 2026, Methods in Ecology and Evolution) is used.
+\if{html}{\figure{FINN-overview.jpg}{options: width="100\%" alt="One time step of FINN: the cohorts of a patch and the site's environment enter competition, growth, mortality and regeneration, which produce the cohorts of the next step and the simulated stand variables."}}
+\if{latex}{\figure{FINN-overview.jpg}{options: width=12cm}}
 
-\code{finn()} only assembles the model architecture (analogous to instantiating a
-\code{torch} \code{nn_module}); none of the process or environmental-response parameters
-are estimated yet. Use \link{fit} to calibrate the returned object against
-observed data, and \link{predict.finn_class}/\link{simulateForest} to
-simulate forest dynamics from a (fitted) model.
+\strong{How FINN simulates a forest.} A site is a set of patches (small plots of
+\code{patch_size} ha). On each patch the trees are kept as cohorts, each with a
+species, a diameter at breast height (dbh, cm) and a number of trees. Every
+simulated time step, usually one year, runs the four processes in turn:
+\enumerate{
+\item \emph{competition} works out how much light reaches each cohort from the
+basal area of the taller trees on its patch (\code{\link[=competition]{competition()}});
+\item \emph{growth} increases each cohort's diameter, depending on its light, size,
+species and the site's environment (\code{\link[=growth]{growth()}});
+\item \emph{mortality} removes a share of each cohort's trees, depending on its
+growth, light, size, species and environment (\code{\link[=mortality]{mortality()}});
+\item \emph{regeneration} adds new cohorts of small trees (\code{recruits_dbh}), depending
+on light, species and environment (\code{\link[=regeneration_capped]{regeneration_capped()}}).
+}
+
+Growth, mortality and regeneration each carry their own response to the
+environment: for every species, the columns of the environment table that
+the process' \code{formula} names are turned into one number that scales the
+process. By default that response is a simple linear (growth, regeneration)
+or logistic (mortality) function with one coefficient per predictor and
+species; \code{createProcess(hidden = )} turns it into a small neural network.
+The simulated stand variables (mean dbh, basal area, number of trees) and
+the simulated rates (growth, mortality, recruitment) of every site and year
+are what \code{\link[=fit]{fit()}} compares with the observations.
+
+\strong{The default processes} are, in 0.2.0, \code{createProcess(func = growth)},
+\code{createProcess(func = mortality)}, \code{createProcess(func = regeneration_capped)}
+and \code{createProcess(func = competition)}: the equations of Pichler & Käber
+(2026), with one change -- recruitment is capped (\code{\link[=regeneration_capped]{regeneration_capped()}}
+is new in 0.2.0; \code{\link[=regeneration]{regeneration()}} is the uncapped process of the paper).
+A process written in the signature as \code{createProcess(func = )} uses every
+column of the environment table (\code{formula = ~.}) and its default settings.
+Passing \code{NULL} for a process is still accepted and means the same default.
+The competition process cannot depend on the environment in this version.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
-# the three demographic processes, each with a linear temperature and
-# precipitation response; ?createProcess for the hybrid and network variants
-Nsp <- max(fia_obs_dt$species)
-m <- finn(
-  N_species            = Nsp, recruits_dbh = 12.9,
-  growth_process       = createProcess(~ temp + prec, FINN::growth),
-  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+library(data.table)
+# The whole workflow on three Oregon FIA sites: build, estimate, simulate.
+# A real calibration uses all sites and hundreds of epochs.
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+
+# 1. build the model: growth, mortality and regeneration respond to annual
+#    temperature and precipitation; competition has no environment
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createProcess(~ temp + prec, growth),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 m
+
+# 2. estimate the parameters from the inventory: the observed stand
+#    variables and rates (data), the climate of every year (env) and the
+#    trees at the first census (init_cohort)
+init <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+tail(m$history, 1)   # the loss of every response in the last epoch
+
+# 3. simulate the three sites over the years of `env` with the fitted model
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites],
+                      init_cohort = init, patches = 4, patch_size = 0.06)
+head(sim$long$site)
+
+# the same model with the defaults spelled out: every process uses every
+# column of `env` as a predictor
+m2 <- finn(N_species = Nsp, recruits_dbh = 12.9,
+           growth_process       = createProcess(func = growth),
+           mortality_process    = createProcess(func = mortality),
+           regeneration_process = createProcess(func = regeneration_capped),
+           competition_process  = createProcess(func = competition))
 \dontshow{\}) # examplesIf}
 }
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
 models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 \doi{10.1111/2041-210x.70347}
+
+Kohyama, T. S., Kohyama, T. I., & Sheil, D. (2018). Definition and
+estimation of vital rates from repeated censuses: choices, comparisons and
+bias corrections focusing on trees. \emph{Methods in Ecology and Evolution},
+9, 809-821. \doi{10.1111/2041-210X.12929}
 }
 \seealso{
-\link{recruitment} for the recruitment options and how to combine them
+\code{\link[=fit]{fit()}} to estimate the parameters, \code{\link[=simulateForest]{simulateForest()}}
+to simulate, \link{finn_data} for the input tables, \link{recruitment} for the
+recruitment options
 }

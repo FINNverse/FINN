@@ -1,125 +1,199 @@
-#' Forest Informed Neural Network
+#' Build a FINN forest model
 #'
 #' @description
-#' Creates a Forest Informed Neural Network (FINN), a differentiable, cohort-based
-#' dynamic forest (gap) model in the tradition of JABOWA/ForClim-style models, in
-#' which any of the four demographic processes (growth, mortality, regeneration,
-#' competition for light) can either be specified mechanistically or replaced by a
-#' deep neural network (DNN). Mechanistic and DNN-based processes are calibrated
-#' jointly, end-to-end, via gradient descent (see [FINN::fit]).
+#' Builds a FINN (Forest Informed Neural Network) model: a forest simulator that
+#' follows groups of similar trees (cohorts) on small patches of forest through
+#' time, year by year, and that can learn its parameters from forest inventory
+#' data. Each of the four demographic processes -- competition for light,
+#' growth, mortality and regeneration -- is either a classic, interpretable
+#' equation ([FINN::createProcess()]) or a neural network
+#' ([FINN::createHybrid()]). Whatever the mix, all processes are estimated
+#' together, in one go, by [FINN::fit()].
+#'
+#' `finn()` only assembles the model. Nothing is estimated yet: pass the result
+#' to [FINN::fit()] to estimate the parameters from your data, and to
+#' [FINN::simulateForest()] to simulate forest development.
 #'
 #' @details
-#' FINN represents the forest as cohorts of trees, grouped by site, patch and
-#' cohort, each characterized by diameter at breast height (dbh), number of trees,
-#' and species identity. Starting from an initial state, FINN simulates the forest
-#' forward in discrete annual time steps by sequentially applying the four
-#' demographic processes: competition (light availability, based on basal area
-#' and species-specific shading), growth (diameter increment as a function of
-#' light, size and environment), mortality (binomial death of trees as a function
-#' of growth, light, size and environment) and regeneration (recruitment of new
-#' cohorts as a function of light and environment, drawn from a negative binomial
-#' distribution). Each process additionally depends on a species- and
-#' process-specific environmental-response function that maps site-level
-#' environmental predictors to a scalar effect on the process.
+#' The defaults work for a first model: `finn(N_species = 11)` builds a model
+#' whose four processes are the package's own equations, with every column of
+#' the environment table as a predictor. Pass a process built with
+#' [FINN::createProcess()] to choose the predictors (its `formula`), to change
+#' the equation (its `func`), or to fix parameters; pass one built with
+#' [FINN::createHybrid()] to replace the whole process by a neural network.
 #'
-#' Every process and its environmental-response function can be configured in one
-#' of two ways: (1) mechanistically, with an explicit functional form and
-#' interpretable parameters (e.g. light-response thresholds, allometric
-#' coefficients), created via [FINN::createProcess]; or (2) as a hybrid process, in
-#' which the environmental-response function or the entire process equation is
-#' replaced by a DNN, created via [FINN::createHybrid]. The remaining mechanistic
-#' processes constrain the DNN to ecologically plausible behaviour, while the DNN
-#' absorbs misalignments and structural simplifications that would otherwise bias
-#' the mechanistic processes; both are estimated jointly rather than calibrated in
-#' isolation and plugged in afterwards. If a process argument is left at its
-#' default `NULL`, the corresponding default mechanistic process (as described in
-#' Pichler & Käber, 2026, Methods in Ecology and Evolution) is used.
+#' \if{html}{\figure{FINN-overview.jpg}{options: width="100\%" alt="One time step of FINN: the cohorts of a patch and the site's environment enter competition, growth, mortality and regeneration, which produce the cohorts of the next step and the simulated stand variables."}}
+#' \if{latex}{\figure{FINN-overview.jpg}{options: width=12cm}}
 #'
-#' `finn()` only assembles the model architecture (analogous to instantiating a
-#' `torch` `nn_module`); none of the process or environmental-response parameters
-#' are estimated yet. Use [FINN::fit] to calibrate the returned object against
-#' observed data, and [FINN::predict.finn_class]/[FINN::simulateForest] to
-#' simulate forest dynamics from a (fitted) model.
+#' **How FINN simulates a forest.** A site is a set of patches (small plots of
+#' `patch_size` ha). On each patch the trees are kept as cohorts, each with a
+#' species, a diameter at breast height (dbh, cm) and a number of trees. Every
+#' simulated time step, usually one year, runs the four processes in turn:
 #'
-#' @param N_species (`integer(1)`)\cr Number of species.
-#' @param mortality_process (`function`)\cr Mortality process, created by
-#'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
-#'   `NULL` (default), the default mechanistic mortality process is used.
-#' @param growth_process (`function`)\cr Growth process, created by
-#'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
-#'   `NULL` (default), the default mechanistic growth process is used.
-#' @param regeneration_process (`function`)\cr Regeneration process, created by
-#'   [FINN::createProcess] (mechanistic) or [FINN::createHybrid] (DNN-based). If
-#'   `NULL` (default), the default mechanistic regeneration process is used,
-#'   which since 0.2.0 is [FINN::regeneration_capped()] (recruitment with a
-#'   Beverton-Holt cap). The other mechanistic choices are
-#'   [FINN::regeneration()] (unbounded, the default before 0.2.0) and
-#'   [FINN::regeneration_adult()] (recruitment limited by the density of
-#'   conspecific adults); `regeneration_saturation()` is the older, deprecated
-#'   name of `regeneration_capped()`. See [recruitment] for how to combine the
-#'   recruitment options.
-#' @param competition_process (`function`)\cr Competition (light availability)
-#'   process, created by [FINN::createProcess]. If `NULL` (default), the default
-#'   mechanistic competition process is used.
-#' @param recruits_dbh (`numeric(1)`)\cr Starting dbh for recruits. Has value 1.0 as default.
+#' 1. *competition* works out how much light reaches each cohort from the
+#'    basal area of the taller trees on its patch ([FINN::competition()]);
+#' 2. *growth* increases each cohort's diameter, depending on its light, size,
+#'    species and the site's environment ([FINN::growth()]);
+#' 3. *mortality* removes a share of each cohort's trees, depending on its
+#'    growth, light, size, species and environment ([FINN::mortality()]);
+#' 4. *regeneration* adds new cohorts of small trees (`recruits_dbh`), depending
+#'    on light, species and environment ([FINN::regeneration_capped()]).
+#'
+#' Growth, mortality and regeneration each carry their own response to the
+#' environment: for every species, the columns of the environment table that
+#' the process' `formula` names are turned into one number that scales the
+#' process. By default that response is a simple linear (growth, regeneration)
+#' or logistic (mortality) function with one coefficient per predictor and
+#' species; `createProcess(hidden = )` turns it into a small neural network.
+#' The simulated stand variables (mean dbh, basal area, number of trees) and
+#' the simulated rates (growth, mortality, recruitment) of every site and year
+#' are what [FINN::fit()] compares with the observations.
+#'
+#' **The default processes** are, in 0.2.0, `createProcess(func = growth)`,
+#' `createProcess(func = mortality)`, `createProcess(func = regeneration_capped)`
+#' and `createProcess(func = competition)`: the equations of Pichler & Käber
+#' (2026), with one change -- recruitment is capped ([FINN::regeneration_capped()]
+#' is new in 0.2.0; [FINN::regeneration()] is the uncapped process of the paper).
+#' A process written in the signature as `createProcess(func = )` uses every
+#' column of the environment table (`formula = ~.`) and its default settings.
+#' Passing `NULL` for a process is still accepted and means the same default.
+#' The competition process cannot depend on the environment in this version.
+#'
+#' @param N_species (`integer(1)`)\cr Number of species in the data. Species are
+#'   coded `1, ..., N_species` in every table ([FINN::resolveSiteIDs()] does
+#'   the coding).
+#' @param mortality_process (`process`)\cr How trees die. Default
+#'   `createProcess(func = mortality)`, the mortality equation of
+#'   [FINN::mortality()] with a logistic response to every environment column.
+#'   Build your own with [FINN::createProcess()] or [FINN::createHybrid()].
+#' @param growth_process (`process`)\cr How trees grow in diameter. Default
+#'   `createProcess(func = growth)`, the growth equation of [FINN::growth()]
+#'   with a linear response to every environment column. Build your own with
+#'   [FINN::createProcess()] or [FINN::createHybrid()].
+#' @param regeneration_process (`process`)\cr How new trees appear. Default
+#'   `createProcess(func = regeneration_capped)`: the regeneration equation of
+#'   [FINN::regeneration_capped()], whose expected recruitment is capped
+#'   (new in 0.2.0). Alternatives: [FINN::regeneration()] (no cap, the equation
+#'   of the paper) and [FINN::regeneration_adult()] (recruitment limited by the
+#'   adults of the same species on the site). See [recruitment] for the
+#'   recruitment options and how they act together. Build your own with
+#'   [FINN::createProcess()] or [FINN::createHybrid()].
+#' @param competition_process (`process`)\cr How trees shade each other.
+#'   Default `createProcess(func = competition)`, the light model of
+#'   [FINN::competition()]. Only [FINN::createProcess()] is accepted here, and
+#'   competition cannot depend on the environment in this version.
+#' @param recruits_dbh (`numeric(1)`)\cr Diameter (cm) at which new trees enter
+#'   the simulation. Default `1`. Set it to the smallest diameter your
+#'   inventory records (12.9 cm for the bundled FIA data), so that simulated
+#'   recruits are the trees the inventory counts as recruits.
+#' @param growth_rate (`character(1)`)\cr What the `growth` column of the data
+#'   is, so that [FINN::fit()] compares it with the right simulated quantity.
+#'   `"annual"` (default): a rate per time step -- with annual steps the mean
+#'   annual relative growth rate over the observation interval (each year's
+#'   `dbh / dbh_before - 1`, averaged). FINN compares it with the mean of its
+#'   simulated per-step rates over the interval. `"period"`: the relative
+#'   diameter increment over the whole observation interval
+#'   (`dbh_end / dbh_start - 1`), which compounds the per-step rates; FINN then
+#'   compounds its simulated rates the same way. The two only differ when an
+#'   observation interval spans several time steps (`period_length` in the
+#'   data). If unsure, keep the default: with annual time steps it is the
+#'   annual growth rate. [FINN::makeObsData()] returns the increment between
+#'   two censuses, which is the per-step rate when one step is one census
+#'   interval (as in the bundled FIA data); with annual steps and an interval
+#'   of several years, annualise it or choose `"period"`. The terms follow
+#'   Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from the
+#'   change over a census interval.
+#' @param recruit_obs_weight (`numeric(1)`)\cr Only for inventories that do not
+#'   count recruits per hectare (angle-count sampling, small-tree subplots):
+#'   the factor that turns a recruitment density into the counts such a design
+#'   tallies. Default `1`, which leaves per-hectare data as they are. See
+#'   [recruitment].
+#' @param ... Arguments of earlier versions, still accepted with a warning:
+#'   `reg_floor` (now `createProcess(reg_floor = )` of the regeneration process)
+#'   and `growth_period_scale` (`TRUE` is now `growth_rate = "period"`).
 #'
 #' @references
 #' Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
-#' @seealso [recruitment] for the recruitment options and how to combine them
+#' Kohyama, T. S., Kohyama, T. I., & Sheil, D. (2018). Definition and
+#' estimation of vital rates from repeated censuses: choices, comparisons and
+#' bias corrections focusing on trees. \emph{Methods in Ecology and Evolution},
+#' 9, 809-821. \doi{10.1111/2041-210X.12929}
 #'
-#' @return An object of class `finn_class` (a [torch::nn_module]): an assembled
-#'   but un-fitted FINN model, ready to pass to [fit()] or [simulateForest()].
+#' @seealso [FINN::fit()] to estimate the parameters, [FINN::simulateForest()]
+#'   to simulate, [finn_data] for the input tables, [recruitment] for the
+#'   recruitment options
+#'
+#' @return An object of class `finn_class` (a [torch::nn_module]): the
+#'   assembled, not yet fitted model, ready for [fit()] or [simulateForest()].
 #'
 #' @export
-#' @param reg_floor (`numeric(1)`)\cr Additive floor on the expected recruitment of
-#'   every species in every patch, in stems ha^-1 per time step, used by
-#'   [regeneration()], [regeneration_capped()] and [regeneration_adult()]:
-#'   `mean = regP * exp(env) + reg_floor`. It keeps the negative-binomial
-#'   likelihood finite where the light gate closes. Default `1e-3`. Earlier versions
-#'   hard-coded `0.2`, which with many species adds a large climate-independent
-#'   recruitment (65 species x 0.2 = 13 stems ha^-1 yr^-1); models saved before this
-#'   argument existed keep that value when reloaded.
-#' @param recruit_obs_weight (`numeric(1)`)\cr Observation-operator inclusion
-#'   weight applied to both predicted and observed regeneration before the loss
-#'   (maps a per-hectare recruitment DENSITY into a sampling design's tallied-count
-#'   space, e.g. `g(recruit_dbh)/BAF` for an angle-count inventory). `1.0` (default)
-#'   is the per-hectare behaviour. It is not a weight of the regeneration term in
-#'   the objective. For a fixed-radius small-tree plot that counts stems in a
-#'   diameter band below the recruitment threshold, `w` = plot area (ha) x
-#'   residence time in the band (years) / observation period (years), so one
-#'   tallied stem stands for `1 / w` recruits per ha over the period. In 0.2.0 it
-#'   is applied only under `fit(loss_family = c(regeneration = "nbinom"))`, the
-#'   default; under `"poisson"`, `"mse"` or `"gaussian"` the per-hectare values are
-#'   scored and the weight has no effect (FINNverse/FINN#65). See [recruitment].
-#' @param growth_period_scale (`logical(1)`)\cr If `TRUE`, growth is scored against
-#'   the COMPOUNDED period increment (`prod(1+g)-1`) rather than the mean of the
-#'   per-year rates, so a de-annualised period target aligns without collapsing
-#'   growth's variance. Default `FALSE` (mean of annual rates).
 #' @examplesIf torch::torch_is_installed()
-#' # the three demographic processes, each with a linear temperature and
-#' # precipitation response; ?createProcess for the hybrid and network variants
-#' Nsp <- max(fia_obs_dt$species)
-#' m <- finn(
-#'   N_species            = Nsp, recruits_dbh = 12.9,
-#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
-#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' library(data.table)
+#' # The whole workflow on three Oregon FIA sites: build, estimate, simulate.
+#' # A real calibration uses all sites and hundreds of epochs.
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#'
+#' # 1. build the model: growth, mortality and regeneration respond to annual
+#' #    temperature and precipitation; competition has no environment
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 #' m
+#'
+#' # 2. estimate the parameters from the inventory: the observed stand
+#' #    variables and rates (data), the climate of every year (env) and the
+#' #    trees at the first census (init_cohort)
+#' init <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#' tail(m$history, 1)   # the loss of every response in the last epoch
+#'
+#' # 3. simulate the three sites over the years of `env` with the fitted model
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites],
+#'                       init_cohort = init, patches = 4, patch_size = 0.06)
+#' head(sim$long$site)
+#'
+#' # the same model with the defaults spelled out: every process uses every
+#' # column of `env` as a predictor
+#' m2 <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'            growth_process       = createProcess(func = growth),
+#'            mortality_process    = createProcess(func = mortality),
+#'            regeneration_process = createProcess(func = regeneration_capped),
+#'            competition_process  = createProcess(func = competition))
 finn = function(N_species,
-                mortality_process = NULL,
-                growth_process = NULL,
-                regeneration_process = NULL,
-                competition_process = NULL,
+                mortality_process = createProcess(func = mortality),
+                growth_process = createProcess(func = growth),
+                regeneration_process = createProcess(func = regeneration_capped),
+                competition_process = createProcess(func = competition),
                 recruits_dbh = 1.0,
+                growth_rate = c("annual", "period"),
                 recruit_obs_weight = 1.0,
-                growth_period_scale = FALSE,
-                reg_floor = 1e-3) {
-  if(!(is.numeric(reg_floor) && length(reg_floor) %in% c(1L, N_species) &&
-       all(is.finite(reg_floor)) && all(reg_floor >= 0)))
-    stop("`reg_floor` must be non-negative finite numbers, of length 1 or `N_species`.", call. = FALSE)
+                ...) {
+  dots = list(...)
+  known = c("reg_floor", "growth_period_scale")
+  unknown = setdiff(names(dots), known)
+  if (length(dots) && (is.null(names(dots)) || any(names(dots) == "") || length(unknown)))
+    stop(sprintf("unused argument(s) in finn(): %s.",
+                 paste(if (length(unknown)) unknown else "(unnamed)", collapse = ", ")), call. = FALSE)
+  if (!is.null(dots$growth_period_scale)) {
+    warning("`growth_period_scale` is deprecated; use `growth_rate = \"period\"` (TRUE) or \"annual\" (FALSE).", call. = FALSE)
+    if (!missing(growth_rate))
+      stop("give either `growth_rate` or the deprecated `growth_period_scale`, not both.", call. = FALSE)
+    growth_rate = if (isTRUE(dots$growth_period_scale)) "period" else "annual"
+  }
+  growth_rate = match.arg(growth_rate)
+  reg_floor = NULL
+  if (!is.null(dots$reg_floor)) {
+    warning("`finn(reg_floor = )` is deprecated; set it on the regeneration process: createProcess(reg_floor = ). The value given here overrides the process' value.", call. = FALSE)
+    reg_floor = check_reg_floor(dots$reg_floor, N_species)
+  }
   finn_class(N_species = N_species,
              mortality_process = mortality_process,
              growth_process = growth_process,
@@ -127,264 +201,66 @@ finn = function(N_species,
              competition_process = competition_process,
              recruits_dbh = recruits_dbh,
              recruit_obs_weight = recruit_obs_weight,
-             growth_period_scale = growth_period_scale,
+             growth_period_scale = identical(growth_rate, "period"),
              reg_floor = reg_floor)
 }
 
 
-#' Fit FINN
+#' Estimate the parameters of a FINN model
 #'
 #' @description
-#' Fit (calibrate) a FINN model end-to-end by gradient-descent optimization. All
-#' mechanistic process parameters, environmental-response coefficients and, if
-#' present, the weights of any hybrid (DNN-based) processes are estimated jointly
-#' in a single optimization, rather than calibrating each process in isolation.
+#' Estimates the parameters of a model built with [FINN::finn()] from forest
+#' inventory data. The model simulates every site from its initial trees
+#' through the years of `env`, the simulation is compared with the observed
+#' stand variables and demographic rates in `data`, and the parameters of all
+#' processes -- the species parameters of the mechanistic equations, their
+#' responses to the environment, and the weights of any neural-network process
+#' -- are adjusted together, in one joint optimization, until the simulation
+#' matches the observations as well as it can. The processes are never
+#' calibrated one at a time: this joint calibration is what makes the estimated
+#' processes consistent with each other.
+#'
+#' The defaults are robust in most cases. A first call needs `data`, `env`,
+#' `init_cohort`, `patch_size` and `epochs`; everything else can stay as it
+#' is. [finn_data] explains the input tables, [finn_loss] how the simulation is
+#' compared with the observations.
 #'
 #' @details
-#' Calibration relies on the fact that FINN is implemented in `torch` for R and is
-#' therefore fully differentiable: at each simulated time step the predicted stand
-#' variables and demographic rates are compared to the observed data through a
-#' joint loss function, and gradients of this loss with respect to every model
-#' parameter are obtained via automatic differentiation (backpropagation) and used
-#' to update the parameters with a `torch` optimizer (Adam, [torch::optim_ignite_adam],
-#' by default).
+#' **What happens in a fit.** Every epoch, `fit()` takes the sites in batches
+#' of `batchsize`, simulates each batch over the years of `env` starting from
+#' `init_cohort`, and at every year that has observations compares the
+#' simulated mean dbh, basal area, number of trees, growth, mortality and
+#' recruitment with the observed ones, response by response, through the
+#' likelihoods in `loss_family`. The six comparisons are added up into one
+#' number, the loss, and every parameter is moved a small step (`lr`) in the
+#' direction that lowers it. FINN is written in `torch`, so these directions
+#' (gradients) come from automatic differentiation; no knowledge of `torch` is
+#' needed. After `epochs` passes over the data the model holds the estimated
+#' parameters; `fit()` changes the model in place and also returns it. The
+#' per-response losses of every epoch are in `model$history`.
 #'
-#' The joint loss is the sum of per-variable losses (akin to negative
-#' log-likelihoods), one for each of `dbh`, `ba` (basal area), `trees` (number of
-#' trees), `growth`, `mortality` and `regeneration`. Following Pichler & Käber
-#' (2026), reasonable choices are mean squared error (`"mse"`, equivalent to a
-#' Gaussian likelihood) for `dbh` and `ba`, Poisson likelihood for `trees`,
-#' negative binomial (`"nbinom"`) for `regeneration`, and `"mse"` for `growth` as
-#' a continuous rate. Both rate responses are per YEAR: over a `period_length`
-#' window they are compared against the model's mean over that window, so an
-#' inventory interval has to be annualised before it becomes a target. `mortality`
-#' is an observed annual *proportion* of trees that died
-#' and the model predicts it through a sigmoid, so it defaults to `"binomial"` —
-#' a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
-#' targets). This respects the \[0, 1\] support and the mean-variance link of a
-#' proportion, both of which `"mse"` ignores (the model also supports
-#' `"gaussian"` and `"poisson"` as alternatives via the `loss` argument; see
-#' Appendix B of the paper for details). Each loss can be weighted individually via `weights`, and
-#' missing values in the observed data are masked out of the corresponding loss
-#' term. The model is trained for `epochs` iterations over the (optionally
-#' batched and shuffled) data using `optimizer` with learning rate `lr`.
+#' **Reading the progress.** With the default `loss_weights = "auto"` every
+#' response's loss is reported as a fraction of the loss a constant prediction
+#' (the mean of the observations) would get: `1` means no better than the
+#' mean, below `1` better. The plot drawn with `plot_progress = TRUE` and
+#' `model$history` show these fractions per epoch. A fit has converged when
+#' the parameters stop moving (`model$param_history`), not merely when the
+#' losses look flat; see the vignette *Fitting FINN to FIA data*.
 #'
-#' Backpropagating gradients through a long simulated time series is prone to
-#' vanishing gradients and is computationally expensive. FINN therefore uses
-#' truncated backpropagation through time: the computational graph is detached
-#' every `update_step` simulated years, gradients are accumulated and the
-#' parameters are updated, before the simulation continues. Smaller `update_step`
-#' values are faster and avoid vanishing gradients but provide a more short-sighted
-#' learning signal; larger values let the loss integrate over a longer trajectory
-#' at increased computational cost. `start_time` allows discarding an initial
-#' burn-in period of the simulation from the loss, and `checkpoints`/`folder`
-#' allow periodically saving the model state during training.
+#' **Long simulated series.** Taking the gradient through a long simulation is
+#' slow and the signal fades. `fit()` therefore cuts the gradient every
+#' `update_step` years and updates the parameters at every cut; the simulated
+#' state itself runs on uncut. The default of one year is the fastest and the
+#' most short-sighted; larger values let a loss see further back at a higher
+#' cost.
 #'
-#' @param model (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
-#' @param data (`data.table|data.frame`)\cr Data about demographic rates and stand
-#'   variables must be passed as `data.table` or `data.frame`.
+#' **Advanced estimators.** `reanchor` restarts the simulated stand from the
+#' observed trees at every census (multiple shooting), `teacher_forcing`
+#' evaluates the rates on the observed stands and never simulates a
+#' trajectory, and `loss_resolution`/`loss_aggregation = "tree"` score single
+#' trees. They are for specific questions; the default single-shooting fit is
+#' what the vignettes use.
 #'
-#'   Optional columns that change how the responses are scored:
-#'   \itemize{
-#'     \item `period_length` — how many simulated timesteps each observation's
-#'       inventory interval spans. The rate responses (`growth`, `mortality`) are
-#'       then compared against the model's **mean** over that interval, and
-#'       `regeneration` against its **sum** (recruits accumulate). It may differ
-#'       between sites (see the per-site path below). Absent or `NA` means each
-#'       observation is compared against a single timestep, except on the
-#'       per-site path forced by `loss_aggregation = "tree"` or
-#'       `model$period_mode = "per_site"`: there every window is read from this
-#'       column, and `fit()` stops if it has no finite value.
-#'     \item `n_at_risk` — trees behind each observed `mortality` proportion; used
-#'       to weight the binomial term (see `weights`).
-#'     \item `growth_n` — trees behind each observed `growth` mean; used to weight
-#'       the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
-#'   }
-#'
-#'   On the per-site path (`period_length` differing between sites, or sites
-#'   observed in different years) each response's loss of a batch is ONE mean
-#'   over all units it scores in that batch — observed trees for
-#'   `loss_aggregation = "tree"`, `n_at_risk` / `growth_n` for the weighted
-#'   cell terms, cells otherwise — across all observation years: the mean of
-#'   each observation year enters with weight \eqn{n_{year} / n_{batch}}. A
-#'   batch that scores a single observation year is unaffected.
-#' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
-#' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
-#' @param patches (`integer(1)`)\cr Number of patches.
-#' @param patch_size (`numeric(1)`)\cr Patch size.
-#' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat]
-#' @param epochs (`integer(1)`)\cr Number of iteration steps. `epochs = 0`
-#'   runs the set-up only (data tensors, `loss_baseline`, `loss_weights` for
-#'   `weights = "auto"`) and trains nothing; the parameters stay as they were.
-#' @param lr (`numeric(1)`)\cr Learning rate of the optimizer.
-#' @param lr_scheduler (`character(1)|function`)\cr Learning-rate schedule applied
-#'   on top of the constant `lr` above. `"none"` (default) keeps `lr` constant,
-#'   reproducing the previous behavior exactly. Built-ins: `"step"` (decay by
-#'   `gamma` every `step_size` epochs), `"exponential"` (multiply by `gamma` every
-#'   epoch), `"cosine"` (cosine-anneal to `eta_min` over `T_max` epochs),
-#'   `"plateau"` (reduce by `factor` after `patience` epochs without improvement
-#'   in the total loss). Advanced: pass a `function(optimizer)` returning a
-#'   `torch` lr scheduler object (must implement `$step()`).
-#' @param lr_scheduler_params (`list()`)\cr Tuning overrides for the scheduler
-#'   chosen via `lr_scheduler`, e.g. `list(step_size = 50, gamma = 0.5)` for
-#'   `"step"`, `list(T_max = 200)` for `"cosine"`, `list(factor = 0.5, patience =
-#'   20)` for `"plateau"`. Unset entries fall back to defaults scaled off
-#'   `epochs`/`lr`.
-#' @param loss (deprecated)\cr Former name of `loss_family`. Still accepted, with
-#'   a warning; it will be removed in a future release.
-#' @param loss_family (`character(6)`)\cr Named vector giving the **likelihood**
-#'   used for each response. Names should be `dbh`, `ba`, `trees`, `growth`,
-#'   `mortality`, and `regeneration`. Supported families are `mse`, `poisson`,
-#'   `nbinom`, `gaussian`, `binomial`, and `none`.
-#'
-#'   `binomial` is a Bernoulli/binomial negative log-likelihood intended for
-#'   `mortality`; it expects both the prediction and the observation to be
-#'   proportions in \[0, 1\]. `nbinom` is implemented for `trees` and
-#'   `regeneration` only. `none` switches a response off entirely — it
-#'   contributes a constant zero and no gradient. Use it to retire a response
-#'   whose information now enters through another term, for example setting
-#'   `dbh = "none"` and `ba = "none"` when the size distribution is fitted
-#'   through size-classed stem counts (see `loss_aggregation`).
-#'
-#'   For `regeneration`, `"nbinom"` (the default) uses the recruit dispersion
-#'   `theta` of the regeneration process and applies
-#'   `finn(recruit_obs_weight = )`; `"poisson"` has no dispersion parameter, so
-#'   it cannot collapse, but in 0.2.0 it ignores `recruit_obs_weight` and scores
-#'   per-hectare values (FINNverse/FINN#65), with `trees_offset` added to the
-#'   prediction. See [recruitment].
-#' @param loss_aggregation (`character`|`list`)\cr How the model's per-cohort
-#'   quantities are reduced before they meet the observation, given per response
-#'   as a named character vector or, when a type needs arguments, a named list.
-#'   Anything not named keeps the default, so the argument only ever states what
-#'   departs from it. Supported types:
-#'   \itemize{
-#'     \item `"mean"` — one value per site, year and species, the abundance-weighted
-#'       mean over cohorts. The default for `dbh`, `growth` and `mortality`.
-#'     \item `"sum"` — summed over cohorts. The default for `ba`, `trees` and
-#'       `regeneration`.
-#'     \item `"size_classes"` — stem counts binned by diameter, requiring
-#'       `breaks` (the class boundaries in cm) and optionally `tau` (the
-#'       softness of the bin edges in cm, default 1). `K` breaks give `K + 1`
-#'       classes, and the observation is read from columns `n_class_1` …
-#'       `n_class_K+1` of `data`. Only meaningful for `trees`.
-#'
-#'       This is the size-distribution counterpart of the mean diameter: with a
-#'       `poisson` family it scores total abundance and size composition at
-#'       once, since independent Poisson class counts factorise into
-#'       `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
-#'       difference of sigmoids rather than a hard cut so the term stays
-#'       differentiable with respect to diameter; `tau` controls that softness
-#'       and small values approach hard binning.
-#'     \item `"quantiles"` — the abundance-weighted diameter quantiles of each
-#'       site and species instead of their mean, requiring `probs` (e.g.
-#'       `c(0.1, 0.5, 0.9)`) and optionally `tau` (the softness of the quantile
-#'       on the cumulative-abundance scale, default 0.05). The observation is
-#'       read from columns `dbh_q10`, `dbh_q50`, `dbh_q90` of `data`
-#'       (`<response>_q<100*p>`). Only meaningful for `dbh`.
-#'
-#'       Where `"size_classes"` asks how many stems fall in a diameter
-#'       interval, this asks how thick the stem at a given position of the
-#'       distribution is, which keeps the statement on the diameter scale: the
-#'       upper quantile speaks directly about the big trees that carry the
-#'       basal area, where a count likelihood weighs them the same as saplings.
-#'       The quantile is a soft selection along the cumulative abundance, so it
-#'       stays differentiable with respect to diameter; `tau` controls that
-#'       softness and small values approach the exact weighted quantile.
-#'     \item `"tree"` — no aggregation: the growth and mortality kernels are
-#'       evaluated on the **observed** trees at their observed diameters, with
-#'       light computed from the observed stand, and compared tree by tree. Only
-#'       available for `growth` and `mortality`, and requires `tree_data`. This
-#'       removes the compositional confound in a stand mean (relative growth
-#'       falls several-fold from the smallest to the largest trees, so a mean
-#'       moves when the size distribution moves), at the cost of teacher-forcing
-#'       those two responses onto observed stands rather than simulated ones.
-#'   }
-#'
-#'   Example — score the size distribution through stem counts and the two rates
-#'   per tree:
-#'
-#'   ```r
-#'   fit(m, data = obs_dt, env = env, tree_data = tree_obs_dt,
-#'       loss_family      = c(dbh = "none", ba = "none", trees = "poisson",
-#'                            growth = "mse", mortality = "binomial",
-#'                            regeneration = "nbinom"),
-#'       loss_aggregation = list(trees  = list(type = "size_classes",
-#'                                            breaks = seq(20, 60, by = 10)),
-#'                               growth = "tree", mortality = "tree"))
-#'   ```
-#' @param tree_data (`data.table|data.frame`)\cr Individual observed trees, one
-#'   row per tree and census, required by both ways of scoring single trees
-#'   (`loss_aggregation = "tree"` and `loss_resolution = "tree"`, see the section
-#'   *Scoring individual trees*). `year` is the census that CLOSES the tree's
-#'   interval, i.e. the `year` the same interval carries in `data`. Columns:
-#'   \itemize{
-#'     \item always: `siteID`, `year`, `patchID`, `species`, `growth` (the
-#'       observed relative growth rate per timestep, `NA` if unobserved) and
-#'       `died` (0/1 over the interval, `NA` if unobserved);
-#'     \item `loss_aggregation = "tree"`: additionally `dbh` (diameter at the
-#'       START of the interval, cm), and optionally `trees` (stems the row
-#'       stands for, default 1). The observed stand is rebuilt from these rows,
-#'       so any `patchID` coding works.
-#'     \item `loss_resolution = "tree"`: additionally `cohortID`, the id
-#'       [makeInitCohorts()] / [obsDF2arrays()] assigned per (`siteID`,
-#'       `patchID`) to the cohort the tree started as — its position along the
-#'       cohort dimension of `init_cohort` (`makeInitCohorts(treeID_table =
-#'       TRUE)` returns the table that carries it), or of the anchor at the
-#'       previous census under `reanchor`/`teacher_forcing`. `patchID` must be
-#'       the patch index of that layout. `species` (and `dbh`, if present) are
-#'       checked against the cohort, and a row that names a missing or already
-#'       used cohort, a site or year that is not scored, or a tree that does not
-#'       match its cohort stops the fit: the targets are keyed by position, so a
-#'       misaligned table would silently score every tree against another one.
-#'   }
-#' @details
-#' `growth` is compared as a **relative** rate (`dbh/dbh_before - 1`), which is
-#' the model's native parameter (`dbh_new = dbh * (1 + g)`). Training against the
-#' absolute diameter increment (`dbh * g`) instead was tested over three seeds and
-#' was worse on every one — even when scored on the absolute scale — and about
-#' four times more seed-variable, because it couples the growth parameter to
-#' whichever trees happen to be present.
-#'
-#' @param weights (`"auto"` or `numeric(6)`)\cr Weights of the six losses, in the
-#'   order `dbh`, `ba`, `trees`, `growth`, `mortality`, `regeneration`.
-#'
-#'   The six terms are summed, and their raw magnitudes differ by orders of
-#'   magnitude: on the bundled FIA data `dbh` is an MSE in cm^2 (~430 at the
-#'   start of training) while `growth` is an MSE on a ratio (~0.03), a factor of
-#'   ~1e4. On the raw scale, equal weights give `dbh` ~87% of the FIA objective
-#'   and `growth` ~1%, and `growth` then never improves.
-#'
-#'   `"auto"` (the default) fixes this without needing to know the units. Each
-#'   loss is divided by its **intercept-only baseline** — the loss you would get
-#'   by predicting the single best constant (the null model). Every term then
-#'   measures the same thing on the same scale: the fraction of its own null
-#'   deviance. For a squared-error term the baseline is exactly \eqn{var(y)}, so
-#'   this reduces to scaling by \eqn{1/sd(y)^2}; but it generalises to the
-#'   Poisson, negative-binomial and binomial terms, where a standard deviation is
-#'   not the right scale. It is the same idea as `env_autoscale = TRUE`, applied
-#'   to the responses rather than the predictors.
-#'
-#'   A useful side effect: the per-response values in `m$history` become directly
-#'   interpretable as **"how much better than the mean"** — `1` is no better than
-#'   the intercept, below `1` is better, above `1` is worse. The baselines are
-#'   stored in `m$loss_baseline`, the resulting weights in `m$loss_weights`, and
-#'   both are reported once when fitting starts.
-#'
-#'   A `numeric(6)` multiplies the baseline-scaled losses (since 0.2.0), so each
-#'   number reads directly as that response's relative share: `c(1, 1, 1, 2, 1, 1)`
-#'   gives `growth` twice the weight of every other response. Every fit reports
-#'   each response's resulting share of the objective at the intercept-only
-#'   baseline. On the FIA example, balancing the objective is worth ~+0.24
-#'   Spearman on held-out `growth`, far more than tuning `lr` or `epochs`. See
-#'   the "Fitting FINN to forest inventory data" vignette.
-#' @param weight_scale (`character(1)`)\cr How a numeric `weights` vector acts.
-#'   `"auto"` (default): it multiplies the baseline-scaled losses, as described
-#'   under `weights`. `"raw"`: it multiplies the raw losses and the baseline
-#'   scaling is off, which is the meaning `weights` had before 0.2.0 and
-#'   reproduces analyses fitted with earlier versions. The shares are reported
-#'   in both modes.
-#' @param optimizer (`torch_optimizer_generator`)\cr Optimizer from the `torch` package.
-#' @param batchsize (`integer(1)`)\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.
 #' @section What makes a fit faster, and what does not:
 #' A FINN fit is bound by the *number of tensor operations it dispatches*, not by the
 #' arithmetic in them: a simulated year issues thousands of small kernels, and a tiny
@@ -398,8 +274,8 @@ finn = function(N_species,
 #' * **Intra-op threads do not help and eventually cost.** On a 64-core machine,
 #'   1/2/4/8/16 threads gave 4.59/4.77/4.68/4.73/**6.06** s/epoch on a comparable
 #'   problem; on an 8-core laptop one thread was fastest by 30 %. The knee moves with
-#'   the core count, the direction does not. `torch::torch_set_num_threads(1)` is the
-#'   considerate setting on a shared machine and costs nothing.
+#'   the core count, the direction does not. `fit(threads = 1)` is the considerate
+#'   setting on a shared machine and costs nothing.
 #' * **Concurrency is what pays.** Seven fits side by side cost 13-33 % per epoch each
 #'   and roughly doubled total throughput, because the machine was never short of cores.
 #'   Run several fits at once rather than giving one fit more of the machine.
@@ -408,25 +284,113 @@ finn = function(N_species,
 #' `$param_history` and stop when the parameters settle, rather than fixing a large
 #' `epochs` in advance.
 #'
-#' @section Lower bound on simulated mortality:
-#' The simulation clamps the per-cohort mortality probability to `[0.01, 0.99]`
-#' before the death draw (`mortality_draw`), so **however low the fitted mortality
-#' is, at least 1 % of a cohort is at risk per model step**. The bound is per
-#' *step*, not per year, so its annual equivalent is roughly `0.01 / dt`: 1 %/yr on
-#' annual data, 0.2 %/yr on five-year steps, 0.1 %/yr on decadal ones. It exists
-#' because `binomial_from_gamma()`'s shape parameter `n*p/(1-p)` degenerates as
-#' `p -> 0`, and it is the reason a simulated low-mortality stand -- a mature
-#' unthinned stand, a slow-growing species, an equilibrium run -- loses stems the
-#' observations do not. The per-tree mortality loss is **not** affected; it clamps
-#' at `1e-6`. So a fit can be correct while the trajectory it simulates is not.
+#' @section Bounds on simulated mortality:
+#' Before the death draw, the simulation clamps the per-cohort mortality
+#' probability of every step to the interval
+#' `createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)` of the
+#' mortality process, so at least 0.1 % and at most 99.9 % of a cohort is at
+#' risk per simulated step however extreme the fitted rate. The bound is per
+#' *step*, not per year: on five-year steps the floor is 0.02 %/yr, on decadal
+#' ones 0.01 %/yr. Until 0.2.0 the interval was hard-coded to `[0.01, 0.99]`,
+#' which made simulated low-mortality stands lose stems the observations did
+#' not. The per-tree mortality loss is not affected by either bound; it clamps
+#' at `1e-6`. See [FINN::createProcess()].
 #'
-#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
-#'   synonym for `"gpu"`. Only NVIDIA cards are supported. A card does not always
-#'   pay: the per-tree route (`loss_resolution = "tree"`, `loss_aggregation = "tree"`)
-#'   issues thousands of small kernels per simulated year and is bound by dispatch
-#'   rather than arithmetic, so it can run at the same speed on either device with
-#'   the card almost idle. Measure one configuration before committing a long fit to
-#'   a GPU.
+#' @param model (`finn_class`)\cr The model built by [FINN::finn()].
+#' @param data (`data.frame`)\cr The observations: one row per site, census year
+#'   and species, with the columns `siteID`, `year`, `species`, `dbh`, `ba`,
+#'   `trees`, `growth`, `mort` and `reg`; optionally `period_length`,
+#'   `n_at_risk` and `growth_n`. `NA` marks a response that was not observed
+#'   and is left out of the comparison. [FINN::makeObsData()] and
+#'   [FINN::resolveSiteIDs()] build this table from a tree list. The columns,
+#'   their units, missing values and incomplete series are explained in
+#'   [finn_data], with the bundled [fia_obs_dt] as the example.
+#' @param env (`data.frame`)\cr The environment of every site and simulated
+#'   year: one row per `siteID` and `year`, plus one column per predictor (for
+#'   the bundled FIA data `temp` and `prec`, annual mean temperature and
+#'   precipitation; see [fia_env_dt]). The rows are the simulated time steps,
+#'   so `env` must cover every year from the first step to the last
+#'   observation; the predictors are in natural units and standardised
+#'   internally (`env_autoscale`). See [finn_data].
+#' @param disturbance (`data.frame` or `NULL`)\cr Optional disturbances: one
+#'   row per `siteID` and `year` with the column `intensity`, the probability
+#'   (0 to 1) that a patch of that site loses all its trees in that year. Must
+#'   have the same sites and years as `env`. `NULL` (default): no disturbance.
+#'   See [finn_data].
+#' @param patches (`integer(1)`)\cr Number of patches per site when the fit
+#'   starts from bare ground (`init_cohort = NULL`). Ignored, with a warning
+#'   when it differs, as soon as `init_cohort` is given: the patch count then
+#'   comes from the initial cohorts.
+#' @param patch_size (`numeric(1)`)\cr Area of one patch in ha. Default `0.1`.
+#'   Use the plot size of the inventory (the bundled FIA data: `0.06`). A
+#'   model that was fitted or simulated with another patch size before gives a
+#'   warning.
+#' @param init_cohort (`CohortMat`)\cr The trees of every site at the first
+#'   census, from [FINN::makeInitCohorts()]. `NULL` (default) starts every
+#'   site from bare ground with `patches` empty patches. See [finn_data].
+#' @param epochs (`integer(1)`)\cr Number of passes over the data. Default
+#'   `20`; a real calibration takes hundreds, until the parameters stop moving.
+#'   `epochs = 0` runs the set-up only (data tensors, `loss_baseline`,
+#'   `loss_weights`) and trains nothing.
+#' @param lr (`numeric(1)`)\cr Learning rate, the size of a parameter step.
+#'   Default `0.01`. Lower it when the losses oscillate; see also
+#'   [finnControl()] for a learning-rate schedule.
+#' @param batchsize (`integer(1)`)\cr Number of sites simulated between two
+#'   parameter updates. `NULL` (default) takes all sites at once. Smaller
+#'   batches use less memory and update more often per epoch.
+#' @param loss_family (named `character`)\cr The likelihood each response is
+#'   compared with: `dbh` and `ba` by squared error (`"mse"`), `trees` by a
+#'   Poisson, `growth` by squared error, `mortality` by a binomial, recruitment
+#'   (`regeneration`) by a negative binomial. The defaults are robust in most
+#'   cases; name only what departs from them, e.g. `c(trees = "nbinom")`, or
+#'   `"none"` to leave a response out. See [finn_loss].
+#' @param loss_aggregation (named `character` or `list`)\cr How the simulated
+#'   cohorts are summarised before they meet an observation: the default is
+#'   the mean over cohorts for `dbh`, `growth` and `mortality` and the sum for
+#'   `ba`, `trees` and `regeneration`, which matches the tables
+#'   [FINN::makeObsData()] builds. The alternatives (`"size_classes"`,
+#'   `"quantiles"`, `"tree"`) are described in [finn_loss].
+#' @param loss_resolution (`character(1)`)\cr Whether `growth` and `mortality`
+#'   are scored per site, year and species (`"site"`, default) or per
+#'   individual simulated tree (`"tree"`, which needs `tree_data` with a
+#'   `cohortID` column). See [finn_loss].
+#' @param loss_weights (`"auto"` or `numeric(6)`)\cr The weight of each
+#'   response in the sum of the six losses, in the order `dbh`, `ba`, `trees`,
+#'   `growth`, `mortality`, `regeneration`. `"auto"` (default) makes the six
+#'   comparable by dividing each by its intercept-only baseline, so no response
+#'   drowns the others; a numeric vector then multiplies these balanced terms
+#'   (`c(1, 1, 1, 2, 1, 1)` gives `growth` twice the weight). Before 0.2.0 the
+#'   argument was called `weights`, which is still accepted with a warning.
+#'   See [finn_loss].
+#' @param weight_scale (`logical(1)` or `character(1)`)\cr Whether a numeric
+#'   `loss_weights` vector applies to the baseline-balanced losses (`TRUE` or
+#'   `"auto"`, default) or to the raw, unbalanced losses (`FALSE` or `"raw"`,
+#'   the meaning of `weights` before 0.2.0). See [finn_loss].
+#' @param loss_recruit (`character(1)`)\cr Where the recruits of the simulated
+#'   stand come from during the fit. `"simulated"` (default): from the
+#'   regeneration process, which is estimated with the rest. `"observed"`: the
+#'   observed recruitment (`reg` in `data`) is fed into the simulation, the
+#'   regeneration process is frozen and left out of the loss, and growth and
+#'   mortality are estimated on a stand that recruits what was observed -- the
+#'   first stage of a staged calibration, see [recruitment]. Before 0.2.0 the
+#'   argument was called `recruits`, which is still accepted with a warning.
+#'   See [finn_loss].
+#' @param tree_data (`data.frame` or `NULL`)\cr Individual observed trees, one
+#'   row per tree and census, only needed to score growth or mortality per
+#'   tree (`loss_aggregation = "tree"` or `loss_resolution = "tree"`). Unlike
+#'   `data`, which holds one row per site, year and species, it holds the
+#'   trees themselves. Columns and the two per-tree routes: [finn_loss] and
+#'   [finn_data].
+#' @param control (`finnControl`)\cr Settings of the optimizer: the optimizer
+#'   itself, a learning-rate schedule and its parameters, gradient clipping.
+#'   The defaults of [finnControl()] are robust in most cases.
+#' @param device (`character(1)`)\cr `"cpu"` (default) or `"gpu"`; `"cuda"` is
+#'   accepted as a synonym for `"gpu"`. Only NVIDIA cards are supported. A card
+#'   does not always pay: the per-tree route (`loss_resolution = "tree"`,
+#'   `loss_aggregation = "tree"`) issues thousands of small kernels per
+#'   simulated year and is bound by dispatch rather than arithmetic, so it can
+#'   run at the same speed on either device with the card almost idle. Measure
+#'   one configuration before committing a long fit to a GPU.
 #' @param threads (`integer(1)` or `NULL`)\cr torch's intra-op thread count
 #'   during the fit. `NULL` (the default) leaves torch's setting alone, including
 #'   one made through `OMP_NUM_THREADS` or [torch::torch_set_num_threads()].
@@ -441,17 +405,37 @@ finn = function(N_species,
 #'   builds, e.g. Linux). torch's native backend (macOS) accepts one change per
 #'   session, so there the session keeps the count `fit()` set, and a count fixed
 #'   earlier in the session cannot be changed (`fit()` then says so).
-#' @param update_step (`integer(1)`)\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.
-#' @param start_time (`integer(1)`)\cr Starting from which year should the model be fitted. Can be used to use on burn-in.
-#' @param plot_progress (`logical(1)`)\cr Plot fitting progress (losses) or not.
-#' @param folder (`character(1)`)\cr Path to folder for saving checkpoint models. If `NULL`, no models will be saved during the training.
-#' @param checkpoints (`integer(1)`)\cr Interval size in epochs for saving checkpoint models.
-#' @param shuffle (`logical(1)`)\cr Shuffle data or not.
-#' @param record_gradients (`logical(1)`)\cr Record the gradients of all parameters or not. Can get large for many epochs.
-#' @param env_autoscale How to scale the environmental predictors in `env`.
-#'   The learned transformation is stored on the model and re-applied
-#'   automatically at every `predict()`/`simulate()` call, so raw (untransformed)
-#'   `env` can be passed for both calibration and prediction. Accepts:
+#' @param update_step (`integer(1)`)\cr Every how many simulated years the
+#'   gradient is cut and the parameters are updated (truncated backpropagation
+#'   through time). Default `1`: one update per simulated year. A loss is only
+#'   scored at a year that is a multiple of `update_step`, so an observation
+#'   year off that grid is not scored, and `fit()` stops when none is on it.
+#'   The simulated state runs on uncut. Larger values let the loss see a
+#'   longer stretch of the trajectory at a higher cost and with fading
+#'   gradients.
+#' @param start_time (`integer(1)`)\cr Reserved for a burn-in: the simulated
+#'   year from which observations are scored. In 0.2.0 it has no effect --
+#'   every observation year in `data` is scored -- and a value other than `1`
+#'   gives a warning. Start `env` at the first year you want simulated and
+#'   leave out of `data` what should not be scored; see [finn_data].
+#' @param plot_progress (`logical(1)`)\cr Draw the losses of every response
+#'   per epoch while fitting, each as a fraction of its value in the first
+#'   epoch. Default `TRUE`.
+#' @param folder (`character(1)` or `NULL`)\cr Folder in which the model is
+#'   saved every `checkpoints` epochs (`epoch_<n>model.pt`, readable with
+#'   `torch::torch_load()`). `NULL` (default): no checkpoints.
+#' @param checkpoints (`integer(1)`)\cr Every how many epochs the parameters are
+#'   recorded in `model$param_history` and, with `folder`, the model is saved.
+#'   Default `100`.
+#' @param shuffle (`logical(1)`)\cr Draw the batches in a new random order
+#'   every epoch. Default `TRUE`.
+#' @param record_gradients (`logical(1)`)\cr Also record the gradients of every
+#'   parameter at each checkpoint, in `model$gradients`. Default `FALSE`; the
+#'   record can get large.
+#' @param env_autoscale How the predictors in `env` are standardised. The
+#'   learned transformation is stored on the model and re-applied automatically
+#'   at every `predict()`/`simulateForest()` call, so raw (untransformed) `env`
+#'   is passed for both calibration and prediction. Accepts:
 #'   * `TRUE` (default) -- z-standardise every predictor (mean / sd);
 #'   * `FALSE` -- use `env` exactly as supplied (no scaling);
 #'   * a **per-predictor spec** for more nuanced scaling: a length-1 string
@@ -463,21 +447,14 @@ finn = function(N_species,
 #'   Example: `env_autoscale = c(mat_c = "auto", management = "identity")` keeps
 #'   an ordinal management forcing on its native 0..3 scale while z-scaling
 #'   climate. The learned constants are available as `model$env_scaling`.
-#' @param clip_norm (`numeric(1)|list()`)\cr Gradient-norm budget passed to
-#'   `torch::nn_utils_clip_grad_norm_()`, applied separately to each of three
-#'   parameter groups (mechanistic per-species rates, env-effect networks,
-#'   loss-distribution nuisance parameters) rather than once globally across all
-#'   parameters. A single number (default `2.0`) applies the same budget to
-#'   every group; a named list/vector keyed by `"mechanistic"`/`"nn"`/`"loss"`
-#'   overrides individual groups, e.g. `clip_norm = list(loss = 5, nn = 1)`.
 #' @param nonfinite (`character(1)`)\cr What happens when one of the six loss
 #'   terms is not finite at a scored timestep (an overflowing likelihood, a
 #'   target outside the family's support). `"drop_term"` (default) leaves only
 #'   that term out of the timestep's gradient and reported loss; the other
 #'   responses are still backpropagated there, and the occurrences are counted
 #'   per response in `model$nonfinite_counts` and summarised in a warning when
-#'   the fit ends. `"skip_step"` discards the WHOLE timestep — none of the six
-#'   terms is backpropagated or reported there — which is what every version
+#'   the fit ends. `"skip_step"` discards the WHOLE timestep -- none of the six
+#'   terms is backpropagated or reported there -- which is what every version
 #'   before `drop_term` existed did; use it to reproduce such a fit. The
 #'   difference only shows once a term overflows: with finite losses the two
 #'   are identical.
@@ -487,7 +464,7 @@ finn = function(N_species,
 #'   compounds across every observation. With `TRUE` the simulated state is
 #'   discarded at every timestep for which `anchor_cohorts` supplies an observed
 #'   tree list and rebuilt from it, after that timestep's loss has been
-#'   backpropagated — drift is then bounded by one inter-census segment. This is
+#'   backpropagated -- drift is then bounded by one inter-census segment. This is
 #'   not the same as the gradient truncation controlled by `update_step`, which
 #'   cuts the gradient but keeps the state; set `update_step` to the segment length
 #'   to let the gradient span the whole segment.
@@ -497,14 +474,14 @@ finn = function(N_species,
 #'   `year_sequence`, i.e. timesteps that carry an observation). Every anchor must
 #'   have the same number of species, sites and patches as `init_cohort`; the
 #'   number of cohorts may differ between anchors and from `init_cohort`. The last
-#'   observation year needs no anchor — nothing is simulated after it — and an
+#'   observation year needs no anchor -- nothing is simulated after it -- and an
 #'   anchor may not fall inside another observation's `period_length` window,
 #'   because the aggregated rates would then mix pre- and post-anchor state.
 #'   `fit()` copies the anchors onto its own device and never modifies them, so one
 #'   list can be reused across fits. Ignored unless `reanchor = TRUE`.
 #'
-#'   **Build the arrays directly** —
-#'   `CohortMat(dbh = , trees = , species = , dims = , sp = )` — rather than via
+#'   **Build the arrays directly** --
+#'   `CohortMat(dbh = , trees = , species = , dims = , sp = )` -- rather than via
 #'   `CohortMat(obs_df = )`. The `obs_df` path runs `obsDF2arrays()`, which rounds
 #'   `trees` to whole stems and silently renumbers any `siteID`/`patchID` that is
 #'   not a complete `1:n` sequence; on a simulated or partly empty stand that
@@ -514,7 +491,7 @@ finn = function(N_species,
 #'   cohorts with `dbh < anchor_min_dbh` and concatenates them with the full anchor.
 #'   Use `"merge"` whenever the inventory has a minimum-dbh threshold (FIA: 12.7 cm):
 #'   an anchor built from it contains no small trees, so `"replace"` deletes FINN's
-#'   entire regeneration pool at every census — on FIA that inflates 200-year
+#'   entire regeneration pool at every census -- on FIA that inflates 200-year
 #'   equilibrium basal area by 41%. Nothing is double counted, because the
 #'   observation is complete at and above the threshold. Ignored unless
 #'   `reanchor = TRUE`.
@@ -524,8 +501,8 @@ finn = function(N_species,
 #' @param teacher_forcing (`logical(1)`)\cr Fit by **direct estimation** instead of
 #'   by simulation, and never run a trajectory at all. The cohort state is reset at
 #'   **every** timestep to the observed stand at the census that STARTS that
-#'   timestep's observation interval — `init_cohort` for the first interval, then
-#'   `anchor_cohorts` — so each year's demographic rates are evaluated at an
+#'   timestep's observation interval -- `init_cohort` for the first interval, then
+#'   `anchor_cohorts` -- so each year's demographic rates are evaluated at an
 #'   observed state and the simulated state is never carried forward. The interval
 #'   rates are then aggregated over the window and scored exactly as `fit()`
 #'   already scores them, so growth, mortality and regeneration keep their usual
@@ -534,63 +511,14 @@ finn = function(N_species,
 #'
 #'   Mutually exclusive with `reanchor`, which is a different estimator:
 #'   re-anchoring still free-runs the whole segment between two censuses and scores
-#'   where it lands. `update_step` is inert under teacher forcing — there is no
-#'   multi-year trajectory to truncate — and the anchor validation refuses any
+#'   where it lands. `update_step` is inert under teacher forcing -- there is no
+#'   multi-year trajectory to truncate -- and the anchor validation refuses any
 #'   `update_step` that would change which observations are scored.
 #'
 #'   `anchor_cohorts` must supply an anchor for every observed timestep except the
 #'   last (nothing is conditioned on the final census, because nothing follows it).
 #'   Only `fit()` teacher-forces; `predict()`/`simulateForest()` always simulate,
 #'   so a teacher-forced model is still validated by single shooting.
-#' @param loss_resolution (`character(1)`)\cr The resolution the `growth` and
-#'   `mortality` terms are scored at. `"site"` (the default) is the validated path
-#'   and is unchanged in every respect: both are per (site, census, species) cell.
-#'   `"tree"` scores the same two responses per individual SIMULATED tree and
-#'   **replaces** the cell-resolution terms rather than adding to them — scoring
-#'   one response twice under two independent weights is a redundancy the
-#'   optimiser can trade against itself. Needs `tree_data` with a `cohortID`
-#'   column and an `init_cohort` with one cohort per tree (see the section
-#'   *Scoring individual trees* for how it differs from `loss_aggregation =
-#'   "tree"`; the two cannot be combined). The loss vector, `weights` and
-#'   `$history` keep their six positions and their meaning in both modes; only
-#'   the resolution of positions 4 and 5 changes, and the likelihood family is
-#'   the one `loss_family` names for them. `dbh`, `ba`, `trees` and
-#'   `regeneration` are untouched — a recruit has no per-tree counterpart at all.
-#'
-#'   The correspondence is carried by the cohort ids: a cohort keeps the id of
-#'   the slot it was created in, so cohort *j* of a (site, patch) in a generation
-#'   is tree *j* of the list that generation started from. Recruits get ids above
-#'   that block and can never enter a residual. A generation starts at
-#'   `init_cohort` and restarts at every anchor under `reanchor`/`teacher_forcing`;
-#'   `anchor_mode = "merge"` keeps the carried sub-threshold cohorts out of it,
-#'   which the anchor never saw. Growth is scored over the interval exactly as the
-#'   aggregate term is, mortality as the compounded probability `1 - prod(1 - m)`
-#'   against the tree's 0/1 fate — never the sampled death, which at `trees = 1`
-#'   is a coin flip.
-#'
-#'   The term does not depend on the fitting regime but its residual does: under
-#'   `teacher_forcing` the kernel runs on the observed tree, so the residual is
-#'   parameter error alone; under `reanchor` the cohort has drifted for at most one
-#'   census interval; under single shooting for up to the whole horizon.
-#'
-#'   A cohort the simulation kills inside a window is **kept** with `trees = 0` for
-#'   as long as its generation lasts — to the next anchor under
-#'   `reanchor`/`teacher_forcing`, which restart the generation there, and
-#'   to the end of the horizon under single shooting, where `tree_live0` is rebuilt
-#'   only at anchors. It shades nothing and contributes nothing to `dbh`, `ba` or
-#'   `trees`, but its diameter and its hazard keep accumulating, because the
-#'   observation it is scored against is the mean annual rate and the 0/1 fate over
-#'   the whole interval. Both terms therefore score every tree, and the scored
-#'   sample does not depend on the parameters. `$tree_deaths` reports per census and
-#'   epoch how often the simulation killed a tree the inventory found alive
-#'   (`frac_killed`) and in which year (`mean_kill_year`) — a diagnostic, not a
-#'   correction. A generation outlives a window under single shooting, so a slot
-#'   killed in an earlier window enters the next one already dead; `frac_ghost`
-#'   is that share and it is excluded from `frac_killed`, which counts this
-#'   window's kills alone. Under `reanchor`/`teacher_forcing` the generation
-#'   restarts at every anchor, so `frac_ghost` is 0 by construction only where the
-#'   anchors cover every census; a sparser anchor list carries ghosts like single
-#'   shooting does.
 #' @param rb_gradient (`logical(1)`)\cr Take the gradient of the drawn death and
 #'   recruitment counts through their expectation instead of through the draw. The
 #'   forward pass is unchanged to the bit -- the stand still dies and recruits
@@ -606,90 +534,21 @@ finn = function(N_species,
 #'   the historical `1e-5` (poisson) and `0.001` (nbinom) left it at `y/offset`,
 #'   four orders above the rest. `NULL` restores those two historical constants
 #'   and so reproduces a fit made before 0.2.0.
-#' @param recruits (`character(1)`)\cr Where the recruits of the simulated stand
-#'   come from. `"simulated"` (the default) is the regeneration process, unchanged.
-#'   `"observed"` drives the stand with the OBSERVED recruitment instead, while
-#'   growth, mortality and competition run and are trained as usual: stage 2 of a
-#'   staged calibration. An inventory samples small trees too sparsely for
-#'   recruitment to be calibrated jointly with the rest -- a mis-fitted
-#'   regeneration process feeds a wrong stand into every later interval, and growth
-#'   and mortality compensate for it. So they are fitted on a stand that recruits
-#'   what was observed, and the regeneration process is fitted afterwards in a call
-#'   of its own (with the other processes' `optimizeSpecies`/`optimizeEnv` off, or
-#'   through `weights`).
-#'
-#'   The unit chain: `reg` in `data` (recruits per ha over the observation period,
-#'   on the row of the interval's END year) divided by `period_length` is a rate
-#'   per ha and year, and it is the expected recruitment `r_mean_ha` of EVERY
-#'   simulated year of that interval, at that site and for that species. Times
-#'   `patch_size` it is the expected recruitment per patch, which the model's
-#'   recruit sampler draws from (or which is taken as is with
-#'   `sample_regeneration = FALSE`) and rounds, as always. Drawing around the
-#'   observed mean rather than rounding it keeps the low rates, most of which are
-#'   below one recruit per patch and year: the observed mode inherits the sampler,
-#'   and with `sample_regeneration = FALSE` the rounding delivers exactly zero
-#'   recruits wherever the per-patch mean is below 0.5. The simulated years of an interval are
-#'   exactly those whose simulated recruitment `fit()` sums to score that
-#'   observation: an observation at timestep `t` with `period_length` `p` covers
-#'   the timesteps `t - p + 1, ..., t` on the constant and the per-site path alike,
-#'   and the timestep `t` alone where the constant path has no `period_length`
-#'   (timestep = position of the year among the years of `env`). The observed rate
-#'   is a constant; no gradient flows from it.
-#'
-#'   In such a call the regeneration term is weighted 0 (the other weights stay as
-#'   given), and every parameter of the regeneration process -- its species
-#'   parameters, its environment network, the cap `reg_logK`, the recruit
-#'   dispersion and any custom parameters it declares -- is frozen; each gets its
-#'   previous `requires_grad` back when `fit()` returns. Nothing on the model
-#'   records the mode, so a later `fit(recruits = "simulated")` trains them again.
-#'
-#'   Refused with an error: an `NA` `reg` in a cell an interval needs (0 stays 0);
-#'   a simulated year lying in two intervals, or before or between a site's
-#'   intervals (give the first census a `period_length` that reaches back to the
-#'   first year of `env`, or start `env` there); `reanchor` and `teacher_forcing`,
-#'   which replace the free-running stand the fed recruitment is defined for. Years
-#'   after a site's last census get no recruits: nothing after it enters the
-#'   objective. A model fitted this way still simulates with its own regeneration
-#'   process; [FINN::simulateForest] can feed it the observed recruitment instead.
-#'
-#'   The fed count is itself a noisy estimate and is re-sampled as if it were the
-#'   mean, so the observation noise of a sparse small-tree count enters the
-#'   simulated stand. See [recruitment].
-#' @param ... Additional arguments passed to `optimizer`.
-#'
-#' @section Scoring individual trees:
-#' By default, `growth` and `mortality` are scored per site, species and census,
-#' as means over cohorts. Two options score them per observed tree instead; both
-#' take the tree table in `tree_data`, but they ask different questions.
-#'
-#' `loss_aggregation = c(growth = "tree", mortality = "tree")` predicts each
-#' OBSERVED tree: the kernels run on its measured dbh at the interval start with
-#' light from the observed stand, and only the yearly environment changes across
-#' the interval. It measures the error of the growth and mortality functions
-#' alone. `loss_resolution = "tree"` predicts each SIMULATED cohort that started
-#' as an observed tree, along the model's own trajectory (simulated growth,
-#' competitors, light). It measures the error of the functions plus the drift of
-#' the simulated stand.
-#'
-#' | | `loss_aggregation = "tree"` | `loss_resolution = "tree"` |
-#' |---|---|---|
-#' | the tree is | observed: measured dbh, observed competitors, yearly environment | simulated: the cohort it started as, along the model's trajectory |
-#' | measures | the growth and mortality functions alone | the functions plus the drift of the simulated stand |
-#' | responses | chosen separately, e.g. only `mortality = "tree"` | growth and mortality together |
-#' | `init_cohort` | any, incl. binned (`makeInitCohorts(dbh_binsize = )`) | one cohort per tree (`makeInitCohorts()` without `dbh_binsize`) |
-#' | `tree_data` needs | `dbh` at the interval start | `cohortID` of the initial cohort |
-#' | combines with | the simulated `dbh`/`ba`/`trees`/`regeneration` terms | `reanchor` and `teacher_forcing` (under teacher forcing the trajectory is reset to the observed stand every year, which comes close to the first option) |
-#' | diagnostics | [predictTrees()] | `$tree_deaths`, `$tree_pred` |
-#'
-#' Use the first to estimate the process functions from the trees as observed,
-#' the second to test whether simulated trajectories follow the real trees. The
-#' two cannot be combined in one fit.
+#' @param ... Arguments of earlier versions, still accepted with a warning:
+#'   `weights` (now `loss_weights`), `recruits` (now `loss_recruit`), and
+#'   `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` (now
+#'   members of `control = finnControl()`). Any other named argument is passed
+#'   on to the optimizer, as before; `finnControl(...)` is the place for it now.
+#' @param loss Deprecated name of `loss_family`, still accepted with a warning.
 #'
 #' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
 #'   the returned object is the one passed in, now carrying the training results
-#'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`).
-#' @seealso [recruitment] for the recruitment options (`recruits`, the
-#'   regeneration likelihood) and how to combine them
+#'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`, `$param_history`).
+#' @seealso [finn_data] for the input tables, [finn_loss] for how the
+#'   simulation is compared with the observations, [finnControl()] for the
+#'   optimizer settings, [recruitment] for the recruitment options
+#'   (`loss_recruit`, the regeneration likelihood), [FINN::simulateForest()]
+#'   to simulate with the fitted model
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -698,19 +557,27 @@ finn = function(N_species,
 #' Nsp   <- max(fia_obs_dt$species)
 #' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
 #' FINN.seed(1)
-#' m <- finn(
-#'   N_species            = Nsp, recruits_dbh = 12.9,
-#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
-#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 #' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
 #'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
 #'     plot_progress = FALSE)
 #'
 #' # the per-response losses over the epochs, and the baselines they were
-#' # scaled by to make `weights = "auto"` comparable across responses
+#' # scaled by to make `loss_weights = "auto"` comparable across responses
 #' tail(m$history, 2)
 #' m$loss_baseline
+#'
+#' # give growth twice the weight of every other response, and lower the
+#' # learning rate every 50 epochs
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     loss_weights = c(1, 1, 1, 2, 1, 1),
+#'     control = finnControl(lr_scheduler = "step",
+#'                           lr_scheduler_params = list(step_size = 50, gamma = 0.5)),
+#'     plot_progress = FALSE)
 fit = function(model,
                data = NULL,
                env,
@@ -720,17 +587,17 @@ fit = function(model,
                init_cohort = NULL,
                epochs = 20L,
                lr = 0.01,
-               lr_scheduler = "none",
-               lr_scheduler_params = list(),
-               loss = NULL,
+               batchsize = NULL,
                loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom"),
                loss_aggregation = NULL,
+               loss_resolution = c("site", "tree"),
+               loss_weights = "auto",
+               weight_scale = TRUE,
+               loss_recruit = c("simulated", "observed"),
                tree_data = NULL,
-               weights = "auto",
-               weight_scale = c("auto", "raw"),
-               optimizer = optim_ignite_adam,
-               batchsize = NULL,
+               control = finnControl(),
                device = c("cpu", "gpu"),
+               threads = NULL,
                update_step = 1L,
                start_time = 1L,
                plot_progress = TRUE,
@@ -739,21 +606,80 @@ fit = function(model,
                shuffle = TRUE,
                record_gradients = FALSE,
                env_autoscale = TRUE,
-               clip_norm = 2.0,
                nonfinite = c("drop_term", "skip_step"),
                reanchor = FALSE,
                anchor_cohorts = NULL,
                anchor_mode = "replace",
                anchor_min_dbh = NULL,
                teacher_forcing = FALSE,
-               loss_resolution = c("site", "tree"),
                rb_gradient = TRUE,
                trees_offset = 0.01,
-               recruits = c("simulated", "observed"),
-               threads = NULL,
-               ...) {
+               ...,
+               loss = NULL) {
+  # the thread count is validated (and set) before anything else, so a wrong
+  # value is refused without touching the model
   old_threads = set_torch_threads(threads)
   if (!is.null(old_threads)) on.exit(torch::torch_set_num_threads(old_threads), add = TRUE)
+  if (!inherits(model, "finn_class"))
+    stop("`model` must be a FINN model built by finn().", call. = FALSE)
+  # `loss` stays a formal (after `...`, so it is matched exactly): passed through
+  # `...` it would partially match five `loss_*` arguments and R would refuse it
+  if (!is.null(loss)) {
+    if (!missing(loss_family))
+      stop("give either `loss_family` or the deprecated `loss`, not both.", call. = FALSE)
+    warning("`loss` is deprecated; use `loss_family`.", call. = FALSE)
+    loss_family = loss
+  }
+  if (!inherits(control, "finnControl"))
+    stop("`control` must be built by finnControl().", call. = FALSE)
+  dots = list(...)
+  if (length(dots) && (is.null(names(dots)) || any(names(dots) == "")))
+    stop("every argument passed to fit() through `...` must be named.", call. = FALSE)
+
+  # ---- arguments of earlier versions (renamed or moved into finnControl()) ----
+  # Each old form is mapped onto the new one with a warning; giving both forms is
+  # refused rather than silently resolved.
+  take_old = function(old, new, given_new, what) {
+    if (is.null(dots[[old]])) return(NULL)
+    if (given_new)
+      stop(sprintf("give either `%s` or the deprecated `%s`, not both.", new, old), call. = FALSE)
+    warning(sprintf("`%s` is deprecated; use %s.", old, what), call. = FALSE)
+    dots[[old]]
+  }
+  v = take_old("weights", "loss_weights", !missing(loss_weights), "`loss_weights` (the weights of the six loss terms)")
+  if (!is.null(v)) loss_weights = v
+  v = take_old("recruits", "loss_recruit", !missing(loss_recruit), "`loss_recruit`")
+  if (!is.null(v)) loss_recruit = v
+  given_control = !missing(control)
+  for (nm in c("optimizer", "lr_scheduler", "lr_scheduler_params", "clip_norm")) {
+    v = take_old(nm, "control", given_control, sprintf("`control = finnControl(%s = )`", nm))
+    if (!is.null(v)) control[[nm]] = v
+  }
+  dots = dots[setdiff(names(dots), c("weights", "recruits", "optimizer",
+                                     "lr_scheduler", "lr_scheduler_params", "clip_norm"))]
+  # anything else is an optimizer argument, as before; finnControl(...) holds the
+  # ones given the new way
+  optimizer_args = c(control$optimizer_args, dots)
+
+  # ---- weight_scale: TRUE/"auto" balance the losses first, FALSE/"raw" do not ----
+  weight_scale = if (isTRUE(weight_scale) || identical(weight_scale, "auto")) "auto"
+                 else if (isFALSE(weight_scale) || identical(weight_scale, "raw")) "raw"
+                 else stop('`weight_scale` must be TRUE ("auto") or FALSE ("raw").', call. = FALSE)
+  loss_recruit = match.arg(loss_recruit)
+
+  if (!identical(as.integer(start_time), 1L))
+    warning("`start_time` has no effect in this version: every observation year in `data` is scored. Start `env` at the first year to simulate and leave unscored years out of `data`.", call. = FALSE)
+
+  # ---- input checks that would otherwise fail deep inside with a cryptic message ----
+  loss_family = complete_loss_family(loss_family)
+  if (!is.null(data)) {
+    data = check_fit_data(data, model$N_species, loss_family)
+    env = check_fit_env(env, data = data, caller = "fit()")
+    disturbance = check_fit_disturbance(disturbance, env, caller = "fit()")
+  }
+  check_patch_arguments(model, patches, patch_size, init_cohort,
+                        patches_given = !missing(patches), caller = "fit()")
+
   invisible(model$fit(data = data,
                       env = env,
                       disturbance = disturbance,
@@ -762,15 +688,15 @@ fit = function(model,
                       init_cohort = init_cohort,
                       epochs = epochs,
                       lr = lr,
-                      lr_scheduler = lr_scheduler,
-                      lr_scheduler_params = lr_scheduler_params,
-                      loss = loss,
+                      lr_scheduler = control$lr_scheduler,
+                      lr_scheduler_params = control$lr_scheduler_params,
+                      loss = NULL,
                       loss_family = loss_family,
                       loss_aggregation = loss_aggregation,
                       tree_data = tree_data,
-                      weights = weights,
+                      weights = loss_weights,
                       weight_scale = weight_scale,
-                      optimizer = optimizer,
+                      optimizer = control$optimizer,
                       batchsize = batchsize,
                       device = device,
                       update_step = update_step,
@@ -781,7 +707,7 @@ fit = function(model,
                       shuffle = shuffle,
                       record_gradients = record_gradients,
                       env_autoscale = env_autoscale,
-                      clip_norm = clip_norm,
+                      clip_norm = control$clip_norm,
                       nonfinite = match.arg(nonfinite),
                       reanchor = reanchor,
                       anchor_cohorts = anchor_cohorts,
@@ -791,9 +717,156 @@ fit = function(model,
                       rb_gradient = rb_gradient,
                       trees_offset = trees_offset,
                       loss_resolution = match.arg(loss_resolution),
-                      recruits = match.arg(recruits),
-                      ...))
+                      recruits = loss_recruit,
+                      optimizer_args = optimizer_args))
 }
+
+# The six-slot loss_family vector fit() works on, from a full vector or a
+# partial named one (`c(trees = "nbinom")` keeps the other five defaults).
+complete_loss_family = function(loss_family) {
+  default = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "binomial", regeneration = "nbinom")
+  if (is.null(loss_family)) return(default)
+  if (!is.character(loss_family))
+    stop("`loss_family` must be a named character vector, e.g. c(trees = \"nbinom\"); see ?finn_loss.", call. = FALSE)
+  if (is.null(names(loss_family)) || any(names(loss_family) == "")) {
+    if (length(loss_family) == 6L) { names(loss_family) = names(default); return(loss_family) }
+    stop("`loss_family` must be named by response (dbh, ba, trees, growth, mortality, regeneration), or give all six in that order; see ?finn_loss.", call. = FALSE)
+  }
+  unknown = setdiff(names(loss_family), names(default))
+  if (length(unknown))
+    stop(sprintf("`loss_family` names %s, which is not a response; the responses are dbh, ba, trees, growth, mortality, regeneration.",
+                 paste0("`", unknown, "`", collapse = ", ")), call. = FALSE)
+  out = default
+  out[names(loss_family)] = loss_family
+  out
+}
+
+# ---- input validation shared by fit() and predict() ----------------------------
+# The checks name the table, the column and the fix, which the torch errors that
+# would otherwise follow do not (FINNverse/FINN#64, #66).
+
+# `data`: a data.frame with the key columns and the six response columns. A
+# response whose loss_family is "none" may be absent (it is filled with NA); any
+# other missing response column is an error, because the column is read into the
+# response array whatever its family.
+check_fit_data = function(data, N_species, loss_family) {
+  if (!is.data.frame(data))
+    stop("`data` must be a data.frame or data.table with one row per site, year and species; see ?finn_data.", call. = FALSE)
+  keys = c("siteID", "year", "species")
+  miss = setdiff(keys, colnames(data))
+  if (length(miss))
+    stop(sprintf("`data` lacks the column(s) %s. It needs `siteID`, `year` and `species` (integer codes; resolveSiteIDs() produces them) and the responses `dbh`, `ba`, `trees`, `growth`, `mort`, `reg`; see ?finn_data.",
+                 paste0("`", miss, "`", collapse = ", ")), call. = FALSE)
+  responses = c(dbh = "dbh", ba = "ba", trees = "trees", growth = "growth", mortality = "mort", regeneration = "reg")
+  fam = loss_family
+  off = names(responses)[vapply(names(responses), function(r) identical(as.character(fam[r]), "none"), logical(1))]
+  absent = responses[!responses %in% colnames(data)]
+  fill = absent[names(absent) %in% off]
+  # fit() works on data.table semantics (extract_env() drops key columns by name)
+  data = data.table::as.data.table(data)
+  if (length(fill)) {
+    data = data.table::copy(data)
+    for (col in fill) data.table::set(data, j = col, value = NA_real_)
+  }
+  absent = absent[!names(absent) %in% off]
+  if (length(absent))
+    stop(sprintf("`data` lacks the response column(s) %s. Every response column must be present; put NA where a response was not observed (it is then left out of the loss), or set its `loss_family` to \"none\" to leave the column out. See ?finn_data.",
+                 paste0("`", absent, "`", collapse = ", ")), call. = FALSE)
+  sp = data[["species"]]
+  if (!is.numeric(sp) || anyNA(sp) || any(sp != round(sp)) || any(sp < 1) || any(sp > N_species))
+    stop(sprintf("`species` in `data` must be integer codes 1..%d (the model's N_species); found %s. resolveSiteIDs() turns species names into these codes.",
+                 N_species, if (is.numeric(sp)) paste(utils::head(sort(unique(sp[!is.na(sp) & (sp < 1 | sp > N_species | sp != round(sp))])), 5L), collapse = ", ") else class(sp)[1]), call. = FALSE)
+  if (!is.numeric(data[["year"]]) || anyNA(data[["year"]]))
+    stop("`year` in `data` must be numeric and not missing.", call. = FALSE)
+  for (col in c("dbh", "ba", "trees", "growth", "mort", "reg", "period_length", "n_at_risk", "growth_n")) {
+    if (col %in% colnames(data) && !is.numeric(data[[col]]))
+      stop(sprintf("`%s` in `data` must be numeric (NA where not observed).", col), call. = FALSE)
+  }
+  dup = duplicated(as.data.frame(data)[, c("siteID", "year", "species")])
+  if (any(dup))
+    stop(sprintf("`data` has %d duplicated (siteID, year, species) row(s), e.g. siteID %s, year %s, species %s; one row per site, year and species is needed (makeObsData(aggregate_by_site = TRUE) or resolveSiteIDs() produce it).",
+                 sum(dup), data$siteID[dup][1], data$year[dup][1], data$species[dup][1]), call. = FALSE)
+  data
+}
+
+# `env`: a data.frame with siteID, year and at least one predictor column, one
+# row per site and year, no missing predictor, and every year of `data` among
+# its years. An env without a predictor gives all-NaN rates (#64).
+check_fit_env = function(env, data = NULL, caller = "fit()") {
+  if (!is.data.frame(env))
+    stop(sprintf("%s: `env` must be a data.frame or data.table with one row per site and year; see ?finn_data.", caller), call. = FALSE)
+  miss = setdiff(c("siteID", "year"), colnames(env))
+  if (length(miss))
+    stop(sprintf("%s: `env` lacks the column(s) %s; it needs `siteID`, `year` and one column per environmental predictor. See ?finn_data.",
+                 caller, paste0("`", miss, "`", collapse = ", ")), call. = FALSE)
+  preds = setdiff(colnames(env), c("siteID", "year"))
+  if (!length(preds))
+    stop(sprintf("%s: `env` has no predictor column, only `siteID` and `year`. Every process responds to at least one environmental predictor; add a column (e.g. temperature) or a constant one. See ?finn_data.", caller), call. = FALSE)
+  not_num = preds[!vapply(preds, function(p) is.numeric(env[[p]]) || is.logical(env[[p]]), logical(1))]
+  if (length(not_num))
+    stop(sprintf("%s: the predictor column(s) %s of `env` must be numeric.", caller, paste0("`", not_num, "`", collapse = ", ")), call. = FALSE)
+  if (!is.numeric(env[["year"]]) || anyNA(env[["year"]]))
+    stop(sprintf("%s: `year` in `env` must be numeric and not missing.", caller), call. = FALSE)
+  na_cols = preds[vapply(preds, function(p) anyNA(env[[p]]), logical(1))]
+  if (length(na_cols))
+    stop(sprintf("%s: `env` has missing values in %s. Every site needs a value of every predictor in every year, because a year without environment cannot be simulated; fill the gaps before fitting. See ?finn_data.",
+                 caller, paste0("`", na_cols, "`", collapse = ", ")), call. = FALSE)
+  dup = duplicated(as.data.frame(env)[, c("siteID", "year")])
+  if (any(dup))
+    stop(sprintf("%s: `env` has %d duplicated (siteID, year) row(s), e.g. siteID %s, year %s; one row per site and year is needed (resolveSiteIDs() returns it that way).",
+                 caller, sum(dup), env$siteID[dup][1], env$year[dup][1]), call. = FALSE)
+  env_years = sort(unique(env[["year"]]))
+  per_site = table(env[["siteID"]])
+  if (length(unique(per_site)) > 1L)
+    stop(sprintf("%s: every site in `env` must have the same years (the simulated time steps); the number of rows per site ranges from %d to %d. Missing (siteID, year) rows would become NA environment. See ?finn_data.",
+                 caller, min(per_site), max(per_site)), call. = FALSE)
+  if (!is.null(data)) {
+    extra = setdiff(unique(data[["year"]]), env_years)
+    if (length(extra))
+      stop(sprintf("%s: `data` has observations in year(s) %s that are not in `env` (years %s). Every observed year must be a simulated year: `env` must run from the first simulated year to the last observation. See ?finn_data.",
+                   caller, paste(sort(extra), collapse = ", "), paste(env_years, collapse = ", ")), call. = FALSE)
+  }
+  # the forward pass works on data.table semantics (extract_env() drops key columns by name)
+  data.table::as.data.table(env)
+}
+
+# `disturbance`: siteID, year and intensity in [0, 1], over the sites and years of
+# `env` (its array is built separately and must have the same shape).
+check_fit_disturbance = function(disturbance, env, caller = "fit()") {
+  if (is.null(disturbance)) return(invisible(NULL))
+  if (!is.data.frame(disturbance))
+    stop(sprintf("%s: `disturbance` must be NULL or a data.frame with `siteID`, `year` and `intensity`; see ?finn_data.", caller), call. = FALSE)
+  miss = setdiff(c("siteID", "year", "intensity"), colnames(disturbance))
+  if (length(miss))
+    stop(sprintf("%s: `disturbance` lacks the column(s) %s; it needs `siteID`, `year` and `intensity` (the probability, 0 to 1, that a patch loses all its trees in that year). See ?finn_data.",
+                 caller, paste0("`", miss, "`", collapse = ", ")), call. = FALSE)
+  int = disturbance[["intensity"]]
+  if (!is.numeric(int) || anyNA(int) || any(int < 0 | int > 1))
+    stop(sprintf("%s: `intensity` in `disturbance` must be a probability between 0 and 1, with no missing value (use 0 for no disturbance).", caller), call. = FALSE)
+  if (!setequal(unique(disturbance[["siteID"]]), unique(env[["siteID"]])) ||
+      !setequal(unique(disturbance[["year"]]), unique(env[["year"]])))
+    stop(sprintf("%s: `disturbance` must cover exactly the sites and years of `env` (one row per site and year, intensity 0 where nothing happens).", caller), call. = FALSE)
+  data.table::as.data.table(disturbance)
+}
+
+# `patches` is ignored when init_cohort supplies the patch layout (#66), and a
+# patch size that differs from the one the model was last fitted or simulated
+# with changes every per-hectare quantity, so both are said out loud.
+check_patch_arguments = function(model, patches, patch_size, init_cohort, patches_given, caller = "fit()") {
+  if (!is.null(init_cohort) && patches_given) {
+    np = tryCatch(as.integer(dim(init_cohort$species_r)[2]), error = function(e) NULL)
+    if (!is.null(np) && !is.na(np) && !identical(as.integer(patches), np))
+      warning(sprintf("%s: `patches = %s` is ignored because `init_cohort` is given; the patch count comes from the initial cohorts (%d patches per site).",
+                      caller, format(patches), np), call. = FALSE)
+  }
+  if (!is.null(patch_size) && !is.null(model$patch_size_ha) &&
+      !isTRUE(all.equal(as.numeric(model$patch_size_ha), as.numeric(patch_size))))
+    warning(sprintf("%s: `patch_size = %s` ha differs from the %s ha the model was last fitted or simulated with (`model$patch_size_ha`). Every per-hectare quantity changes with it; pass the same patch size unless the change is intended.",
+                    caller, format(patch_size), format(model$patch_size_ha)), call. = FALSE)
+  invisible(NULL)
+}
+
+
 
 
 #' Predict growth and mortality for individual observed trees
@@ -862,125 +935,64 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 }
 
 
-#' Predict from a FINN model
+#' Simulate a forest with a FINN model
+#'
+#' @description
+#' Simulates every site of `env` forward through its years, starting from the
+#' trees in `init_cohort` (or from bare ground), with the model's current
+#' parameters -- usually after [FINN::fit()] has estimated them. Returns the
+#' simulated stand variables and demographic rates per site, year and species,
+#' and on request the individual cohorts. `predict(model, ...)` is the S3
+#' method for the [stats::predict] generic; [FINN::simulateForest()] is the same
+#' function under a name that says what it does.
 #'
 #' @details
-#' Simulate from a (fitted) FINN model. This is an S3 method for the
-#' [stats::predict] generic, so it is dispatched as `predict(model, ...)`.
+#' The simulation uses the environment of every row of `env` in turn; the
+#' first row of a site drives the first step from `init_cohort`. `env` must be
+#' in natural units: the standardisation learned by [FINN::fit()] is applied
+#' automatically. A model that has not been fitted has no standardisation yet,
+#' so it must be given `env` on the scale its processes expect; fit it first
+#' (two epochs are enough for a trial).
 #'
-#' @param object (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
-#' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
-#' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
-#' @param patches (`integer(1)`)\cr Number of patches.
-#' @param patch_size (`numeric(1)`)\cr Patch size.
-#' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
+#' @param object (`finn_class`)\cr The model built by [FINN::finn()], fitted with [FINN::fit()].
+#' @param env (`data.frame`)\cr The environment of every site and simulated
+#'   year: one row per `siteID` and `year`, plus one column per predictor, as
+#'   in [FINN::fit()]. Every row is one simulated step. See [finn_data].
+#' @param disturbance (`data.frame` or `NULL`)\cr Optional disturbances: one
+#'   row per `siteID` and `year` with the column `intensity`, the probability
+#'   (0 to 1) that a patch of that site loses all its trees in that year. See
+#'   [finn_data].
+#' @param patches (`integer(1)`)\cr Number of patches per site when the
+#'   simulation starts from bare ground (`init_cohort = NULL`). Ignored, with a
+#'   warning when it differs, as soon as `init_cohort` is given: the patch
+#'   count then comes from the initial cohorts.
+#' @param patch_size (`numeric(1)`)\cr Area of one patch in ha. `NULL`
+#'   (default) takes the patch size the model was fitted with
+#'   (`model$patch_size_ha`), or `0.1` for a model that was never fitted. A
+#'   value that differs from the fitted one gives a warning: every per-hectare
+#'   quantity changes with it.
+#' @param init_cohort (`CohortMat`)\cr The trees every site starts with, from
+#'   [FINN::makeInitCohorts()]. `NULL` (default) starts from bare ground with
+#'   `patches` empty patches per site (a succession run). See [finn_data].
 #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
 #'   synonym for `"gpu"`. Only NVIDIA cards are supported.
-#' @param return_cohorts Controls whether the raw per-cohort state is returned in
-#'   addition to the aggregated site output. Storing cohorts every timestep is
+#' @param return_cohorts Whether the individual cohorts are returned in
+#'   addition to the site-level output. Storing cohorts every timestep is
 #'   expensive, so the default is `FALSE` (none). Use `TRUE` (or `"all"`) for
 #'   every timestep, `"last"` for the final timestep only, or an integer vector
 #'   of timesteps to store just those. Recorded cohorts appear as `$long$cohort`
 #'   / `$wide$cohort`.
-#' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
-#' @param ... Advanced options forwarded to the internal simulator, chiefly
-#'   `batchsize` (split the sites into batches of this many to cap memory for very
-#'   large runs). The default processes all sites in one batch and is what almost
-#'   all users want.
-#'
-#' @return A named list of predictions. `$long$site` (and `$wide$site`) give the
-#'   site-level results (columns `siteID`, `year`, `species`, `variable`,
-#'   `value`). When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
-#'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
-#'   ...) for the requested timesteps.
-#' @inheritParams simulateForest
-#' @seealso [recruitment] for the recruitment options (`recruits`,
-#'   `obs_recruits`) and how to combine them
-#' @method predict finn_class
-#' @export
-#' @examplesIf torch::torch_is_installed()
-#' library(data.table)
-#' # simulate three Oregon FIA sites over the years in `env`, starting from the
-#' # observed stands. The model is unfitted here, so these are its priors.
-#' sites <- 1:3
-#' Nsp   <- max(fia_obs_dt$species)
-#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
-#' m <- finn(
-#'   N_species            = Nsp, recruits_dbh = 12.9,
-#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
-#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
-#' sim <- predict(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
-#'                patches = 4, patch_size = 0.06, return_cohorts = "last")
-#' head(sim$long$site)
-#'
-#' # the raw per-cohort state of the final timestep, kept because of
-#' # `return_cohorts`; storing every timestep is expensive
-#' head(sim$long$cohort)
-predict.finn_class = function(object,
-                              env,
-                              disturbance = NULL,
-                              patches = 100L,
-                              patch_size = 0.1,
-                              init_cohort = NULL,
-                              device = c("cpu", "gpu"),
-                              return_cohorts = FALSE,
-                              debug = FALSE,
-                              recruits = c("simulated", "observed"),
-                              obs_recruits = NULL,
-                              ...) {
-  object$simulate(env = env,
-                  disturbance = disturbance,
-                  patches = patches,
-                  patch_size = patch_size,
-                  init_cohort = init_cohort,
-                  device = device,
-                  return_cohorts = return_cohorts,
-                  debug = debug,
-                  recruits = match.arg(recruits),
-                  obs_recruits = obs_recruits,
-                  ...)
-}
-
-
-#' Simulate
-#'
-#' @details
-#' Simulate from a fitted FINN model. This is a thin, backwards-compatible
-#' alias for [FINN::predict.finn_class]; new code should call
-#' `predict(model, ...)` directly.
-#'
-#' @param model (`finn_class`)\cr Object of class `finn_class` created by [FINN::finn].
-#' @param env (`data.table|data.frame`)\cr Data with environmental covariates must be passed as `data.table` or `data.frame`.
-#' @param disturbance (`data.table|data.frame`)\cr Data with disturbance rates must be passed as `data.table` or `data.frame`.
-#' @param patches (`integer(1)`)\cr Number of patches.
-#' @param patch_size (`numeric(1)`)\cr Patch size.
-#' @param init_cohort (`CohortMat`)\cr Initial cohort matrix of class `CohortMat`, created by [FINN::CohortMat].
-#' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
-#'   synonym for `"gpu"`. Only NVIDIA cards are supported.
-#' @param return_cohorts Controls whether the raw per-cohort state is returned in
-#'   addition to the aggregated site output. Storing cohorts every timestep is
-#'   expensive, so the default is `FALSE` (none). Use `TRUE` (or `"all"`) for
-#'   every timestep, `"last"` for the final timestep only, or an integer vector
-#'   of timesteps to store just those. Recorded cohorts appear as `$long$cohort`
-#'   / `$wide$cohort`.
-#' @param debug (`logical(1)`)\cr Debug modus or not. If `TRUE`, individual tree states are stored.
+#' @param debug (`logical(1)`)\cr If `TRUE`, the state of every cohort at every
+#'   step is stored, with the intermediate quantities of the processes.
 #' @param recruits (`character(1)`)\cr Where the recruits come from. `"simulated"`
-#'   (the default) is the model's regeneration process, as before. `"observed"`
-#'   feeds the observed recruitment in `obs_recruits` instead, as
-#'   `fit(recruits = "observed")` does: the `reg` of each site, species and
-#'   observation interval (recruits per ha over the interval, on the row of its
-#'   END year) divided by `period_length` is the expected recruitment per ha and
-#'   year in every simulated year of that interval; times `patch_size` it is drawn
-#'   per patch by the recruit sampler (or taken as the mean with
-#'   `sample_regeneration = FALSE`, where the rounding then delivers no recruit
-#'   wherever the per-patch mean is below 0.5). Growth, mortality and competition run as
-#'   usual. Meant for checking a model calibrated that way on the intervals it was
-#'   calibrated on: with observed recruitment the model is **not an autonomous
-#'   simulator**, so every simulated year must lie in an observed interval, and a
-#'   bare-ground, succession or projection run beyond them is refused. Such runs
-#'   need the fitted regeneration process (`"simulated"`). See [recruitment].
-#' @param obs_recruits (`data.table|data.frame`)\cr The observed recruitment for
+#'   (the default) is the model's regeneration process. `"observed"` feeds the
+#'   observed recruitment in `obs_recruits` instead, as
+#'   `fit(loss_recruit = "observed")` does, to check a model calibrated that way
+#'   on the intervals it was calibrated on. With observed recruitment the model
+#'   is not an autonomous simulator: every simulated year must lie in an
+#'   observed interval, and a bare-ground, succession or projection run beyond
+#'   them is refused. See [recruitment] for the unit chain.
+#' @param obs_recruits (`data.frame`)\cr The observed recruitment for
 #'   `recruits = "observed"`, required there and refused otherwise: a table like
 #'   `fit()`'s `data` with `siteID`, `year`, `species`, `reg` and `period_length`,
 #'   rows for every species (0 where none recruited), the sites of `env` and years
@@ -992,33 +1004,88 @@ predict.finn_class = function(object,
 #'   large runs). The default processes all sites in one batch and is what almost
 #'   all users want.
 #'
-#' @return A named list of simulation results. The patch-averaged, stand-level
-#'   state variables and demographic rates are in `$long$site` / `$wide$site`
-#'   (long format: `siteID`, `year`, `species`, `variable`, `value`). When
-#'   `return_cohorts` is set, `$long$cohort` / `$wide$cohort` hold the raw
-#'   per-cohort state for the requested timesteps.
-#' @seealso [FINN::predict.finn_class()], [recruitment] for the recruitment
-#'   options (`recruits`, `obs_recruits`) and how to combine them
+#' @return A named list. `$long$site` (and `$wide$site`) give the site-level
+#'   results, averaged over the patches: columns `siteID`, `year`, `species`,
+#'   `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `r_mean_ha`, ...) and
+#'   `value`. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
+#'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
+#'   ...) for the requested timesteps.
+#' @seealso [FINN::fit()], [finn_data] for the input tables, [recruitment] for
+#'   the recruitment options (`recruits`, `obs_recruits`)
+#' @method predict finn_class
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
+#' # three Oregon FIA sites: estimate the parameters (two epochs, for the
+#' # example), then simulate the sites over the years of `env` from the
+#' # observed stands
 #' sites <- 1:3
 #' Nsp   <- max(fia_obs_dt$species)
 #' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
-#' m <- finn(
-#'   N_species            = Nsp, recruits_dbh = 12.9,
-#'   growth_process       = createProcess(~ temp + prec, FINN::growth),
-#'   mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-#'   regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
-#' # identical to predict(m, ...), which is what new code should call
-#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites],
-#'                       init_cohort = init, patches = 4, patch_size = 0.06)
+#' FINN.seed(1)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#'
+#' sim <- predict(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
+#'                return_cohorts = "last")
 #' head(sim$long$site)
+#'
+#' # the cohorts of the final timestep, kept because of `return_cohorts`
+#' head(sim$long$cohort)
+#'
+#' # a 50-year succession from bare ground, with the climate of year 0 repeated
+#' succession <- fia_env_dt[siteID %in% sites & year == 0][rep(1:3, each = 50)]
+#' succession[, year := rep(1:50, times = 3)]
+#' sim50 <- simulateForest(m, env = succession, patches = 4)
+#' sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year %in% c(10, 50)]
+predict.finn_class = function(object,
+                              env,
+                              disturbance = NULL,
+                              patches = 100L,
+                              patch_size = NULL,
+                              init_cohort = NULL,
+                              device = c("cpu", "gpu"),
+                              return_cohorts = FALSE,
+                              debug = FALSE,
+                              recruits = c("simulated", "observed"),
+                              obs_recruits = NULL,
+                              ...) {
+  dots = list(...)
+  # simulateForest() says whether `patches` was given; a direct predict() call knows itself
+  patches_given = if (!is.null(dots$.patches_given)) dots$.patches_given else !missing(patches)
+  dots$.patches_given = NULL
+  env = check_fit_env(env, caller = "predict()")
+  disturbance = check_fit_disturbance(disturbance, env, caller = "predict()")
+  if (is.null(patch_size)) patch_size = if (is.null(object$patch_size_ha)) 0.1 else object$patch_size_ha
+  check_patch_arguments(object, patches, patch_size, init_cohort,
+                        patches_given = patches_given, caller = "predict()")
+  do.call(object$simulate, c(list(env = env,
+                                  disturbance = disturbance,
+                                  patches = patches,
+                                  patch_size = patch_size,
+                                  init_cohort = init_cohort,
+                                  device = device,
+                                  return_cohorts = return_cohorts,
+                                  debug = debug,
+                                  recruits = match.arg(recruits),
+                                  obs_recruits = obs_recruits),
+                             dots))
+}
+
+
+#' @rdname predict.finn_class
+#' @param model (`finn_class`)\cr The model built by [FINN::finn()], fitted with [FINN::fit()].
+#' @export
 simulateForest = function(model,
                           env,
                           disturbance = NULL,
                           patches = 100L,
-                          patch_size = 0.1,
+                          patch_size = NULL,
                           init_cohort = NULL,
                           device = c("cpu", "gpu"),
                           return_cohorts = FALSE,
@@ -1037,6 +1104,7 @@ simulateForest = function(model,
           debug = debug,
           recruits = match.arg(recruits),
           obs_recruits = obs_recruits,
+          .patches_given = !missing(patches),
           ...)
 }
 
@@ -1155,14 +1223,16 @@ finn_class = nn_module(
     recruits_dbh = 1.0,
     recruit_obs_weight = 1.0,
     growth_period_scale = FALSE,
-    reg_floor = 1e-3
+    reg_floor = NULL
   ) {
     self$N_species = N_species
     self$recruits_dbh = recruits_dbh
     self$recruit_obs_weight = recruit_obs_weight
     ## additive recruitment floor (stems ha^-1 step^-1 per species) used by the
-    ## mechanistic regeneration functions; see finn() docs
-    self$reg_floor = reg_floor
+    ## mechanistic regeneration functions. It lives on the regeneration process
+    ## (createProcess(reg_floor = )) and is copied here by add_process(); a
+    ## value given to the deprecated finn(reg_floor = ) overrides it below.
+    self$reg_floor = NULL
     self$growth_period_scale = growth_period_scale
     ## How each response is reduced from cohorts to the observed quantity. Filled
     ## by fit() from `loss_aggregation`; every entry defaults to the historical
@@ -1200,6 +1270,7 @@ finn_class = nn_module(
     private$add_process(growth_process, "growth")
     private$add_process(regeneration_process, "regeneration")
     private$add_process(competition_process, "competition")
+    if (!is.null(reg_floor)) self$reg_floor = reg_floor
 
   },
 
@@ -2567,6 +2638,9 @@ finn_class = nn_module(
                  # instead of the regeneration process, whose parameters are frozen and
                  # whose loss term is weighted 0 for this call (stage 2 of a staged fit).
                  recruits = c("simulated", "observed"),
+                 # extra arguments for the optimizer generator (fit() collects them
+                 # from finnControl(...) and from its own `...`)
+                 optimizer_args = list(),
                  ...) {
 
     recruits = match.arg(recruits)
@@ -3104,7 +3178,7 @@ finn_class = nn_module(
     # resumed fit starts a fresh optimizer.
     if(is.null(self$optimizer) || !isTRUE(all.equal(self$optimizer_lr, lr)) ||
        !private$optimizer_owns_parameters(self$optimizer)) {
-      self$optimizer = optimizer(self$parameters, lr = lr, ...)
+      self$optimizer = do.call(optimizer, c(list(self$parameters, lr = lr), optimizer_args, list(...)))
       self$optimizer_lr = lr
     }
 
@@ -3330,15 +3404,12 @@ finn_class = nn_module(
       }
 
       if(plot_progress) {
-        if(epoch == 1) max_losses = self$history[[1]]*1.1
+        # every term relative to its first-epoch value; a term at 0 (switched
+        # off, no data) becomes NaN and is left out of the plot
+        if(epoch == 1) max_losses = self$history[[1]]
         losses = do.call(rbind, self$history)
         losses = losses/matrix(max_losses, nrow = nrow(losses), ncol = ncol(losses), byrow = TRUE)
-
-        if(epoch == 1) {
-          visualize.training(losses, epoch, epochs, "Loss", new = TRUE)
-        } else {
-          visualize.training(losses, epoch, epochs, "Loss", new = FALSE)
-        }
+        visualize.training(losses, epoch, epochs, "Loss", new = (epoch == 1))
 
 
 
@@ -4124,7 +4195,7 @@ finn_class = nn_module(
         }
       })
       if (length(failed))
-        warning(sprintf("weights = 'auto': no baseline for %s; left unscaled.",
+        warning(sprintf("loss_weights = \"auto\": no baseline for %s; left unscaled.",
                         paste(sprintf("'%s' (%s)", names(failed), unlist(failed)), collapse = ", ")),
                 call. = FALSE)
       out
@@ -4397,6 +4468,10 @@ finn_class = nn_module(
       if(type == "regeneration") {
         self$sample_regeneration = obj$sample_regeneration
         self$regeneration_sampler = obj$regeneration_sampler
+        # the additive recruitment floor is a setting of the regeneration process
+        # (createProcess(reg_floor = )); a hybrid process or one built before the
+        # argument existed carries none and gets the default
+        self$reg_floor = if (is.null(obj$reg_floor)) 1e-3 else check_reg_floor(obj$reg_floor, self$N_species)
         # before par_theta_recruits, whose getter reads it
         self$theta_floor = obj$theta_floor
         # FALSE keeps theta at dispersion_parameter (a buffer); NULL = a process

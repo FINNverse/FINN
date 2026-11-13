@@ -2,14 +2,30 @@
 % Please edit documentation in R/finn-class.R
 \name{predict.finn_class}
 \alias{predict.finn_class}
-\title{Predict from a FINN model}
+\alias{simulateForest}
+\title{Simulate a forest with a FINN model}
 \usage{
 \method{predict}{finn_class}(
   object,
   env,
   disturbance = NULL,
   patches = 100L,
-  patch_size = 0.1,
+  patch_size = NULL,
+  init_cohort = NULL,
+  device = c("cpu", "gpu"),
+  return_cohorts = FALSE,
+  debug = FALSE,
+  recruits = c("simulated", "observed"),
+  obs_recruits = NULL,
+  ...
+)
+
+simulateForest(
+  model,
+  env,
+  disturbance = NULL,
+  patches = 100L,
+  patch_size = NULL,
   init_cohort = NULL,
   device = c("cpu", "gpu"),
   return_cohorts = FALSE,
@@ -20,47 +36,55 @@
 )
 }
 \arguments{
-\item{object}{(\code{finn_class})\cr Object of class \code{finn_class} created by \link{finn}.}
+\item{object}{(\code{finn_class})\cr The model built by \code{\link[=finn]{finn()}}, fitted with \code{\link[=fit]{fit()}}.}
 
-\item{env}{(\code{data.table|data.frame})\cr Data with environmental covariates must be passed as \code{data.table} or \code{data.frame}.}
+\item{env}{(\code{data.frame})\cr The environment of every site and simulated
+year: one row per \code{siteID} and \code{year}, plus one column per predictor, as
+in \code{\link[=fit]{fit()}}. Every row is one simulated step. See \link{finn_data}.}
 
-\item{disturbance}{(\code{data.table|data.frame})\cr Data with disturbance rates must be passed as \code{data.table} or \code{data.frame}.}
+\item{disturbance}{(\code{data.frame} or \code{NULL})\cr Optional disturbances: one
+row per \code{siteID} and \code{year} with the column \code{intensity}, the probability
+(0 to 1) that a patch of that site loses all its trees in that year. See
+\link{finn_data}.}
 
-\item{patches}{(\code{integer(1)})\cr Number of patches.}
+\item{patches}{(\code{integer(1)})\cr Number of patches per site when the
+simulation starts from bare ground (\code{init_cohort = NULL}). Ignored, with a
+warning when it differs, as soon as \code{init_cohort} is given: the patch
+count then comes from the initial cohorts.}
 
-\item{patch_size}{(\code{numeric(1)})\cr Patch size.}
+\item{patch_size}{(\code{numeric(1)})\cr Area of one patch in ha. \code{NULL}
+(default) takes the patch size the model was fitted with
+(\code{model$patch_size_ha}), or \code{0.1} for a model that was never fitted. A
+value that differs from the fitted one gives a warning: every per-hectare
+quantity changes with it.}
 
-\item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}.}
+\item{init_cohort}{(\code{CohortMat})\cr The trees every site starts with, from
+\code{\link[=makeInitCohorts]{makeInitCohorts()}}. \code{NULL} (default) starts from bare ground with
+\code{patches} empty patches per site (a succession run). See \link{finn_data}.}
 
 \item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
 synonym for \code{"gpu"}. Only NVIDIA cards are supported.}
 
-\item{return_cohorts}{Controls whether the raw per-cohort state is returned in
-addition to the aggregated site output. Storing cohorts every timestep is
+\item{return_cohorts}{Whether the individual cohorts are returned in
+addition to the site-level output. Storing cohorts every timestep is
 expensive, so the default is \code{FALSE} (none). Use \code{TRUE} (or \code{"all"}) for
 every timestep, \code{"last"} for the final timestep only, or an integer vector
 of timesteps to store just those. Recorded cohorts appear as \verb{$long$cohort}
 / \verb{$wide$cohort}.}
 
-\item{debug}{(\code{logical(1)})\cr Debug modus or not. If \code{TRUE}, individual tree states are stored.}
+\item{debug}{(\code{logical(1)})\cr If \code{TRUE}, the state of every cohort at every
+step is stored, with the intermediate quantities of the processes.}
 
 \item{recruits}{(\code{character(1)})\cr Where the recruits come from. \code{"simulated"}
-(the default) is the model's regeneration process, as before. \code{"observed"}
-feeds the observed recruitment in \code{obs_recruits} instead, as
-\code{fit(recruits = "observed")} does: the \code{reg} of each site, species and
-observation interval (recruits per ha over the interval, on the row of its
-END year) divided by \code{period_length} is the expected recruitment per ha and
-year in every simulated year of that interval; times \code{patch_size} it is drawn
-per patch by the recruit sampler (or taken as the mean with
-\code{sample_regeneration = FALSE}, where the rounding then delivers no recruit
-wherever the per-patch mean is below 0.5). Growth, mortality and competition run as
-usual. Meant for checking a model calibrated that way on the intervals it was
-calibrated on: with observed recruitment the model is \strong{not an autonomous
-simulator}, so every simulated year must lie in an observed interval, and a
-bare-ground, succession or projection run beyond them is refused. Such runs
-need the fitted regeneration process (\code{"simulated"}). See \link{recruitment}.}
+(the default) is the model's regeneration process. \code{"observed"} feeds the
+observed recruitment in \code{obs_recruits} instead, as
+\code{fit(loss_recruit = "observed")} does, to check a model calibrated that way
+on the intervals it was calibrated on. With observed recruitment the model
+is not an autonomous simulator: every simulated year must lie in an
+observed interval, and a bare-ground, succession or projection run beyond
+them is refused. See \link{recruitment} for the unit chain.}
 
-\item{obs_recruits}{(\code{data.table|data.frame})\cr The observed recruitment for
+\item{obs_recruits}{(\code{data.frame})\cr The observed recruitment for
 \code{recruits = "observed"}, required there and refused otherwise: a table like
 \code{fit()}'s \code{data} with \code{siteID}, \code{year}, \code{species}, \code{reg} and \code{period_length},
 rows for every species (0 where none recruited), the sites of \code{env} and years
@@ -72,44 +96,67 @@ in none are errors.}
 \code{batchsize} (split the sites into batches of this many to cap memory for very
 large runs). The default processes all sites in one batch and is what almost
 all users want.}
+
+\item{model}{(\code{finn_class})\cr The model built by \code{\link[=finn]{finn()}}, fitted with \code{\link[=fit]{fit()}}.}
 }
 \value{
-A named list of predictions. \verb{$long$site} (and \verb{$wide$site}) give the
-site-level results (columns \code{siteID}, \code{year}, \code{species}, \code{variable},
-\code{value}). When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
+A named list. \verb{$long$site} (and \verb{$wide$site}) give the site-level
+results, averaged over the patches: columns \code{siteID}, \code{year}, \code{species},
+\code{variable} (\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mort}, \code{r_mean_ha}, ...) and
+\code{value}. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
 the per-cohort state (\code{dbh}, \code{trees}, \code{species}, growth \code{g}, mortality \code{m},
 ...) for the requested timesteps.
 }
 \description{
-Predict from a FINN model
+Simulates every site of \code{env} forward through its years, starting from the
+trees in \code{init_cohort} (or from bare ground), with the model's current
+parameters -- usually after \code{\link[=fit]{fit()}} has estimated them. Returns the
+simulated stand variables and demographic rates per site, year and species,
+and on request the individual cohorts. \code{predict(model, ...)} is the S3
+method for the \link[stats:predict]{stats::predict} generic; \code{\link[=simulateForest]{simulateForest()}} is the same
+function under a name that says what it does.
 }
 \details{
-Simulate from a (fitted) FINN model. This is an S3 method for the
-\link[stats:predict]{stats::predict} generic, so it is dispatched as \code{predict(model, ...)}.
+The simulation uses the environment of every row of \code{env} in turn; the
+first row of a site drives the first step from \code{init_cohort}. \code{env} must be
+in natural units: the standardisation learned by \code{\link[=fit]{fit()}} is applied
+automatically. A model that has not been fitted has no standardisation yet,
+so it must be given \code{env} on the scale its processes expect; fit it first
+(two epochs are enough for a trial).
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 library(data.table)
-# simulate three Oregon FIA sites over the years in `env`, starting from the
-# observed stands. The model is unfitted here, so these are its priors.
+# three Oregon FIA sites: estimate the parameters (two epochs, for the
+# example), then simulate the sites over the years of `env` from the
+# observed stands
 sites <- 1:3
 Nsp   <- max(fia_obs_dt$species)
 init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
-m <- finn(
-  N_species            = Nsp, recruits_dbh = 12.9,
-  growth_process       = createProcess(~ temp + prec, FINN::growth),
-  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createProcess(~ temp + prec, growth),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+
 sim <- predict(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init,
-               patches = 4, patch_size = 0.06, return_cohorts = "last")
+               return_cohorts = "last")
 head(sim$long$site)
 
-# the raw per-cohort state of the final timestep, kept because of
-# `return_cohorts`; storing every timestep is expensive
+# the cohorts of the final timestep, kept because of `return_cohorts`
 head(sim$long$cohort)
+
+# a 50-year succession from bare ground, with the climate of year 0 repeated
+succession <- fia_env_dt[siteID \%in\% sites & year == 0][rep(1:3, each = 50)]
+succession[, year := rep(1:50, times = 3)]
+sim50 <- simulateForest(m, env = succession, patches = 4)
+sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year \%in\% c(10, 50)]
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\link{recruitment} for the recruitment options (\code{recruits},
-\code{obs_recruits}) and how to combine them
+\code{\link[=fit]{fit()}}, \link{finn_data} for the input tables, \link{recruitment} for
+the recruitment options (\code{recruits}, \code{obs_recruits})
 }
