@@ -430,6 +430,16 @@ someone who was affected.
 
 ## Behaviour changes
 
+* **Trees can grow up to 130 m, not 101 m.** The upper bound of the fitted height
+  parameter (first column of the competition parameters) is `log(2.3)` instead of
+  0.7. `height()` approaches `(exp(parHeight) - 1) * 100` m as the diameter grows,
+  so 0.7 capped every species at 101 m, below the 122-130 m physical limit of tree
+  height (Koch et al. 2004), and a species given exactly 0.7 (as in the
+  introduction vignette) was clamped with a warning. Fits that train the
+  competition parameters change slightly, because the bound sets the scale on
+  which the parameter is optimised. `createProcess(upper = c(0.7, 2.0))` on the
+  competition process restores 0.1.0.
+
 * **The recruitment floor is `1e-3`, not 0.2.** `createProcess(reg_floor = )` replaces a
   hard-coded additive floor of 0.2 on the expected recruitment of every species
   in every cell-year. At 0.2 the floor alone delivered about 13 stems per hectare

@@ -80,7 +80,9 @@ this process is the regeneration process. See \link{recruitment}.}
 environmental-response network architecture.}
 
 \item{upper}{(\code{numeric()})\cr Upper boundaries (natural scale) for the
-species-specific process parameters.}
+species-specific process parameters. For the competition process the
+defaults are \code{c(log(2.3), 2.0)}: the height parameter is capped so that no
+species grows taller than 130 m (see \code{\link[=height]{height()}}).}
 
 \item{lower}{(\code{numeric()})\cr Lower boundaries (natural scale) for the
 species-specific process parameters.}

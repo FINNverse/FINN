@@ -95,7 +95,9 @@
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the default
 #'   environmental-response network architecture.
 #' @param upper (`numeric()`)\cr Upper boundaries (natural scale) for the
-#'   species-specific process parameters.
+#'   species-specific process parameters. For the competition process the
+#'   defaults are `c(log(2.3), 2.0)`: the height parameter is capped so that no
+#'   species grows taller than 130 m (see [FINN::height()]).
 #' @param lower (`numeric()`)\cr Lower boundaries (natural scale) for the
 #'   species-specific process parameters.
 #' @param dropout (`numeric(1)`)\cr Dropout rate of the environmental-response
@@ -700,7 +702,9 @@ get_par_boundary = function(obj, type, upper = TRUE) {
                      mortality = { c(10.0, 10.0, 10.0) },
                      growth = {c(0.99, 4.0)},
                      regeneration = { 0.99 },
-                     competition = { c(0.7, 2.0)})
+                     # height parameter: height() approaches (exp(p) - 1) * 100 m as dbh grows, so
+                     # log(2.3) caps trees at 130 m, the physical limit of tree height (Koch et al. 2004)
+                     competition = { c(log(2.3), 2.0)})
     } else {
       upper = obj$upper
     }
