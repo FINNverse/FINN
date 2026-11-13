@@ -1,4 +1,4 @@
-## fit(recruits = "observed") drives the stand with the observed recruitment of each
+## fit(loss_recruit = "observed") drives the stand with the observed recruitment of each
 ## interval instead of the regeneration process, freezes that process for the call
 ## and weights its loss term 0; simulateForest(recruits = "observed") feeds the same
 ## rates from a table. The rate of an interval is reg / period_length per ha and
@@ -39,7 +39,7 @@ test_that("the default \"simulated\" is the fit without the argument", {
   skip_if_no_torch()
   d <- ro_setup()
   m1 <- ro_model(d$Nsp); ro_fit(m1, d)
-  m2 <- ro_model(d$Nsp); ro_fit(m2, d, recruits = "simulated")
+  m2 <- ro_model(d$Nsp); ro_fit(m2, d, loss_recruit = "simulated")
   expect_identical(m1$history, m2$history)
   expect_identical(lapply(m1$parameters, as.array), lapply(m2$parameters, as.array))
 })
@@ -56,7 +56,7 @@ test_that("observed recruits freeze regeneration, train the rest and restore req
   before <- lapply(m$parameters, function(p) as.array(p$detach()$clone()))
   rg     <- vapply(m$parameters, function(p) p$requires_grad, logical(1))
 
-  ro_fit(m, d, epochs = 3L, recruits = "observed")
+  ro_fit(m, d, epochs = 3L, loss_recruit = "observed")
   after <- lapply(m$parameters, function(p) as.array(p$detach()))
 
   for (nm in reg_nm) expect_identical(after[[nm]], before[[nm]], info = nm)
@@ -107,7 +107,7 @@ test_that("per-site windows are fed per site, and years after a site's last cens
   # site 2 has no census at year 2: per-site path, and its timestep 3 is never scored
   d$obs <- d$obs[!(siteID == 2 & year == 2)]
   m <- ro_model(d$Nsp)
-  ro_fit(m, d, recruits = "observed", shuffle = FALSE)
+  ro_fit(m, d, loss_recruit = "observed", shuffle = FALSE)
   expect_true(m$per_site_period)
   p <- merge(data.table::as.data.table(m$pred$wide$site)[, census := ifelse(year <= 2L, 1L, 2L)],
              d$obs[, .(siteID, species, census = year, reg_obs = reg, period_length)],
@@ -122,17 +122,17 @@ test_that("observed recruits refuse what they cannot feed", {
   m <- ro_model(d$Nsp)
 
   bad <- data.table::copy(d$obs); bad[1, reg := NA]
-  expect_error(ro_fit(m, list(obs = bad, env = d$env, init = d$init), recruits = "observed"),
+  expect_error(ro_fit(m, list(obs = bad, env = d$env, init = d$init), loss_recruit = "observed"),
                "1 site x species x interval cell")
   # without period_length the census at year 1 scores timestep 2 alone: timestep 1 has no recruitment
   nopl <- data.table::copy(d$obs)[, period_length := NULL]
-  expect_error(ro_fit(m, list(obs = nopl, env = d$env, init = d$init), recruits = "observed"),
+  expect_error(ro_fit(m, list(obs = nopl, env = d$env, init = d$init), loss_recruit = "observed"),
                "before or between")
   ovl <- data.table::copy(d$obs)[year == 2, period_length := 2]
-  expect_error(ro_fit(m, list(obs = ovl, env = d$env, init = d$init), recruits = "observed"),
+  expect_error(ro_fit(m, list(obs = ovl, env = d$env, init = d$init), loss_recruit = "observed"),
                "more than one observed interval")
-  expect_error(ro_fit(m, d, recruits = "observed", reanchor = TRUE), "reanchor")
-  expect_error(ro_fit(m, d, recruits = "observed", teacher_forcing = TRUE), "teacher_forcing")
+  expect_error(ro_fit(m, d, loss_recruit = "observed", reanchor = TRUE), "reanchor")
+  expect_error(ro_fit(m, d, loss_recruit = "observed", teacher_forcing = TRUE), "teacher_forcing")
 
   expect_error(simulateForest(m, env = d$env, init_cohort = d$init, patches = 4, patch_size = 0.06,
                               recruits = "observed"), "needs `obs_recruits`")

@@ -19,7 +19,7 @@ test_that("simulating restores a frozen parameter instead of enabling everything
                    treeName = c("t1", "t2"), trees = 4)
   env <- data.table(expand.grid(siteID = 1L, year = 1:5))[, env1 := 0]
   simulateForest(m, env = env, init_cohort = makeInitCohorts(it, Nspecies = Nsp),
-                 patches = 2L, patch_size = 0.1, device = "cpu")
+                 patches = 1L, patch_size = 0.1, device = "cpu")
 
   expect_setequal(names(Filter(function(p) !p$requires_grad, m$parameters)), frozen)
 })

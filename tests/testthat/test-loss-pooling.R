@@ -59,10 +59,10 @@ run_fit <- function(obs, tree_dt = NULL, family, weights = rep(1, 6), agg = NULL
   FINN.seed(SEED); mm <- mk_model(); mm$period_mode <- "per_site"
   # weight_scale = "raw": this file checks the pooling arithmetic by hand, so the
   # reported loss must be the raw one and not the baseline-scaled objective
-  suppressMessages(fit(mm, env = env, data = obs, init_cohort = ic, patches = 1L, patch_size = 0.1,
+  suppressMessages(fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
       env_autoscale = FALSE, loss_family = family, loss_aggregation = agg, tree_data = tree_dt,
-      epochs = 1L, lr = 0, weights = weights, weight_scale = weight_scale, batchsize = Nsites, shuffle = FALSE,
-      optimizer = OPT, plot_progress = FALSE, device = "cpu", clip_norm = 1e6))   # unclipped grads
+      epochs = 1L, lr = 0, loss_weights = weights, weight_scale = weight_scale, batchsize = Nsites, shuffle = FALSE,
+      control = finnControl(optimizer = OPT, clip_norm = 1e6), plot_progress = FALSE, device = "cpu"))   # unclipped grads
   mm
 }
 bce <- function(p, y) { p <- pmin(pmax(p, 1e-6), 1 - 1e-6); -(y * log(p) + (1 - y) * log(1 - p)) }

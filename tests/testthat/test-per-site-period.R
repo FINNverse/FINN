@@ -27,8 +27,8 @@ OPT  <- if (exists("optim_ignite_adam", envir = asNamespace("torch"))) torch::op
 run_fit <- function(obs, mode = "auto") {
   FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
   fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-      loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
-      optimizer = OPT, plot_progress = FALSE, device = "cpu")
+      loss_family = LOSS, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+      control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu")
   mm
 }
 sched_rows <- function(sched) rbindlist(lapply(seq_along(sched), function(s) {
@@ -79,8 +79,8 @@ test_that("period_mode = 'constant' is refused, not overridden, by a per-tree te
   go <- function(mode) {
     FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
     fit(mm, env = env, data = obs5, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-        loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
-        optimizer = OPT, plot_progress = FALSE, device = "cpu",
+        loss_family = LOSS, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+        control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu",
         loss_aggregation = c(growth = "tree"), tree_data = tt)
     mm
   }
@@ -99,8 +99,8 @@ test_that("the per-site path stops when data carries no period_length (FINN#46)"
   go <- function(obs, mode, ...) {
     FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
     fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-        loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
-        optimizer = OPT, plot_progress = FALSE, device = "cpu", ...)
+        loss_family = LOSS, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+        control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu", ...)
     mm
   }
   no_pl <- copy(obs5)[, period_length := NULL]
@@ -127,7 +127,7 @@ test_that("mixed periods: gradients flow through the deferred backward", {
     regeneration_process = createProcess(~1 + env1, func = FINN::regeneration, optimizeSpecies = TRUE))
   p0 <- as.numeric(torch::as_array(mm$par_growth))
   fit(mm, env = env, data = obsm, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-      loss_family = LOSS, epochs = 2L, lr = 0.01, weights = rep(1, 6), batchsize = Nsites, optimizer = OPT,
+      loss_family = LOSS, epochs = 2L, lr = 0.01, loss_weights = rep(1, 6), batchsize = Nsites, control = finnControl(optimizer = OPT),
       plot_progress = FALSE, device = "cpu")
   expect_true(mm$per_site_period)
   expect_gt(max(abs(as.numeric(torch::as_array(mm$par_growth)) - p0)), 1e-6)

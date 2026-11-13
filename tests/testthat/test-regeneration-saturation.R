@@ -44,7 +44,7 @@ test_that("per-species K (reg_logK length N_species) fits without crashing", {
   before <- as.numeric(m$reg_logK)
   suppressMessages(
     fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
-        epochs = 3L, patches = 2, patch_size = 0.06, lr = 0.02, plot_progress = FALSE)
+        epochs = 3L, patches = 4, patch_size = 0.06, lr = 0.02, plot_progress = FALSE)
   )
   after <- as.numeric(m$reg_logK)
   expect_length(after, d$Nsp)
@@ -59,7 +59,7 @@ test_that("shared K (reg_logK length 1) fits and stays scalar", {
   expect_length(as.numeric(m$reg_logK), 1L)
   suppressMessages(
     fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
-        epochs = 3L, patches = 2, patch_size = 0.06, lr = 0.02, plot_progress = FALSE)
+        epochs = 3L, patches = 4, patch_size = 0.06, lr = 0.02, plot_progress = FALSE)
   )
   expect_length(as.numeric(m$reg_logK), 1L)
   expect_true(is.finite(as.numeric(m$reg_logK)))
@@ -79,6 +79,6 @@ test_that("regeneration_saturation without reg_logK errors clearly", {
   expect_equal(m$reg_logK$numel(), 1L)
   expect_silent(suppressMessages(suppressWarnings(
       fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
-          epochs = 1L, patches = 2, patch_size = 0.06, plot_progress = FALSE))))
+          epochs = 1L, patches = 4, patch_size = 0.06, plot_progress = FALSE))))
   expect_equal(m$reg_prior_value, max(d$obs$reg, na.rm = TRUE))
 })

@@ -26,8 +26,8 @@ resume_model <- function(Nsp) {
 }
 resume_fit <- function(m, d, opt) {
   suppressMessages(fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
-                       epochs = 1L, patches = 2, patch_size = 0.06, lr = 0.02,
-                       optimizer = opt, plot_progress = FALSE))
+                       epochs = 1L, patches = 4, patch_size = 0.06, lr = 0.02,
+                       control = finnControl(optimizer = opt), plot_progress = FALSE))
 }
 param_values <- function(m) unlist(lapply(m$parameters, function(p) as.numeric(p$cpu())))
 

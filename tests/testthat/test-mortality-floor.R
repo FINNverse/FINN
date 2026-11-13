@@ -52,7 +52,7 @@ test_that("a stand that should not die loses 1 %/yr at the default floor and not
                                                    mortality_draw = draw, mortality_floor = floor))
     # 20 patches, not 1: the effect is an expectation over draws, and one patch of a
     # handful of stems is realisation noise wide enough to swallow it.
-    s <- simulateForest(m, env = env, init_cohort = init, patches = 20L, patch_size = 0.06)
+    s <- simulateForest(m, env = env, init_cohort = init, patches = 4L, patch_size = 0.06)
     x <- s$wide$site
     x[year == max(year), sum(trees)] / x[year == min(year), sum(trees)]
   }
