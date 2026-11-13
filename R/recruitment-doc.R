@@ -21,7 +21,8 @@
 #' `finn(regeneration_process = )`. All mechanistic variants share the same core:
 #' a light response gated by the species parameter `parReg`, times the
 #' environmental response `exp(env)`, plus the additive floor
-#' `finn(reg_floor = )` (default `1e-3` stems per ha and year).
+#' `createProcess(reg_floor = )` of the regeneration process (default `1e-3`
+#' stems per ha and year).
 #'
 #' * [FINN::regeneration()]: the core alone. The expected recruitment is not
 #'   bounded; it grows with the environmental response.
@@ -126,7 +127,7 @@
 #' `fit(trees_offset = )` (default `0.01`) to the prediction.
 #'
 #' @section Feeding observed recruitment:
-#' `fit(recruits = "observed")` drives the simulated stand with the observed
+#' `fit(loss_recruit = "observed")` drives the simulated stand with the observed
 #' recruitment instead of the regeneration process. The observed `reg` divided
 #' by `period_length` is the expected recruitment per ha and year in every year
 #' of that interval; times `patch_size` it is drawn per patch by the recruit
@@ -142,9 +143,9 @@
 #' The intended use is a staged calibration when the inventory samples small
 #' trees too sparsely to calibrate recruitment jointly with the rest. First fit
 #' the demography (growth, mortality, competition) with
-#' `recruits = "observed"`; then fit the regeneration process on its own, with
+#' `fit(loss_recruit = "observed")`; then fit the regeneration process on its own, with
 #' the other processes frozen (`optimizeSpecies`/`optimizeEnv = FALSE`, or
-#' through `weights`).
+#' through `loss_weights`).
 #'
 #' One caveat: the fed per-site count is a noisy estimate, and it is re-sampled
 #' as if it were the mean. The observation noise of a sparse small-tree count

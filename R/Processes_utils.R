@@ -192,6 +192,19 @@
 #'   heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
 #'   times the old default's at `1e-3` and about a hundred times at `1e-4` --
 #'   so `1e-3` is the lowest tested value and is the new default.
+#' @param reg_floor (`numeric`)\cr A small recruitment that every species gets
+#'   in every patch and time step, whatever the light and the environment, in
+#'   trees per ha and time step. Only used when this process is the
+#'   regeneration process ([FINN::regeneration()], [FINN::regeneration_capped()]
+#'   and [FINN::regeneration_adult()] add it to their expected recruitment:
+#'   `mean = regP * exp(env) + reg_floor`). Default `1e-3`, which keeps the
+#'   recruitment likelihood finite where the light response closes and adds
+#'   next to nothing. One value for all species or one per species. Before
+#'   0.2.0 the floor was hard-coded to `0.2`, which with many species adds a
+#'   large recruitment that does not depend on anything (65 species x 0.2 = 13
+#'   trees per ha and year); models saved before then keep that value when
+#'   reloaded. `finn(reg_floor = )`, the argument of earlier versions, is
+#'   still accepted with a warning and overrides this value.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
 #'   process and `func` declares that argument. `NULL` (the default) keeps the
@@ -239,12 +252,18 @@
 #' @examples
 #' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 #'
+#' # the regeneration process with a smaller recruitment floor and a cap per species
+#' regeneration_process <- createProcess(~temperature, func = regeneration_capped,
+#'                                       reg_floor = 1e-4, cap = "species")
+#'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
                          cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
                          theta_floor = 0.5, optimizeTheta = TRUE,
-                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
+                         mortality_floor = 0.001, mortality_ceiling = 0.999,
+                         reg_floor = 1e-3) {
   out = list()
+  out$reg_floor = check_reg_floor(reg_floor)
   out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
   out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
@@ -703,6 +722,17 @@ get_par_boundary = function(obj, type, upper = TRUE) {
 
 # The recruitment cap's prior is specified identically on createProcess() and
 # createHybrid(); validating it in one place keeps the two from drifting apart.
+# The additive recruitment floor: non-negative, finite, one value or one per
+# species. Checked in createProcess() (length 1 or any, N_species unknown) and
+# again when the process is attached to a model.
+check_reg_floor = function(reg_floor, N_species = NULL) {
+  ok = is.numeric(reg_floor) && all(is.finite(reg_floor)) && all(reg_floor >= 0) &&
+    (if (is.null(N_species)) length(reg_floor) >= 1L else length(reg_floor) %in% c(1L, N_species))
+  if (!ok)
+    stop("`reg_floor` must be non-negative finite numbers, of length 1 or `N_species`.", call. = FALSE)
+  reg_floor
+}
+
 validate_cap_prior = function(prior) {
   if(identical(prior, "max_obs_recruits")) return(prior)
   if(is.numeric(prior) && length(prior) == 1L && is.finite(prior) && prior > 0) return(as.numeric(prior))

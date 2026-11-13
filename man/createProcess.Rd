@@ -33,7 +33,8 @@ createProcess(
   theta_floor = 0.5,
   optimizeTheta = TRUE,
   mortality_floor = 0.001,
-  mortality_ceiling = 0.999
+  mortality_ceiling = 0.999,
+  reg_floor = 0.001
 )
 }
 \arguments{
@@ -240,6 +241,20 @@ unbiased mean gradient down to \code{1e-4}, but single-draw gradients grow
 heavy-tailed as \code{n*p} shrinks -- the largest per-tree gradient is about ten
 times the old default's at \code{1e-3} and about a hundred times at \code{1e-4} --
 so \code{1e-3} is the lowest tested value and is the new default.}
+
+\item{reg_floor}{(\code{numeric})\cr A small recruitment that every species gets
+in every patch and time step, whatever the light and the environment, in
+trees per ha and time step. Only used when this process is the
+regeneration process (\code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}}
+and \code{\link[=regeneration_adult]{regeneration_adult()}} add it to their expected recruitment:
+\code{mean = regP * exp(env) + reg_floor}). Default \code{1e-3}, which keeps the
+recruitment likelihood finite where the light response closes and adds
+next to nothing. One value for all species or one per species. Before
+0.2.0 the floor was hard-coded to \code{0.2}, which with many species adds a
+large recruitment that does not depend on anything (65 species x 0.2 = 13
+trees per ha and year); models saved before then keep that value when
+reloaded. \code{finn(reg_floor = )}, the argument of earlier versions, is
+still accepted with a warning and overrides this value.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and
@@ -293,6 +308,10 @@ are constrained during optimization.
 }
 \examples{
 growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
+
+# the regeneration process with a smaller recruitment floor and a cap per species
+regeneration_process <- createProcess(~temperature, func = regeneration_capped,
+                                      reg_floor = 1e-4, cap = "species")
 
 }
 \references{

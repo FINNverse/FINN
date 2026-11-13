@@ -51,7 +51,7 @@ A cap that only the data constrain runs to whatever the fitted window
 supports, which on a national inventory is far above anything observed. So
 the cap carries a prior, added to the objective as
 \verb{prior_lambda * (log K - log prior)^2} per cap -- the same form as the L2
-pull of a staged calibration. It is added \strong{after} the \code{weights = "auto"}
+pull of a staged calibration. It is added \strong{after} the \code{loss_weights = "auto"}
 baseline scaling, so \code{prior_lambda} means the same thing on every dataset.
 
 \code{createProcess(prior = "max_obs_recruits")}, the default, resolves the prior

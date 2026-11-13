@@ -357,7 +357,7 @@ regeneration = function(species, parReg, pred, light, debug = FALSE) {
   if("matrix" %in% class(pred)) pred = torch::torch_tensor(pred)
   environment = torch::torch_exp(pred) # Environmental inverse link function
   regP = (1 / (1 + torch_exp(-10 * (light - parReg))) - 1 / (1 + torch_exp(10 * parReg))) / (1 - 1 / (1 + torch_exp(10 * (1 - parReg))))
-  ## additive floor: finn(reg_floor = ); models saved before the argument existed
+  ## additive floor: createProcess(reg_floor = ); models saved before the argument existed
   ## carry no field and keep the historical 0.2
   reg_floor = if(is.null(self$reg_floor)) 0.2 else self$reg_floor
   mean = (regP*(environment[,NULL])$`repeat`(c(1, species$shape[2], 1)) + reg_floor)
@@ -400,7 +400,7 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' supports, which on a national inventory is far above anything observed. So
 #' the cap carries a prior, added to the objective as
 #' `prior_lambda * (log K - log prior)^2` per cap -- the same form as the L2
-#' pull of a staged calibration. It is added **after** the `weights = "auto"`
+#' pull of a staged calibration. It is added **after** the `loss_weights = "auto"`
 #' baseline scaling, so `prior_lambda` means the same thing on every dataset.
 #'
 #' `createProcess(prior = "max_obs_recruits")`, the default, resolves the prior

@@ -18,14 +18,16 @@ init_trees <- data.table(siteID = rep(1:3, each = 8), patchID = rep(rep(1:2, eac
 ic  <- makeInitCohorts(init_trees, Nspecies = Nsp)
 env <- data.table(expand.grid(siteID = 1:3, year = 1:6)); env[, env1 := (siteID - 2) * 0.5]
 sim_rec <- function(reg_floor) {
-  FINN.seed(1); m <- mk(reg_floor)
+  FINN.seed(1); m <- suppressWarnings(mk(reg_floor))
   s <- simulateForest(m, env = env, init_cohort = ic, patches = 2L, patch_size = 0.1, device = "cpu")
   s$long$site[variable == "r_mean_ha", mean(value, na.rm = TRUE)]
 }
 
-test_that("finn() exposes reg_floor with a small default", {
-  expect_equal(formals(finn)$reg_floor, 1e-3)
-  expect_equal(mk(0.05)$reg_floor, 0.05)
+test_that("the regeneration process exposes reg_floor with a small default; finn(reg_floor = ) still sets it", {
+  expect_equal(formals(createProcess)$reg_floor, 1e-3)
+  expect_equal(finn(N_species = Nsp)$reg_floor, 1e-3)
+  expect_warning(m <- mk(0.05), "createProcess\\(reg_floor = \\)")
+  expect_equal(m$reg_floor, 0.05)
 })
 
 test_that("the recruitment floor is what reg_floor says, not a hard-coded 0.2", {
