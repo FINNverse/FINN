@@ -37,3 +37,27 @@ Joins tree, environment, and observation tables; assigns integer indices
 for site, patch, period; standardizes species coding; and returns aligned
 data plus optional initial cohorts.
 }
+\examples{
+library(data.table)
+# eight Oregon FIA plots, three inventories each; see the data-preparation vignette
+tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+env_dt  <- fread(system.file("extdata", "example_env_dt.csv",  package = "FINN"))
+obs <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+                   fix_period_length = 10, NspeciesQuantile = 0.98)
+
+# Names become integer ids shared by every table, calendar years become
+# 0, 1, 2 (0 is the initial state). Pass the tree list makeObsData() returned:
+# it carries the same species lumping as obs_dt. createInitCohorts = FALSE
+# leaves out the starting cohorts, which need torch.
+inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt,
+                         createInitCohorts = FALSE)
+inputs$species_dt
+head(inputs$obs_dt)      # per site, year and species: what fit(data = ) takes
+head(inputs$env_dt)      # one row per site and year: what fit(env = ) takes
+head(inputs$siteID_dt)   # the map back to the inventory's own names
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# with torch, the same call also builds the starting cohorts (a CohortMat)
+inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt)
+inputs$initCohorts$dims  # sites, patches, cohorts
+\dontshow{\}) # examplesIf}
+}

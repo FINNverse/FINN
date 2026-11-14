@@ -171,7 +171,7 @@ test_that("no recruit cohort enters the per-tree residual", {
     g = tl_model(d)
     # weight_scale = "raw": the assertion below is the hand-computed BCE, so the
     # reported loss must not carry the baseline scaling
-    tl_fit(g, d, loss_resolution = "tree", weights = rep(1, 6), weight_scale = "raw",
+    tl_fit(g, d, loss_resolution = "tree", loss_weights = rep(1, 6), weight_scale = "raw",
            tree_data = tl_table(td, g$init, year = 2))
     as.numeric(g$model$history[[1]])[4:5]
   }
@@ -283,7 +283,7 @@ test_that("tree_data is checked against the layout the interval starts from", {
                                     loss_resolution = "tree", tree_data = tb())),
                "needs `init_cohort`")
   # the weight vector is six long in both modes - one weight per response, not per resolution
-  bad("length 6", weights = rep(1, 5), tree_data = tb())
+  bad("length 6", loss_weights = rep(1, 5), tree_data = tb())
   # the two ways of scoring single trees cannot be combined on one response
   bad("cannot be combined", tree_data = tb(), loss_aggregation = c(mortality = "tree"))
   # the anchor, not init_cohort, is the layout of the interval that follows it
@@ -357,7 +357,7 @@ tll = if (!requireNamespace("torch", quietly = TRUE) || !torch::torch_is_install
                                              initSpecies = c(0.1, 0.1), func = FINN::regeneration, sample_regeneration = FALSE))
       m$growth_period_scale = period_scale
       suppressMessages(fit(m, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
-          env_autoscale = FALSE, epochs = 1L, lr = 0, weights = weights, batchsize = Nsites,
+          env_autoscale = FALSE, epochs = 1L, lr = 0, loss_weights = weights, batchsize = Nsites,
           shuffle = FALSE, plot_progress = FALSE, device = "cpu",
           loss_family = c(dbh = "mse", ba = "mse", trees = "mse", growth = "mse",
                           mortality = "binomial", regeneration = "mse"),

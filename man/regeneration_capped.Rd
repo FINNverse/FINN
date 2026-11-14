@@ -35,6 +35,8 @@ unbounded mean recruitment with a Beverton-Holt density dependence,
 \code{recruits = K * m / (K + m)}, where \code{m} is the mechanistic mean recruitment
 (identical to \link{regeneration}) and \code{K} is a fitted carrying capacity
 (stems ha^-1 step^-1). As \code{m} grows, recruitment saturates towards \code{K}.
+\code{regeneration_saturation()} is the same function under its older name, kept
+as a deprecated alias for one release.
 }
 \details{
 The cap is the parameter \code{reg_logK} (\code{K = exp(reg_logK)}), which \strong{FINN
@@ -49,7 +51,7 @@ A cap that only the data constrain runs to whatever the fitted window
 supports, which on a national inventory is far above anything observed. So
 the cap carries a prior, added to the objective as
 \verb{prior_lambda * (log K - log prior)^2} per cap -- the same form as the L2
-pull of a staged calibration. It is added \strong{after} the \code{weights = "auto"}
+pull of a staged calibration. It is added \strong{after} the \code{loss_weights = "auto"}
 baseline scaling, so \code{prior_lambda} means the same thing on every dataset.
 
 \code{createProcess(prior = "max_obs_recruits")}, the default, resolves the prior
@@ -86,5 +88,8 @@ m <- finn(N_species = Nsp, regeneration_process = createProcess(
 
 }
 \seealso{
-\link{regeneration}, \code{\link[=createProcess]{createProcess()}}
+\link{regeneration}, \code{\link[=regeneration_adult]{regeneration_adult()}},
+\code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}},
+\code{\link[=createProcess]{createProcess()}}, \link{recruitment} for the recruitment options and how
+to combine them
 }

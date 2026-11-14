@@ -26,6 +26,29 @@
 #'   \item \code{initCohort_dt} (optional): trees used to build cohorts.
 #' }
 #'
+#' @examples
+#' library(data.table)
+#' # eight Oregon FIA plots, three inventories each; see the data-preparation vignette
+#' tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+#' env_dt  <- fread(system.file("extdata", "example_env_dt.csv",  package = "FINN"))
+#' obs <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+#'                    fix_period_length = 10, NspeciesQuantile = 0.98)
+#'
+#' # Names become integer ids shared by every table, calendar years become
+#' # 0, 1, 2 (0 is the initial state). Pass the tree list makeObsData() returned:
+#' # it carries the same species lumping as obs_dt. createInitCohorts = FALSE
+#' # leaves out the starting cohorts, which need torch.
+#' inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt,
+#'                          createInitCohorts = FALSE)
+#' inputs$species_dt
+#' head(inputs$obs_dt)      # per site, year and species: what fit(data = ) takes
+#' head(inputs$env_dt)      # one row per site and year: what fit(env = ) takes
+#' head(inputs$siteID_dt)   # the map back to the inventory's own names
+#' @examplesIf torch::torch_is_installed()
+#' # with torch, the same call also builds the starting cohorts (a CohortMat)
+#' inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt)
+#' inputs$initCohorts$dims  # sites, patches, cohorts
+#'
 #' @import data.table
 #' @export
 resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
@@ -53,7 +76,10 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   tree_dt[, year := period-1,]
   tree_dt <- tree_dt[, -"period"]
 
-  env_dt <- merge(env_dt, siteID_dt[,.(siteName, siteID, year, period)], by = c("siteName","year"), all = FALSE)
+  # siteID_dt has one row per site, patch and year; the environment is a site
+  # property, so take the site x year rows once or every patch would duplicate
+  # them and climateDF2array() refuses the table when fit() builds its arrays.
+  env_dt <- merge(env_dt, unique(siteID_dt[,.(siteName, siteID, year, period)]), by = c("siteName","year"), all = FALSE)
   env_dt[, OrigYear := year,]
   env_dt[, year := period-1,]
   env_dt <- env_dt[, -"period"]
@@ -161,6 +187,28 @@ dbh2ba <- function(dbh){
 #'     response; pass them to \code{fit} with \code{mortality = "binomial"}.
 #'   \item \code{tree_dt}: input trees with added growth fields and species recode.
 #' }
+#'
+#' @examples
+#' library(data.table)
+#' # A tree list of eight Oregon FIA plots with four patches and three inventories
+#' # each, one row per tree and inventory: siteName, patchName, treeName, year,
+#' # species_name, dbh (cm), status ("new", "alive", "dead") and living.
+#' tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+#' head(tree_dt[, .(siteName, patchName, treeName, year, species_name, dbh, status)])
+#'
+#' obs <- makeObsData(
+#'   tree_dt[complete == TRUE],    # fully remeasured plots only
+#'   plotsize          = 0.06,     # ha per patch; recruits are scaled to per hectare
+#'   aggregate_by_site = FALSE,    # keep the patches: resolveSiteIDs() needs them
+#'   fix_period_length = 10,       # drop plots whose remeasurement interval is not 10 years
+#'   NspeciesQuantile  = 0.98)     # species covering 98 % of the stems; the rest is "other"
+#' head(obs$obs_dt)
+#'
+#' # mortality is a closed cohort: the trees alive at the start of the interval
+#' # and how many of them had died by its end, not a bare rate
+#' obs$obs_dt[n_at_risk > 0, .(siteName, patchName, year, species_name, n_at_risk, n_died, mort)][1:5]
+#' # growth travels with the number of trees behind it, so fit() can weight it
+#' obs$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
 #'
 #' @import data.table
 #' @export
@@ -391,6 +439,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #'   }
 #'
 #' @seealso \code{\link[FINN]{CohortMat}}
+#'
 #' @import data.table
 #' @export
 #' @examplesIf torch::torch_is_installed()

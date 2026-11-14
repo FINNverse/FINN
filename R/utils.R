@@ -45,32 +45,32 @@ build_NN = function(input_shape,
 
 
 
-visualize.training <- function(losses,epoch,max_epoch = 100L, main, new = FALSE, baseline = NULL){
-  if (epoch==1|new){
-
-    graphics::plot(c(),c(),xlim=c(1, max_epoch),ylim=c(0,1.0),
-                   main= main,
-                   xlab= "epoch",
-                   ylab= "Loss in %",
-                   las = 1)
-
-      graphics::legend("topright", pch = 15, bty = "n", col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-                                    legend = c("dbh", "ba", "trees", "growth", "mort", "reg"))
-
-      matplot(losses[,1:6,drop=FALSE], type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-              lwd = 1.5,
-              las = 1, add = TRUE,
-              pch = 16)
-
-  } else{
-
-    matplot(c(epoch-1,epoch),
-            losses[(epoch-1):(epoch),1:6, drop = FALSE],
-            type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-            lwd = 1.5,
-            las = 1, add = TRUE,
-            pch = 16)
-  }
+# The progress plot of fit(plot_progress = TRUE): the six loss terms per epoch,
+# each as a fraction of its first-epoch value. The whole plot is redrawn every
+# epoch with the y-axis fitted to the data, so a term that rises above its
+# starting value is not cut off (the previous version fixed ylim at [0, 1] and
+# only appended the last segment); a term that is switched off ("none") or has
+# no data is NaN here and is simply not drawn.
+visualize.training <- function(losses, epoch, max_epoch = 100L, main, new = FALSE, baseline = NULL){
+  cols = c("#de324c", "#9656a2", "#95cf92", "#f4895f", "#000000", "#369acc")
+  lab  = c("dbh", "ba", "trees", "growth", "mort", "reg")
+  y = losses[, 1:6, drop = FALSE]
+  y[!is.finite(y)] = NA
+  shown = colSums(!is.na(y)) > 0
+  top = suppressWarnings(max(y, na.rm = TRUE))
+  if (!is.finite(top) || top <= 0) top = 1
+  graphics::plot(c(), c(), xlim = c(1, max(max_epoch, 2)), ylim = c(0, top * 1.05),
+                 main = main,
+                 xlab = "epoch",
+                 ylab = "loss relative to epoch 1",
+                 las = 1)
+  graphics::abline(h = 1, col = "grey80", lty = 2)
+  if (any(shown))
+    graphics::matplot(seq_len(nrow(y)), y[, shown, drop = FALSE], type = "l", lty = 1,
+                      col = cols[shown], lwd = 1.5, add = TRUE)
+  graphics::legend("topright", pch = 15, bty = "n", col = cols[shown],
+                   legend = if (any(shown)) lab[shown] else character(0))
+  invisible(NULL)
 }
 
 
@@ -95,6 +95,30 @@ np_runif = function(low, high, size) {
   array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
 }
 
+
+# Set torch's intra-op thread count for a fit (FINN#48). Returns the count to
+# restore on exit, or NULL when there is nothing to restore. With OpenMP the
+# count can change at any time; torch's native backend (macOS) accepts one change
+# per session, so there the count is set but not restored, and a refused change
+# is reported instead of silently running on another count.
+set_torch_threads = function(threads) {
+  if (is.null(threads)) return(NULL)
+  threads = as.integer(threads)
+  if (length(threads) != 1L || is.na(threads) || threads < 1L)
+    stop("`threads` must be NULL or one positive integer.", call. = FALSE)
+  old = torch::torch_get_num_threads()
+  if (old == threads) return(NULL)
+  torch::torch_set_num_threads(threads)
+  now = torch::torch_get_num_threads()
+  if (now != threads) {
+    message(sprintf(paste0("torch keeps %d intra-op threads: this session's thread count was already set ",
+                           "(torch's native backend allows one change per session). Restart R, or call ",
+                           "torch::torch_set_num_threads(%d) before any other, to fit on %d."),
+                    now, threads, threads))
+    return(NULL)
+  }
+  if (torch::backends_openmp_is_available()) old else NULL
+}
 
 check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), device="cpu", requires_grad = FALSE) {
   pointer_check <- tryCatch(torch::as_array(tensor), error = function(e) e)
@@ -663,9 +687,10 @@ rnbinom_torch = function(pred, theta) {
 #' Negative-binomial recruit draw without the recruitment floor
 #'
 #' @description
-#' The alternative regeneration sampler, selected with
-#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()` stays the
-#' default. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
+#' The default regeneration sampler since 0.2.0, selected with
+#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()`
+#' (`regeneration_sampler = "gaussian"`) reproduces results published before
+#' 0.2.0. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
 #' the Gamma draw is clamped at that same `eps` instead of taking `+0.001` and an
 #' absolute value, and the draw goes through `sample_poisson_refined()` (an exact
 #' `torch_poisson` below `lambda = 2`, the Gaussian approximation above) instead of

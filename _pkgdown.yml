@@ -46,13 +46,18 @@ reference:
   - createProcess
   - createHybrid
   - CohortMat
+  - recruitment
 
 - title: Fitting and prediction
   desc: Calibrate every component jointly, end-to-end, then simulate.
   contents:
   - fit
+  - finn_data
+  - finn_loss
+  - finnControl
   - predict.finn_class
   - simulateForest
+  - predictTrees
   - FINN.seed
 
 - title: Processes
@@ -61,6 +66,9 @@ reference:
   - growth
   - mortality
   - regeneration
+  - regeneration_capped
+  - regeneration_adult
+  - regeneration_adult_effect
   - competition
   - height
   - BA_stand
@@ -77,6 +85,14 @@ reference:
   - obsDF2arrays
   - array2obsDF
   - pred2DF
+
+- title: Data
+  desc: The bundled Oregon FIA calibration data, in FINN's input format.
+  contents:
+  - fia_obs_dt
+  - fia_env_dt
+  - fia_init_trees
+  - fia_species_dt
 
 - title: Environmental scaling
   desc: >

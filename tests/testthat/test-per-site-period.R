@@ -27,8 +27,8 @@ OPT  <- if (exists("optim_ignite_adam", envir = asNamespace("torch"))) torch::op
 run_fit <- function(obs, mode = "auto") {
   FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
   fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-      loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
-      optimizer = OPT, plot_progress = FALSE, device = "cpu")
+      loss_family = LOSS, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+      control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu")
   mm
 }
 sched_rows <- function(sched) rbindlist(lapply(seq_along(sched), function(s) {
@@ -79,8 +79,8 @@ test_that("period_mode = 'constant' is refused, not overridden, by a per-tree te
   go <- function(mode) {
     FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
     fit(mm, env = env, data = obs5, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-        loss_family = LOSS, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
-        optimizer = OPT, plot_progress = FALSE, device = "cpu",
+        loss_family = LOSS, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+        control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu",
         loss_aggregation = c(growth = "tree"), tree_data = tt)
     mm
   }
@@ -88,6 +88,33 @@ test_that("period_mode = 'constant' is refused, not overridden, by a per-tree te
   # on "auto" the same combination forces per-site windows and says why
   expect_message(a <- go("auto"), "loss_aggregation")
   expect_true(a$per_site_period)
+})
+
+test_that("the per-site path stops when data carries no period_length (FINN#46)", {
+  # without a finite period_length every per-site window is empty and all six terms
+  # used to be zero, so the fit ran to the end without scoring anything
+  obs5 <- mk_obs(list(c(5, 10), c(5, 10), c(5, 10)))
+  tt <- obs5[species == 1, .(siteID, year, patchID = 1L, species, dbh = 20, growth = 0.01, died = 0,
+                             period_length = 5L)]
+  go <- function(obs, mode, ...) {
+    FINN.seed(SEED); mm <- m$clone(deep = TRUE); mm$period_mode <- mode
+    fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
+        loss_family = LOSS, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites, shuffle = FALSE,
+        control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu", ...)
+    mm
+  }
+  no_pl <- copy(obs5)[, period_length := NULL]
+  na_pl <- copy(obs5)[, period_length := NA_integer_]
+  expect_error(go(no_pl, "auto", loss_aggregation = c(mortality = "tree"), tree_data = tt),
+               "needs a `period_length` column")
+  expect_error(go(na_pl, "auto", loss_aggregation = c(mortality = "tree"), tree_data = tt),
+               "needs a `period_length` column")
+  expect_error(go(no_pl, "per_site"), "period_mode = \"per_site\"")
+  # the constant path keeps its meaning of a missing period_length: one-year windows
+  expect_false(go(no_pl, "auto")$per_site_period)
+  # one site without an observation window is a schedule, not a missing column
+  part <- copy(obs5)[siteID == 1, period_length := NA_integer_]
+  expect_true(go(part, "per_site")$per_site_period)
 })
 
 test_that("mixed periods: gradients flow through the deferred backward", {
@@ -100,7 +127,7 @@ test_that("mixed periods: gradients flow through the deferred backward", {
     regeneration_process = createProcess(~1 + env1, func = FINN::regeneration, optimizeSpecies = TRUE))
   p0 <- as.numeric(torch::as_array(mm$par_growth))
   fit(mm, env = env, data = obsm, init_cohort = ic, patches = 2L, patch_size = 0.1, env_autoscale = FALSE,
-      loss_family = LOSS, epochs = 2L, lr = 0.01, weights = rep(1, 6), batchsize = Nsites, optimizer = OPT,
+      loss_family = LOSS, epochs = 2L, lr = 0.01, loss_weights = rep(1, 6), batchsize = Nsites, control = finnControl(optimizer = OPT),
       plot_progress = FALSE, device = "cpu")
   expect_true(mm$per_site_period)
   expect_gt(max(abs(as.numeric(torch::as_array(mm$par_growth)) - p0)), 1e-6)

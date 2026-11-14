@@ -2,7 +2,7 @@
 % Please edit documentation in R/finn-class.R
 \name{fit}
 \alias{fit}
-\title{Fit FINN}
+\title{Estimate the parameters of a FINN model}
 \usage{
 fit(
   model,
@@ -14,18 +14,18 @@ fit(
   init_cohort = NULL,
   epochs = 20L,
   lr = 0.01,
-  lr_scheduler = "none",
-  lr_scheduler_params = list(),
-  loss = NULL,
+  batchsize = NULL,
   loss_family = c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality =
     "binomial", regeneration = "nbinom"),
   loss_aggregation = NULL,
+  loss_resolution = c("site", "tree"),
+  loss_weights = "auto",
+  weight_scale = TRUE,
+  loss_recruit = c("simulated", "observed"),
   tree_data = NULL,
-  weights = "auto",
-  weight_scale = c("auto", "raw"),
-  optimizer = optim_ignite_adam,
-  batchsize = NULL,
+  control = finnControl(),
   device = c("cpu", "gpu"),
+  threads = NULL,
   update_step = 1L,
   start_time = 1L,
   plot_progress = TRUE,
@@ -34,254 +34,186 @@ fit(
   shuffle = TRUE,
   record_gradients = FALSE,
   env_autoscale = TRUE,
-  clip_norm = 2,
   nonfinite = c("drop_term", "skip_step"),
   reanchor = FALSE,
   anchor_cohorts = NULL,
   anchor_mode = "replace",
   anchor_min_dbh = NULL,
   teacher_forcing = FALSE,
-  loss_resolution = c("site", "tree"),
   rb_gradient = TRUE,
   trees_offset = 0.01,
-  recruits = c("simulated", "observed"),
-  ...
+  ...,
+  loss = NULL
 )
 }
 \arguments{
-\item{model}{(\code{finn_class})\cr Object of class \code{finn_class} created by \link{finn}.}
+\item{model}{(\code{finn_class})\cr The model built by \code{\link[=finn]{finn()}}.}
 
-\item{data}{(\code{data.table|data.frame})\cr Data about demographic rates and stand
-variables must be passed as \code{data.table} or \code{data.frame}.
+\item{data}{(\code{data.frame})\cr The observations: one row per site, census year
+and species, with the columns \code{siteID}, \code{year}, \code{species}, \code{dbh}, \code{ba},
+\code{trees}, \code{growth}, \code{mort} and \code{reg}; optionally \code{period_length},
+\code{n_at_risk} and \code{growth_n}. \code{NA} marks a response that was not observed
+and is left out of the comparison. \code{\link[=makeObsData]{makeObsData()}} and
+\code{\link[=resolveSiteIDs]{resolveSiteIDs()}} build this table from a tree list. The columns,
+their units, missing values and incomplete series are explained in
+\link{finn_data}, with the bundled \link{fia_obs_dt} as the example.}
 
-Optional columns that change how the responses are scored:
-\itemize{
-\item \code{period_length} — how many simulated timesteps each observation's
-inventory interval spans. The rate responses (\code{growth}, \code{mortality}) are
-then compared against the model's \strong{mean} over that interval, and
-\code{regeneration} against its \strong{sum} (recruits accumulate). Absent or \code{NA}
-means each observation is compared against a single timestep. NOTE: this
-must currently be the SAME for every site — a per-site interval is not
-supported yet, so inventories with varying remeasurement gaps need
-filtering to a constant interval first.
-\item \code{n_at_risk} — trees behind each observed \code{mortality} proportion; used
-to weight the binomial term (see \code{weights}).
-\item \code{growth_n} — trees behind each observed \code{growth} mean; used to weight
-the squared-error term, since the variance of a mean is \eqn{\sigma^2/n}.
-}
+\item{env}{(\code{data.frame})\cr The environment of every site and simulated
+year: one row per \code{siteID} and \code{year}, plus one column per predictor (for
+the bundled FIA data \code{temp} and \code{prec}, annual mean temperature and
+precipitation; see \link{fia_env_dt}). The rows are the simulated time steps,
+so \code{env} must cover every year from the first step to the last
+observation; the predictors are in natural units and standardised
+internally (\code{env_autoscale}). See \link{finn_data}.}
 
-On the per-site path (\code{period_length} differing between sites, or sites
-observed in different years) each response's loss of a batch is ONE mean
-over all units it scores in that batch — observed trees for
-\code{loss_aggregation = "tree"}, \code{n_at_risk} / \code{growth_n} for the weighted
-cell terms, cells otherwise — across all observation years: the mean of
-each observation year enters with weight \eqn{n_{year} / n_{batch}}. A
-batch that scores a single observation year is unaffected.}
+\item{disturbance}{(\code{data.frame} or \code{NULL})\cr Optional disturbances: one
+row per \code{siteID} and \code{year} with the column \code{intensity}, the probability
+(0 to 1) that a patch of that site loses all its trees in that year. Must
+have the same sites and years as \code{env}. \code{NULL} (default): no disturbance.
+See \link{finn_data}.}
 
-\item{env}{(\code{data.table|data.frame})\cr Data with environmental covariates must be passed as \code{data.table} or \code{data.frame}.}
+\item{patches}{(\code{integer(1)})\cr Number of patches per site when the fit
+starts from bare ground (\code{init_cohort = NULL}). Ignored, with a warning
+when it differs, as soon as \code{init_cohort} is given: the patch count then
+comes from the initial cohorts.}
 
-\item{disturbance}{(\code{data.table|data.frame})\cr Data with disturbance rates must be passed as \code{data.table} or \code{data.frame}.}
+\item{patch_size}{(\code{numeric(1)})\cr Area of one patch in ha. Default \code{0.1}.
+Use the plot size of the inventory (the bundled FIA data: \code{0.06}). A
+model that was fitted or simulated with another patch size before gives a
+warning.}
 
-\item{patches}{(\code{integer(1)})\cr Number of patches.}
+\item{init_cohort}{(\code{CohortMat})\cr The trees of every site at the first
+census, from \code{\link[=makeInitCohorts]{makeInitCohorts()}}. \code{NULL} (default) starts every
+site from bare ground with \code{patches} empty patches (no stems). See \link{finn_data}.}
 
-\item{patch_size}{(\code{numeric(1)})\cr Patch size.}
+\item{epochs}{(\code{integer(1)})\cr Number of passes over the data. Default
+\code{20}; a real calibration takes hundreds, until the parameters stop moving.
+\code{epochs = 0} runs the set-up only (data tensors, \code{loss_baseline},
+\code{loss_weights}) and trains nothing.}
 
-\item{init_cohort}{(\code{CohortMat})\cr Initial cohort matrix of class \code{CohortMat}, created by \link{CohortMat}}
+\item{lr}{(\code{numeric(1)})\cr Learning rate, the size of a parameter step.
+Default \code{0.01}. Lower it when the losses oscillate; see also
+\code{\link[=finnControl]{finnControl()}} for a learning-rate schedule.}
 
-\item{epochs}{(\code{integer(1)})\cr Number of iteration steps. \code{epochs = 0}
-runs the set-up only (data tensors, \code{loss_baseline}, \code{loss_weights} for
-\code{weights = "auto"}) and trains nothing; the parameters stay as they were.}
+\item{batchsize}{(\code{integer(1)})\cr Number of sites simulated between two
+parameter updates. \code{NULL} (default) takes all sites at once. Smaller
+batches use less memory and update more often per epoch.}
 
-\item{lr}{(\code{numeric(1)})\cr Learning rate of the optimizer.}
+\item{loss_family}{(named \code{character})\cr The likelihood each response is
+compared with: \code{dbh} and \code{ba} by squared error (\code{"mse"}), \code{trees} by a
+Poisson, \code{growth} by squared error, \code{mortality} by a binomial, recruitment
+(\code{regeneration}) by a negative binomial. The defaults are robust in most
+cases; name only what departs from them, e.g. \code{c(trees = "nbinom")}, or
+\code{"none"} to leave a response out. See \link{finn_loss}.}
 
-\item{lr_scheduler}{(\verb{character(1)|function})\cr Learning-rate schedule applied
-on top of the constant \code{lr} above. \code{"none"} (default) keeps \code{lr} constant,
-reproducing the previous behavior exactly. Built-ins: \code{"step"} (decay by
-\code{gamma} every \code{step_size} epochs), \code{"exponential"} (multiply by \code{gamma} every
-epoch), \code{"cosine"} (cosine-anneal to \code{eta_min} over \code{T_max} epochs),
-\code{"plateau"} (reduce by \code{factor} after \code{patience} epochs without improvement
-in the total loss). Advanced: pass a \verb{function(optimizer)} returning a
-\code{torch} lr scheduler object (must implement \verb{$step()}).}
+\item{loss_aggregation}{(named \code{character} or \code{list})\cr How the simulated
+cohorts are summarised before they meet an observation: the default is
+the mean over cohorts for \code{dbh}, \code{growth} and \code{mortality} and the sum for
+\code{ba}, \code{trees} and \code{regeneration}, which matches the tables
+\code{\link[=makeObsData]{makeObsData()}} builds. The alternatives (\code{"size_classes"},
+\code{"quantiles"}, \code{"tree"}) are described in \link{finn_loss}.}
 
-\item{lr_scheduler_params}{(\code{list()})\cr Tuning overrides for the scheduler
-chosen via \code{lr_scheduler}, e.g. \code{list(step_size = 50, gamma = 0.5)} for
-\code{"step"}, \code{list(T_max = 200)} for \code{"cosine"}, \code{list(factor = 0.5, patience = 20)} for \code{"plateau"}. Unset entries fall back to defaults scaled off
-\code{epochs}/\code{lr}.}
+\item{loss_resolution}{(\code{character(1)})\cr Whether \code{growth} and \code{mortality}
+are scored per site, year and species (\code{"site"}, default) or per
+individual simulated tree (\code{"tree"}, which needs \code{tree_data} with a
+\code{cohortID} column). See \link{finn_loss}.}
 
-\item{loss}{(deprecated)\cr Former name of \code{loss_family}. Still accepted, with
-a warning; it will be removed in a future release.}
+\item{loss_weights}{(\code{"auto"} or \code{numeric(6)})\cr The weight of each
+response in the sum of the six losses, in the order \code{dbh}, \code{ba}, \code{trees},
+\code{growth}, \code{mortality}, \code{regeneration}. \code{"auto"} (default) makes the six
+comparable by dividing each by its intercept-only baseline, so no response
+drowns the others; a numeric vector then multiplies these balanced terms
+(\code{c(1, 1, 1, 2, 1, 1)} gives \code{growth} twice the weight). Before 0.2.0 the
+argument was called \code{weights}, which is still accepted with a warning.
+See \link{finn_loss}.}
 
-\item{loss_family}{(\code{character(6)})\cr Named vector giving the \strong{likelihood}
-used for each response. Names should be \code{dbh}, \code{ba}, \code{trees}, \code{growth},
-\code{mortality}, and \code{regeneration}. Supported families are \code{mse}, \code{poisson},
-\code{nbinom}, \code{gaussian}, \code{binomial}, and \code{none}.
+\item{weight_scale}{(\code{logical(1)} or \code{character(1)})\cr Whether a numeric
+\code{loss_weights} vector applies to the baseline-balanced losses (\code{TRUE} or
+\code{"auto"}, default) or to the raw, unbalanced losses (\code{FALSE} or \code{"raw"},
+the meaning of \code{weights} before 0.2.0). See \link{finn_loss}.}
 
-\code{binomial} is a Bernoulli/binomial negative log-likelihood intended for
-\code{mortality}; it expects both the prediction and the observation to be
-proportions in [0, 1]. \code{nbinom} is implemented for \code{trees} and
-\code{regeneration} only. \code{none} switches a response off entirely — it
-contributes a constant zero and no gradient. Use it to retire a response
-whose information now enters through another term, for example setting
-\code{dbh = "none"} and \code{ba = "none"} when the size distribution is fitted
-through size-classed stem counts (see \code{loss_aggregation}).}
+\item{loss_recruit}{(\code{character(1)})\cr Where the recruits of the simulated
+stand come from during the fit. \code{"simulated"} (default): from the
+regeneration process, which is estimated with the rest. \code{"observed"}: the
+observed recruitment (\code{reg} in \code{data}) is fed into the simulation, the
+regeneration process is frozen and left out of the loss, and growth and
+mortality are estimated on a stand that recruits what was observed -- the
+first stage of a staged calibration, see \link{recruitment}. Before 0.2.0 the
+argument was called \code{recruits}, which is still accepted with a warning.
+See \link{finn_loss}.}
 
-\item{loss_aggregation}{(\code{character}|\code{list})\cr How the model's per-cohort
-quantities are reduced before they meet the observation, given per response
-as a named character vector or, when a type needs arguments, a named list.
-Anything not named keeps the default, so the argument only ever states what
-departs from it. Supported types:
-\itemize{
-\item \code{"mean"} — one value per site, year and species, the abundance-weighted
-mean over cohorts. The default for \code{dbh}, \code{growth} and \code{mortality}.
-\item \code{"sum"} — summed over cohorts. The default for \code{ba}, \code{trees} and
-\code{regeneration}.
-\item \code{"size_classes"} — stem counts binned by diameter, requiring
-\code{breaks} (the class boundaries in cm) and optionally \code{tau} (the
-softness of the bin edges in cm, default 1). \code{K} breaks give \code{K + 1}
-classes, and the observation is read from columns \code{n_class_1} …
-\code{n_class_K+1} of \code{data}. Only meaningful for \code{trees}.
+\item{tree_data}{(\code{data.frame} or \code{NULL})\cr Individual observed trees, one
+row per tree and census, only needed to score growth or mortality per
+tree (\code{loss_aggregation = "tree"} or \code{loss_resolution = "tree"}). Unlike
+\code{data}, which holds one row per site, year and species, it holds the
+trees themselves. Columns and the two per-tree routes: \link{finn_loss} and
+\link{finn_data}.}
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{  This is the size-distribution counterpart of the mean diameter: with a
-  `poisson` family it scores total abundance and size composition at
-  once, since independent Poisson class counts factorise into
-  `Poisson(N | lambda) x Multinomial(n | N, p)`. Class membership uses a
-  difference of sigmoids rather than a hard cut so the term stays
-  differentiable with respect to diameter; `tau` controls that softness
-  and small values approach hard binning.
-\\item `"quantiles"` — the abundance-weighted diameter quantiles of each
-  site and species instead of their mean, requiring `probs` (e.g.
-  `c(0.1, 0.5, 0.9)`) and optionally `tau` (the softness of the quantile
-  on the cumulative-abundance scale, default 0.05). The observation is
-  read from columns `dbh_q10`, `dbh_q50`, `dbh_q90` of `data`
-  (`<response>_q<100*p>`). Only meaningful for `dbh`.
+\item{control}{(\code{finnControl})\cr Settings of the optimizer: the optimizer
+itself, a learning-rate schedule and its parameters, gradient clipping.
+The defaults of \code{\link[=finnControl]{finnControl()}} are robust in most cases.}
 
-  Where `"size_classes"` asks how many stems fall in a diameter
-  interval, this asks how thick the stem at a given position of the
-  distribution is, which keeps the statement on the diameter scale: the
-  upper quantile speaks directly about the big trees that carry the
-  basal area, where a count likelihood weighs them the same as saplings.
-  The quantile is a soft selection along the cumulative abundance, so it
-  stays differentiable with respect to diameter; `tau` controls that
-  softness and small values approach the exact weighted quantile.
-\\item `"tree"` — no aggregation: the growth and mortality kernels are
-  evaluated on the **observed** trees at their observed diameters, with
-  light computed from the observed stand, and compared tree by tree. Only
-  available for `growth` and `mortality`, and requires `tree_data`. This
-  removes the compositional confound in a stand mean (relative growth
-  falls several-fold from the smallest to the largest trees, so a mean
-  moves when the size distribution moves), at the cost of teacher-forcing
-  those two responses onto observed stands rather than simulated ones.
-}\if{html}{\out{</div>}}
+\item{device}{(\code{character(1)})\cr \code{"cpu"} (default) or \code{"gpu"}; \code{"cuda"} is
+accepted as a synonym for \code{"gpu"}. Only NVIDIA cards are supported. A card
+does not always pay: the per-tree route (\code{loss_resolution = "tree"},
+\code{loss_aggregation = "tree"}) issues thousands of small kernels per
+simulated year and is bound by dispatch rather than arithmetic, so it can
+run at the same speed on either device with the card almost idle. Measure
+one configuration before committing a long fit to a GPU.}
 
-}
+\item{threads}{(\code{integer(1)} or \code{NULL})\cr torch's intra-op thread count
+during the fit. \code{NULL} (the default) leaves torch's setting alone, including
+one made through \code{OMP_NUM_THREADS} or \code{\link[torch:threads]{torch::torch_set_num_threads()}}.
+FINN's forward pass is a long chain of small tensor operations, so its cost
+is set by the number of operations, not by their arithmetic, and extra
+threads rarely pay. In the measurements behind FINNverse/FINN#48, one
+thread was up to 30 \% faster on macOS at the size of a 512-site,
+25-patch batch, and within a few per cent of the best setting on a 64-core
+Linux node, where only a single 2000-site batch gained from 4 threads.
+\code{threads = 1} is the considerate choice when several fits share a machine.
+The previous count is restored afterwards where torch allows it (OpenMP
+builds, e.g. Linux). torch's native backend (macOS) accepts one change per
+session, so there the session keeps the count \code{fit()} set, and a count fixed
+earlier in the session cannot be changed (\code{fit()} then says so).}
 
-Example — score the size distribution through stem counts and the two rates
-per tree:
+\item{update_step}{(\code{integer(1)})\cr Every how many simulated years the
+gradient is cut and the parameters are updated (truncated backpropagation
+through time). Default \code{1}: one update per simulated year. A loss is only
+scored at a year that is a multiple of \code{update_step}, so an observation
+year off that grid is not scored, and \code{fit()} stops when none is on it.
+The simulated state runs on uncut. Larger values let the loss see a
+longer stretch of the trajectory at a higher cost and with fading
+gradients.}
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{fit(m, data = obs_dt, env = env, tree_data = tree_obs_dt,
-    loss_family      = c(dbh = "none", ba = "none", trees = "poisson",
-                         growth = "mse", mortality = "binomial",
-                         regeneration = "nbinom"),
-    loss_aggregation = list(trees  = list(type = "size_classes",
-                                         breaks = seq(20, 60, by = 10)),
-                            growth = "tree", mortality = "tree"))
-}\if{html}{\out{</div>}}}
+\item{start_time}{(\code{integer(1)})\cr Reserved for a burn-in: the simulated
+year from which observations are scored. In 0.2.0 it has no effect --
+every observation year in \code{data} is scored -- and a value other than \code{1}
+gives a warning. Start \code{env} at the first year you want simulated and
+leave out of \code{data} what should not be scored; see \link{finn_data}.}
 
-\item{tree_data}{(\code{data.table|data.frame})\cr Individual observed trees, one
-row per tree and census, required by both ways of scoring single trees
-(\code{loss_aggregation = "tree"} and \code{loss_resolution = "tree"}, see the section
-\emph{Scoring individual trees}). \code{year} is the census that CLOSES the tree's
-interval, i.e. the \code{year} the same interval carries in \code{data}. Columns:
-\itemize{
-\item always: \code{siteID}, \code{year}, \code{patchID}, \code{species}, \code{growth} (the
-observed relative growth rate per timestep, \code{NA} if unobserved) and
-\code{died} (0/1 over the interval, \code{NA} if unobserved);
-\item \code{loss_aggregation = "tree"}: additionally \code{dbh} (diameter at the
-START of the interval, cm), and optionally \code{trees} (stems the row
-stands for, default 1). The observed stand is rebuilt from these rows,
-so any \code{patchID} coding works.
-\item \code{loss_resolution = "tree"}: additionally \code{cohortID}, the id
-\code{\link[=makeInitCohorts]{makeInitCohorts()}} / \code{\link[=obsDF2arrays]{obsDF2arrays()}} assigned per (\code{siteID},
-\code{patchID}) to the cohort the tree started as — its position along the
-cohort dimension of \code{init_cohort} (\code{makeInitCohorts(treeID_table = TRUE)} returns the table that carries it), or of the anchor at the
-previous census under \code{reanchor}/\code{teacher_forcing}. \code{patchID} must be
-the patch index of that layout. \code{species} (and \code{dbh}, if present) are
-checked against the cohort, and a row that names a missing or already
-used cohort, a site or year that is not scored, or a tree that does not
-match its cohort stops the fit: the targets are keyed by position, so a
-misaligned table would silently score every tree against another one.
-}}
+\item{plot_progress}{(\code{logical(1)})\cr Draw the losses of every response
+per epoch while fitting, each as a fraction of its value in the first
+epoch. Default \code{TRUE}.}
 
-\item{weights}{(\code{"auto"} or \code{numeric(6)})\cr Weights of the six losses, in the
-order \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality}, \code{regeneration}.
+\item{folder}{(\code{character(1)} or \code{NULL})\cr Folder in which the model is
+saved every \code{checkpoints} epochs (\verb{epoch_<n>model.pt}, readable with
+\code{torch::torch_load()}). \code{NULL} (default): no checkpoints.}
 
-The six terms are summed, and their raw magnitudes differ by orders of
-magnitude: on the bundled FIA data \code{dbh} is an MSE in cm^2 (~430 at the
-start of training) while \code{growth} is an MSE on a ratio (~0.03), a factor of
-~1e4. On the raw scale, equal weights give \code{dbh} ~87\% of the FIA objective
-and \code{growth} ~1\%, and \code{growth} then never improves.
+\item{checkpoints}{(\code{integer(1)})\cr Every how many epochs the parameters are
+recorded in \code{model$param_history} and, with \code{folder}, the model is saved.
+Default \code{100}.}
 
-\code{"auto"} (the default) fixes this without needing to know the units. Each
-loss is divided by its \strong{intercept-only baseline} — the loss you would get
-by predicting the single best constant (the null model). Every term then
-measures the same thing on the same scale: the fraction of its own null
-deviance. For a squared-error term the baseline is exactly \eqn{var(y)}, so
-this reduces to scaling by \eqn{1/sd(y)^2}; but it generalises to the
-Poisson, negative-binomial and binomial terms, where a standard deviation is
-not the right scale. It is the same idea as \code{env_autoscale = TRUE}, applied
-to the responses rather than the predictors.
+\item{shuffle}{(\code{logical(1)})\cr Draw the batches in a new random order
+every epoch. Default \code{TRUE}.}
 
-A useful side effect: the per-response values in \code{m$history} become directly
-interpretable as \strong{"how much better than the mean"} — \code{1} is no better than
-the intercept, below \code{1} is better, above \code{1} is worse. The baselines are
-stored in \code{m$loss_baseline}, the resulting weights in \code{m$loss_weights}, and
-both are reported once when fitting starts.
+\item{record_gradients}{(\code{logical(1)})\cr Also record the gradients of every
+parameter at each checkpoint, in \code{model$gradients}. Default \code{FALSE}; the
+record can get large.}
 
-A \code{numeric(6)} multiplies the baseline-scaled losses (since 0.2.0), so each
-number reads directly as that response's relative share: \code{c(1, 1, 1, 2, 1, 1)}
-gives \code{growth} twice the weight of every other response. Every fit reports
-each response's resulting share of the objective at the intercept-only
-baseline. On the FIA example, balancing the objective is worth ~+0.24
-Spearman on held-out \code{growth}, far more than tuning \code{lr} or \code{epochs}. See
-the "Fitting FINN to forest inventory data" vignette.}
-
-\item{weight_scale}{(\code{character(1)})\cr How a numeric \code{weights} vector acts.
-\code{"auto"} (default): it multiplies the baseline-scaled losses, as described
-under \code{weights}. \code{"raw"}: it multiplies the raw losses and the baseline
-scaling is off, which is the meaning \code{weights} had before 0.2.0 and
-reproduces analyses fitted with earlier versions. The shares are reported
-in both modes.}
-
-\item{optimizer}{(\code{torch_optimizer_generator})\cr Optimizer from the \code{torch} package.}
-
-\item{batchsize}{(\code{integer(1)})\cr Batch size, model will be trained in random batch sizes of the data to preserve memory and improve convergence.}
-
-\item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
-synonym for \code{"gpu"}. Only NVIDIA cards are supported. A card does not always
-pay: the per-tree route (\code{loss_resolution = "tree"}, \code{loss_aggregation = "tree"})
-issues thousands of small kernels per simulated year and is bound by dispatch
-rather than arithmetic, so it can run at the same speed on either device with
-the card almost idle. Measure one configuration before committing a long fit to
-a GPU.}
-
-\item{update_step}{(\code{integer(1)})\cr Number of steps for which the gradient should be calculated. Automatic differentation becomes slow for larger update steps and the risk of vanishing gradients increases.}
-
-\item{start_time}{(\code{integer(1)})\cr Starting from which year should the model be fitted. Can be used to use on burn-in.}
-
-\item{plot_progress}{(\code{logical(1)})\cr Plot fitting progress (losses) or not.}
-
-\item{folder}{(\code{character(1)})\cr Path to folder for saving checkpoint models. If \code{NULL}, no models will be saved during the training.}
-
-\item{checkpoints}{(\code{integer(1)})\cr Interval size in epochs for saving checkpoint models.}
-
-\item{shuffle}{(\code{logical(1)})\cr Shuffle data or not.}
-
-\item{record_gradients}{(\code{logical(1)})\cr Record the gradients of all parameters or not. Can get large for many epochs.}
-
-\item{env_autoscale}{How to scale the environmental predictors in \code{env}.
-The learned transformation is stored on the model and re-applied
-automatically at every \code{predict()}/\code{simulate()} call, so raw (untransformed)
-\code{env} can be passed for both calibration and prediction. Accepts:
+\item{env_autoscale}{How the predictors in \code{env} are standardised. The
+learned transformation is stored on the model and re-applied automatically
+at every \code{predict()}/\code{simulateForest()} call, so raw (untransformed) \code{env}
+is passed for both calibration and prediction. Accepts:
 \itemize{
 \item \code{TRUE} (default) -- z-standardise every predictor (mean / sd);
 \item \code{FALSE} -- use \code{env} exactly as supplied (no scaling);
@@ -296,22 +228,14 @@ an ordinal management forcing on its native 0..3 scale while z-scaling
 climate. The learned constants are available as \code{model$env_scaling}.
 }}
 
-\item{clip_norm}{(\code{numeric(1)|list()})\cr Gradient-norm budget passed to
-\code{torch::nn_utils_clip_grad_norm_()}, applied separately to each of three
-parameter groups (mechanistic per-species rates, env-effect networks,
-loss-distribution nuisance parameters) rather than once globally across all
-parameters. A single number (default \code{2.0}) applies the same budget to
-every group; a named list/vector keyed by \code{"mechanistic"}/\code{"nn"}/\code{"loss"}
-overrides individual groups, e.g. \code{clip_norm = list(loss = 5, nn = 1)}.}
-
 \item{nonfinite}{(\code{character(1)})\cr What happens when one of the six loss
 terms is not finite at a scored timestep (an overflowing likelihood, a
 target outside the family's support). \code{"drop_term"} (default) leaves only
 that term out of the timestep's gradient and reported loss; the other
 responses are still backpropagated there, and the occurrences are counted
 per response in \code{model$nonfinite_counts} and summarised in a warning when
-the fit ends. \code{"skip_step"} discards the WHOLE timestep — none of the six
-terms is backpropagated or reported there — which is what every version
+the fit ends. \code{"skip_step"} discards the WHOLE timestep -- none of the six
+terms is backpropagated or reported there -- which is what every version
 before \code{drop_term} existed did; use it to reproduce such a fit. The
 difference only shows once a term overflows: with finite losses the two
 are identical.}
@@ -322,7 +246,7 @@ shooting. With the default \code{FALSE} the cohort state is initialised once fro
 compounds across every observation. With \code{TRUE} the simulated state is
 discarded at every timestep for which \code{anchor_cohorts} supplies an observed
 tree list and rebuilt from it, after that timestep's loss has been
-backpropagated — drift is then bounded by one inter-census segment. This is
+backpropagated -- drift is then bounded by one inter-census segment. This is
 not the same as the gradient truncation controlled by \code{update_step}, which
 cuts the gradient but keeps the state; set \code{update_step} to the segment length
 to let the gradient span the whole segment.}
@@ -333,14 +257,14 @@ re-anchor at (integers as characters, and entries of the model's internal
 \code{year_sequence}, i.e. timesteps that carry an observation). Every anchor must
 have the same number of species, sites and patches as \code{init_cohort}; the
 number of cohorts may differ between anchors and from \code{init_cohort}. The last
-observation year needs no anchor — nothing is simulated after it — and an
+observation year needs no anchor -- nothing is simulated after it -- and an
 anchor may not fall inside another observation's \code{period_length} window,
 because the aggregated rates would then mix pre- and post-anchor state.
 \code{fit()} copies the anchors onto its own device and never modifies them, so one
 list can be reused across fits. Ignored unless \code{reanchor = TRUE}.
 
-\strong{Build the arrays directly} —
-\code{CohortMat(dbh = , trees = , species = , dims = , sp = )} — rather than via
+\strong{Build the arrays directly} --
+\code{CohortMat(dbh = , trees = , species = , dims = , sp = )} -- rather than via
 \code{CohortMat(obs_df = )}. The \code{obs_df} path runs \code{obsDF2arrays()}, which rounds
 \code{trees} to whole stems and silently renumbers any \code{siteID}/\code{patchID} that is
 not a complete \code{1:n} sequence; on a simulated or partly empty stand that
@@ -351,7 +275,7 @@ corrupts the anchor, and a renumbered site no longer aligns with \code{init_coho
 cohorts with \code{dbh < anchor_min_dbh} and concatenates them with the full anchor.
 Use \code{"merge"} whenever the inventory has a minimum-dbh threshold (FIA: 12.7 cm):
 an anchor built from it contains no small trees, so \code{"replace"} deletes FINN's
-entire regeneration pool at every census — on FIA that inflates 200-year
+entire regeneration pool at every census -- on FIA that inflates 200-year
 equilibrium basal area by 41\%. Nothing is double counted, because the
 observation is complete at and above the threshold. Ignored unless
 \code{reanchor = TRUE}.}
@@ -363,8 +287,8 @@ the units of the \code{dbh} column. Required by \code{anchor_mode = "merge"}, ig
 \item{teacher_forcing}{(\code{logical(1)})\cr Fit by \strong{direct estimation} instead of
 by simulation, and never run a trajectory at all. The cohort state is reset at
 \strong{every} timestep to the observed stand at the census that STARTS that
-timestep's observation interval — \code{init_cohort} for the first interval, then
-\code{anchor_cohorts} — so each year's demographic rates are evaluated at an
+timestep's observation interval -- \code{init_cohort} for the first interval, then
+\code{anchor_cohorts} -- so each year's demographic rates are evaluated at an
 observed state and the simulated state is never carried forward. The interval
 rates are then aggregated over the window and scored exactly as \code{fit()}
 already scores them, so growth, mortality and regeneration keep their usual
@@ -373,63 +297,14 @@ predicting them requires a trajectory, and there is none here.
 
 Mutually exclusive with \code{reanchor}, which is a different estimator:
 re-anchoring still free-runs the whole segment between two censuses and scores
-where it lands. \code{update_step} is inert under teacher forcing — there is no
-multi-year trajectory to truncate — and the anchor validation refuses any
+where it lands. \code{update_step} is inert under teacher forcing -- there is no
+multi-year trajectory to truncate -- and the anchor validation refuses any
 \code{update_step} that would change which observations are scored.
 
 \code{anchor_cohorts} must supply an anchor for every observed timestep except the
 last (nothing is conditioned on the final census, because nothing follows it).
 Only \code{fit()} teacher-forces; \code{predict()}/\code{simulateForest()} always simulate,
 so a teacher-forced model is still validated by single shooting.}
-
-\item{loss_resolution}{(\code{character(1)})\cr The resolution the \code{growth} and
-\code{mortality} terms are scored at. \code{"site"} (the default) is the validated path
-and is unchanged in every respect: both are per (site, census, species) cell.
-\code{"tree"} scores the same two responses per individual SIMULATED tree and
-\strong{replaces} the cell-resolution terms rather than adding to them — scoring
-one response twice under two independent weights is a redundancy the
-optimiser can trade against itself. Needs \code{tree_data} with a \code{cohortID}
-column and an \code{init_cohort} with one cohort per tree (see the section
-\emph{Scoring individual trees} for how it differs from \code{loss_aggregation = "tree"}; the two cannot be combined). The loss vector, \code{weights} and
-\verb{$history} keep their six positions and their meaning in both modes; only
-the resolution of positions 4 and 5 changes, and the likelihood family is
-the one \code{loss_family} names for them. \code{dbh}, \code{ba}, \code{trees} and
-\code{regeneration} are untouched — a recruit has no per-tree counterpart at all.
-
-The correspondence is carried by the cohort ids: a cohort keeps the id of
-the slot it was created in, so cohort \emph{j} of a (site, patch) in a generation
-is tree \emph{j} of the list that generation started from. Recruits get ids above
-that block and can never enter a residual. A generation starts at
-\code{init_cohort} and restarts at every anchor under \code{reanchor}/\code{teacher_forcing};
-\code{anchor_mode = "merge"} keeps the carried sub-threshold cohorts out of it,
-which the anchor never saw. Growth is scored over the interval exactly as the
-aggregate term is, mortality as the compounded probability \code{1 - prod(1 - m)}
-against the tree's 0/1 fate — never the sampled death, which at \code{trees = 1}
-is a coin flip.
-
-The term does not depend on the fitting regime but its residual does: under
-\code{teacher_forcing} the kernel runs on the observed tree, so the residual is
-parameter error alone; under \code{reanchor} the cohort has drifted for at most one
-census interval; under single shooting for up to the whole horizon.
-
-A cohort the simulation kills inside a window is \strong{kept} with \code{trees = 0} for
-as long as its generation lasts — to the next anchor under
-\code{reanchor}/\code{teacher_forcing}, which restart the generation there, and
-to the end of the horizon under single shooting, where \code{tree_live0} is rebuilt
-only at anchors. It shades nothing and contributes nothing to \code{dbh}, \code{ba} or
-\code{trees}, but its diameter and its hazard keep accumulating, because the
-observation it is scored against is the mean annual rate and the 0/1 fate over
-the whole interval. Both terms therefore score every tree, and the scored
-sample does not depend on the parameters. \verb{$tree_deaths} reports per census and
-epoch how often the simulation killed a tree the inventory found alive
-(\code{frac_killed}) and in which year (\code{mean_kill_year}) — a diagnostic, not a
-correction. A generation outlives a window under single shooting, so a slot
-killed in an earlier window enters the next one already dead; \code{frac_ghost}
-is that share and it is excluded from \code{frac_killed}, which counts this
-window's kills alone. Under \code{reanchor}/\code{teacher_forcing} the generation
-restarts at every anchor, so \code{frac_ghost} is 0 by construction only where the
-anchors cover every census; a sparser anchor list carries ghosts like single
-shooting does.}
 
 \item{rb_gradient}{(\code{logical(1)})\cr Take the gradient of the drawn death and
 recruitment counts through their expectation instead of through the draw. The
@@ -448,111 +323,71 @@ the historical \code{1e-5} (poisson) and \code{0.001} (nbinom) left it at \code{
 four orders above the rest. \code{NULL} restores those two historical constants
 and so reproduces a fit made before 0.2.0.}
 
-\item{recruits}{(\code{character(1)})\cr Where the recruits of the simulated stand
-come from. \code{"simulated"} (the default) is the regeneration process, unchanged.
-\code{"observed"} drives the stand with the OBSERVED recruitment instead, while
-growth, mortality and competition run and are trained as usual: stage 2 of a
-staged calibration. An inventory samples small trees too sparsely for
-recruitment to be calibrated jointly with the rest -- a mis-fitted
-regeneration process feeds a wrong stand into every later interval, and growth
-and mortality compensate for it. So they are fitted on a stand that recruits
-what was observed, and the regeneration process is fitted afterwards in a call
-of its own (with the other processes' \code{optimizeSpecies}/\code{optimizeEnv} off, or
-through \code{weights}).
+\item{...}{Arguments of earlier versions, still accepted with a warning:
+\code{weights} (now \code{loss_weights}), \code{recruits} (now \code{loss_recruit}), and
+\code{optimizer}, \code{lr_scheduler}, \code{lr_scheduler_params}, \code{clip_norm} (now
+members of \code{control = finnControl()}). Any other named argument is passed
+on to the optimizer, as before; \code{finnControl(...)} is the place for it now.}
 
-The unit chain: \code{reg} in \code{data} (recruits per ha over the observation period,
-on the row of the interval's END year) divided by \code{period_length} is a rate
-per ha and year, and it is the expected recruitment \code{r_mean_ha} of EVERY
-simulated year of that interval, at that site and for that species. Times
-\code{patch_size} it is the expected recruitment per patch, which the model's
-recruit sampler draws from (or which is taken as is with
-\code{sample_regeneration = FALSE}) and rounds, as always. Drawing around the
-observed mean rather than rounding it keeps the low rates, most of which are
-below one recruit per patch and year: the observed mode inherits the sampler,
-and with \code{sample_regeneration = FALSE} the rounding delivers exactly zero
-recruits wherever the per-patch mean is below 0.5. The simulated years of an interval are
-exactly those whose simulated recruitment \code{fit()} sums to score that
-observation: an observation at timestep \code{t} with \code{period_length} \code{p} covers
-the timesteps \verb{t - p + 1, ..., t} on the constant and the per-site path alike,
-and the timestep \code{t} alone where the constant path has no \code{period_length}
-(timestep = position of the year among the years of \code{env}). The observed rate
-is a constant; no gradient flows from it.
-
-In such a call the regeneration term is weighted 0 (the other weights stay as
-given), and every parameter of the regeneration process -- its species
-parameters, its environment network, the cap \code{reg_logK}, the recruit
-dispersion and any custom parameters it declares -- is frozen; each gets its
-previous \code{requires_grad} back when \code{fit()} returns. Nothing on the model
-records the mode, so a later \code{fit(recruits = "simulated")} trains them again.
-
-Refused with an error: an \code{NA} \code{reg} in a cell an interval needs (0 stays 0);
-a simulated year lying in two intervals, or before or between a site's
-intervals (give the first census a \code{period_length} that reaches back to the
-first year of \code{env}, or start \code{env} there); \code{reanchor} and \code{teacher_forcing},
-which replace the free-running stand the fed recruitment is defined for. Years
-after a site's last census get no recruits: nothing after it enters the
-objective. A model fitted this way still simulates with its own regeneration
-process; \link{simulateForest} can feed it the observed recruitment instead.}
-
-\item{...}{Additional arguments passed to \code{optimizer}.}
+\item{loss}{Deprecated name of \code{loss_family}, still accepted with a warning.}
 }
 \value{
 The fitted \code{model}, invisibly. \code{fit()} trains the model in place, so
 the returned object is the one passed in, now carrying the training results
-(e.g. \verb{$history}, \verb{$loss_weights}, \verb{$loss_baseline}).
+(e.g. \verb{$history}, \verb{$loss_weights}, \verb{$loss_baseline}, \verb{$param_history}).
 }
 \description{
-Fit (calibrate) a FINN model end-to-end by gradient-descent optimization. All
-mechanistic process parameters, environmental-response coefficients and, if
-present, the weights of any hybrid (DNN-based) processes are estimated jointly
-in a single optimization, rather than calibrating each process in isolation.
+Estimates the parameters of a model built with \code{\link[=finn]{finn()}} from forest
+inventory data. The model simulates every site from its initial trees
+through the years of \code{env}, the simulation is compared with the observed
+stand variables and demographic rates in \code{data}, and the parameters of all
+processes -- the species parameters of the mechanistic equations, their
+responses to the environment, and the weights of any neural-network process
+-- are adjusted together, in one joint optimization, until the simulation
+matches the observations as well as it can. The processes are never
+calibrated one at a time: this joint calibration is what makes the estimated
+processes consistent with each other.
+
+The defaults are robust in most cases. A first call needs \code{data}, \code{env},
+\code{init_cohort}, \code{patch_size} and \code{epochs}; everything else can stay as it
+is. \link{finn_data} explains the input tables, \link{finn_loss} how the simulation is
+compared with the observations.
 }
 \details{
-Calibration relies on the fact that FINN is implemented in \code{torch} for R and is
-therefore fully differentiable: at each simulated time step the predicted stand
-variables and demographic rates are compared to the observed data through a
-joint loss function, and gradients of this loss with respect to every model
-parameter are obtained via automatic differentiation (backpropagation) and used
-to update the parameters with a \code{torch} optimizer (Adam, \link[torch:optim_ignite_adam]{torch::optim_ignite_adam},
-by default).
+\strong{What happens in a fit.} Every epoch, \code{fit()} takes the sites in batches
+of \code{batchsize}, simulates each batch over the years of \code{env} starting from
+\code{init_cohort}, and at every year that has observations compares the
+simulated mean dbh, basal area, number of trees, growth, mortality and
+recruitment with the observed ones, response by response, through the
+likelihoods in \code{loss_family}. The six comparisons are added up into one
+number, the loss, and every parameter is moved a small step (\code{lr}) in the
+direction that lowers it. FINN is written in \code{torch}, so these directions
+(gradients) come from automatic differentiation; no knowledge of \code{torch} is
+needed. After \code{epochs} passes over the data the model holds the estimated
+parameters; \code{fit()} changes the model in place and also returns it. The
+per-response losses of every epoch are in \code{model$history}.
 
-The joint loss is the sum of per-variable losses (akin to negative
-log-likelihoods), one for each of \code{dbh}, \code{ba} (basal area), \code{trees} (number of
-trees), \code{growth}, \code{mortality} and \code{regeneration}. Following Pichler & Käber
-(2026), reasonable choices are mean squared error (\code{"mse"}, equivalent to a
-Gaussian likelihood) for \code{dbh} and \code{ba}, Poisson likelihood for \code{trees},
-negative binomial (\code{"nbinom"}) for \code{regeneration}, and \code{"mse"} for \code{growth} as
-a continuous rate. Both rate responses are per YEAR: over a \code{period_length}
-window they are compared against the model's mean over that window, so an
-inventory interval has to be annualised before it becomes a target. \code{mortality}
-is an observed annual \emph{proportion} of trees that died
-and the model predicts it through a sigmoid, so it defaults to \code{"binomial"} —
-a Bernoulli/binomial likelihood (binary cross-entropy, which admits fractional
-targets). This respects the [0, 1] support and the mean-variance link of a
-proportion, both of which \code{"mse"} ignores (the model also supports
-\code{"gaussian"} and \code{"poisson"} as alternatives via the \code{loss} argument; see
-Appendix B of the paper for details). Each loss can be weighted individually via \code{weights}, and
-missing values in the observed data are masked out of the corresponding loss
-term. The model is trained for \code{epochs} iterations over the (optionally
-batched and shuffled) data using \code{optimizer} with learning rate \code{lr}.
+\strong{Reading the progress.} With the default \code{loss_weights = "auto"} every
+response's loss is reported as a fraction of the loss a constant prediction
+(the mean of the observations) would get: \code{1} means no better than the
+mean, below \code{1} better. The plot drawn with \code{plot_progress = TRUE} and
+\code{model$history} show these fractions per epoch. A fit has converged when
+the parameters stop moving (\code{model$param_history}), not merely when the
+losses look flat; see the vignette \emph{Fitting FINN to FIA data}.
 
-Backpropagating gradients through a long simulated time series is prone to
-vanishing gradients and is computationally expensive. FINN therefore uses
-truncated backpropagation through time: the computational graph is detached
-every \code{update_step} simulated years, gradients are accumulated and the
-parameters are updated, before the simulation continues. Smaller \code{update_step}
-values are faster and avoid vanishing gradients but provide a more short-sighted
-learning signal; larger values let the loss integrate over a longer trajectory
-at increased computational cost. \code{start_time} allows discarding an initial
-burn-in period of the simulation from the loss, and \code{checkpoints}/\code{folder}
-allow periodically saving the model state during training.
+\strong{Long simulated series.} Taking the gradient through a long simulation is
+slow and the signal fades. \code{fit()} therefore cuts the gradient every
+\code{update_step} years and updates the parameters at every cut; the simulated
+state itself runs on uncut. The default of one year is the fastest and the
+most short-sighted; larger values let a loss see further back at a higher
+cost.
 
-\code{growth} is compared as a \strong{relative} rate (\code{dbh/dbh_before - 1}), which is
-the model's native parameter (\code{dbh_new = dbh * (1 + g)}). Training against the
-absolute diameter increment (\code{dbh * g}) instead was tested over three seeds and
-was worse on every one — even when scored on the absolute scale — and about
-four times more seed-variable, because it couples the growth parameter to
-whichever trees happen to be present.
+\strong{Advanced estimators.} \code{reanchor} restarts the simulated stand from the
+observed trees at every census (multiple shooting), \code{teacher_forcing}
+evaluates the rates on the observed stands and never simulates a
+trajectory, and \code{loss_resolution}/\code{loss_aggregation = "tree"} score single
+trees. They are for specific questions; the default single-shooting fit is
+what the vignettes use.
 }
 \section{What makes a fit faster, and what does not}{
 
@@ -568,8 +403,8 @@ to a device.
 \item \strong{Intra-op threads do not help and eventually cost.} On a 64-core machine,
 1/2/4/8/16 threads gave 4.59/4.77/4.68/4.73/\strong{6.06} s/epoch on a comparable
 problem; on an 8-core laptop one thread was fastest by 30 \%. The knee moves with
-the core count, the direction does not. \code{torch::torch_set_num_threads(1)} is the
-considerate setting on a shared machine and costs nothing.
+the core count, the direction does not. \code{fit(threads = 1)} is the considerate
+setting on a shared machine and costs nothing.
 \item \strong{Concurrency is what pays.} Seven fits side by side cost 13-33 \% per epoch each
 and roughly doubled total throughput, because the machine was never short of cores.
 Run several fits at once rather than giving one fit more of the machine.
@@ -580,48 +415,18 @@ What does shorten a fit is fewer epochs: read a convergence criterion off
 \code{epochs} in advance.
 }
 
-\section{Lower bound on simulated mortality}{
+\section{Bounds on simulated mortality}{
 
-The simulation clamps the per-cohort mortality probability to \verb{[0.01, 0.99]}
-before the death draw (\code{mortality_draw}), so \strong{however low the fitted mortality
-is, at least 1 \% of a cohort is at risk per model step}. The bound is per
-\emph{step}, not per year, so its annual equivalent is roughly \code{0.01 / dt}: 1 \%/yr on
-annual data, 0.2 \%/yr on five-year steps, 0.1 \%/yr on decadal ones. It exists
-because \code{binomial_from_gamma()}'s shape parameter \code{n*p/(1-p)} degenerates as
-\code{p -> 0}, and it is the reason a simulated low-mortality stand -- a mature
-unthinned stand, a slow-growing species, an equilibrium run -- loses stems the
-observations do not. The per-tree mortality loss is \strong{not} affected; it clamps
-at \code{1e-6}. So a fit can be correct while the trajectory it simulates is not.
-}
-
-\section{Scoring individual trees}{
-
-By default, \code{growth} and \code{mortality} are scored per site, species and census,
-as means over cohorts. Two options score them per observed tree instead; both
-take the tree table in \code{tree_data}, but they ask different questions.
-
-\code{loss_aggregation = c(growth = "tree", mortality = "tree")} predicts each
-OBSERVED tree: the kernels run on its measured dbh at the interval start with
-light from the observed stand, and only the yearly environment changes across
-the interval. It measures the error of the growth and mortality functions
-alone. \code{loss_resolution = "tree"} predicts each SIMULATED cohort that started
-as an observed tree, along the model's own trajectory (simulated growth,
-competitors, light). It measures the error of the functions plus the drift of
-the simulated stand.\tabular{lll}{
-    \tab \code{loss_aggregation = "tree"} \tab \code{loss_resolution = "tree"} \cr
-   the tree is \tab observed: measured dbh, observed competitors, yearly environment \tab simulated: the cohort it started as, along the model's trajectory \cr
-   measures \tab the growth and mortality functions alone \tab the functions plus the drift of the simulated stand \cr
-   responses \tab chosen separately, e.g. only \code{mortality = "tree"} \tab growth and mortality together \cr
-   \code{init_cohort} \tab any, incl. binned (\code{makeInitCohorts(dbh_binsize = )}) \tab one cohort per tree (\code{makeInitCohorts()} without \code{dbh_binsize}) \cr
-   \code{tree_data} needs \tab \code{dbh} at the interval start \tab \code{cohortID} of the initial cohort \cr
-   combines with \tab the simulated \code{dbh}/\code{ba}/\code{trees}/\code{regeneration} terms \tab \code{reanchor} and \code{teacher_forcing} (under teacher forcing the trajectory is reset to the observed stand every year, which comes close to the first option) \cr
-   diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_deaths}, \verb{$tree_pred} \cr
-}
-
-
-Use the first to estimate the process functions from the trees as observed,
-the second to test whether simulated trajectories follow the real trees. The
-two cannot be combined in one fit.
+Before the death draw, the simulation clamps the per-cohort mortality
+probability of every step to the interval
+\code{createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)} of the
+mortality process, so at least 0.1 \% and at most 99.9 \% of a cohort is at
+risk per simulated step however extreme the fitted rate. The bound is per
+\emph{step}, not per year: on five-year steps the floor is 0.02 \%/yr, on decadal
+ones 0.01 \%/yr. Until 0.2.0 the interval was hard-coded to \verb{[0.01, 0.99]},
+which made simulated low-mortality stands lose stems the observations did
+not. The per-tree mortality loss is not affected by either bound; it clamps
+at \code{1e-6}. See \code{\link[=createProcess]{createProcess()}}.
 }
 
 \examples{
@@ -632,18 +437,33 @@ sites <- 1:3
 Nsp   <- max(fia_obs_dt$species)
 init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
 FINN.seed(1)
-m <- finn(
-  N_species            = Nsp, recruits_dbh = 12.9,
-  growth_process       = createProcess(~ temp + prec, FINN::growth),
-  mortality_process    = createProcess(~ temp + prec, FINN::mortality),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration))
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createProcess(~ temp + prec, growth),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
 
 # the per-response losses over the epochs, and the baselines they were
-# scaled by to make `weights = "auto"` comparable across responses
+# scaled by to make `loss_weights = "auto"` comparable across responses
 tail(m$history, 2)
 m$loss_baseline
+
+# give growth twice the weight of every other response, and lower the
+# learning rate every 50 epochs
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    loss_weights = c(1, 1, 1, 2, 1, 1),
+    control = finnControl(lr_scheduler = "step",
+                          lr_scheduler_params = list(step_size = 50, gamma = 0.5)),
+    plot_progress = FALSE)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\link{finn_data} for the input tables, \link{finn_loss} for how the
+simulation is compared with the observations, \code{\link[=finnControl]{finnControl()}} for the
+optimizer settings, \link{recruitment} for the recruitment options
+(\code{loss_recruit}, the regeneration likelihood), \code{\link[=simulateForest]{simulateForest()}}
+to simulate with the fitted model
 }

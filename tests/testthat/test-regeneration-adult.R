@@ -10,7 +10,7 @@ library(data.table)
 build_adult_model <- function(Nsp, logx = log(20), logA = log(20)) {
   FINN.seed(1)
   finn(
-    N_species            = Nsp, recruits_dbh = 12.9, reg_floor = 1e-3,
+    N_species            = Nsp, recruits_dbh = 12.9,
     competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
     growth_process       = createProcess(~ temp + prec, FINN::growth,    optimizeSpecies = TRUE, optimizeEnv = TRUE),
     mortality_process    = createProcess(~ temp + prec, FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE),
@@ -84,7 +84,7 @@ test_that("regeneration_adult fits, and its parameters move", {
   suppressMessages(
     fit(m, env = env[siteID %in% sites], data = obs[siteID %in% sites],
         init_cohort = makeInitCohorts(it[siteID %in% sites], Nspecies = Nsp), device = "cpu",
-        epochs = 3L, patches = 2, patch_size = 0.06, lr = 0.02, plot_progress = FALSE)
+        epochs = 3L, patches = 4, patch_size = 0.06, lr = 0.02, plot_progress = FALSE)
   )
   after <- list(x = as.numeric(m$reg_adult_logx), A = as.numeric(m$reg_adult_logA))
   expect_true(all(is.finite(unlist(after))))

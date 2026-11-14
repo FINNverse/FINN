@@ -33,7 +33,8 @@ createProcess(
   theta_floor = 0.5,
   optimizeTheta = TRUE,
   mortality_floor = 0.001,
-  mortality_ceiling = 0.999
+  mortality_ceiling = 0.999,
+  reg_floor = 0.001
 )
 }
 \arguments{
@@ -71,14 +72,17 @@ network. Default \code{NULL} infers it from \code{formula}/\code{env}.}
 network. Default \code{NULL} uses the number of species.}
 
 \item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
-the negative binomial distribution used to sample recruits. Only used when
-this process is the regeneration process.}
+the negative binomial distribution used to sample recruits (the size
+\code{theta}), or its fixed value with \code{optimizeTheta = FALSE}. Only used when
+this process is the regeneration process. See \link{recruitment}.}
 
 \item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the default
 environmental-response network architecture.}
 
 \item{upper}{(\code{numeric()})\cr Upper boundaries (natural scale) for the
-species-specific process parameters.}
+species-specific process parameters. For the competition process the
+defaults are \code{c(log(2.3), 2.0)}: the height parameter is capped so that no
+species grows taller than 130 m (see \code{\link[=height]{height()}}).}
 
 \item{lower}{(\code{numeric()})\cr Lower boundaries (natural scale) for the
 species-specific process parameters.}
@@ -89,7 +93,9 @@ network. Ignored unless \code{hidden} is set.}
 \item{sample_regeneration}{(\code{logical(1)})\cr Should recruits actually be sampled
 from the negative binomial regeneration distribution (\code{TRUE}), or only its
 expectation used (\code{FALSE})? Only used when this process is the regeneration
-process.}
+process. With \code{FALSE} the expected number of recruits per patch is rounded,
+so wherever it is below 0.5 no recruit enters at all: a silent zero for
+sparse species on small patches. See \link{recruitment}.}
 
 \item{n_quantiles}{(\code{integer(1)})\cr Number of height classes used to discretize
 cohorts when computing shading/light availability. Only used when this
@@ -196,14 +202,37 @@ it reached 0.035 by epoch 50 and the simulated stand overshot observed
 recruitment 133-fold, with basal-area and stem losses flat until epoch 25
 and running away after. The Beverton-Holt cap does not prevent this -- it
 bounds the mean, and the variance around a capped mean is still
-\code{K + K^2/theta}.}
+\code{K + K^2/theta}.
+
+The floor keeps the fit stable, and in one converged pair of fits on the
+German national forest inventory it calibrated the recruitment level as
+well as a fixed \code{theta}: out of sample on a spatially blocked holdout, 1.06
+times the observed level after 2000 epochs (about 126 000 optimizer steps)
+against 1.04 for \code{optimizeTheta = FALSE}. A fit stopped early is
+different: after 50 of those epochs (3 150 optimizer steps) the floored
+\code{theta} still put the level about 12 times too high, a fixed \code{theta} 2 to 3
+times. Read the level only once the parameters have settled,
+or fix \code{theta} for short fits. See \link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion
 \code{par_theta_recruits} be estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}.
 With \code{FALSE} it stays at \code{dispersion_parameter} for the whole fit (a buffer,
 not a parameter), in the recruit draw and in the regeneration likelihood
 alike; \code{theta_floor} still applies. Only used when this process is the
-regeneration process.}
+regeneration process.
+
+Use \code{FALSE} for short fits, or when the recruitment level should not
+depend on how long the fit runs: a trained \code{theta} falls on sparse
+recruitment data, and with the floor (\code{theta_floor}) the level is right
+only once the fit has converged, while a fixed \code{theta} gets there sooner.
+\code{dispersion_parameter = 1} is FINN's start value; on the German national
+forest inventory it matched the floored \code{theta} at convergence. A higher
+value such as \code{50} brings the recruit draw close to a Poisson draw: the
+variance \code{mu + mu^2/theta} approaches \code{mu} while the expected count per
+patch \code{mu} stays small against \code{theta} (at \code{theta = 50} the excess is 2 \%
+of the mean at \code{mu = 1} and 20 \% at \code{mu = 10}). Per-patch recruit counts
+are usually small enough for that; larger counts need a larger value. See
+\link{recruitment}.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 per-cohort mortality probability is clamped to \strong{per simulation step},
@@ -222,6 +251,21 @@ unbiased mean gradient down to \code{1e-4}, but single-draw gradients grow
 heavy-tailed as \code{n*p} shrinks -- the largest per-tree gradient is about ten
 times the old default's at \code{1e-3} and about a hundred times at \code{1e-4} --
 so \code{1e-3} is the lowest tested value and is the new default.}
+
+\item{reg_floor}{(\code{numeric})\cr A small recruitment that every species gets
+in every patch and time step, whatever the light and the environment, in
+trees per ha and time step. Only used when this process is the
+regeneration process (\code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}},
+\code{\link[=regeneration_adult]{regeneration_adult()}} and \code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}} add it
+to their expected recruitment:
+\code{mean = regP * exp(env) + reg_floor}). Default \code{1e-3}, which keeps the
+recruitment likelihood finite where the light response closes and adds
+next to nothing. One value for all species or one per species. Before
+0.2.0 the floor was hard-coded to \code{0.2}, which with many species adds a
+large recruitment that does not depend on anything (65 species x 0.2 = 13
+trees per ha and year); models saved before then keep that value when
+reloaded. \code{finn(reg_floor = )}, the argument of earlier versions, is
+still accepted with a warning and overrides this value.}
 }
 \value{
 A list of class \code{"process"} containing the process definition and
@@ -276,6 +320,10 @@ are constrained during optimization.
 \examples{
 growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
 
+# the regeneration process with a smaller recruitment floor and a cap per species
+regeneration_process <- createProcess(~temperature, func = regeneration_capped,
+                                      reg_floor = 1e-4, cap = "species")
+
 }
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
@@ -283,5 +331,6 @@ models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 \doi{10.1111/2041-210x.70347}
 }
 \seealso{
-\code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}}
+\code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}}, \link{recruitment} for the
+recruitment options and how to combine them
 }

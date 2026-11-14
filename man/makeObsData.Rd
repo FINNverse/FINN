@@ -67,3 +67,26 @@ response; pass them to \code{fit} with \code{mortality = "binomial"}.
 Derives stand metrics by site/patch/species/year from tree measurements,
 filters sites, harmonizes years, optionally aggregates by site.
 }
+\examples{
+library(data.table)
+# A tree list of eight Oregon FIA plots with four patches and three inventories
+# each, one row per tree and inventory: siteName, patchName, treeName, year,
+# species_name, dbh (cm), status ("new", "alive", "dead") and living.
+tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+head(tree_dt[, .(siteName, patchName, treeName, year, species_name, dbh, status)])
+
+obs <- makeObsData(
+  tree_dt[complete == TRUE],    # fully remeasured plots only
+  plotsize          = 0.06,     # ha per patch; recruits are scaled to per hectare
+  aggregate_by_site = FALSE,    # keep the patches: resolveSiteIDs() needs them
+  fix_period_length = 10,       # drop plots whose remeasurement interval is not 10 years
+  NspeciesQuantile  = 0.98)     # species covering 98 \% of the stems; the rest is "other"
+head(obs$obs_dt)
+
+# mortality is a closed cohort: the trees alive at the start of the interval
+# and how many of them had died by its end, not a bare rate
+obs$obs_dt[n_at_risk > 0, .(siteName, patchName, year, species_name, n_at_risk, n_died, mort)][1:5]
+# growth travels with the number of trees behind it, so fit() can weight it
+obs$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
+
+}

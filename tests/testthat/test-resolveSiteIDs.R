@@ -44,3 +44,22 @@ test_that("'other' is always coded as the last species", {
   sp  <- res$species_dt[order(species)]
   expect_identical(sp$species_name[nrow(sp)], "other")
 })
+
+test_that("env_dt comes back with one row per site and year, however many patches", {
+  # Two patches on one site. The site/patch/year map has one row per patch, and
+  # the environment used to be merged onto it row by row, so a site with four
+  # patches got every climate row four times -- which climateDF2array() now
+  # refuses, so fit() failed on the output of the documented pipeline.
+  tree <- rbind(toy_tree_dt(),
+                toy_tree_dt()[, `:=`(patchName = "p2", treeName = paste0(treeName, "b"))])
+  obs  <- suppressMessages(makeObsData(tree, plotsize = 1, aggregate_by_site = FALSE))$obs_dt
+  env  <- data.table(siteName = "s1", year = c(2000, 2010),
+                     temp = c(8.0, 8.2), prec = c(900, 950))
+
+  res <- suppressMessages(resolveSiteIDs(tree, env, obs, createInitCohorts = FALSE))
+  expect_equal(uniqueN(res$obs_dt_patches$patchID), 2L)
+  expect_equal(nrow(res$env_dt), 2L)
+  expect_false(anyDuplicated(res$env_dt, by = c("siteID", "year")) > 0)
+  # and the array builder behind fit() accepts it
+  expect_equal(dim(climateDF2array(res$env_dt, c("temp", "prec"))), c(1L, 2L, 2L))
+})

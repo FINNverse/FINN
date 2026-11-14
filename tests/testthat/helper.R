@@ -55,7 +55,7 @@ fit_toy_finn <- function(epochs = 2L, n_sites = 4L) {
   )
   suppressMessages(
     fit(m, env = env, data = obs, init_cohort = init, device = "cpu",
-        epochs = epochs, patches = 2, patch_size = 0.06, lr = 0.01, plot_progress = FALSE)
+        epochs = epochs, patches = 4, patch_size = 0.06, lr = 0.01, plot_progress = FALSE)
   )
   list(model = m, env = env, init = init, obs = obs, Nsp = Nsp)
 }

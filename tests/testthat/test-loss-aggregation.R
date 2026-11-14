@@ -43,8 +43,8 @@ OPT <- if (exists("optim_ignite_adam", envir = asNamespace("torch"))) torch::opt
 run_fit <- function(..., data = obs) {
   FINN.seed(SEED); mm <- mk_model()
   fit(mm, env = env, data = data, init_cohort = ic, patches = 2L, patch_size = 0.1,
-      env_autoscale = FALSE, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites,
-      shuffle = FALSE, optimizer = OPT, plot_progress = FALSE, device = "cpu", ...)
+      env_autoscale = FALSE, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites,
+      shuffle = FALSE, control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu", ...)
   mm
 }
 
@@ -132,8 +132,8 @@ test_that("weights = 'auto' gives the new aggregations their own baseline", {
   for (k in 1:4) obs_cls[[paste0("n_class_", k)]] <- c(80, 60, 40, 20)[k]
   FINN.seed(SEED); mm <- mk_model()
   fit(mm, env = env, data = obs_cls, init_cohort = ic, patches = 2L, patch_size = 0.1,
-      env_autoscale = FALSE, epochs = 1L, lr = 0, weights = "auto", batchsize = Nsites,
-      shuffle = FALSE, optimizer = OPT, plot_progress = FALSE, device = "cpu",
+      env_autoscale = FALSE, epochs = 1L, lr = 0, loss_weights = "auto", batchsize = Nsites,
+      shuffle = FALSE, control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu",
       loss_family = c(dbh = "none", ba = "none", trees = "poisson", growth = "mse",
                       mortality = "binomial", regeneration = "mse"),
       loss_aggregation = list(trees = list(type = "size_classes", breaks = c(10, 20, 30)),
@@ -302,8 +302,8 @@ test_that("a per-tree aggregation forces the per-site path and its own baseline"
   const <- copy(obs)[, period_length := 3L]
   FINN.seed(SEED); m <- mk_model()
   suppressMessages(fit(m, env = env, data = const, init_cohort = ic, patches = 2L,
-      patch_size = 0.1, env_autoscale = FALSE, epochs = 1L, lr = 0, weights = "auto",
-      batchsize = Nsites, shuffle = FALSE, optimizer = OPT, plot_progress = FALSE,
+      patch_size = 0.1, env_autoscale = FALSE, epochs = 1L, lr = 0, loss_weights = "auto",
+      batchsize = Nsites, shuffle = FALSE, control = finnControl(optimizer = OPT), plot_progress = FALSE,
       device = "cpu", loss_family = LOSS, loss_aggregation = c(mortality = "tree"),
       tree_data = tree_dt))
   expect_true(m$per_site_period)
@@ -360,8 +360,8 @@ test_that("epochs = 0 runs the set-up only", {
   FINN.seed(SEED); mm <- mk_model()
   before <- lapply(mm$parameters, function(p) as.numeric(p$detach()))
   fit(mm, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
-      env_autoscale = FALSE, epochs = 0L, lr = 0.1, weights = "auto", batchsize = Nsites,
-      shuffle = FALSE, optimizer = OPT, plot_progress = FALSE, device = "cpu",
+      env_autoscale = FALSE, epochs = 0L, lr = 0.1, loss_weights = "auto", batchsize = Nsites,
+      shuffle = FALSE, control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu",
       loss_family = LOSS, loss_aggregation = c(mortality = "tree"), tree_data = one_patch_trees())
   expect_length(mm$history, 0L)                       # no epoch ran (1:0 used to run two)
   after <- lapply(mm$parameters, function(p) as.numeric(p$detach()))
@@ -378,7 +378,7 @@ test_that("fit() drops the observation tensors of an earlier call", {
   m <- run_fit(loss_family = LOSS, loss_aggregation = c(mortality = "tree"), tree_data = one_patch_trees())
   expect_false(is.null(m$tree_obs))
   fit(m, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
-      env_autoscale = FALSE, epochs = 1L, lr = 0, weights = rep(1, 6), batchsize = Nsites,
-      shuffle = FALSE, optimizer = OPT, plot_progress = FALSE, device = "cpu", loss_family = LOSS)
+      env_autoscale = FALSE, epochs = 1L, lr = 0, loss_weights = rep(1, 6), batchsize = Nsites,
+      shuffle = FALSE, control = finnControl(optimizer = OPT), plot_progress = FALSE, device = "cpu", loss_family = LOSS)
   expect_null(m$tree_obs); expect_null(m$class_obs); expect_null(m$quant_obs)
 })
