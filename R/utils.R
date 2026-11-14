@@ -76,26 +76,6 @@ visualize.training <- function(losses, epoch, max_epoch = 100L, main, new = FALS
 
 
 
-#' Generate random numbers from a uniform distribution
-#'
-#' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.
-#'
-#' @param low numeric Lower bound of the uniform distribution.
-#' @param high numeric Upper bound of the uniform distribution.
-#' @param size numeric Size of the output array.
-#'
-#' @return array A numeric array of random numbers.
-#'
-#' @examples
-#' np_runif(0, 1, c(2, 3))
-#'
-#' @export
-np_runif = function(low, high, size) {
-  N = prod(size)  # Calculate total number of values to generate
-  array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
-}
-
-
 # Set torch's intra-op thread count for a fit (FINN#48). Returns the count to
 # restore on exit, or NULL when there is nothing to restore. With OpenMP the
 # count can change at any time; torch's native backend (macOS) accepts one change
@@ -120,16 +100,6 @@ set_torch_threads = function(threads) {
   if (torch::backends_openmp_is_available()) old else NULL
 }
 
-check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), device="cpu", requires_grad = FALSE) {
-  pointer_check <- tryCatch(torch::as_array(tensor), error = function(e) e)
-  if(!is.null(attr(r_obj, "requires_grad"))) requires_grad = attr(r_obj, "requires_grad")
-  if(inherits(pointer_check,"error")){
-    tensor = torch::torch_tensor(r_obj, dtype=dtype, device=device, requires_grad = requires_grad)
-  }
-  return(tensor)
-}
-
-
 #' Index species
 #'
 #' @param pred predictions
@@ -137,8 +107,7 @@ check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), devic
 #'
 #' @return A `torch` tensor of `pred` gathered along its species dimension by
 #'   `species`.
-#' @keywords internal
-#' @export
+#' @noRd
 index_species = function(pred, species) {
   shapes = pred$shape
   X_expanded = pred$unsqueeze(2)$expand(c(shapes[1], species$shape[2], shapes[2]))
@@ -183,76 +152,12 @@ aggregate_species = function(labels, samples, sp) {
 }
 
 
-#' Aggregate function
-#'
-#' @param labels labels
-#' @param samples samples
-#' @param Results Results
-#' @param drop_rows logical Drop empty rows from the aggregated output. Defaults to TRUE.
-#' @param sp_max integer (Optional) Maximum species index to aggregate over. Defaults to NULL.
-#'
-#' @return A list of `torch` tensors, one per element of `samples`, each holding
-#'   the per-species aggregated result.
-#' @keywords internal
-#' @export
-aggregate_results_old = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
-
-  if(drop_rows) {
-    # Drop rows for speed up - memory intensive
-    if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2]) # Not good, better to pass sp_max to function!
-
-    old_shape = labels$shape
-
-    labels_new = (labels + torch::torch_tensor(seq(1, by = sp_max, length.out = labels$shape[1])-1,
-                                               dtype = torch_int64(),
-                                               device = labels$device)$reshape(c(labels$shape[1], 1L, 1L))$expand(labels$shape))$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3]))
-
-    samples_new = lapply(samples, function(sample) {
-      return(sample$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3])))
-    })
-    Results_new = lapply(Results, function(result) {
-      return(result$reshape(c(1, labels$shape[1]*sp_max)))
-    })
-    Results = Results_new
-    labels = labels_new
-    samples = samples_new
-  }
-
-  for(k in 1:labels$shape[1]) {
-    #samples_tmp = [sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)) for sample in samples]
-    samples_tmp = lapply(samples, function(sample) sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)))
-
-    results = groupby_mean(samples_tmp, labels[k,,,drop=FALSE]$flatten())
-    values = results[[1]]
-    positions = results[[2]]
-
-    for( v in 1:length(samples)) {
-      Results[[v]][k,positions] = Results[[v]][k,positions] + values[[v]]$squeeze()
-    }
-  }
-
-  if(drop_rows) {
-    Results = lapply(Results, function(result) {
-      return(result$reshape(c(old_shape[1], sp_max)))
-    })
-  }
-
-  return(Results)
-}
-
-
-
+# Per-site, per-species sums (or means) of cohort values: every sample is
+# scattered into a species tensor and reduced over the patches. The time loop
+# of forward() uses the stacked form aggregate_species(); this one serves the
+# adult-density terms of the regeneration processes and the per-tree light.
 aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL, aggregation = "sum") {
 
-  # if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
-  # old_shape = labels$shape
-  # labels = labels$flatten(start_dim=1, end_dim = 2)
-  #
-  # for( v in 1:length(samples)) {
-  #   da = samples[[v]]$flatten(start_dim=1, end_dim=2)
-  #   Results[[v]]$add_(torch::torch_zeros(da$shape[1], sp_max, dtype=da$dtype, device = da$device)$scatter_add(2, labels, da$expand(c(da$shape[1], -1)))$view(c(old_shape[1:2], sp_max))$sum(dim = 2))
-  # }
-  # return(Results)
   if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
 
   if(length(aggregation) == 1) aggregation = rep(aggregation, length(samples))
@@ -269,143 +174,6 @@ aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max 
 
 }
 
-#' group by mean
-#'
-#' @param values list of value tensors
-#' @param labels labels
-#'
-#' @return A `torch` tensor of the mean of `values` within each unique group in
-#'   `labels`.
-#' @keywords internal
-#' @export
-groupby_mean = function(values, labels) {
-  uniques = unique(as.matrix(labels))
-  key_val = 1:length(uniques)
-  names(key_val) = val_key = sort(uniques)
-  names(val_key) = 1:length(uniques)
-  labels2 = as.matrix(labels)[,1]
-  labels = torch_tensor(key_val[as.character(labels2)],  dtype = torch_int64(), device = values[[1]]$device)
-  labels = labels$view(c(labels$size(1), 1))$expand(c(-1, values[[1]]$size(2)))
-  unique_labels_r = matrix(sort(unique(as.matrix(labels))), ncol = 1L)
-  unique_labels = torch_tensor(unique_labels_r, dtype = torch_int64())
-  results = lapply(values, function(value) torch_zeros_like(unique_labels, dtype = value$dtype, device = values[[1]]$device)$scatter_add_(1, labels, value))
-  new_position = torch_tensor(val_key[as.character(unique_labels_r[,1])], device = values[[1]]$device,  dtype = torch_int64())
-  return(list(results, new_position))
-}
-
-
-#' Padding tensors to remove dead cohorts (internal)
-#' @noRd
-pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
-  # KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), split_size = org_dim[1]*org_dim[2], dim = 1) TODO does not work...bug?!
-  KK = value$flatten(start_dim = 1, end_dim = 2)$split(1, 1)
-  KK_new = vector("list", length = length(KK))
-  for( i in 1:indices$shape[1]) {
-    KK_new[[i]] = KK[[i]][1, indices[i, ]$detach()]
-  }
-  return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE, padding_value = const))
-}
-
-# pad_tensors_speed_up2 <- function(value, indices, org_dim, const = 0) {
-#   # Flatten the value tensor to 2D
-#   flat_value <- value$flatten(start_dim = 1, end_dim = 2)
-#
-#   # Use the boolean indices to filter out the alive cohorts
-#   alive_cohorts <- flat_value$masked_select(indices$unsqueeze(1))$view(c(indices$sum(dim = 2)$max()$item(), -1))
-#
-#   # Pad the sequences
-#   padded_tensor <- torch::nn_utils_rnn_pad_sequence(list(alive_cohorts), batch_first = TRUE, padding_value = const)
-#
-#   return(padded_tensor)
-# }
-#
-# pad_tensors_speed_up3 <- function(value, indices, org_dim, const = 0) {
-#   # Flatten the value tensor to 2D
-#   flat_value <- value$flatten(start_dim = 1, end_dim = 2)
-#
-#   # Get the shape parameters
-#   sites_patches <- indices$shape[1]
-#   cohorts <- indices$shape[2]
-#
-#   # Calculate the maximum number of alive cohorts
-#   max_alive <- indices$sum(dim = 2)$max()$item()
-#
-#   # Create a tensor to store the padded cohorts
-#   padded_tensor <- torch::torch_full(c(sites_patches, max_alive), const)
-#
-#   # Expand the indices tensor for broadcasting
-#   indices_expanded <- indices$unsqueeze(1)
-#
-#   # Gather the alive cohorts
-#   alive_cohorts <- flat_value$masked_select(indices_expanded)
-#
-#   # Reshape the alive cohorts tensor
-#   alive_cohorts_reshaped <- alive_cohorts$view(c(sites_patches, -1))
-#
-#   # Fill the padded tensor with alive cohorts
-#   padded_tensor[, 1:alive_cohorts_reshaped$shape[2]] <- alive_cohorts_reshaped
-#
-#   return(padded_tensor)
-# }
-# value <- torch_tensor(array(sample(0:5, 10*50*9, replace = TRUE), dim = c(10, 50, 9)), requires_grad = TRUE, dtype = torch_float32()) # [sites, patches, cohorts]
-# indices = (value > 0)$flatten(start_dim = 1, end_dim = 2) # boolean [sites*patches, cohorts], reporting which cohorts are alive or dead
-# org_dim <- c(10, 50, 9)
-#
-# padded_tensor <- pad_tensors_speed_up(value, indices, org_dim) # output [sites*patches, mininum number of cohort dimension required (usually == highest number of alive cohorts in all sites and patches)]
-#
-# padd
-#
-# print(padded_tensor)
-# # in this example: [5,5]
-#
-# indices = (M>0)$flatten(start_dim = 1, end_dim = 2)
-#
-# as_array(pad_tensors_speed_up(M, indices, org_dim = c(1, 10, 5)))
-#
-# M = matrix(sample(c(0, 1), 50, replace = TRUE), 10, 5)
-# M
-#
-# remove_zeros_and_pad(M[1,,])
-#
-#
-#
-# # Print the result tensor
-# print(result_tensor)
-#
-#
-# remove_zeros_and_pad = function(tensor, index) {
-#   mask = index
-#   non_zero_counts = mask$sum(dim=2)
-#   max_non_zeros = non_zero_counts$max()$item()
-#   sorted_tensor = torch_sort(mask$float(), dim=2, descending=TRUE)[[2]]
-#   sorted_tensor = tensor$gather(2, sorted_tensor)[, 1:max_non_zeros]
-#
-#   return(sorted_tensor)
-# }
-#
-# pad_tensors_speed_up(value, indices, org_dim)
-# tensor = value$flatten(start_dim = 1, end_dim = 2)
-# remove_zeros_and_pad(tensor, indices) == pad_tensors_speed_up(value, indices, org_dim)
-#
-#
-# microbenchmark::microbenchmark(remove_zeros_and_pad(tensor, indices) , pad_tensors_speed_up(value, indices, org_dim))
-
-
-#' Sample poisson relaxed
-#'
-#' @param lmbd lambda
-#' @param num_samples number of samples
-#' @param temperature temperature
-#'
-#' @return A `torch` tensor of relaxed (differentiable) Poisson samples.
-#' @keywords internal
-#' @export
-sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
-  t = ((torch::torch_rand(c(num_samples,lmbd$shape))+0.0001)$log()$negative()/lmbd)$cumsum(dim=1L)
-  relaxed_indicator = torch_sigmoid((1.0 - t) / temperature)
-  N = relaxed_indicator$sum(1)
-  return(N)
-}
 
 sample_poisson_gaussian <- function(lmbd) {
   epsilon <- torch_randn_like(lmbd)
@@ -545,16 +313,6 @@ binomial_from_bernoulli = function(n, p) {
 
 
 
-sample_poisson_gumbel <- function(lmbd, num_samples=50, temperature = 1e-2) {
-  shape <- lmbd$shape
-  gumbels <- -torch::torch_log(-torch::torch_log(torch::torch_rand(c(num_samples, shape))))
-  logits <- lmbd$log()
-  poisson_samples <- (logits + gumbels) / temperature
-  poisson_samples <- poisson_samples$exp()$cumsum(dim=1L)
-  relaxed_indicator <- torch_sigmoid((1.0 - poisson_samples) / temperature)
-  N <- relaxed_indicator$sum(1)
-  return(N)
-}
 
 
 #' Set Seed for Reproducibility in R and Torch
@@ -583,68 +341,6 @@ FINN.seed <- function(seed) {
 }
 
 
-checkPars = function(inputPar, parRange, name = NULL){
-  if(is.list(inputPar)) inputPar = inputPar[[1]]
-  if(is.vector(inputPar)) {
-    Npar = 1
-    Nsp = length(inputPar)
-    inputPar = matrix(inputPar, nrow = Nsp, ncol = Npar)
-    parRange = matrix(parRange, nrow = Npar, ncol = 2)
-  }else if(is.matrix(inputPar)){
-    Npar = ncol(inputPar)
-    Nsp = nrow(inputPar)
-  }else{
-    error_message = c(
-      "Error: speciesPars and speciesPars_ranges must contain vectors or a matrices\n",
-      paste0("The object provided for ", name, " is not a vector or matrix\nstr(",name,")\n",paste0(capture.output(str(inputPar)), collapse = "\n"))
-      )
-    stop(error_message)
-  }
-  if(Npar != nrow(parRange)){
-    stop("speciesPars and speciesPars_ranges must have the same number of parameters")
-  }
-  checkedPar = matrix(nrow = Nsp, ncol = Npar)
-  j=1
-  for(j in 1:Nsp){
-    for(i in 1:Npar){
-      lower = parRange[i,1]
-      upper = parRange[i,2]
-      checkedPar[j,i] = inputPar[j,i] < upper & inputPar[j,i] > lower
-    }
-  }
-  return(list(invalid = any(!checkedPar), checkedPar = checkedPar, inputPar = inputPar, parRange = parRange))
-}
-
-checkParInput = function(speciesPars, speciesPars_ranges){
-  checked = list()
-  valid_pars = TRUE
-  for(i in names(speciesPars_ranges)){
-    checked[[i]] = checkPars(speciesPars[[i]], speciesPars_ranges[[i]], i)
-    if(checked[[i]]$invalid) valid_pars = FALSE
-  }
-  if(!valid_pars){
-    stop_message = paste("speciesPars must be within the range of speciesPars_ranges", sep = "\n")
-    stop_message <- paste(stop_message, "The following parameters are out of range:", sep = "\n")
-    for(i in names(speciesPars_ranges)){
-      if(any(!checked[[i]]$checkedPar)){
-        false_idx = which(!checked[[i]]$checkedPar, arr.ind = TRUE)
-        for(ipar in 1:nrow(false_idx)){
-          stop_message <- paste(
-            stop_message,
-            paste0(
-              "speciesPars$", i, "[", false_idx[ipar,1], ",", false_idx[ipar,2], "] = ", checked[[i]]$inputPar[false_idx[ipar,1], false_idx[ipar,2]],
-              " (min = ", checked[[i]]$parRange[false_idx[ipar,2],1], " max = ", checked[[i]]$parRange[false_idx[ipar,2],2],")"
-            ),
-            sep = "\n")
-        }
-      }
-    }
-    stop_message <- paste(stop_message, "Adjust the upper and lower range in speciesPars_ranges or adjust the parameters in initSpecies", "", sep = "\n")
-    stop(stop_message)
-  }
-}
-
-
 # default ranges
 default_speciesPars_ranges = list(
   parGrowth = rbind(
@@ -659,43 +355,6 @@ default_speciesPars_ranges = list(
   parHeight = c(0.3, 0.7)
 )
 
-to_r = function(par, numeric = FALSE) {
-  if(numeric) {
-    tmp = par |> as.numeric()
-  } else {
-    tmp = par |> as.matrix()
-  }
-  attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
-  return(tmp)
-}
-
-get_mort_thresholds = function(base_steepness) {
-
-  ff = function(parM, light = 1.0, base_steepness = 10) {
-    parM = torch::torch_tensor(parM, requires_grad = TRUE)
-    scaled_steepness <- base_steepness / (0.5 - abs(parM - 0.5))
-    shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parM))) - 1 / (1 + torch::torch_exp(scaled_steepness * parM))) /
-                   (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parM))) - 1 / (1 + torch::torch_exp(scaled_steepness * parM))))
-    shade$backward()
-    return(parM$grad |> as.numeric())
-  }
-
-  upper_high = cbind(seq(0, 1, length.out = 100), sapply(seq(0, 1, length.out = 100), function(x) ff(x, 1.0, base_steepness = base_steepness) |> as.numeric() ))
-  upper_limit_light_max = upper_high[which(is.na(upper_high[,2]), arr.ind = TRUE)[-1][1]-1, 1]
-  upper_low = cbind(seq(0, 1, length.out = 100), sapply(seq(0, 1, length.out = 100), function(x) ff(x, 0.0, base_steepness = base_steepness) |> as.numeric() ))
-  upper_limit_light_min = upper_low[which(is.na(upper_low[,2]), arr.ind = TRUE)[-1][1]-1, 1]
-  upper_limit = c(upper_limit_light_max, upper_limit_light_min)[which.min(c(upper_limit_light_max, upper_limit_light_min))]
-  upper_limit= 0.99*upper_limit
-
-  min = rev(which(is.na(upper_high[1:50,2]), arr.ind = TRUE))
-  lower_limit_light_max = upper_high[1:50][min+1][1]
-  min = rev(which(is.na(upper_low[1:50,2]), arr.ind = TRUE))
-  lower_limit_light_min = upper_low[1:50][min+1][1]
-
-  lower_limit = c(lower_limit_light_max, lower_limit_light_min)[which.min(c(lower_limit_light_max, lower_limit_light_min))]
-  lower_limit= 1.01*lower_limit
-  return(c(lower_limit, upper_limit))
-}
 
 
 rnbinom_torch = function(pred, theta) {
@@ -774,76 +433,6 @@ dnbinom_torch = function(pred, true, theta) {
   }
 
 
-
-#' @export
-plot.finn_class = function(x, pars = c("process", "env"), env_names = NULL, species_names = NULL, ...) {
-  if(is.null(species_names)) species_names = 1:x$N_species
-  if(tolower(pars) == "env"){
-    growth = x$parameters_r$nn_growth.0.weight
-    mort = x$parameters_r$nn_mortality.0.weight
-    reg = x$parameters_r$nn_regeneration.0.weight
-    if(any(c(is.null(growth), is.null(mort), is.null(reg)))){
-      return(print("no environmental effects fitted"))
-    }else{
-      env_effects_dt <- rbindlist(list(
-        data.table(growth, process = "growth", species = species_names),
-        data.table(mort, process = "mort", species = species_names),
-        data.table(reg, process = "reg", species = species_names)
-      ))
-      env_effects_dt <- melt(env_effects_dt, id.vars = c("species","process"))
-      if(is.null(env_names)) env_names = paste0("x",2:(ncol(growth)))
-      env_effects_dt[, variable := factor(
-        variable,
-        levels = paste0("V", 1:(ncol(growth))),
-        labels = c("intercept", env_names)),]
-      p = ggplot(env_effects_dt, aes(x = value, y = as.factor(species)))+
-        geom_bar(stat = "identity")+
-        facet_wrap(~variable)+
-        theme_bw()+
-        geom_vline(xintercept = 0)+
-        ylab("Species")
-      print(p)
-    }
-  }
-  if(tolower(pars) == "process"){
-    disp_dt <- data.table(
-      disp_recr = torch::as_array(x$par_theta_recruits),
-      species = species_names
-    )
-    par_mort <- data.table(x$par_mortality_r)
-    par_mort$species <- species_names
-    colnames(par_mort) <- c("mortLight", "mortSize", "mortGrowth","species")
-
-    par_growth <- data.table(x$par_growth_r)
-    par_growth$species <- species_names
-    colnames(par_growth) <- c("growthLight", "growthSize","species")
-
-    par_reg <- data.table(x$par_regeneration_r)
-    par_reg$species <- species_names
-    colnames(par_reg) <- c("regLight","species")
-
-    par_mort <- melt(data.table(par_mort), measure.vars = colnames(par_mort)[-length(colnames(par_mort))])
-    par_growth <- melt(data.table(par_growth), measure.vars = colnames(par_growth)[-length(colnames(par_growth))])
-    par_reg <- melt(data.table(par_reg), measure.vars = colnames(par_reg)[-length(colnames(par_reg))])
-
-    process_par_dt <- rbindlist(list(
-      data.table(par_mort, process = "mort"),
-      data.table(par_growth, process = "growth"),
-      data.table(par_reg, process = "reg"),
-      data.table(species = disp_dt$species, variable = "regDispersion", value = disp_dt$disp_recr, process = "reg")
-    ))
-    p = ggplot(process_par_dt, aes(x = value, y = as.factor(species), fill = process))+
-      geom_bar(stat = "identity")+
-      facet_wrap(~variable+process, scales = "free_x")+
-      theme_bw()+
-      geom_vline(xintercept = 0)+
-      ylab("Species ID")
-    print(p)
-  }
-}
-# usage
-# plot(m1, pars = "env", env_names = env_scales_dt$variable)
-# plot(m1, pars = "process", species_names = species_dt$species_name)
 
 # `"cuda"` is what everyone who has used torch directly reaches for, and
 # match.arg()'s "should be one of cpu, gpu" does not say that it is accepted.

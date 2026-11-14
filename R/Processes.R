@@ -191,38 +191,6 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
   return(light)
 }
 
-# TODO:
-# Rework the height comparison, the sigmoid function preserves the gradients but they are not great (either -1 or 1)
-
-
-#' mortality_wo_growth (internal)
-#' @noRd
-mortality_wo_growth = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE) {
-  # TODO remove constant part
-  # shade = 1-torch_sigmoid((light + (1-parMort[,1][species]) - 1)/(1/10^(1.5 + torch_abs(light-0.5))))
-
-  # Scale steepness towards the edges
-  scaled_steepness <- base_steepness / (0.5 - abs(parMort[,1][species] - 0.5))
-  shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))) /
-         (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parMort[,1][species]))) - 1 / (1 + torch::torch_exp(scaled_steepness * parMort[,1][species]))))
-
-  environment = torch::torch_sigmoid(pred)
-  # gPSize = torch_clamp(0.1*(dbh/torch_clamp((parMort[,2][species]*100), min = 0.00001))$pow(2.3), max = 1.0)
-  gPSize = (1-torch::torch_exp(-(dbh / (parMort[,2][species] * 100))))
-  # gPSize = torch_sigmoid(gPSize)
-  # TODO
-  # clamp can lead to vanishing gradients, sigmoid is not perfect but probably better here!
-  # shade -> [0,1]
-  # gPsize -> [0, 1]
-  # environment -> [0, 1]
-  # -> raw pred -> [0, 5]
-  predM = environment*((shade*gPSize + shade + gPSize)/3)
-  # predM = torch_sigmoid((environment*(shade+gPSize) + shade*gPSize + shade + gPSize -1.5)*2 )
-  if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM)
-  else out = predM
-  return(out)
-}
-
 #' Mortality
 #'
 #' @param dbh dbh

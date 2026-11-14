@@ -76,6 +76,12 @@ and gives the same result.
   their examples fit two epochs first, so they run on the bundled data
   (an unfitted model has no environment scaling yet).
 
+* Removed from the exported interface, as nothing in the package, the tests
+  or the vignettes used them: `aggregate_results_old()`, `np_runif()`,
+  `sample_poisson_relaxed()`, the undocumented `plot()` method of a model
+  (use `ALE()` and `summary()`), and the internal helpers `groupby_mean()`
+  and `index_species()` are no longer exported.
+
 ## Documentation and data preparation
 
 * Examples for the fitting workflow (`finn()`, `fit()`, `predict()`,

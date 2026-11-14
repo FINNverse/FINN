@@ -1841,7 +1841,7 @@ finn_class = nn_module(
       if (isTRUE(self$rb_gradient)) r = r_mean_patch + (r - r_mean_patch)$detach()
 
       # New recruits
-      dbh_new = ((r-1+0.1)/1e-3)$sigmoid() + (self$recruits_dbh - 1.0) # TODO: check!!! --> when r 0 dann dbh = 0, ansonsten dbh = 1 dbh[r==0] = 0
+      dbh_new = ((r-1+0.1)/1e-3)$sigmoid() + (self$recruits_dbh - 1.0) # soft step: recruits_dbh where r >= 1, recruits_dbh - 1 (no stems) where r = 0
       trees_new = r
       species_new = torch_arange(1, sp, dtype=torch_int64(), device = self$device)$unsqueeze(1)$`repeat`(c(r$shape[1], r$shape[2], 1))
 
@@ -2002,7 +2002,6 @@ finn_class = nn_module(
       if(update_boundary) {
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
-          # browser()
           # Under teacher forcing the state at step i is the LAST OBSERVED stand carried one
           # year, not a trajectory that reached year i, so the three state responses are not
           # predictions of this census at all and leave the objective.
@@ -2149,7 +2148,6 @@ finn_class = nn_module(
             # # counts
             # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,(i-period+1):(i),]$mean(2))
 
-            #browser()
             ## Growth aggregation over the period. Default: MEAN of the per-year
             ## rates, matched by an annualised per-year target. With
             ## `growth_period_scale = TRUE` the per-year rates are COMPOUNDED over
@@ -2295,8 +2293,6 @@ finn_class = nn_module(
       if(verbose) cli::cli_progress_update()
 
     }
-
-    # browser()
 
     # per-site windows: each term becomes one mean over all units scored in this
     # call - step s enters with weight n_s / sum(n), the units of the steps where
@@ -2679,7 +2675,7 @@ finn_class = nn_module(
     if (scale_env) self$env_scaling = compute_env_scaling(env, env_autoscale)
 
     if(is.null(data)) {
-      print("No data. Switching into simulation modus...")
+      message("No data given: simulating instead of fitting.")
       return(self$predict(env = env, patches = patches, patch_size = patch_size, batchsize=batchsize, device=device))
     }
     # `data`, `env` and `init_cohort` are paired by site POSITION, so they must
@@ -4714,127 +4710,4 @@ finn_class = nn_module(
 )
 
 
-# gg = createProcess(func = growth, optimizeSpecies = TRUE)
-#
-# m = finn(N_species = 5, growth_process = gg, mortality_process = createProcess(func = mortality))
-# library(data.table)
-# sim_env_data <- data.table(expand.grid(siteID = 1:10, year = 1:5, temp = 0.9, precip = 0.7))
-#
-# m = finn(N_species = 5, growth_process = gg, mortality_process = createProcess(func = mortality))
-# t = m$simulate(env = sim_env_data, batchsize = 10L)
-#
-# data = t$wide$site
-# m = finn(N_species = 5, growth_process = gg, mortality_process = createProcess(func = mortality))
-# m$fit(data = data, env = sim_env_data, lr = 0.001, epochs = 20L, folder = "checkpoints", checkpoints = 5L)
-
-
-
-
-# period_length
-
-# plot(t$wide$site$dbh)
-#
-# list(long = list(site = rbindlist( lapply(t, function(X) X$long$site ))),
-#      wide = list(site = rbindlist( lapply(t, function(X) X$wide$site )))
-#      )
-# rbindlist( lapply(t, function(X) X$long$site ))
-# rbindlist( lapply(t, function(X) X$wide$site ))
-#
-# nn2 = torch::torch_load( torch::torch_serialize(m) )
-# nn2$simulate(sim_env_data)
-
-#
-# m$fit(X, Y, .....)
-#
-# m$fit(...)
-#
-# # von den Prozessen, brauchen wir:
-# # function
-# # parameters
-# # data model
-# # formula
-# # limits/parameter ranges der parameter?!
-#
-#
-#
-#
-#
-#
-#
-# ff = FINN(Nspecies = 5)
-# ff$mortality
-#
-# #
-# A = 5
-# ff = function() A
-# library(torch)
-# Test = nn_module("Test",
-#                  initialize = function(ff = NULL) {
-#                    self$ff = ff
-#                    self$nn = nn_sequential(nn_linear(5, 5))
-#                    self$par = nn_parameter(torch_tensor(5.0, requires_grad = TRUE))
-#                    self$register_buffer("g", torch_tensor(5.0))
-#                    self[["Test"]] = nn_parameter(torch_tensor(1.0))
-#                    self$egal = NULL
-#                    self$optimizer = torch::optim_ignite_adagrad(params = self$par)
-#
-#                  },
-#                  forward = function(x) torch::torch_serialize(self$clone()),
-#                  active = list(
-#                    testPar = function(value) {
-#                      if(missing(value)) {return(self$par+5.0)}
-#                      else self$par = nn_parameter(torch_tensor(value))
-#                    }
-#                  )
-# )
-# #
-# nn = Test(ff)
-# torch_save(nn, path = "test.pt")
-# nn$forward()
-# class(nn)
-#
-# nn2 = torch_load("test.pt")
-# nn2$parameters
-
-# nn$parameters
-# nn$test_NN
-#
-# nn$to(device = "mps")
-#
-# nn$optimizer$param_groups
-# nn$test2 = nn_parameter(torch_tensor(3.0))
-#
-# nn$testPar = 10.0
-# nn$testPar
-#
-# nn$parameters
-# nn$g =torch_tensor(3.0, requires_grad = TRUE)
-# nn$g
-#
-# nn$ff()
-# nn$par
-#
-# nn2 = torch::torch_load( torch::torch_serialize(m) )
-# nn2$parameters
-# nn2$optimizer$param_groups
-#
-# torch::torch_save(nn, "nn.RDS")
-# nn2 = torch_load("nn.RDS")
-# nn2$ff()
-# nn2$par
-#
-#
-# binomial_coefficient = function(n, x){
-#   return(torch::torch_exp(torch::torch_lgamma((n + 1.0)) -
-#                             torch::torch_lgamma((x + 1.0)) -
-#                             torch::torch_lgamma((n - x + 1.0))))
-# }
-#
-# binomial_likelihood = function(x, n, p) {
-#   binom_coeff = binomial_coefficient(n, x)
-#   likelihood = binom_coeff * (p ** x) * ((1 - p) ** (n - x))
-#   return(likelihood$log())
-# }
-# binomial_likelihood(7, 10, 0.3)
-# dbinom(7, 10, 0.3, log = TRUE)
 
