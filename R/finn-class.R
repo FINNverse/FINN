@@ -1849,7 +1849,8 @@ finn_class = nn_module(
         # denominator is 1 where there are none, so that the quotient is
         # defined everywhere and masked afterwards; where the mask holds it is
         # the plain quotient, as before.
-        if(trees$sum()$item() > 0) {
+        # isTRUE(): a NaN sum reads as "no trees", as the bool tensor did before
+        if(isTRUE(trees$sum()$item() > 0)) {
           mask = tmp_res[[3]]$gt(0.5)
           denom = torch_where(mask, tmp_res[[3]], 1)
           # Growth
@@ -1934,7 +1935,7 @@ finn_class = nn_module(
           # trees, [sites, species] each
           tmp_res = aggregate_species(species, list(trees * dbh, BA_stem_values, trees), sp)
           # BA and number of trees Result[[1]] and Result[[2]]
-          if(trees$sum()$item() > 0) {
+          if(isTRUE(trees$sum()$item() > 0)) {
             # mask only alive trees (see the rate aggregation above for the form)
             mask = tmp_res[[3]]$gt(0.5)
             denom = torch_where(mask, tmp_res[[3]], 1)
