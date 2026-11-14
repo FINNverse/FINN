@@ -43,8 +43,8 @@ for growth, a binomial for mortality, a negative binomial for
 regeneration.
 
 <div class="figure" style="text-align: center">
-<img src="FINN-overview.jpg" alt="FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from K&lt;U+00E4&gt;ber &amp; Pichler (2026)." width="100%" />
-<p class="caption">FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from K<U+00E4>ber & Pichler (2026).</p>
+<img src="FINN-overview.jpg" alt="FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Käber &amp; Pichler (2026)." width="100%" />
+<p class="caption">FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Käber & Pichler (2026).</p>
 </div>
 
 This vignette builds a **fully mechanistic** model from known parameters
@@ -228,7 +228,7 @@ pars_dt
 #> 1:         1   0.1     0.1    0.04 -1.2247449 -8.528029e-01     0        0.5
 #> 2:         2   0.2     0.2    0.05 -0.8164966 -4.264014e-01     0        0.5
 #> 3:         3   0.5     0.5    0.05  0.4082483 -4.264014e-01     0        0.4
-#> 4:         4   0.5     0.5    0.06  0.4082483 -2.958754e-16     0        0.7
+#> 4:         4   0.5     0.5    0.06  0.4082483 -5.917509e-16     0        0.7
 #> 5:         5   0.7     0.7    0.10  1.2247449  1.705606e+00     0        0.6
 #>    compStrength regEnv1    regEnv2 growthEnv1 growthEnv2  mortEnv1  mortEnv2
 #>           <num>   <num>      <num>      <num>      <num>     <num>     <num>
@@ -360,40 +360,39 @@ for(i in c("patches_1", "patches_100")){
 }
 ```
 
-<img src="A/A-plot-patches-1.png" alt="" style="display: block; margin: auto;" /><img src="A/A-plot-patches-2.png" alt="" style="display: block; margin: auto;" />
+<img src="A/A-plot-patches-1.png" style="display: block; margin: auto;" /><img src="A/A-plot-patches-2.png" style="display: block; margin: auto;" />
 
 
 ``` r
 sessionInfo()
-#> R version 4.5.2 (2025-10-31)
-#> Platform: x86_64-pc-linux-gnu
-#> Running under: Ubuntu 26.04.1 LTS
+#> R version 4.5.0 (2025-04-11)
+#> Platform: aarch64-apple-darwin20
+#> Running under: macOS 26.5.1
 #> 
 #> Matrix products: default
-#> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
-#> LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.32.so;  LAPACK version 3.12.0
+#> BLAS:   /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRblas.0.dylib 
+#> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 #> 
 #> locale:
-#> [1] C
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 #> 
-#> time zone: Etc/UTC
-#> tzcode source: system (glibc)
+#> time zone: Europe/Berlin
+#> tzcode source: internal
 #> 
 #> attached base packages:
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_4.0.3       data.table_1.18.6.1 FINN_0.2.0         
+#> [1] ggplot2_3.5.2       data.table_1.18.6.1 FINN_0.2.0         
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] vctrs_0.7.3        cli_3.6.6          knitr_1.51         rlang_1.3.0       
-#>  [5] xfun_0.60          processx_3.9.0     otel_0.2.0         generics_0.1.4    
-#>  [9] torch_0.17.0       coro_1.1.0         S7_0.2.2           labeling_0.4.3    
-#> [13] bit_4.6.0          glue_1.8.1         ps_1.9.3           scales_1.4.0      
-#> [17] grid_4.5.2         abind_1.4-8        evaluate_1.0.5     tibble_3.3.1      
-#> [21] lifecycle_1.0.5    compiler_4.5.2     dplyr_1.2.1        RColorBrewer_1.1-3
-#> [25] Rcpp_1.1.2         pkgconfig_2.0.3    farver_2.1.2       R6_2.6.1          
-#> [29] tidyselect_1.2.1   pillar_1.11.1      parallel_4.5.2     callr_3.8.0       
-#> [33] magrittr_2.0.5     withr_3.0.3        bit64_4.8.6        tools_4.5.2       
-#> [37] gtable_0.3.6
+#>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
+#>  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     torch_0.15.1      
+#>  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         
+#> [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         abind_1.4-8       
+#> [17] evaluate_1.0.5     tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0    
+#> [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.2         pkgconfig_2.0.3   
+#> [25] farver_2.1.2       R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
+#> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
+#> [33] bit64_4.6.0-1      gtable_0.3.6
 ```
