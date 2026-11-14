@@ -24,16 +24,17 @@ species_name, and stand metrics (ba, dbh, trees, growth, mort, n_at_risk,
 n_died, reg, period_length), as returned by \code{makeObsData}.}
 
 \item{createInitCohorts}{logical. If TRUE, build FINN initial cohorts from
-the living trees of the first inventory (\code{year == 0}; with
-\code{time_axis = "census"}, as in FINN 0.1.0, from \code{year == 1}).
-Default TRUE.}
+the living trees of the first inventory (\code{year == 0}) on either time
+axis. Default TRUE.}
 
 \item{time_axis}{\code{"annual"} (default) or \code{"census"}.
 \code{"census"} is the axis of FINN 0.1.0: \code{year} is the index of
 the inventory (0, 1, 2, ...), one simulation step is one census interval
 (\code{period_length = 1}), \code{env_dt} keeps the inventory years, and
 the observations of the first inventory stay in \code{obs_dt}. Use it
-with \code{makeObsData(rates = "interval")}.}
+with \code{makeObsData(rates = "interval")}. Unlike 0.1.0, which built
+the initial cohorts from the second inventory, the census axis now
+starts from the first one, so 0.1.0 results are not reproduced exactly.}
 }
 \value{
 A list with:

@@ -484,7 +484,9 @@ someone who was affected.
     `env_dt` now holds only `siteID`, `year` and the predictors, which is
     what `fit(env = )` accepts (it carried the character `siteName`, which
     `fit()` refuses). `time_axis = "census"` keeps the inventory index of
-    0.1.0.
+    0.1.0, but builds the initial cohorts from the first inventory, as the
+    annual axis does; 0.1.0 took the second inventory (`year == 1`) for them,
+    so 0.1.0 results are not reproduced exactly on the census axis either.
   - The bundled FIA datasets (`fia_obs_dt`, `fia_env_dt`, `fia_obs_test`,
     `fia_env_test`) are rebuilt on the annual axis from the same plots and
     sample: observations at years 10 and 20 (21 and 22 for two sites whose

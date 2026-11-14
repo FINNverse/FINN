@@ -47,6 +47,22 @@ test_that("time_axis = \"census\" keeps the inventory index of FINN 0.1.0", {
                  "rates = \"interval\"")
 })
 
+test_that("the initial cohorts come from the first inventory on both time axes", {
+  skip_if_no_torch()   # the CohortMat behind initCohorts is a torch object
+  tree <- toy_tree_dt()
+  mo   <- suppressMessages(makeObsData(tree, plotsize = 1, aggregate_by_site = FALSE, rates = "interval"))
+  env  <- data.table(siteName = "s1", year = c(2000, 2010), temp = c(8.0, 8.2), prec = c(900, 950))
+  # the 2000 inventory: t1, t2 and t3 alive; t4 only recruits in 2010
+  census <- suppressMessages(suppressWarnings(
+    resolveSiteIDs(mo$tree_dt, env, mo$obs_dt, createInitCohorts = TRUE, time_axis = "census")))
+  expect_setequal(census$initCohort_dt$treeName, c("t1", "t2", "t3"))
+  expect_equal(unique(census$initCohort_dt$OrigYear), 2000)
+  annual <- suppressMessages(suppressWarnings(
+    resolveSiteIDs(mo$tree_dt, toy_env(), mo$obs_dt, createInitCohorts = TRUE)))
+  expect_setequal(annual$initCohort_dt$treeName, c("t1", "t2", "t3"))
+  expect_equal(sum(torch::as_array(census$initCohorts$trees)), sum(torch::as_array(annual$initCohorts$trees)))
+})
+
 test_that("contiguous integer site IDs and 0-indexed time", {
   tree <- toy_tree_dt()
   obs  <- suppressMessages(
