@@ -41,12 +41,18 @@ This function calculates growth based on specified parameters.
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 # growth as the growth process of a model: the equation above with its two
-# species parameters, and a linear response to one environmental predictor
-m <- finn(N_species = 2, growth_process = createProcess(~ temp, growth))
+# species parameters, and a linear response to one environmental predictor.
+# Mortality starts low (see ?mortality), so the simulated stand builds up.
+m <- finn(N_species = 2,
+          growth_process    = createProcess(~ 1 + temp, growth),
+          mortality_process = createProcess(~ 1 + temp, mortality,
+                                            initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 
-# a 30-year simulation from bare ground on one site with a constant climate
-env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+# a 30-year simulation from bare ground on one site. A model that was not
+# fitted has no scaling constants for `env` yet and uses it as given, so the
+# predictor is passed standardised (0 = an average site).
+env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-head(sim$wide$site)
+tail(sim$wide$site)
 \dontshow{\}) # examplesIf}
 }

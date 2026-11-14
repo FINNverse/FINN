@@ -30,8 +30,8 @@ their curves are overlaid in the same panel as one coloured line each.
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 library(data.table)
-# a small model fitted on three Oregon FIA sites (see ?fit), then its ALE curves
-sites <- 1:3
+# a small model fitted on two Oregon FIA sites (see ?fit), then its ALE curves
+sites <- 1:2
 Nsp   <- max(fia_obs_dt$species)
 init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
 FINN.seed(1)
@@ -40,7 +40,7 @@ m <- finn(N_species = Nsp, recruits_dbh = 12.9,
           mortality_process    = createProcess(~ temp + prec, mortality),
           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
-    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    init_cohort = init, epochs = 1L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
 
 ale <- ALE(m, plot = FALSE)

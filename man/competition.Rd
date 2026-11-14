@@ -58,10 +58,14 @@ This function calculates the fraction of available light for each cohort of tree
 # environment; `continuous = TRUE` compares every pair of cohorts instead of
 # binning them into height quantiles
 m <- finn(N_species = 2,
-          competition_process = createProcess(func = competition, continuous = TRUE))
+          competition_process = createProcess(func = competition, continuous = TRUE),
+          mortality_process   = createProcess(~ 1 + temp, mortality,
+                                              initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 
-env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+# a 30-year simulation from bare ground; an unfitted model uses `env` as
+# given (no scaling constants yet), so the predictor is passed standardised
+env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-head(sim$wide$site)
+tail(sim$wide$site)
 \dontshow{\}) # examplesIf}
 }

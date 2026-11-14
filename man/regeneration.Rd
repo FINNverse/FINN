@@ -28,13 +28,18 @@ This function calculates the regeneration of forest patches based on species inf
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 # the uncapped regeneration of the paper instead of the default
-# regeneration_capped(); recruits enter at 1 cm (recruits_dbh)
+# regeneration_capped(); recruits enter at 1 cm (recruits_dbh). Mortality
+# starts low (see ?mortality), so the recruits survive.
 m <- finn(N_species = 2, recruits_dbh = 1,
-          regeneration_process = createProcess(~ temp, regeneration))
+          regeneration_process = createProcess(~ 1 + temp, regeneration),
+          mortality_process    = createProcess(~ 1 + temp, mortality,
+                                               initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 
-env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+# a 30-year simulation from bare ground; an unfitted model uses `env` as
+# given (no scaling constants yet), so the predictor is passed standardised
+env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-head(sim$wide$site)
+tail(sim$wide$site)
 \dontshow{\}) # examplesIf}
 }
 \seealso{

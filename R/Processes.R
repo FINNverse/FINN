@@ -146,11 +146,15 @@ height = function(dbh, parHeight) {
 #' # environment; `continuous = TRUE` compares every pair of cohorts instead of
 #' # binning them into height quantiles
 #' m <- finn(N_species = 2,
-#'           competition_process = createProcess(func = competition, continuous = TRUE))
+#'           competition_process = createProcess(func = competition, continuous = TRUE),
+#'           mortality_process   = createProcess(~ 1 + temp, mortality,
+#'                                               initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 #'
-#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' # a 30-year simulation from bare ground; an unfitted model uses `env` as
+#' # given (no scaling constants yet), so the predictor is passed standardised
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 #' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-#' head(sim$wide$site)
+#' tail(sim$wide$site)
 #'
 #' @import torch
 #' @export
@@ -244,9 +248,11 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 #'           mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01,
 #'                                             initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 #'
-#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' # a 30-year simulation from bare ground; an unfitted model uses `env` as
+#' # given (no scaling constants yet), so the predictor is passed standardised
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 #' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-#' head(sim$wide$site)
+#' tail(sim$wide$site)
 #'
 #' @export
 mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL, growth_scale = 0.01) {
@@ -300,13 +306,19 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 #'
 #' @examplesIf torch::torch_is_installed()
 #' # growth as the growth process of a model: the equation above with its two
-#' # species parameters, and a linear response to one environmental predictor
-#' m <- finn(N_species = 2, growth_process = createProcess(~ temp, growth))
+#' # species parameters, and a linear response to one environmental predictor.
+#' # Mortality starts low (see ?mortality), so the simulated stand builds up.
+#' m <- finn(N_species = 2,
+#'           growth_process    = createProcess(~ 1 + temp, growth),
+#'           mortality_process = createProcess(~ 1 + temp, mortality,
+#'                                             initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 #'
-#' # a 30-year simulation from bare ground on one site with a constant climate
-#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' # a 30-year simulation from bare ground on one site. A model that was not
+#' # fitted has no scaling constants for `env` yet and uses it as given, so the
+#' # predictor is passed standardised (0 = an average site).
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 #' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-#' head(sim$wide$site)
+#' tail(sim$wide$site)
 #'
 #' @import torch
 #'
@@ -365,13 +377,18 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #'
 #' @examplesIf torch::torch_is_installed()
 #' # the uncapped regeneration of the paper instead of the default
-#' # regeneration_capped(); recruits enter at 1 cm (recruits_dbh)
+#' # regeneration_capped(); recruits enter at 1 cm (recruits_dbh). Mortality
+#' # starts low (see ?mortality), so the recruits survive.
 #' m <- finn(N_species = 2, recruits_dbh = 1,
-#'           regeneration_process = createProcess(~ temp, regeneration))
+#'           regeneration_process = createProcess(~ 1 + temp, regeneration),
+#'           mortality_process    = createProcess(~ 1 + temp, mortality,
+#'                                                initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
 #'
-#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' # a 30-year simulation from bare ground; an unfitted model uses `env` as
+#' # given (no scaling constants yet), so the predictor is passed standardised
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 #' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
-#' head(sim$wide$site)
+#' tail(sim$wide$site)
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid
