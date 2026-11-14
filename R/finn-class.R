@@ -1973,7 +1973,13 @@ finn_class = nn_module(
       ##### Rework #######
       # NOTE: truncation of the recurrent cohort state (below) is intentionally
       # decoupled from `i %in% year_sequence` - see comment further down.
-      update_boundary = i > 0 && dbh$shape[3] != 0 && !is.null(y) && (i %% update_step == 0)
+      # An empty stand (every cohort of the batch dead, so the padding pass left no
+      # cohort slot) is still a prediction: zero basal area, zero trees and the
+      # recruits of the window are scored against the observations, otherwise a
+      # die-off before a census would cost nothing. dbh, growth and mortality have
+      # no prediction without a tree and are left unscored at such a step.
+      stand_empty = dbh$shape[3] == 0
+      update_boundary = i > 0 && !is.null(y) && (i %% update_step == 0)
       if(update_boundary) {
         if(i %in% year_sequence) {
           tmp_index = which(year_sequence %in% i, arr.ind = TRUE)
@@ -1981,7 +1987,8 @@ finn_class = nn_module(
           # year, not a trajectory that reached year i, so the three state responses are not
           # predictions of this census at all and leave the objective.
           if(!isTRUE(teacher_forcing)) {
-            # #dbh
+            # #dbh (no prediction on an empty stand)
+            if(!stand_empty) {
             loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,i,] )
             loss_n[1] = scored_n(y[, tmp_index,,1])
 
@@ -1995,6 +2002,7 @@ finn_class = nn_module(
               q_pred = private$quantile_values(dbh, trees, species, self$quant_probs, self$quant_tau)
               loss[1] = self$loss_dbh_func(quant_obs[, tmp_index, , ], q_pred)
               loss_n[1] = scored_n(quant_obs[, tmp_index, , ])
+            }
             }
             # ba
             loss[2] = self$loss_ba_func(y[, tmp_index,,2], Result[[2]][,i,] )
@@ -2010,7 +2018,7 @@ finn_class = nn_module(
           # directly. Contains both abundance and size composition, because
           # independent Poisson class counts factorise into Poisson(total) x
           # Multinomial(shape).
-          if (!isTRUE(teacher_forcing) && !is.null(class_obs) && identical(self$loss_agg$trees$type, "size_classes")) {
+          if (!isTRUE(teacher_forcing) && !stand_empty && !is.null(class_obs) && identical(self$loss_agg$trees$type, "size_classes")) {
             cls_pred = private$class_counts(dbh, trees, species, self$class_breaks, self$class_tau)
             loss[3] = self$loss_trees_func(class_obs[, tmp_index, , ], cls_pred)
             loss_n[3] = scored_n(class_obs[, tmp_index, , ])
@@ -2080,7 +2088,7 @@ finn_class = nn_module(
               g_pred = if (isTRUE(self$growth_period_scale)) (G*M3 + 1)$prod(2) - 1 else (G*M3)$sum(2)/denom
               m_pred = (Result[[5]][,1:i,,drop = FALSE]*M3)$sum(2)/denom
               r_pred = (Result[[7]][,1:i,,drop = FALSE]*M3)$sum(2)
-              if(!tree_mode) {
+              if(!tree_mode && !stand_empty) {
                 loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
                 loss[5] = self$loss_mortality_func(y[,tmp_index,,5], m_pred, y[,tmp_index,,8])
                 loss_n[4] = scored_n(y[,tmp_index,,4], y[,tmp_index,,9])
@@ -2131,7 +2139,7 @@ finn_class = nn_module(
             ## a per-year drought forcing still lands on the right year) while
             ## scoring growth at full period magnitude -- annualising the target
             ## instead collapses growth's variance and flattens its env response.
-            if(!tree_mode) {
+            if(!tree_mode && !stand_empty) {
               g_pred = if (isTRUE(self$growth_period_scale))
                          (Result[[4]][,(i-period+1):(i),] + 1)$prod(2) - 1
                        else Result[[4]][,(i-period+1):(i),]$mean(2)
@@ -2149,12 +2157,16 @@ finn_class = nn_module(
             # branch below; a non-finite period-averaged loss would otherwise inject
             # NaN gradients into every parameter with no diagnostic at all)
             keep = private$scored_terms(loss, nonfinite)
-            if (length(keep) && isTRUE(loss$requires_grad)) {
+            if (length(keep) && (isTRUE(loss$requires_grad) || stand_empty)) {
               # (a loss with no graph - every response NA at this step - has
-              # nothing to backpropagate; calling backward() on it is a hard error)
+              # nothing to backpropagate; calling backward() on it is a hard error.
+              # An empty stand predicts constants, so its loss has no graph either,
+              # but it is a scored prediction and is reported.)
               l = private$loss_at_step(loss, keep, nonfinite)
-              l$sum$backward()
-              for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+              if (isTRUE(loss$requires_grad)) {
+                l$sum$backward()
+                for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+              }
               loss_total = loss_total + l$value
               loss_count = loss_count + 1L
             }
@@ -2166,7 +2178,7 @@ finn_class = nn_module(
             # # counts
             # loss[3] = self$loss_trees_func(y[,tmp_index,,3], Result[[3]][,i,])
 
-            if(!tree_mode) {
+            if(!tree_mode && !stand_empty) {
               loss[4] = self$loss_growth_func(y[,tmp_index,,4], Result[[4]][,i,], y[,tmp_index,,9])
               # mort rates
               loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,i,], y[,tmp_index,,8])
@@ -2176,10 +2188,12 @@ finn_class = nn_module(
             self$loss_raw = as.numeric(loss)
             # ---- Check loss before backward ----
             keep = private$scored_terms(loss, nonfinite)
-            if (length(keep) && isTRUE(loss$requires_grad)) {
+            if (length(keep) && (isTRUE(loss$requires_grad) || stand_empty)) {
               l = private$loss_at_step(loss, keep, nonfinite)
-              l$sum$backward()
-              for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+              if (isTRUE(loss$requires_grad)) {
+                l$sum$backward()
+                for(j in 1:7) Result[[j]] = Result[[j]]$detach()
+              }
               loss_total = loss_total + l$value
               loss_count = loss_count + 1L
             }

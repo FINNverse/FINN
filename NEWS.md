@@ -644,6 +644,16 @@ someone who was affected.
 
 ## Bug fixes
 
+* **A stand that dies out before a census is now scored.** When every cohort
+  of a batch had died, the padding pass left no cohort slot and the census
+  step was not scored at all (the scoring required at least one slot), so a
+  die-off before a census went unpenalised. An empty stand now predicts zero
+  basal area, zero trees and the recruits of the window against the
+  observations; `dbh`, `growth` and `mortality` have no prediction without a
+  tree and stay unscored at such a step. The zero predictions carry no
+  gradient (nothing is left to move), but the loss is reported, so a fit that
+  kills its stands shows it in `$history` instead of a flat zero.
+
 * A model that never went through `fit()` simulated with the 0.1.0 Gamma death
   draw instead of the `mortality_draw = "binomial"` default, because the flag
   that selects the exact binomial (`rb_gradient`) was set only inside `fit()`.
