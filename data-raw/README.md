@@ -1,7 +1,7 @@
 # `data-raw/` — source data behind the bundled FIA datasets
 
 This directory holds the **source** Oregon FIA + climate CSVs that the bundled
-datasets in `inst/extdata/` are derived from. It is **`.Rbuildignore`d**, so none
+datasets in `data/` (and the two example CSVs in `inst/extdata/`) are derived from. It is **`.Rbuildignore`d**, so none
 of it ships to CRAN — it exists only to make the shipped data reproducible.
 
 ## Where this comes from (upstream)

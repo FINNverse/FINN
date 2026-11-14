@@ -47,8 +47,8 @@ jobs:
           needs: check
 
       # torch downloads libtorch at runtime and the runners do not have it, so the
-      # 20 of 26 test files behind skip_if_no_torch() skip here. Build, docs,
-      # examples, vignettes and the non-torch tests are still covered.
+      # test files behind skip_if_no_torch() skip here. Build, docs, examples,
+      # the precompiled vignettes and the non-torch tests are still covered.
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
