@@ -84,7 +84,7 @@ warning.}
 
 \item{init_cohort}{(\code{CohortMat})\cr The trees of every site at the first
 census, from \code{\link[=makeInitCohorts]{makeInitCohorts()}}. \code{NULL} (default) starts every
-site from bare ground with \code{patches} empty patches. See \link{finn_data}.}
+site from bare ground with \code{patches} empty patches (no stems). See \link{finn_data}.}
 
 \item{epochs}{(\code{integer(1)})\cr Number of passes over the data. Default
 \code{20}; a real calibration takes hundreds, until the parameters stop moving.

@@ -305,3 +305,13 @@ CohortMat = torch::nn_module("CohortMat",
     }
   )
 )
+
+# Bare ground, the start of fit() and predict() / simulateForest() when
+# `init_cohort = NULL`: one cohort slot per patch holding no stems (dbh 0,
+# trees 0), so that every tree of the run comes from the regeneration process.
+# The slot's species index is a placeholder; with trees = 0 it carries no weight.
+bare_ground_cohorts = function(sites, patches, sp) {
+  dims = c(sites, patches, 1L)
+  CohortMat(dims = dims, dbh = array(0, dim = dims), trees = array(0, dim = dims),
+            species = array(1L, dim = dims), sp = sp)
+}

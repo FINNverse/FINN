@@ -442,6 +442,17 @@ someone who was affected.
 
 ## Behaviour changes
 
+* **Bare ground is bare: `init_cohort = NULL` starts with no stems.**
+  `simulateForest()` / `predict()` and `fit()` without an `init_cohort` used to
+  start every patch with one 1-cm stem of every species, although the help said
+  "empty patches". That planted species the regeneration process would not
+  recruit, so a bare-ground (equilibrium) run did not test the regeneration
+  process: on FIA conterminous US a species of moist eastern sites grew to
+  62-73 % of 112-168 m2/ha at dry western sites where it barely recruits; from
+  an empty start the same model ends at 30-61 m2/ha. Now every tree of such a
+  run comes from the regeneration process. Results of runs without an
+  `init_cohort` change; runs with one are unaffected.
+
 * **Trees can grow up to 130 m, not 101 m.** The upper bound of the fitted height
   parameter (first column of the competition parameters) is `log(2.3)` instead of
   0.7. `height()` approaches `(exp(parHeight) - 1) * 100` m as the diameter grows,

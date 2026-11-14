@@ -60,7 +60,8 @@ quantity changes with it.}
 
 \item{init_cohort}{(\code{CohortMat})\cr The trees every site starts with, from
 \code{\link[=makeInitCohorts]{makeInitCohorts()}}. \code{NULL} (default) starts from bare ground with
-\code{patches} empty patches per site (a succession run). See \link{finn_data}.}
+\code{patches} empty patches per site (a succession run): no stems, every tree
+comes from the regeneration process. See \link{finn_data}.}
 
 \item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
 synonym for \code{"gpu"}. Only NVIDIA cards are supported.}

@@ -329,7 +329,7 @@ finn = function(N_species,
 #'   warning.
 #' @param init_cohort (`CohortMat`)\cr The trees of every site at the first
 #'   census, from [FINN::makeInitCohorts()]. `NULL` (default) starts every
-#'   site from bare ground with `patches` empty patches. See [finn_data].
+#'   site from bare ground with `patches` empty patches (no stems). See [finn_data].
 #' @param epochs (`integer(1)`)\cr Number of passes over the data. Default
 #'   `20`; a real calibration takes hundreds, until the parameters stop moving.
 #'   `epochs = 0` runs the set-up only (data tensors, `loss_baseline`,
@@ -975,7 +975,8 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   quantity changes with it.
 #' @param init_cohort (`CohortMat`)\cr The trees every site starts with, from
 #'   [FINN::makeInitCohorts()]. `NULL` (default) starts from bare ground with
-#'   `patches` empty patches per site (a succession run). See [finn_data].
+#'   `patches` empty patches per site (a succession run): no stems, every tree
+#'   comes from the regeneration process. See [finn_data].
 #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
 #'   synonym for `"gpu"`. Only NVIDIA cards are supported.
 #' @param return_cohorts Whether the individual cohorts are returned in
@@ -2480,14 +2481,10 @@ finn_class = nn_module(
     }
 
     sp <- self$N_species
-    local_init <- if (is.null(init_cohort)) {
-      CohortMat(
-        dims  = c(sites, patches, sp),
-        dbh   = array(1, dim = c(sites, patches, sp)),
-        trees = array(1, dim = c(sites, patches, sp)),
-        sp    = sp
-      )
-    } else {
+    # bare ground: one empty cohort slot per patch and no stems, so every tree of the
+    # run comes from the regeneration process (until 0.2.0 this was one 1-cm stem of
+    # every species in every patch, which planted species the process would not recruit)
+    local_init <- if (is.null(init_cohort)) bare_ground_cohorts(sites, patches, sp) else {
       init_cohort
     }
     self$to(device = device)
@@ -3045,10 +3042,7 @@ finn_class = nn_module(
 
     if(is.null(init_cohort)) {
       sp = self$N_species
-      self$init_cohort = CohortMat(dims = c(sites, patches, sp),
-                                   dbh = array(1, dim = c(sites, patches, sp)),
-                                   trees = array(1, dim = c(sites, patches, sp)),
-                                   sp = sp)
+      self$init_cohort = bare_ground_cohorts(sites, patches, sp)   # no stems: see simulate()
     } else {
       self$init_cohort = init_cohort
       if(self$init_cohort$sp != sp) stop(paste("sp in cohort", self$init_cohort$sp, "does not match sp from data", sp))
