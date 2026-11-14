@@ -103,6 +103,8 @@ finnControl = function(optimizer = torch::optim_ignite_adam,
             class = "finnControl")
 }
 
+#' @rdname finnControl
+#' @param x (`finnControl`)\cr The object to print.
 #' @export
 print.finnControl = function(x, ...) {
   sched = if (is.function(x$lr_scheduler)) "<function>" else x$lr_scheduler

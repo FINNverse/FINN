@@ -107,7 +107,7 @@ regeneration likelihood. On sparse, zero-heavy recruitment data the
 likelihood optimum of \code{theta} is very small: a small \code{theta} widens the
 likelihood and so lowers the loss without improving the predicted mean, and
 the same small \code{theta} makes the simulated draws bursty. A free \code{theta} can
-therefore run away (FINNverse/FINN#63).
+therefore run away.
 
 What the floor does: it keeps the fit stable, and in a fit run to
 convergence it costs nothing we could resolve. In one converged pair of fits
@@ -152,7 +152,7 @@ In 0.2.0 \code{recruit_obs_weight} is applied \strong{only} under \code{"nbinom"
 \code{loss_family["regeneration"] = "poisson"} (or \code{"mse"}, \code{"gaussian"}) the term
 scores the per-ha values as they are and \code{recruit_obs_weight} has no effect,
 without a warning; the Poisson variance then is that of a per-ha value, not of
-the tallied count (FINNverse/FINN#65). The Poisson term adds
+the tallied count. The Poisson term adds
 \code{fit(trees_offset = )} (default \code{0.01}) to the prediction.
 }
 

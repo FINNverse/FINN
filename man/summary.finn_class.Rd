@@ -48,3 +48,23 @@ conditional effects, which are computed once and cached — so if \code{\link[=A
 already run (or a previous \code{summary()}), the default path needs no further
 simulation.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a small model fitted on three Oregon FIA sites (see ?fit)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createProcess(~ temp + prec, growth),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+
+# which predictor matters for which process and species, and in which direction
+summary(m)
+\dontshow{\}) # examplesIf}
+}

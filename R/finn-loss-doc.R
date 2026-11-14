@@ -52,9 +52,8 @@
 #' For `regeneration`, `"nbinom"` (the default) uses the recruit dispersion
 #' `theta` of the regeneration process and applies `finn(recruit_obs_weight
 #' = )`; `"poisson"` has no dispersion parameter, so it cannot collapse, but in
-#' 0.2.0 it ignores `recruit_obs_weight` and scores per-hectare values
-#' (FINNverse/FINN#65), with `trees_offset` added to the prediction. See
-#' [recruitment].
+#' 0.2.0 it ignores `recruit_obs_weight` and scores per-hectare values, with
+#' `trees_offset` added to the prediction. See [recruitment].
 #'
 #' A missing observation (`NA`) is left out of its term; the other responses
 #' of that cell are still scored. A term that is not finite at a step (an

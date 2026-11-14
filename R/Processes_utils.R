@@ -574,6 +574,11 @@ extract_env = function(formula, env) {
 #'   object stored on a fitted model as \code{model$env_scaling} when it is fit
 #'   with \code{env_autoscale = TRUE}.
 #' @seealso \code{\link{apply_env_scaling}}
+#' @examples
+#' # the constants fit(env_autoscale = TRUE) stores on a model for this table
+#' compute_env_scaling(fia_env_dt)
+#' # keep one predictor on its own scale
+#' compute_env_scaling(fia_env_dt, spec = c(temp = "auto", prec = "identity"))
 #' @export
 compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))

@@ -100,10 +100,10 @@ ALE_ce = function(X, ce) {
           pred = torch_tensor(as.matrix(df_tmp[,..cols_env]), device = model$device, requires_grad = TRUE)
           pred2 = pred
           if(process == "growth" && !inherits(model$process_growth, "hybrid")) {
-            pred2 = model$nn_growth(pred2); pred2 = FINN::index_species(pred2, species)
+            pred2 = model$nn_growth(pred2); pred2 = index_species(pred2, species)
           }
           if(process == "mortality" && !inherits(model$process_mortality, "hybrid")) {
-            pred2 = model$nn_mortality(pred2); pred2 = FINN::index_species(pred2, species)
+            pred2 = model$nn_mortality(pred2); pred2 = index_species(pred2, species)
           }
           process_output = switch(process,
                                   growth    = model$growth_func(dbh = dbh, trees = trees, light = light, species = species, pred = pred2, parGrowth = model$par_growth),
@@ -285,6 +285,25 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #'   y-axis is then used); if `FALSE` (default) the raw ALE is shown with free y-axes.
 #' @param ... currently ignored.
 #' @return invisibly, the `ggplot` object.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a small model fitted on three Oregon FIA sites (see ?fit), then its ALE curves
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#'
+#' ale <- ALE(m, plot = FALSE)
+#' plot(ale, process = "growth")
+#'
 #' @method plot FINNale
 #' @export
 plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
@@ -624,6 +643,25 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'   across processes and species (Sobol-style). Default `TRUE`.
 #' @param ... passed through (e.g. to [predict()] for the permutation option).
 #' @return invisibly, a list with `importance`, `average_conditional_effects`, and `method`.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a small model fitted on three Oregon FIA sites (see ?fit)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#'
+#' # which predictor matters for which process and species, and in which direction
+#' summary(m)
+#'
 #' @method summary finn_class
 #' @export
 summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, ...) {

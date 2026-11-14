@@ -76,16 +76,24 @@ overall level to the data. Every species still starts at the observed maximum.
 }
 
 \examples{
-\dontrun{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+Nsp <- max(fia_obs_dt$species)
 # the default: one cap for all species, prior from the data
-m <- finn(N_species = Nsp)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9)
 
-# one cap per species, a fixed prior, a stronger pull
-m <- finn(N_species = Nsp, regeneration_process = createProcess(
-  ~ temp + prec, FINN::regeneration_capped,
-  cap = "species", prior = 500, prior_lambda = 1))
-}
+# one cap per species, a fixed prior (stems per ha and year), a stronger pull
+m2 <- finn(N_species = Nsp, recruits_dbh = 12.9,
+           regeneration_process = createProcess(~ temp + prec, regeneration_capped,
+                                                cap = "species", prior = 500, prior_lambda = 1))
 
+# the cap is created and resolved by fit(); read it back on the natural scale
+sites <- 1:3
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+fit(m2, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 1L, patch_size = 0.06, plot_progress = FALSE)
+exp(as.numeric(m2$reg_logK))   # one carrying capacity per species
+\dontshow{\}) # examplesIf}
 }
 \seealso{
 \link{regeneration}, \code{\link[=regeneration_adult]{regeneration_adult()}},

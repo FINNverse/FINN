@@ -154,27 +154,18 @@ itself, a learning-rate schedule and its parameters, gradient clipping.
 The defaults of \code{\link[=finnControl]{finnControl()}} are robust in most cases.}
 
 \item{device}{(\code{character(1)})\cr \code{"cpu"} (default) or \code{"gpu"}; \code{"cuda"} is
-accepted as a synonym for \code{"gpu"}. Only NVIDIA cards are supported. A card
-does not always pay: the per-tree route (\code{loss_resolution = "tree"},
-\code{loss_aggregation = "tree"}) issues thousands of small kernels per
-simulated year and is bound by dispatch rather than arithmetic, so it can
-run at the same speed on either device with the card almost idle. Measure
-one configuration before committing a long fit to a GPU.}
+accepted as a synonym for \code{"gpu"}. Only NVIDIA cards are supported, and a
+card does not always pay: see the section on speed below.}
 
 \item{threads}{(\code{integer(1)} or \code{NULL})\cr torch's intra-op thread count
 during the fit. \code{NULL} (the default) leaves torch's setting alone, including
 one made through \code{OMP_NUM_THREADS} or \code{\link[torch:threads]{torch::torch_set_num_threads()}}.
-FINN's forward pass is a long chain of small tensor operations, so its cost
-is set by the number of operations, not by their arithmetic, and extra
-threads rarely pay. In the measurements behind FINNverse/FINN#48, one
-thread was up to 30 \% faster on macOS at the size of a 512-site,
-25-patch batch, and within a few per cent of the best setting on a 64-core
-Linux node, where only a single 2000-site batch gained from 4 threads.
-\code{threads = 1} is the considerate choice when several fits share a machine.
-The previous count is restored afterwards where torch allows it (OpenMP
-builds, e.g. Linux). torch's native backend (macOS) accepts one change per
-session, so there the session keeps the count \code{fit()} set, and a count fixed
-earlier in the session cannot be changed (\code{fit()} then says so).}
+Extra threads rarely pay; \code{threads = 1} is the considerate choice when
+several fits share a machine. The previous count is restored afterwards
+where torch allows it (OpenMP builds, e.g. Linux). torch's native backend
+(macOS) accepts one change per session, so there the session keeps the
+count \code{fit()} set, and a count fixed earlier in the session cannot be
+changed (\code{fit()} then says so).}
 
 \item{update_step}{(\code{integer(1)})\cr Every how many simulated years the
 gradient is cut and the parameters are updated (truncated backpropagation
@@ -210,23 +201,15 @@ every epoch. Default \code{TRUE}.}
 parameter at each checkpoint, in \code{model$gradients}. Default \code{FALSE}; the
 record can get large.}
 
-\item{env_autoscale}{How the predictors in \code{env} are standardised. The
-learned transformation is stored on the model and re-applied automatically
-at every \code{predict()}/\code{simulateForest()} call, so raw (untransformed) \code{env}
-is passed for both calibration and prediction. Accepts:
-\itemize{
-\item \code{TRUE} (default) -- z-standardise every predictor (mean / sd);
-\item \code{FALSE} -- use \code{env} exactly as supplied (no scaling);
-\item a \strong{per-predictor spec} for more nuanced scaling: a length-1 string
-applied to all, or a vector/list with one entry per predictor (matched by
-name if named, else by position). Each entry is one of \code{"auto"}
-(z-standardise), \code{"identity"}/\code{"none"} (leave unchanged), \code{"0to1"}
-(min-max to \verb{[0,1]}), or a function \code{f(x)} returning \code{list(center=, scale=)}
-for a custom affine scaler. Every mode is affine, so ALE stays invertible.
-Example: \code{env_autoscale = c(mat_c = "auto", management = "identity")} keeps
-an ordinal management forcing on its native 0..3 scale while z-scaling
-climate. The learned constants are available as \code{model$env_scaling}.
-}}
+\item{env_autoscale}{(\code{logical(1)} or \code{character})\cr How the predictors in
+\code{env} are standardised before they enter the processes. \code{TRUE} (default):
+every predictor to mean 0 and standard deviation 1. \code{FALSE}: as supplied.
+Or one entry per predictor (named, or in column order): \code{"auto"},
+\code{"identity"}, \code{"0to1"} or a function \code{f(x)} returning \code{list(center =, scale =)},
+e.g. \code{c(temp = "auto", management = "identity")} to keep an ordinal
+predictor on its own scale. The constants are stored on the model
+(\code{model$env_scaling}) and re-applied by \code{predict()}/\code{simulateForest()}, so
+\code{env} is always passed in natural units. See \link{finn_data}.}
 
 \item{nonfinite}{(\code{character(1)})\cr What happens when one of the six loss
 terms is not finite at a scored timestep (an overflowing likelihood, a
@@ -310,9 +293,9 @@ so a teacher-forced model is still validated by single shooting.}
 recruitment counts through their expectation instead of through the draw. The
 forward pass is unchanged to the bit -- the stand still dies and recruits
 discretely -- but the reparameterised draw and the rounding's surrogate no
-longer carry the sampler's noise into the gradient. On the German inventory
-97 \% of the mortality gradient was draw noise without it. Default \code{TRUE} since
-0.2.0; set \code{FALSE} to reproduce a fit made before that. See FINNverse/FINN#53.}
+longer carry the sampler's noise into the gradient (on a national inventory
+most of the mortality gradient was draw noise without it). Default \code{TRUE}
+since 0.2.0; set \code{FALSE} to reproduce a fit made before that.}
 
 \item{trees_offset}{(\code{numeric(1)})\cr Offset added to the predicted stem count
 before the \code{trees} count likelihood, which is \code{-Inf} (poisson) or arbitrarily
@@ -391,28 +374,14 @@ what the vignettes use.
 }
 \section{What makes a fit faster, and what does not}{
 
-A FINN fit is bound by the \emph{number of tensor operations it dispatches}, not by the
-arithmetic in them: a simulated year issues thousands of small kernels, and a tiny
-operation costs tens of microseconds of dispatch whatever hardware runs it. Three
-consequences, each measured on a 32,190 site-period panel with 25 patches:
-\itemize{
-\item \strong{A GPU need not help.} The per-tree route ran at 84 s/epoch on an RTX A5000
-against 85-100 s/epoch on CPU under the same load, with the card at \strong{3 \%
-utilisation and 653 MB}. Measure one configuration before committing a long fit
-to a device.
-\item \strong{Intra-op threads do not help and eventually cost.} On a 64-core machine,
-1/2/4/8/16 threads gave 4.59/4.77/4.68/4.73/\strong{6.06} s/epoch on a comparable
-problem; on an 8-core laptop one thread was fastest by 30 \%. The knee moves with
-the core count, the direction does not. \code{fit(threads = 1)} is the considerate
-setting on a shared machine and costs nothing.
-\item \strong{Concurrency is what pays.} Seven fits side by side cost 13-33 \% per epoch each
-and roughly doubled total throughput, because the machine was never short of cores.
-Run several fits at once rather than giving one fit more of the machine.
-}
-
-What does shorten a fit is fewer epochs: read a convergence criterion off
-\verb{$param_history} and stop when the parameters settle, rather than fixing a large
-\code{epochs} in advance.
+A fit is bound by the number of small tensor operations a simulated year
+issues, not by the arithmetic in them. So a GPU does not always pay (measure
+one configuration before committing a long fit to it), more threads rarely
+help (\code{threads = 1} is usually fastest and the considerate setting on a shared
+machine), and several fits run side by side use a machine better than one fit
+given all of it. What does shorten a fit is fewer epochs: watch
+\code{model$param_history} and stop when the parameters settle instead of fixing a
+large \code{epochs} in advance.
 }
 
 \section{Bounds on simulated mortality}{

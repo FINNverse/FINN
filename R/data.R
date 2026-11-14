@@ -54,11 +54,10 @@
 #'     \item{`reg`}{recruits over the interval, trees per hectare (mean over
 #'       patches).}
 #'   }
-#' @source Subsampled by `dev/make_extdata.R` (`set.seed(42)`) from the Oregon
-#'   FIA plots prepared in the (private) `FINNverse/FINN-fia` analysis repo:
-#'   tree records via the FIA
-#'   database, climate from WorldClim bioclim variables attached per plot. The
-#'   full provenance chain is in `data-raw/README.md`.
+#' @source A seeded subsample of Oregon plots of the US Forest Inventory and
+#'   Analysis (FIA) database, with WorldClim bioclimatic variables attached per
+#'   plot. The preparation script and the provenance of the source tables are
+#'   in the package repository (`dev/make_extdata.R`, `data-raw/README.md`).
 #' @seealso [fia_env_dt], [fia_init_trees], [fia_species_dt]
 #' @family fia datasets
 #' @examples

@@ -264,27 +264,14 @@ finn = function(N_species,
 #' what the vignettes use.
 #'
 #' @section What makes a fit faster, and what does not:
-#' A FINN fit is bound by the *number of tensor operations it dispatches*, not by the
-#' arithmetic in them: a simulated year issues thousands of small kernels, and a tiny
-#' operation costs tens of microseconds of dispatch whatever hardware runs it. Three
-#' consequences, each measured on a 32,190 site-period panel with 25 patches:
-#'
-#' * **A GPU need not help.** The per-tree route ran at 84 s/epoch on an RTX A5000
-#'   against 85-100 s/epoch on CPU under the same load, with the card at **3 %
-#'   utilisation and 653 MB**. Measure one configuration before committing a long fit
-#'   to a device.
-#' * **Intra-op threads do not help and eventually cost.** On a 64-core machine,
-#'   1/2/4/8/16 threads gave 4.59/4.77/4.68/4.73/**6.06** s/epoch on a comparable
-#'   problem; on an 8-core laptop one thread was fastest by 30 %. The knee moves with
-#'   the core count, the direction does not. `fit(threads = 1)` is the considerate
-#'   setting on a shared machine and costs nothing.
-#' * **Concurrency is what pays.** Seven fits side by side cost 13-33 % per epoch each
-#'   and roughly doubled total throughput, because the machine was never short of cores.
-#'   Run several fits at once rather than giving one fit more of the machine.
-#'
-#' What does shorten a fit is fewer epochs: read a convergence criterion off
-#' `$param_history` and stop when the parameters settle, rather than fixing a large
-#' `epochs` in advance.
+#' A fit is bound by the number of small tensor operations a simulated year
+#' issues, not by the arithmetic in them. So a GPU does not always pay (measure
+#' one configuration before committing a long fit to it), more threads rarely
+#' help (`threads = 1` is usually fastest and the considerate setting on a shared
+#' machine), and several fits run side by side use a machine better than one fit
+#' given all of it. What does shorten a fit is fewer epochs: watch
+#' `model$param_history` and stop when the parameters settle instead of fixing a
+#' large `epochs` in advance.
 #'
 #' @section Bounds on simulated mortality:
 #' Before the death draw, the simulation clamps the per-cohort mortality
@@ -387,26 +374,17 @@ finn = function(N_species,
 #'   itself, a learning-rate schedule and its parameters, gradient clipping.
 #'   The defaults of [finnControl()] are robust in most cases.
 #' @param device (`character(1)`)\cr `"cpu"` (default) or `"gpu"`; `"cuda"` is
-#'   accepted as a synonym for `"gpu"`. Only NVIDIA cards are supported. A card
-#'   does not always pay: the per-tree route (`loss_resolution = "tree"`,
-#'   `loss_aggregation = "tree"`) issues thousands of small kernels per
-#'   simulated year and is bound by dispatch rather than arithmetic, so it can
-#'   run at the same speed on either device with the card almost idle. Measure
-#'   one configuration before committing a long fit to a GPU.
+#'   accepted as a synonym for `"gpu"`. Only NVIDIA cards are supported, and a
+#'   card does not always pay: see the section on speed below.
 #' @param threads (`integer(1)` or `NULL`)\cr torch's intra-op thread count
 #'   during the fit. `NULL` (the default) leaves torch's setting alone, including
 #'   one made through `OMP_NUM_THREADS` or [torch::torch_set_num_threads()].
-#'   FINN's forward pass is a long chain of small tensor operations, so its cost
-#'   is set by the number of operations, not by their arithmetic, and extra
-#'   threads rarely pay. In the measurements behind FINNverse/FINN#48, one
-#'   thread was up to 30 % faster on macOS at the size of a 512-site,
-#'   25-patch batch, and within a few per cent of the best setting on a 64-core
-#'   Linux node, where only a single 2000-site batch gained from 4 threads.
-#'   `threads = 1` is the considerate choice when several fits share a machine.
-#'   The previous count is restored afterwards where torch allows it (OpenMP
-#'   builds, e.g. Linux). torch's native backend (macOS) accepts one change per
-#'   session, so there the session keeps the count `fit()` set, and a count fixed
-#'   earlier in the session cannot be changed (`fit()` then says so).
+#'   Extra threads rarely pay; `threads = 1` is the considerate choice when
+#'   several fits share a machine. The previous count is restored afterwards
+#'   where torch allows it (OpenMP builds, e.g. Linux). torch's native backend
+#'   (macOS) accepts one change per session, so there the session keeps the
+#'   count `fit()` set, and a count fixed earlier in the session cannot be
+#'   changed (`fit()` then says so).
 #' @param update_step (`integer(1)`)\cr Every how many simulated years the
 #'   gradient is cut and the parameters are updated (truncated backpropagation
 #'   through time). Default `1`: one update per simulated year. A loss is only
@@ -434,21 +412,15 @@ finn = function(N_species,
 #' @param record_gradients (`logical(1)`)\cr Also record the gradients of every
 #'   parameter at each checkpoint, in `model$gradients`. Default `FALSE`; the
 #'   record can get large.
-#' @param env_autoscale How the predictors in `env` are standardised. The
-#'   learned transformation is stored on the model and re-applied automatically
-#'   at every `predict()`/`simulateForest()` call, so raw (untransformed) `env`
-#'   is passed for both calibration and prediction. Accepts:
-#'   * `TRUE` (default) -- z-standardise every predictor (mean / sd);
-#'   * `FALSE` -- use `env` exactly as supplied (no scaling);
-#'   * a **per-predictor spec** for more nuanced scaling: a length-1 string
-#'     applied to all, or a vector/list with one entry per predictor (matched by
-#'     name if named, else by position). Each entry is one of `"auto"`
-#'     (z-standardise), `"identity"`/`"none"` (leave unchanged), `"0to1"`
-#'     (min-max to `[0,1]`), or a function `f(x)` returning `list(center=, scale=)`
-#'     for a custom affine scaler. Every mode is affine, so ALE stays invertible.
-#'   Example: `env_autoscale = c(mat_c = "auto", management = "identity")` keeps
-#'   an ordinal management forcing on its native 0..3 scale while z-scaling
-#'   climate. The learned constants are available as `model$env_scaling`.
+#' @param env_autoscale (`logical(1)` or `character`)\cr How the predictors in
+#'   `env` are standardised before they enter the processes. `TRUE` (default):
+#'   every predictor to mean 0 and standard deviation 1. `FALSE`: as supplied.
+#'   Or one entry per predictor (named, or in column order): `"auto"`,
+#'   `"identity"`, `"0to1"` or a function `f(x)` returning `list(center =, scale =)`,
+#'   e.g. `c(temp = "auto", management = "identity")` to keep an ordinal
+#'   predictor on its own scale. The constants are stored on the model
+#'   (`model$env_scaling`) and re-applied by `predict()`/`simulateForest()`, so
+#'   `env` is always passed in natural units. See [finn_data].
 #' @param nonfinite (`character(1)`)\cr What happens when one of the six loss
 #'   terms is not finite at a scored timestep (an overflowing likelihood, a
 #'   target outside the family's support). `"drop_term"` (default) leaves only
@@ -525,9 +497,9 @@ finn = function(N_species,
 #'   recruitment counts through their expectation instead of through the draw. The
 #'   forward pass is unchanged to the bit -- the stand still dies and recruits
 #'   discretely -- but the reparameterised draw and the rounding's surrogate no
-#'   longer carry the sampler's noise into the gradient. On the German inventory
-#'   97 % of the mortality gradient was draw noise without it. Default `TRUE` since
-#'   0.2.0; set `FALSE` to reproduce a fit made before that. See FINNverse/FINN#53.
+#'   longer carry the sampler's noise into the gradient (on a national inventory
+#'   most of the mortality gradient was draw noise without it). Default `TRUE`
+#'   since 0.2.0; set `FALSE` to reproduce a fit made before that.
 #' @param trees_offset (`numeric(1)`)\cr Offset added to the predicted stem count
 #'   before the `trees` count likelihood, which is `-Inf` (poisson) or arbitrarily
 #'   steep (nbinom) where a species' simulated count is exactly zero and the

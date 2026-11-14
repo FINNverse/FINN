@@ -45,6 +45,12 @@ stored \code{(variable, center, scale)} table is applied by
 mode. A predictor with (near-)zero standard deviation is given \code{scale = 1}
 (centred only) to avoid division by zero.
 }
+\examples{
+# the constants fit(env_autoscale = TRUE) stores on a model for this table
+compute_env_scaling(fia_env_dt)
+# keep one predictor on its own scale
+compute_env_scaling(fia_env_dt, spec = c(temp = "auto", prec = "identity"))
+}
 \seealso{
 \code{\link{apply_env_scaling}}
 }

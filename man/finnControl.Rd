@@ -2,6 +2,7 @@
 % Please edit documentation in R/finn-control.R
 \name{finnControl}
 \alias{finnControl}
+\alias{print.finnControl}
 \title{Settings of the optimizer used by fit()}
 \usage{
 finnControl(
@@ -11,6 +12,8 @@ finnControl(
   clip_norm = 2,
   ...
 )
+
+\method{print}{finnControl}(x, ...)
 }
 \arguments{
 \item{optimizer}{(\code{function})\cr A \code{torch} optimizer generator. Default
@@ -27,6 +30,8 @@ Details.}
 parameter group. Default \code{2}.}
 
 \item{...}{Further arguments for \code{optimizer}, e.g. \code{weight_decay = 1e-4}.}
+
+\item{x}{(\code{finnControl})\cr The object to print.}
 }
 \value{
 A list of class \code{finnControl}, to be passed to \code{fit(control = )}.

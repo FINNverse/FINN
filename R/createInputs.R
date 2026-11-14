@@ -236,6 +236,8 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE, ti
 #'
 #' @param dbh numeric vector of diameters (cm).
 #' @return numeric vector of basal areas (m^2).
+#' @examples
+#' dbh2ba(c(10, 30, 50))   # basal area of one stem of 10, 30 and 50 cm
 #' @export
 dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)

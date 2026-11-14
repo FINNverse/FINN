@@ -95,7 +95,7 @@
 #' likelihood optimum of `theta` is very small: a small `theta` widens the
 #' likelihood and so lowers the loss without improving the predicted mean, and
 #' the same small `theta` makes the simulated draws bursty. A free `theta` can
-#' therefore run away (FINNverse/FINN#63).
+#' therefore run away.
 #'
 #' What the floor does: it keeps the fit stable, and in a fit run to
 #' convergence it costs nothing we could resolve. In one converged pair of fits
@@ -138,7 +138,7 @@
 #' `loss_family["regeneration"] = "poisson"` (or `"mse"`, `"gaussian"`) the term
 #' scores the per-ha values as they are and `recruit_obs_weight` has no effect,
 #' without a warning; the Poisson variance then is that of a per-ha value, not of
-#' the tallied count (FINNverse/FINN#65). The Poisson term adds
+#' the tallied count. The Poisson term adds
 #' `fit(trees_offset = )` (default `0.01`) to the prediction.
 #'
 #' @section Feeding observed recruitment:

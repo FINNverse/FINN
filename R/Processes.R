@@ -140,6 +140,18 @@ height = function(dbh, parHeight) {
 #'   [FINN::createProcess()] for the measurement.
 #'
 #' @return torch.Tensor Fraction of available light (light) for each cohort.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # the light model as the competition process of a model. It takes no
+#' # environment; `continuous = TRUE` compares every pair of cohorts instead of
+#' # binning them into height quantiles
+#' m <- finn(N_species = 2,
+#'           competition_process = createProcess(func = competition, continuous = TRUE))
+#'
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+#' head(sim$wide$site)
+#'
 #' @import torch
 #' @export
 competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba = NULL, cohortHeights = NULL, n_quantiles = 10, continuous = FALSE, light_mask = TRUE){
@@ -265,6 +277,16 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 #'
 #' @return torch.Tensor A tensor representing the forest plot growth.
 #'
+#' @examplesIf torch::torch_is_installed()
+#' # growth as the growth process of a model: the equation above with its two
+#' # species parameters, and a linear response to one environmental predictor
+#' m <- finn(N_species = 2, growth_process = createProcess(~ temp, growth))
+#'
+#' # a 30-year simulation from bare ground on one site with a constant climate
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+#' head(sim$wide$site)
+#'
 #' @import torch
 #'
 #' @export
@@ -319,6 +341,16 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #' @seealso [FINN::regeneration_capped()] (the default regeneration process since
 #'   0.2.0), [FINN::regeneration_adult()], [recruitment] for the recruitment
 #'   options and how to combine them
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # the uncapped regeneration of the paper instead of the default
+#' # regeneration_capped(); recruits enter at 1 cm (recruits_dbh)
+#' m <- finn(N_species = 2, recruits_dbh = 1,
+#'           regeneration_process = createProcess(~ temp, regeneration))
+#'
+#' env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+#' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+#' head(sim$wide$site)
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid
@@ -416,16 +448,23 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #'   [FINN::createProcess()], [recruitment] for the recruitment options and how
 #'   to combine them
 #'
-#' @examples
-#' \dontrun{
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' Nsp <- max(fia_obs_dt$species)
 #' # the default: one cap for all species, prior from the data
-#' m <- finn(N_species = Nsp)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9)
 #'
-#' # one cap per species, a fixed prior, a stronger pull
-#' m <- finn(N_species = Nsp, regeneration_process = createProcess(
-#'   ~ temp + prec, FINN::regeneration_capped,
-#'   cap = "species", prior = 500, prior_lambda = 1))
-#' }
+#' # one cap per species, a fixed prior (stems per ha and year), a stronger pull
+#' m2 <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'            regeneration_process = createProcess(~ temp + prec, regeneration_capped,
+#'                                                 cap = "species", prior = 500, prior_lambda = 1))
+#'
+#' # the cap is created and resolved by fit(); read it back on the natural scale
+#' sites <- 1:3
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' fit(m2, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 1L, patch_size = 0.06, plot_progress = FALSE)
+#' exp(as.numeric(m2$reg_logK))   # one carrying capacity per species
 #'
 #' @import torch
 #' @importFrom torch torch_sigmoid

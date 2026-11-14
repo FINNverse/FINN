@@ -25,6 +25,18 @@ torch.Tensor Regeneration values for forest patches.
 \description{
 This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the uncapped regeneration of the paper instead of the default
+# regeneration_capped(); recruits enter at 1 cm (recruits_dbh)
+m <- finn(N_species = 2, recruits_dbh = 1,
+          regeneration_process = createProcess(~ temp, regeneration))
+
+env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+head(sim$wide$site)
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 \code{\link[=regeneration_capped]{regeneration_capped()}} (the default regeneration process since
 0.2.0), \code{\link[=regeneration_adult]{regeneration_adult()}}, \link{recruitment} for the recruitment

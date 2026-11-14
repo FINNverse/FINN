@@ -84,6 +84,15 @@ and gives the same result.
 
 ## Documentation and data preparation
 
+* The process functions `growth()`, `mortality()`, `regeneration()`,
+  `competition()` and `regeneration_capped()`, `summary()` of a model,
+  `plot()` of an `ALE()` object, `compute_env_scaling()` and `dbh2ba()` have
+  runnable examples in the context of the fitting workflow; the `print()`
+  method of `finnControl()` is documented with it. `?fit` says in a few lines
+  what makes a fit faster instead of reporting the benchmark behind it, the
+  `env_autoscale` item is short and points to `?finn_data`, and the help
+  pages no longer cite issue numbers.
+
 * Examples for the fitting workflow (`finn()`, `fit()`, `predict()`,
   `simulateForest()`, `predictTrees()`, `regeneration_capped()`,
   `regeneration_adult()`, gated on an installed torch backend) and for the data

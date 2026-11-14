@@ -38,3 +38,15 @@ torch.Tensor A tensor representing the forest plot growth.
 \description{
 This function calculates growth based on specified parameters.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# growth as the growth process of a model: the equation above with its two
+# species parameters, and a linear response to one environmental predictor
+m <- finn(N_species = 2, growth_process = createProcess(~ temp, growth))
+
+# a 30-year simulation from bare ground on one site with a constant climate
+env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+head(sim$wide$site)
+\dontshow{\}) # examplesIf}
+}

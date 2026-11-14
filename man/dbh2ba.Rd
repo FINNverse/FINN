@@ -16,3 +16,6 @@ numeric vector of basal areas (m^2).
 Computes basal area in m^2 from diameter at breast height in cm:
 \deqn{BA = \pi \left(\frac{\mathrm{DBH}}{200}\right)^2}
 }
+\examples{
+dbh2ba(c(10, 30, 50))   # basal area of one stem of 10, 30 and 50 cm
+}

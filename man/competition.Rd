@@ -52,3 +52,16 @@ torch.Tensor Fraction of available light (light) for each cohort.
 \description{
 This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the light model as the competition process of a model. It takes no
+# environment; `continuous = TRUE` compares every pair of cohorts instead of
+# binning them into height quantiles
+m <- finn(N_species = 2,
+          competition_process = createProcess(func = competition, continuous = TRUE))
+
+env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+head(sim$wide$site)
+\dontshow{\}) # examplesIf}
+}

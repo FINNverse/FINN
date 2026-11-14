@@ -56,9 +56,8 @@ per time step or the increment over the whole interval.
 
 For \code{regeneration}, \code{"nbinom"} (the default) uses the recruit dispersion
 \code{theta} of the regeneration process and applies \code{finn(recruit_obs_weight = )}; \code{"poisson"} has no dispersion parameter, so it cannot collapse, but in
-0.2.0 it ignores \code{recruit_obs_weight} and scores per-hectare values
-(FINNverse/FINN#65), with \code{trees_offset} added to the prediction. See
-\link{recruitment}.
+0.2.0 it ignores \code{recruit_obs_weight} and scores per-hectare values, with
+\code{trees_offset} added to the prediction. See \link{recruitment}.
 
 A missing observation (\code{NA}) is left out of its term; the other responses
 of that cell are still scored. A term that is not finite at a step (an

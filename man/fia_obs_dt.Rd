@@ -38,11 +38,10 @@ patches).}
 An object of class \code{data.table} (inherits from \code{data.frame}) with 4400 rows and 14 columns.
 }
 \source{
-Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon
-FIA plots prepared in the (private) \code{FINNverse/FINN-fia} analysis repo:
-tree records via the FIA
-database, climate from WorldClim bioclim variables attached per plot. The
-full provenance chain is in \code{data-raw/README.md}.
+A seeded subsample of Oregon plots of the US Forest Inventory and
+Analysis (FIA) database, with WorldClim bioclimatic variables attached per
+plot. The preparation script and the provenance of the source tables are
+in the package repository (\code{dev/make_extdata.R}, \code{data-raw/README.md}).
 }
 \usage{
 fia_obs_dt
