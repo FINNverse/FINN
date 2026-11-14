@@ -2,24 +2,50 @@
 #' Resolve site, patch, and year indices for FINN inputs
 #'
 #' Joins tree, environment, and observation tables; assigns integer indices
-#' for site, patch, period; standardizes species coding; and returns aligned
+#' for site, patch and year; standardizes species coding; and returns aligned
 #' data plus optional initial cohorts.
+#'
+#' With \code{time_axis = "annual"} (the default) one simulation step is one
+#' year: \code{year} becomes the number of years since the first inventory of
+#' the site's patch (0 at the first inventory, e.g. 10 and 20 at the next two),
+#' the first inventory is the initial state (the initial cohorts, not an
+#' observation), the observations carry \code{period_length} in years, and
+#' \code{env_dt} is returned with one row per site and year \code{1..Tmax},
+#' \code{Tmax} being the longest time from a first to a last inventory. The
+#' environment row of year \eqn{k} drives the simulated year that ends at
+#' year \eqn{k}, so an inventory \eqn{k} years after the first is compared
+#' with the stand after \eqn{k} simulated years. \code{env_dt} therefore needs
+#' one row per site and calendar year from the year after the site's first
+#' inventory to \code{Tmax} years after it; a climate that does not change is
+#' repeated for every year.
 #'
 #' @param tree_dt data.table with tree-level data including siteName, patchName, year,
 #'   species_name, dbh, status, living, and optional trees.
-#' @param env_dt data.table with environment data including siteName and year.
+#' @param env_dt data.table with environment data including siteName and year
+#'   (calendar year; see Details for the years needed).
 #' @param obs_dt data.table with observations including siteName, patchName, year,
 #'   species_name, and stand metrics (ba, dbh, trees, growth, mort, n_at_risk,
-#'   n_died, reg), as returned by \code{makeObsData}.
+#'   n_died, reg, period_length), as returned by \code{makeObsData}.
 #' @param createInitCohorts logical. If TRUE, build FINN initial cohorts from
-#'   trees with \code{living == TRUE} and \code{year == 1}. Default TRUE.
+#'   the living trees of the first inventory (\code{year == 0}; with
+#'   \code{time_axis = "census"}, as in FINN 0.1.0, from \code{year == 1}).
+#'   Default TRUE.
+#' @param time_axis \code{"annual"} (default) or \code{"census"}.
+#'   \code{"census"} is the axis of FINN 0.1.0: \code{year} is the index of
+#'   the inventory (0, 1, 2, ...), one simulation step is one census interval
+#'   (\code{period_length = 1}), \code{env_dt} keeps the inventory years, and
+#'   the observations of the first inventory stay in \code{obs_dt}. Use it
+#'   with \code{makeObsData(rates = "interval")}.
 #'
 #' @return A list with:
 #' \itemize{
-#'   \item \code{siteID_dt}: site/patch/year index map.
+#'   \item \code{siteID_dt}: site/patch/year index map (\code{OrigYear} is the
+#'     calendar year).
 #'   \item \code{tree_dt}: tree table with indices and standardized species.
-#'   \item \code{env_dt}: environment table with indices.
-#'   \item \code{obs_dt}: site-aggregated observations by species.
+#'   \item \code{env_dt}: environment table with indices, the years of the
+#'     simulation.
+#'   \item \code{obs_dt}: site-aggregated observations by species, with
+#'     \code{period_length}.
 #'   \item \code{obs_dt_patches}: patch-level observations by species.
 #'   \item \code{species_dt}: species lookup (\code{species}, \code{species_name}).
 #'   \item \code{initCohorts} (optional): FINN \code{CohortMat} object.
@@ -34,15 +60,15 @@
 #' obs <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
 #'                    fix_period_length = 10, NspeciesQuantile = 0.98)
 #'
-#' # Names become integer ids shared by every table, calendar years become
-#' # 0, 1, 2 (0 is the initial state). Pass the tree list makeObsData() returned:
-#' # it carries the same species lumping as obs_dt. createInitCohorts = FALSE
-#' # leaves out the starting cohorts, which need torch.
+#' # Names become integer ids shared by every table, calendar years become years
+#' # since the first inventory: 0 (the initial state), 10 and 20. Pass the tree
+#' # list makeObsData() returned: it carries the same species lumping as obs_dt.
+#' # createInitCohorts = FALSE leaves out the starting cohorts, which need torch.
 #' inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt,
 #'                          createInitCohorts = FALSE)
 #' inputs$species_dt
 #' head(inputs$obs_dt)      # per site, year and species: what fit(data = ) takes
-#' head(inputs$env_dt)      # one row per site and year: what fit(env = ) takes
+#' range(inputs$env_dt$year) # one row per site and simulated year: what fit(env = ) takes
 #' head(inputs$siteID_dt)   # the map back to the inventory's own names
 #' @examplesIf torch::torch_is_installed()
 #' # with torch, the same call also builds the starting cohorts (a CohortMat)
@@ -51,8 +77,12 @@
 #'
 #' @import data.table
 #' @export
-resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
-  # browser()
+resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE, time_axis = c("annual", "census")){
+  time_axis <- match.arg(time_axis)
+  annual <- time_axis == "annual"
+  tree_dt <- copy(as.data.table(tree_dt))
+  env_dt  <- copy(as.data.table(env_dt))
+  obs_dt  <- copy(as.data.table(obs_dt))
   siteID_dt <- unique(env_dt[,.(siteName, year)])
   siteID_dt <- merge(siteID_dt, unique(tree_dt[,.(siteName, year)]), by = c("siteName", "year"), all = FALSE)
   siteID_dt <- merge(siteID_dt, unique(obs_dt[,.(siteName, patchName, year)]), by = c("siteName", "year"), all = FALSE)
@@ -63,6 +93,10 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   siteID_dt[, siteID := match(siteName, sort(unique(siteName), method = "radix"))]
   siteID_dt[, patchID := match(patchName, sort(unique(patchName), method = "radix")), by = siteID]
   siteID_dt[, period := as.integer(as.factor(year)), by = .(siteID, patchID)]
+  # The simulated year of each inventory: years since the patch's first
+  # inventory on the annual axis, the inventory index on the census axis.
+  if (annual) siteID_dt[, step := as.integer(year - min(year)), by = .(siteID, patchID)]
+  else        siteID_dt[, step := period - 1L]
 
   tree_dt <- merge(tree_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = FALSE)
 
@@ -73,23 +107,76 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   species_dt <- unique(tree_dt[,.(species,species_name)])
 
   tree_dt[, OrigYear := year,]
-  tree_dt[, year := period-1,]
-  tree_dt <- tree_dt[, -"period"]
+  tree_dt[, year := step,]
+  tree_dt <- tree_dt[, -c("period", "step")]
 
   # siteID_dt has one row per site, patch and year; the environment is a site
   # property, so take the site x year rows once or every patch would duplicate
   # them and climateDF2array() refuses the table when fit() builds its arrays.
-  env_dt <- merge(env_dt, unique(siteID_dt[,.(siteName, siteID, year, period)]), by = c("siteName","year"), all = FALSE)
+  if (annual) {
+    # One row per site and simulated year 1..Tmax: the row of year k drives the
+    # year that ends k years after the first inventory, so the inventory at
+    # offset k is scored against env row k, and there is no row 0.
+    site_first <- siteID_dt[, .(first = min(year)), by = .(siteName, siteID)]
+    Tmax <- max(siteID_dt$step)
+    if (Tmax < 1) stop("resolveSiteIDs(): no site has an inventory after its first one, so there is nothing to simulate.", call. = FALSE)
+    need <- site_first[, .(step = seq_len(Tmax), year = first + seq_len(Tmax)), by = .(siteName, siteID)]
+    env_dt[, .env_row := TRUE]
+    env_dt <- merge(need, env_dt, by = c("siteName", "year"), all.x = TRUE)
+    if (anyNA(env_dt$.env_row)) {
+      miss <- env_dt[is.na(.env_row)]
+      stop(sprintf(paste0("resolveSiteIDs(): `env_dt` has no row for %d site-year(s) of the annual time axis, e.g. site %s in %s. ",
+                          "It needs one row per site and calendar year from the year after the site's first inventory to %d years after it ",
+                          "(a climate that does not change is repeated for every year), or use time_axis = \"census\"."),
+                   nrow(miss), miss$siteName[1], format(miss$year[1]), Tmax), call. = FALSE)
+    }
+    if (anyDuplicated(env_dt[, .(siteID, step)]))
+      stop("resolveSiteIDs(): `env_dt` has more than one row for a site and year.", call. = FALSE)
+    env_dt[, .env_row := NULL]
+  } else {
+    env_dt <- merge(env_dt, unique(siteID_dt[,.(siteName, siteID, year, step)]), by = c("siteName","year"), all = FALSE)
+  }
   env_dt[, OrigYear := year,]
-  env_dt[, year := period-1,]
-  env_dt <- env_dt[, -"period"]
+  env_dt[, year := step,]
+  env_dt <- env_dt[, -"step"]
+  data.table::setcolorder(env_dt, c("siteName", "year"))
+  data.table::setorder(env_dt, siteID, year)
+
+  # The unit of growth and mort in obs_dt (makeObsData(rates = )), read off
+  # the data: where a cohort died partly over an interval of several years the
+  # yearly and the interval rate differ. Elsewhere the two are the same number.
+  if ("period_length" %in% names(obs_dt)) {
+    chk <- obs_dt[is.finite(mort) & n_died > 0 & n_died < n_at_risk & is.finite(period_length) & period_length > 1]
+    rates_in <- if (nrow(chk) && isTRUE(all(abs(chk$mort - obs_mort(chk$n_died, chk$n_at_risk, chk$period_length, "annual")) < 1e-8)))
+      "annual" else "interval"
+    setnames(obs_dt, "period_length", "period_length_in")
+  } else {
+    if (annual) warning("resolveSiteIDs(): `obs_dt` has no `period_length` column (it was not built by makeObsData() of FINN 0.2.0), so its growth and mortality are taken as rates over the whole interval, while the time axis is annual. Rebuild it with makeObsData().", call. = FALSE)
+    rates_in <- "interval"
+    obs_dt[, period_length_in := NA_real_]
+  }
+  if (!annual && rates_in == "annual")
+    warning("resolveSiteIDs(): time_axis = \"census\" (one step per census interval) with yearly growth and mortality rates; build obs_dt with makeObsData(rates = \"interval\").", call. = FALSE)
 
   obs_dt <- merge(obs_dt, siteID_dt, by = c("siteName", "patchName", "year"), all = FALSE)
   obs_dt[, OrigYear := year,]
-  obs_dt[, year := period-1,]
-  obs_dt <- obs_dt[, -"period"]
+  obs_dt[, year := step,]
+  if (annual) {
+    # the interval each inventory closes, in years; the first inventory is the
+    # initial state, not an observation
+    steps <- unique(obs_dt[, .(siteID, patchID, year)])
+    data.table::setorder(steps, siteID, patchID, year)
+    steps[, period_length := year - data.table::shift(year, 1, type = "lag"), by = .(siteID, patchID)]
+    obs_dt <- merge(obs_dt, steps, by = c("siteID", "patchID", "year"))
+    obs_dt <- obs_dt[year > 0]
+    obs_dt[, pl_rate := period_length]
+  } else {
+    obs_dt[, pl_rate := period_length_in]
+    obs_dt[, period_length := data.table::fifelse(year > 0, 1, NA_real_)]
+  }
+  obs_dt <- obs_dt[, -c("period", "step", "period_length_in")]
   obs_dt <- merge(obs_dt, species_dt, by = "species_name", all = TRUE)
-  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
+  out_cols_obs_dt <- c("siteID", "patchID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name", "period_length")
 
   obs_dt_aggr <- obs_dt[,.(ba = mean(ba, na.rm = TRUE),
                         dbh = mean(dbh, na.rm = TRUE),
@@ -100,13 +187,17 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
                         # from the pooled counts, never averaged from rates.
                         n_at_risk = sum(n_at_risk, na.rm = TRUE),
                         n_died = sum(n_died, na.rm = TRUE),
-                        reg = mean(reg, na.rm = TRUE)),
+                        reg = mean(reg, na.rm = TRUE),
+                        period_length = max(period_length),
+                        pl_rate = max(pl_rate)),
                     by = .(siteID, year, species, species_name)]
-  obs_dt_aggr[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
-  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name")
+  # in the unit the observations came in (see rates_in above)
+  obs_dt_aggr[, mort := obs_mort(n_died, n_at_risk, pl_rate, rates_in)]
+  out_cols_obs_dt_aggr <- c("siteID", "year", "ba", "dbh", "trees", "growth", "growth_n", "mort", "n_at_risk", "n_died", "reg", "species", "species_name", "period_length")
 
   siteID_dt[, OrigYear := year, by = .(siteID, patchID)]
-  siteID_dt[, year := period, by = .(siteID, patchID)]
+  if (annual) siteID_dt[, year := step]
+  else        siteID_dt[, year := period, by = .(siteID, patchID)]
   out_cols_siteID_dt <- c("siteID", "patchID", "siteName", "patchName", "year", "OrigYear")
 
   out <- list(
@@ -120,7 +211,7 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE){
   )
 
   if(createInitCohorts){
-    init_trees <- tree_dt[living == TRUE & year == 1]
+    init_trees <- tree_dt[living == TRUE & year == (if (annual) 0 else 1)]
     if(!any(colnames(init_trees) %in% "trees")) init_trees[, trees := 1,]
     out[["initCohorts"]] <- makeInitCohorts(init_trees, Nspecies = uniqueN(obs_dt$species), treeID_table = FALSE)
     out[["initCohort_dt"]] <- init_trees
@@ -146,6 +237,22 @@ dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
 }
 
+# The mortality rate of a closed cohort from its counts. `rates = "interval"`:
+# the fraction n_died / n_at_risk over the census interval. `rates = "annual"`:
+# the constant yearly probability that compounds to that fraction over
+# `period_length` years, 1 - (1 - n_died / n_at_risk)^(1 / period_length). NA
+# where no tree was at risk; an interval without a length is left as it is.
+obs_mort <- function(n_died, n_at_risk, period_length, rates = c("annual", "interval")) {
+  rates <- match.arg(rates)
+  m <- data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)
+  if (rates == "annual") {
+    p <- as.numeric(period_length)
+    ok <- !is.na(m) & is.finite(p) & p > 0
+    m[ok] <- 1 - (1 - m[ok])^(1 / p[ok])
+  }
+  m
+}
+
 #' Create observation data from trees
 #'
 #' Derives stand metrics by site/patch/species/year from tree measurements,
@@ -167,12 +274,41 @@ dbh2ba <- function(dbh){
 #' @param Nspecies integer or NULL. Cap species to the top N (others merged to "other").
 #' @param NspeciesQuantile numeric in (0,1] or NULL. Choose the smallest N covering
 #'   this fraction of individuals; overrides \code{Nspecies} if supplied.
+#' @param rates \code{"annual"} (default) or \code{"interval"}: the unit of
+#'   \code{growth} and \code{mort}. \code{"annual"} returns them per year, for a
+#'   model simulated in yearly steps: a tree's growth over an interval of
+#'   \eqn{p} years is \eqn{(dbh/dbh_{before})^{1/p} - 1}, and the mortality of a
+#'   cohort is \eqn{1 - (1 - n_{died}/n_{at\,risk})^{1/p}}, the constant yearly
+#'   rates that compound to what was observed over the interval.
+#'   \code{"interval"} returns them over the whole interval
+#'   (\code{dbh/dbh_before - 1} and \code{n_died / n_at_risk}), the output of
+#'   FINN 0.1.0, for a model in which one simulation step is one census
+#'   interval. \eqn{p} is \code{year - year_before} in the units of
+#'   \code{year}, so \code{year} must be the calendar year of the inventory.
+#'
+#' @details
+#' FINN simulates the forest in steps of one year. With \code{rates = "annual"}
+#' the observation table is in the units that \code{fit()} compares with such a
+#' simulation: \code{fit()} averages the simulated yearly growth and mortality
+#' over the \code{period_length} years before each census and sums the
+#' simulated recruits over them (see \code{\link{finn_data}}). The counts
+#' (\code{n_at_risk}, \code{n_died}, \code{growth_n}) and \code{reg} stay
+#' quantities of the whole interval in both modes: the counts weight the
+#' likelihood by the number of trees behind an observation, and \code{reg} is
+#' compared with the recruits summed over the interval. To use the table,
+#' express \code{year} as years since the first inventory, give \code{env} one
+#' row per site and year from 1 to the last census, and build the initial
+#' cohorts from the first inventory; \code{\link{resolveSiteIDs}} does all
+#' three.
 #'
 #' @return A list with:
 #' \itemize{
-#'   \item \code{obs_dt}: observations at site or patch level. \code{growth} is
-#'     the mean relative diameter increment (\code{dbh/dbh_before - 1}), and
-#'     \code{growth_n} is how many trees that mean rests on. Both matter: means
+#'   \item \code{obs_dt}: observations at site or patch level, one row per site
+#'     (and patch), inventory \code{year} and species. \code{period_length} is
+#'     the number of years since the site's previous inventory (\code{NA} at
+#'     its first). \code{growth} is the mean relative diameter growth rate of
+#'     the surviving trees (per year, or over the interval, see \code{rates}),
+#'     and \code{growth_n} is how many trees that mean rests on. Both matter: means
 #'     are aggregated across patches TREE-WEIGHTED (by \code{growth_n}), because
 #'     that is the quantity the model predicts - it simulates
 #'     \code{sum(g*trees)/sum(trees)} over the whole site, so an unweighted mean
@@ -182,10 +318,19 @@ dbh2ba <- function(dbh){
 #'     30+, and the variance of a mean is \eqn{\sigma^2/n}. Mortality comes
 #'     back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
 #'     the start of the interval) and \code{n_died} (how many of them were dead
-#'     at the end), plus the derived rate \code{mort = n_died / n_at_risk}
-#'     (\code{NA} where no cohort was at risk). The counts are the binomial
-#'     response; pass them to \code{fit} with \code{mortality = "binomial"}.
-#'   \item \code{tree_dt}: input trees with added growth fields and species recode.
+#'     at the end), plus the derived rate \code{mort} (\code{NA} where no
+#'     cohort was at risk): the yearly rate
+#'     \code{1 - (1 - n_died / n_at_risk)^(1 / period_length)}, or
+#'     \code{n_died / n_at_risk} with \code{rates = "interval"}. \code{fit()}
+#'     scores \code{mort} with the binomial loss weighted by \code{n_at_risk}.
+#'     \code{reg} is the number of recruits per hectare over the interval.
+#'   \item \code{tree_dt}: input trees with added growth fields and species
+#'     recode: \code{year_before}, \code{dbh_before}, \code{period_length}
+#'     (years since the tree's previous record), \code{rel_growth} (the
+#'     increment over the interval, \code{dbh/dbh_before - 1}) and
+#'     \code{growth} (the tree's growth rate in the unit of \code{rates}, the
+#'     quantity behind \code{obs_dt$growth} and the \code{growth} column of
+#'     \code{fit(tree_data = )}); an input column \code{growth} is replaced.
 #' }
 #'
 #' @examples
@@ -205,15 +350,22 @@ dbh2ba <- function(dbh){
 #' head(obs$obs_dt)
 #'
 #' # mortality is a closed cohort: the trees alive at the start of the interval
-#' # and how many of them had died by its end, not a bare rate
-#' obs$obs_dt[n_at_risk > 0, .(siteName, patchName, year, species_name, n_at_risk, n_died, mort)][1:5]
-#' # growth travels with the number of trees behind it, so fit() can weight it
+#' # and how many of them had died by its end; `mort` is the yearly rate over the
+#' # period_length years of the interval
+#' obs$obs_dt[n_at_risk > 0, .(siteName, patchName, year, period_length, species_name,
+#'                             n_at_risk, n_died, mort)][1:5]
+#' # growth is a yearly rate too, and travels with the number of trees behind it
 #' obs$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
+#'
+#' # the same table with the rates over the whole ten-year interval (FINN 0.1.0)
+#' obs10 <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+#'                      fix_period_length = 10, NspeciesQuantile = 0.98, rates = "interval")
+#' obs10$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
 #'
 #' @import data.table
 #' @export
-makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL){
-  # browser()
+makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears = 2, fix_period_length = NULL, dbh_growth_thresh = c(-10,50), Npatches = NULL, Nspecies = NULL, NspeciesQuantile = NULL, rates = c("annual", "interval")){
+  rates <- match.arg(rates)
   tree_dt <- copy(as.data.table(tree_dt))
   data.table::setorder(tree_dt, treeName, year)
   tree_dt[, ":="(
@@ -229,7 +381,18 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
   # exclude all plots without consistent period length
   tree_dt[, dbh_growth := dbh - dbh_before,]
   tree_dt[status == "alive", rel_growth := dbh/dbh_before - 1,]
-  # tree_dt[rel_growth < 0, rel_growth := 0,]
+  # `growth` is the per-tree rate behind obs_dt$growth: annual by default, so a
+  # census interval of p years gives (dbh/dbh_before)^(1/p) - 1, the constant
+  # yearly rate that compounds to the observed increment. That is what fit()
+  # compares with the mean of the simulated yearly rates over the interval.
+  # `rel_growth` stays the increment over the whole interval.
+  tree_dt[, growth := NA_real_]
+  if (rates == "annual") {
+    tree_dt[status == "alive" & is.finite(period_length) & period_length > 0,
+            growth := (dbh/dbh_before)^(1/period_length) - 1]
+  } else {
+    tree_dt[status == "alive", growth := rel_growth]
+  }
   tree_dt[living == TRUE,trees := 1,]
 
   if(!is.null(fix_period_length)){
@@ -267,12 +430,12 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 
   obs_dt <- tree_dt[,.(
     ba = sum(dbh2ba(dbh)*(living == TRUE), na.rm = TRUE),
-    growth = mean(rel_growth[living == TRUE], na.rm = TRUE),
+    growth = mean(growth[living == TRUE], na.rm = TRUE),
     # `growth_n` is how many trees the growth mean rests on. 34% of FIA growth
     # observations come from a SINGLE tree while others average 30+, and the
     # variance of a mean is sigma^2/n - so the count has to travel with the
     # response for the loss to weight it (as n_at_risk does for mortality).
-    growth_n = sum(is.finite(rel_growth) & living == TRUE, na.rm = TRUE),
+    growth_n = sum(is.finite(growth) & living == TRUE, na.rm = TRUE),
     dbh = mean(dbh[living == TRUE], na.rm = TRUE),
     trees = sum(living == TRUE, na.rm = TRUE),
     reg = sum(status == "new", na.rm = TRUE)/plotsize
@@ -335,7 +498,14 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
   # loss masks the observation out.
   obs_dt[is.na(n_at_risk), n_at_risk := 0L]
   obs_dt[is.na(n_died),    n_died    := 0L]
-  obs_dt[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
+  # The interval each row closes, in years: the time since the site's previous
+  # inventory (NA at its first). It is the window fit() aggregates the simulated
+  # yearly rates and recruits over, and the exponent of the annualisation.
+  site_periods <- unique(obs_dt[, .(siteName, year)])
+  data.table::setorder(site_periods, siteName, year)
+  site_periods[, period_length := year - data.table::shift(year, 1, type = "lag"), by = siteName]
+  obs_dt <- merge(obs_dt, site_periods, by = c("siteName", "year"), all.x = TRUE)
+  obs_dt[, mort := obs_mort(n_died, n_at_risk, period_length, rates)]
   obs_dt = obs_dt[order(siteName, patchName, species_name, year)]
 
   if(!is.null(minNyears)){
@@ -371,11 +541,12 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
       n_died = sum(n_died, na.rm = TRUE),
       reg = mean(reg, na.rm = TRUE),
       Npatches = uniqueN(patchName)
-    ), by = .(siteName, year, species_name)]
-    obs_dt[, mort := data.table::fifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_)]
+    ), by = .(siteName, year, species_name, period_length)]
+    obs_dt[, mort := obs_mort(n_died, n_at_risk, period_length, rates)]
+    data.table::setcolorder(obs_dt, setdiff(names(obs_dt), "period_length"))   # last, as in the patch table
     message("Aggregated obs_dt by siteName. For unaggregated data, set aggregate_by_site = FALSE")
   }else{
-    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, growth_n, mort, n_at_risk, n_died, reg)]
+    obs_dt <- obs_dt[,.(siteName, patchName, year, species_name, ba, dbh, trees, growth, growth_n, mort, n_at_risk, n_died, reg, period_length)]
     message("Kept obs_dt unaggregated by siteName. For aggregated data, set aggregate_by_site = TRUE")
   }
 

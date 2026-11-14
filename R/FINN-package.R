@@ -44,5 +44,6 @@ utils::globalVariables(c(
   "rate_sd", "reg", "rel_growth", "sameYearsAllPatches", "shade", "siteID",
   "siteName", "species", "species_before", "species_name", "status", "td",
   "treeName", "trees", "trees_ha", "value", "var", "variable", "year_before",
-  "years", "TransformerEncoderLayer"
+  "years", "TransformerEncoderLayer", ".env_row", "first", "growth",
+  "period_length_in", "pl_rate", "step"
 ))

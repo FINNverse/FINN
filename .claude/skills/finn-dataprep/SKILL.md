@@ -14,14 +14,21 @@ The `C-Data_preparation` vignette is the worked reference.
 ## The tables FINN consumes
 
 - **`obs_dt`** (one row per site × year × species): `siteID, year, ba, dbh, trees,
-  growth, mort, n_at_risk, n_died, reg, species, species_name`. Year starts at 1;
-  the initial state (year 0) is **not** in `obs_dt`. NAs allowed in any response.
-  Units: `ba` m², `dbh` cm, `trees` count, `growth` relative growth rate, `reg`
-  trees ha⁻¹. Mortality is a **pair of counts** — `n_at_risk` (alive at interval
-  start) and `n_died` — which is what the default `mortality = "binomial"` loss
-  consumes; `mort = n_died/n_at_risk` is derived for convenience.
-- **`env_dt`**: `siteID, year, <env vars…>` in **natural units**; must cover every
-  site × year in `obs_dt`. **Do not pre-scale** — FINN z-standardises internally
+  growth, mort, n_at_risk, n_died, reg, species, species_name, period_length`.
+  **One simulation step = one year** (since 0.2.0): `year` counts years since
+  the first inventory (the initial state, year 0, is **not** in `obs_dt`; a
+  ten-year design has observations at 10 and 20), `period_length` is the years
+  since the previous inventory. NAs allowed in any response. Units: `ba` m²,
+  `dbh` cm, `trees` count, `growth` relative growth rate **per year**
+  (`(dbh/dbh_before)^(1/p) - 1`), `reg` trees ha⁻¹ **over the interval**.
+  Mortality is a **pair of counts** — `n_at_risk` (alive at interval start) and
+  `n_died` — that weight the default `mortality = "binomial"` loss; `mort` is the
+  yearly rate `1 - (1 - n_died/n_at_risk)^(1/p)`. `makeObsData(rates =
+  "interval")` gives the old per-interval rates; never use one step per
+  remeasurement interval for a calibration.
+- **`env_dt`**: `siteID, year, <env vars…>` in **natural units**; one row per
+  site and simulated year 1..Tmax (no row 0: env row k drives the year that ends
+  at k). **Do not pre-scale** — FINN z-standardises internally
   (`env_autoscale`, default) and reuses the constants at prediction time.
 - **`init_trees`** (→ `makeInitCohorts`): `siteID, patchID, year, species, dbh,
   trees, living` (the year-0 slice).
@@ -71,7 +78,10 @@ treeName`, optional `trees`).
 
 ## Checklist before fitting
 
-- Period length consistent (`fix_period_length`); FINN assumes a fixed remeasure interval.
+- Annual axis: `year` in years since the first inventory, `period_length` in years,
+  yearly `growth`/`mort` (the `makeObsData()` / `resolveSiteIDs()` defaults). Intervals
+  may differ between sites (FINN then scores each site over its own window);
+  `fix_period_length` keeps one interval length if wanted.
 - `env_dt` covers **every** `siteID × year` in `obs_dt` (missing rows break the fit).
 - Units: `dbh` cm, `ba` m², `reg` trees ha⁻¹; env in natural units (never pre-scaled).
 - Species IDs contiguous `1..N`, aligned across tables — always go through

@@ -13,7 +13,8 @@ makeObsData(
   dbh_growth_thresh = c(-10, 50),
   Npatches = NULL,
   Nspecies = NULL,
-  NspeciesQuantile = NULL
+  NspeciesQuantile = NULL,
+  rates = c("annual", "interval")
 )
 }
 \arguments{
@@ -41,13 +42,28 @@ interval differs. Default NULL.}
 
 \item{NspeciesQuantile}{numeric in (0,1] or NULL. Choose the smallest N covering
 this fraction of individuals; overrides \code{Nspecies} if supplied.}
+
+\item{rates}{\code{"annual"} (default) or \code{"interval"}: the unit of
+\code{growth} and \code{mort}. \code{"annual"} returns them per year, for a
+model simulated in yearly steps: a tree's growth over an interval of
+\eqn{p} years is \eqn{(dbh/dbh_{before})^{1/p} - 1}, and the mortality of a
+cohort is \eqn{1 - (1 - n_{died}/n_{at\,risk})^{1/p}}, the constant yearly
+rates that compound to what was observed over the interval.
+\code{"interval"} returns them over the whole interval
+(\code{dbh/dbh_before - 1} and \code{n_died / n_at_risk}), the output of
+FINN 0.1.0, for a model in which one simulation step is one census
+interval. \eqn{p} is \code{year - year_before} in the units of
+\code{year}, so \code{year} must be the calendar year of the inventory.}
 }
 \value{
 A list with:
 \itemize{
-\item \code{obs_dt}: observations at site or patch level. \code{growth} is
-the mean relative diameter increment (\code{dbh/dbh_before - 1}), and
-\code{growth_n} is how many trees that mean rests on. Both matter: means
+\item \code{obs_dt}: observations at site or patch level, one row per site
+(and patch), inventory \code{year} and species. \code{period_length} is
+the number of years since the site's previous inventory (\code{NA} at
+its first). \code{growth} is the mean relative diameter growth rate of
+the surviving trees (per year, or over the interval, see \code{rates}),
+and \code{growth_n} is how many trees that mean rests on. Both matter: means
 are aggregated across patches TREE-WEIGHTED (by \code{growth_n}), because
 that is the quantity the model predicts - it simulates
 \code{sum(g*trees)/sum(trees)} over the whole site, so an unweighted mean
@@ -57,15 +73,39 @@ patch-level growth observations rest on a single tree while others average
 30+, and the variance of a mean is \eqn{\sigma^2/n}. Mortality comes
 back as a closed-cohort pair of counts, \code{n_at_risk} (trees alive at
 the start of the interval) and \code{n_died} (how many of them were dead
-at the end), plus the derived rate \code{mort = n_died / n_at_risk}
-(\code{NA} where no cohort was at risk). The counts are the binomial
-response; pass them to \code{fit} with \code{mortality = "binomial"}.
-\item \code{tree_dt}: input trees with added growth fields and species recode.
+at the end), plus the derived rate \code{mort} (\code{NA} where no
+cohort was at risk): the yearly rate
+\code{1 - (1 - n_died / n_at_risk)^(1 / period_length)}, or
+\code{n_died / n_at_risk} with \code{rates = "interval"}. \code{fit()}
+scores \code{mort} with the binomial loss weighted by \code{n_at_risk}.
+\code{reg} is the number of recruits per hectare over the interval.
+\item \code{tree_dt}: input trees with added growth fields and species
+recode: \code{year_before}, \code{dbh_before}, \code{period_length}
+(years since the tree's previous record), \code{rel_growth} (the
+increment over the interval, \code{dbh/dbh_before - 1}) and
+\code{growth} (the tree's growth rate in the unit of \code{rates}, the
+quantity behind \code{obs_dt$growth} and the \code{growth} column of
+\code{fit(tree_data = )}); an input column \code{growth} is replaced.
 }
 }
 \description{
 Derives stand metrics by site/patch/species/year from tree measurements,
 filters sites, harmonizes years, optionally aggregates by site.
+}
+\details{
+FINN simulates the forest in steps of one year. With \code{rates = "annual"}
+the observation table is in the units that \code{fit()} compares with such a
+simulation: \code{fit()} averages the simulated yearly growth and mortality
+over the \code{period_length} years before each census and sums the
+simulated recruits over them (see \code{\link{finn_data}}). The counts
+(\code{n_at_risk}, \code{n_died}, \code{growth_n}) and \code{reg} stay
+quantities of the whole interval in both modes: the counts weight the
+likelihood by the number of trees behind an observation, and \code{reg} is
+compared with the recruits summed over the interval. To use the table,
+express \code{year} as years since the first inventory, give \code{env} one
+row per site and year from 1 to the last census, and build the initial
+cohorts from the first inventory; \code{\link{resolveSiteIDs}} does all
+three.
 }
 \examples{
 library(data.table)
@@ -84,9 +124,16 @@ obs <- makeObsData(
 head(obs$obs_dt)
 
 # mortality is a closed cohort: the trees alive at the start of the interval
-# and how many of them had died by its end, not a bare rate
-obs$obs_dt[n_at_risk > 0, .(siteName, patchName, year, species_name, n_at_risk, n_died, mort)][1:5]
-# growth travels with the number of trees behind it, so fit() can weight it
+# and how many of them had died by its end; `mort` is the yearly rate over the
+# period_length years of the interval
+obs$obs_dt[n_at_risk > 0, .(siteName, patchName, year, period_length, species_name,
+                            n_at_risk, n_died, mort)][1:5]
+# growth is a yearly rate too, and travels with the number of trees behind it
 obs$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
+
+# the same table with the rates over the whole ten-year interval (FINN 0.1.0)
+obs10 <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+                     fix_period_length = 10, NspeciesQuantile = 0.98, rates = "interval")
+obs10$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
 
 }
