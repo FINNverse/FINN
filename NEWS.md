@@ -442,6 +442,50 @@ someone who was affected.
 
 ## Behaviour changes
 
+* **Calibration runs on annual simulation steps: data preparation, bundled
+  data and vignettes.** One simulation step per ten-year remeasurement
+  interval distorts the dynamics: recruitment, competition and growth act
+  once per decade, and the per-step mortality floor and ceiling become limits
+  per decade. On FIA Oregon a model calibrated that way grew to a bare-ground
+  equilibrium of 100-170 m2/ha that was still rising; calibrated on annual
+  steps it levels off at 45-60 m2/ha. So everything the package ships now
+  uses one step per year:
+  - `makeObsData(rates = c("annual", "interval"))`: `growth` and `mort` are
+    yearly rates by default, `(dbh / dbh_before)^(1 / p) - 1` per tree and
+    `1 - (1 - n_died / n_at_risk)^(1 / p)` per cohort over an interval of `p`
+    years, and the table carries `period_length` (years since the previous
+    inventory). `n_at_risk`, `n_died`, `growth_n` and `reg` stay quantities of
+    the interval, as `fit()` uses them: it averages the simulated yearly
+    growth and mortality over the `period_length` years before a census,
+    scores `mort` with the binomial weighted by `n_at_risk`, and sums the
+    simulated recruits. The returned tree list gains `growth`, the tree's rate
+    in the same unit (`rel_growth` stays the interval increment).
+    `rates = "interval"` returns the rates over the whole interval, as before.
+  - `resolveSiteIDs(time_axis = c("annual", "census"))`: `year` is the number
+    of years since the first inventory (0, 10, 20 rather than 0, 1, 2), the
+    first inventory is the initial state (initial cohorts, no observation
+    row), and `env_dt` comes back with one row per site and year `1..Tmax`,
+    so it needs one row per calendar year (a static climate is repeated).
+    `env_dt` now holds only `siteID`, `year` and the predictors, which is
+    what `fit(env = )` accepts (it carried the character `siteName`, which
+    `fit()` refuses). `time_axis = "census"` keeps the inventory index of
+    0.1.0.
+  - The bundled FIA datasets (`fia_obs_dt`, `fia_env_dt`, `fia_obs_test`,
+    `fia_env_test`) are rebuilt on the annual axis from the same plots and
+    sample: observations at years 10 and 20 (21 and 22 for two sites whose
+    third inventory came late) with `period_length`, yearly growth and
+    mortality, and `env` over years 1..22. Growth is now also tree-weighted
+    across patches as `makeObsData()` defines it; the old table carried the
+    unweighted mean of the patch means. `ba`, `dbh`, `trees`, `reg` and the
+    counts are unchanged; `example_env_dt.csv` has one row per calendar year.
+  - The vignettes, examples and tests that use these data simulate the 20
+    years between the inventories. The vignettes score a fitted model the
+    way `fit()` does: the stand at the census year, growth and mortality
+    averaged over the `period_length` years before it, and the expected
+    recruits per hectare (`r_mean_ha`) summed over them.
+  Results computed on the bundled data or with `makeObsData()` /
+  `resolveSiteIDs()` defaults change.
+
 * **Bare ground is bare: `init_cohort = NULL` starts with no stems.**
   `simulateForest()` / `predict()` and `fit()` without an `init_cohort` used to
   start every patch with one 1-cm stem of every species, although the help said

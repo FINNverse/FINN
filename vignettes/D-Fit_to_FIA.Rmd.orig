@@ -42,9 +42,9 @@ library(torch)
 library(data.table)
 library(ggplot2)
 
-# Training length. 500 is comfortably past convergence: every response plateaus
-# by ~epoch 400 (checked across 3 seeds). Raising it changes nothing except the
-# knit time.
+# Training length. Every epoch simulates the 20 years between the inventories
+# for all 200 sites; the convergence section below shows the loss curves and how
+# far the parameters still move.
 EPOCHS <- 500L
 ```
 
@@ -77,28 +77,46 @@ init_test  <- fia_init_test
 # long form of the observations, so later we can match FINN's long predictions
 # (sim$long$site) with a single merge()
 resp  <- c("dbh", "ba", "trees", "growth", "mort", "reg")
-to_long <- function(d) melt(d, id.vars = c("siteID", "year", "species", "species_name"),
-                            measure.vars = resp, variable.name = "variable", value.name = "obs")
+to_long <- function(d) melt(d, id.vars = c("siteID", "year", "period_length", "species", "species_name"),
+                            measure.vars = resp, variable.name = "variable", value.name = "obs",
+                            variable.factor = FALSE)
 obs_long  <- to_long(obs_dt)
 test_long <- to_long(obs_test)
 
-cat(sprintf("train: %d sites | holdout: %d sites | %d species | years %s\n",
+cat(sprintf("train: %d sites | holdout: %d sites | %d species | inventory years %s | env years %d-%d\n",
             uniqueN(obs_dt$siteID), uniqueN(obs_test$siteID), uniqueN(obs_dt$species),
-            paste(sort(unique(obs_dt$year)), collapse = " & ")))
+            paste(sort(unique(obs_dt$year)), collapse = " & "), min(env_dt$year), max(env_dt$year)))
 species_dt
+```
+
+FINN simulates the forest in **yearly steps**. The first inventory (2001-02) is
+the starting state at year 0, and the two remeasurements are compared with the
+simulated stand 10 and 20 years later; one site of each sample had its third
+inventory a year or two late, at year 21 or 22. Each observation carries
+`period_length`, the years since the previous inventory, and its growth and
+mortality are **yearly** rates: `fit()` averages the simulated yearly rates over
+those years, and sums the simulated recruits over them for `reg`. Because the
+intervals differ between a few sites, `fit()` scores every site over its own
+window, which it announces when it starts.
+
+```{r intervals}
+unique(obs_dt[, .(siteID, year, period_length)])[, .(sites = .N), by = .(year, period_length)]
 ```
 
 The environment is supplied in **natural units**: with `env_autoscale = TRUE`
 (the default) FINN z-standardizes the predictors internally and reuses the same
-constants at prediction time, so raw values are all we ever pass.
+constants at prediction time, so raw values are all we ever pass. It has one row
+per site and simulated year; the climate here is each plot's long-term normal,
+the same in every year.
 
 ```{r plot-env, fig.width = 8, fig.height = 3}
-ggplot(melt(env_dt[, c("temp", "prec")], measure.vars = c("temp", "prec")),
+ggplot(melt(unique(env_dt[, c("siteID", "temp", "prec")]), id.vars = "siteID",
+            measure.vars = c("temp", "prec")),
        aes(value)) +
   geom_histogram(bins = 20, fill = "grey40") +
   facet_wrap(~variable, scales = "free", labeller = as_labeller(
     c(temp = "Mean~annual~temp~(degree*C)", prec = "Annual~precip~(mm)"), label_parsed)) +
-  labs(x = NULL, y = "site x year") + theme_minimal()
+  labs(x = NULL, y = "sites") + theme_minimal()
 ```
 
 Stand abundance, measured as total basal area per plot (summed over species),
@@ -153,8 +171,9 @@ what ALE is designed for), but they are a problem for the *interpretation* below
 two drivers that correlate at 0.93 have no separately identifiable response
 curves, so calling each one a "niche" would be reading structure into an arbitrary
 split. Two weakly-correlated drivers (r = 0.64) give curves that mean what the
-text says they mean. Measured across three seeds, the cost is nothing on growth
-(0.56 vs 0.55 held out) and ~0.02 on basal area, tree numbers and regeneration.
+text says they mean. Measured across three seeds on the earlier ten-year steps,
+the cost was nothing on growth (0.56 vs 0.55 held out) and ~0.02 on basal area,
+tree numbers and regeneration.
 
 ```{r build-process}
 FINN.seed(42)
@@ -344,14 +363,36 @@ we simulate each model twice, once on the training sites, once on the 200
 held-out sites, and score both with **Spearman correlation** (rank agreement)
 and **RMSE** (in each response's own units), matched on site × year × species.
 
+The simulation runs in yearly steps, so a prediction is put together the way
+`fit()` compares it with an inventory: the stand (`dbh`, `ba`, `trees`) at the
+year of the census, the yearly growth and mortality rates averaged over the
+`period_length` years before it, and the expected recruits per hectare
+(`r_mean_ha`) summed over those years.
+
 ```{r assess-code}
+# the simulated counterpart of every observation, as fit() scores it
+at_census <- function(site, obs_l) {
+  win <- unique(obs_l[, .(siteID, census = year, period_length)])
+  win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
+  s <- merge(site[, .(siteID, year, species, variable = as.character(variable), value)],
+             win, by = c("siteID", "year"))
+  rbindlist(list(
+    s[variable %in% c("dbh", "ba", "trees") & year == census,
+      .(siteID, year = census, species, variable, value)],
+    s[variable %in% c("growth", "mort"),
+      .(value = mean(value)), by = .(siteID, year = census, species, variable)],
+    s[variable == "r_mean_ha",
+      .(variable = "reg", value = sum(value)), by = .(siteID, year = census, species)]
+  ), use.names = TRUE)
+}
+
 # One prediction pass per model x sample. The holdout is driven only by its own
 # environment and starting cohorts; nothing about it entered the fit.
 pred_of <- function(model, label, env, init, obs_l, split) {
   model$eval()                                   # deterministic: dropout off
   sim <- predict(model, env = env, init_cohort = init,
                  patches = 4, patch_size = 0.06, device = "cpu")
-  merge(obs_l, sim$long$site, by = c("siteID", "year", "species", "variable"
+  merge(obs_l, at_census(sim$long$site, obs_l), by = c("siteID", "year", "species", "variable"
   ))[, `:=`(model = label, split = split)][]
 }
 FINN.seed(1)
@@ -442,12 +483,13 @@ dynamics rather than inertia. The second census of the holdout sites predicted
 by the first, next to the two models scored on the same cells:
 
 ```{r persistence}
-# the year-1 observation stands in as the prediction for year 2
-persist <- merge(test_long[year == 2],
-                 test_long[year == 1, .(siteID, species, variable, value = obs)],
+# the first remeasurement (year 10) stands in as the prediction for the second
+# (year 20, or 21/22 where it came late)
+persist <- merge(test_long[year > 10],
+                 test_long[year == 10, .(siteID, species, variable, value = obs)],
                  by = c("siteID", "species", "variable"))
-ref <- rbind(persist[, .(siteID, species, variable, obs, value, model = "Persistence (year 1 as is)")],
-             obs_pred[split == "holdout" & year == 2, .(siteID, species, variable, obs, value, model)])
+ref <- rbind(persist[, .(siteID, species, variable, obs, value, model = "Persistence (year 10 as is)")],
+             obs_pred[split == "holdout" & year > 10, .(siteID, species, variable, obs, value, model)])
 ref[variable %in% c("dbh", "ba", "trees") & is.finite(obs) & is.finite(value),
     .(spearman = round(cor(obs, value, method = "spearman"), 2),
       rmse     = round(sqrt(mean((obs - value)^2)), 2)),
@@ -458,13 +500,13 @@ Persistence wins on all three state variables, and not narrowly. That is the
 expected result for a ten-year interval in mature stands: most of the basal area
 present at the second census was already there at the first, and the models
 are at a disadvantage here, they start from the year-0 tree list and never see
-the year-1 census, so their year-2 prediction carries two intervals of
-compounded simulation error. The lesson is not that the models are poor but
+the year-10 census, so their year-20 prediction carries twenty simulated years
+of compounded error. The lesson is not that the models are poor but
 that a holdout Spearman on `dbh`, `ba` or `trees` is mostly a statement about
 the initial cohorts. The processes are tested by the rates, and by what the
 model does over horizons where persistence has nothing to say, the
 **Simulating succession** vignette. Persistence has no prediction for the first
-census, which is why the table scores year 2 only.
+remeasurement, which is why the table scores the second only.
 
 ### Calibration: predicted against observed by decile
 
@@ -544,9 +586,11 @@ blocked[variable %in% c("dbh", "ba", "trees", "growth") & is.finite(obs) & is.fi
 
 The blocked rows are the transfer skill, and they are the ones to report when
 the model is meant to be applied beyond the sampled conditions. Here the rank
-correlations hold up on the warm block while the errors do not: the basal-area
-RMSE doubles and the stem and growth errors rise by a quarter to a half. The
-model orders the warm sites correctly but misplaces their level, which is what
+correlations of the state variables hold up on the warm block (growth's drops
+from 0.56 to 0.44) while the errors do not: the basal-area RMSE doubles and the
+stem error rises by more than a third (the growth RMSE, a yearly rate, does not
+move at two decimals). The model orders the warm sites but misplaces their
+level, which is what
 an environmental response that is extrapolating looks like, and a random
 holdout cannot show it. It is also the reason to keep the climate formula
 small: a response curve fitted to two collinear drivers can fit the training
@@ -554,7 +598,7 @@ block and still extrapolate in opposite directions.
 
 ## Two fitting strategies for regeneration
 
-Regeneration is the response with the least information in it: 86% of the
+Regeneration is the response with the least information in it: 87% of the
 site × census × species cells record no recruit at all, and a recruit enters at
 12.9 cm, so over a ten-year interval it adds little to basal area. In a joint
 fit the regeneration parameters are free to do something else instead: fill a
@@ -595,7 +639,7 @@ finite `reg`. Stage 1 proper freezes the regeneration process at a fixed,
 near-zero recruitment. `initEnv` is the weight matrix of the linear
 environmental response, one row per species and one column per term of the
 formula (intercept, `temp`, `prec`); an intercept of `log(1e-3)` makes the
-expected recruitment vanish, so the ten-year dynamics are carried by growth and
+expected recruitment vanish, so the twenty years of dynamics are carried by growth and
 mortality of the trees already present.
 
 ```{r stage1, results = "hide"}
@@ -657,9 +701,13 @@ fit(m_s2,
 
 The mechanistic regeneration function is unbounded: its mean rises as
 `exp(env)`, so a steep climate coefficient can turn a warm, wet site into a
-recruitment burst of hundreds of stems in one step. `FINN::regeneration_saturation`
+recruitment burst of hundreds of stems in one year. `FINN::regeneration_saturation`
 adds a Beverton-Holt cap, `K m / (K + m)`, with the carrying capacity `K`
-(stems ha⁻¹ per step) declared as a custom parameter and fitted like any other.
+(stems ha⁻¹ per year, one simulation step) declared as a custom parameter and
+fitted like any other. `fit()` starts every `K` at the largest observed
+recruitment per hectare and year, `max(reg / period_length)` (14.6 here; the
+`reg_logK` given to `createProcess()` sets its length, one `K` per species), and
+a weak prior keeps the species' caps together unless the data pull them apart.
 A length-1 init gives one shared `K`, a length-`Nsp` init one per species. The
 rest of the model is the joint fit above, so the two differ in the cap alone.
 
@@ -682,23 +730,24 @@ fit(m_cap,
 ```
 
 ```{r cap-K}
-# the fitted carrying capacities, recruits per hectare and step
+# the fitted carrying capacities, recruits per hectare and year
 data.table(species_dt, K = round(exp(as.numeric(m_cap$reg_logK)), 1))
 ```
 
-The fitted `K` spans three orders of magnitude, from a few recruits per hectare
-and step for the firs and hemlocks to several hundred for Douglas fir, ponderosa
-pine and the pooled rest. Where `K` is small the cap is binding, so the
-recruitment of those species is now set by the cap rather than by the climate
-response; a `K` that lands on a value the inventory cannot support is the first
-thing to check against the observed recruitment of that species.
+The caps moved down together from 14.6 to 0.6 recruits per hectare and year
+for every species: the prior keeps them together, and the data did not pull them
+apart. 0.6 a year is about the mean yearly recruitment of Douglas fir, the
+commonest recruit, so the cap binds wherever the climate response asks for more,
+and the recruitment of a site is then set by the cap rather than by the climate.
+A `K` that lands on a value the inventory cannot support is the first thing to
+check against the observed recruitment of each species.
 
 ### How the three compare, and why stem counts hinge on a few bursts
 
 All three are scored on the 200 holdout sites exactly as above. On this sample
 they are not distinguishable there: the differences between the rows are of the
 size a change of seed produces (see below), and that too is a result. Two
-censuses ten years apart, with no recruit in 86% of the cells, contain little to
+censuses ten years apart, with no recruit in 87% of the cells, contain little to
 separate a recruitment model that is capped from one that is not, or one fitted
 jointly from one fitted last. The regeneration models differ where the holdout
 does not look, in the simulated stand, which is the next point.
@@ -744,7 +793,7 @@ burst[, .(cells = .N, share_of_sq_error = round(sum((obs - trees)^2) / total_sq_
           max_reg = round(max(reg), 1)), by = .(top_1pct_recruitment = top)]
 ```
 
-One percent of the cells carries about a tenth of the squared stem error, and
+One percent of the cells carries about a seventh of the squared stem error, and
 the seed-to-seed spread in the stem metrics, a hundredth in Spearman and a few
 hundredths in RMSE, is the same mechanism at work: a site that receives a burst
 in one draw and not in the next. That is why a single stems R² on a holdout
@@ -810,8 +859,10 @@ plot_growth_ale <- function(vars, labs) {
 
 Because the environmental responses are learned rather than prescribed, each
 curve is an inferred **niche**, how a species' growth scales along a climate
-gradient. Growth generally rises with precipitation, and the temperature
-responses are single-peaked, with an optimum in the middle of the sampled range.
+gradient. Growth rises with precipitation in most curves, steeply for ponderosa
+pine and Douglas fir. The temperature responses differ between the two models:
+monotone in the mechanistic process, single-peaked with an optimum in the middle
+of the sampled range in the network.
 
 Read these as *illustrations of what ALE recovers*, not as settled ecology. The
 per-species shapes are noisier than the structural responses below; growth is
@@ -850,20 +901,22 @@ ggplot(fimp_growth, aes(reorder(variable, importance), importance, fill = import
   labs(x = NULL, y = "permutation importance (delta error)") + theme_minimal()
 ```
 
-Each species leans on a different climate driver; the importances are learned per
-species, not shared.
+Ponderosa pine leans on precipitation, three times as much as on temperature;
+for the other three species the two drivers matter about equally. The
+importances are learned per species, not shared.
 
 ### Response to size and light: did the network recover the mechanistic form?
 
 The point of a hybrid is to ask which functional form the neural network learned
 and how it *compares* to the mechanistic function it replaced. Here the two agree
-on the structural responses that are well constrained by the data: growth
-**declines with tree size** and **increases with light availability** for every
-species, and the network recovered both shapes without being given the functional
-form. That agreement is the useful result; it says the mechanistic size-and-light
-response was a reasonable choice, and that a flexible network, free to do anything,
-reproduces it. The remaining gaps between the curves are small next to the noise
-in the rate itself.
+on the response the data constrain best: growth **declines with tree size** for
+every species, and the network recovered that shape without being given the
+functional form. Light is less clear. In the mechanistic process growth
+**increases with light availability** for every species; the network finds that
+rise for ponderosa pine and Douglas fir at high light and an almost flat
+response for the two firs. The size response says the mechanistic form was a
+reasonable choice; where the light curves part, the data do not pin the
+response down.
 
 ```{r ale-structural, fig.width = 7, fig.height = 6.5}
 plot_growth_ale(c("dbh", "light"),
