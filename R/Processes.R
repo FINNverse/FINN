@@ -734,6 +734,6 @@ regeneration_saturation = regeneration_capped
 # model by set_environment(), and a wrapper that calls regeneration_capped() by
 # name resolves it in the namespace, where there is no `self`.
 body(regeneration_saturation) = bquote({
-  .Deprecated("regeneration_capped")
+  .Deprecated("regeneration_capped", old = "regeneration_saturation")
   .(body(regeneration_capped))
 })
