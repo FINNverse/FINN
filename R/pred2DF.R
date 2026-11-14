@@ -106,7 +106,9 @@ pred2DF <- function(pred, format = "wide") {
       cohorts_array_i = pred$Predictions$Cohort$cohortID[[year_i]]
       # Timesteps that were not recorded (return_cohorts subset) stay NULL; the
       # list position still encodes the true year, so we simply skip the gaps.
-      if(is.null(cohorts_array_i)) next
+      # A step at which the stand was empty has a cohort array with no slots
+      # (dim [sites, patches, 0]); it holds no cohort to list either.
+      if(is.null(cohorts_array_i) || length(cohorts_array_i) == 0L) next
       # Set dimension names
       dim_names = c("siteID", "patchID", "species")
       # Convert the cohort-level array to a data frame
