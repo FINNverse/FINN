@@ -274,6 +274,7 @@ The penalty is added **after** the `loss_weights = "auto"` baseline scaling, so
 | Per-predictor scaling: `"auto"`, `"identity"`, `"0to1"` or a function | `fit(env_autoscale = )` | `TRUE`, which z-scores as before; the new strings are opt-in |
 | Beverton-Holt cap on recruitment | `regeneration_saturation()` | new export |
 | Recruitment limited by conspecific adults | `regeneration_adult()` | new export |
+| Conspecific adult density as an effect on recruitment, with a share `f0` recruited without adults | `regeneration_adult_effect()` | new export |
 | A process function declares and calibrates its own named parameters | `createProcess(custom_parameters = )` | `NULL` |
 | **Additive recruitment floor, was hard-coded at 0.2.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(reg_floor = )` on the regeneration process | **`1e-3`** (was 0.2) |
 | Observation operator mapping predicted and observed recruitment per ha into the tallied-count space of the sampling design (applied under the `"nbinom"` regeneration likelihood only, #65) | `finn(recruit_obs_weight = )` | `1.0` |
@@ -315,6 +316,17 @@ someone who was affected.
 | A U+039B and a U+00D7 in `?fit`, a stray `\cr`, two dangling `\link` targets, a `@param` on the wrong function | no — the LaTeX manual and two `R CMD check` WARNINGs |
 
 ## New features
+
+* **`regeneration_adult_effect()`: conspecific adults as an effect, not a
+  gate.** `regeneration_adult()` multiplies the whole potential recruitment by
+  `A / (A + A_half)`, so a species without adults on a site recruits only at
+  `reg_floor` and bare ground cannot be colonised. The new process uses
+  `f(A) = f0 + (1 - f0) A / (A + A_half)` with
+  `f0 = plogis(reg_adult_logitf0)`, a new custom parameter (shared or per
+  species) for the share of the potential recruitment without conspecific
+  adults (seed rain from outside, advance regeneration). `f0 -> 1` is
+  `regeneration_capped()`, `f0 -> 0` is `regeneration_adult()`, which is
+  unchanged. See `?regeneration_adult_effect` and `?recruitment`.
 
 * **Bundled Oregon FIA data as package datasets.** The calibration sample that
   the `D-Fit_to_FIA` and `E-Mortality` vignettes fit on now ships as lazy-loaded

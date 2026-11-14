@@ -49,6 +49,15 @@ recruitment of a species is multiplied by \code{f(A) = A / (A + A_half)}, where
 pooled over the patches of the site. A species without adults on a site
 recruits only at \code{reg_floor}. \code{x} and \code{A_half} are declared through
 \code{createProcess(custom_parameters = )}; see its help page.
+\item \code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}}: the adult density as an effect on
+recruitment instead of a gate,
+\verb{f(A) = f0 + (1 - f0) A / (A + A_half)} with \code{f0 = plogis(reg_adult_logitf0)},
+the share of the potential recruitment a species gets without adults on
+the site (seed rain from outside, advance regeneration). Prefer it to
+\code{regeneration_adult()} whenever a species must be able to establish where
+it has no adults: colonisation from an empty stand, and any free run from
+bare ground, need \code{f0 > 0}. \code{f0 -> 1} removes the adult effect, \code{f0 -> 0}
+is \code{regeneration_adult()}.
 }
 
 A regeneration process built with \code{\link[=createHybrid]{createHybrid()}} replaces the whole
@@ -204,5 +213,6 @@ is no better than predicting the mean).
 \seealso{
 \code{\link[=createProcess]{createProcess()}}, \code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}},
 \code{\link[=fit]{fit()}}, \code{\link[=simulateForest]{simulateForest()}}, \code{\link[=regeneration]{regeneration()}},
-\code{\link[=regeneration_capped]{regeneration_capped()}}, \code{\link[=regeneration_adult]{regeneration_adult()}}
+\code{\link[=regeneration_capped]{regeneration_capped()}}, \code{\link[=regeneration_adult]{regeneration_adult()}},
+\code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}}
 }

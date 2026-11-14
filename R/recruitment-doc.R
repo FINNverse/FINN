@@ -44,6 +44,15 @@
 #'   pooled over the patches of the site. A species without adults on a site
 #'   recruits only at `reg_floor`. `x` and `A_half` are declared through
 #'   `createProcess(custom_parameters = )`; see its help page.
+#' * [FINN::regeneration_adult_effect()]: the adult density as an effect on
+#'   recruitment instead of a gate,
+#'   `f(A) = f0 + (1 - f0) A / (A + A_half)` with `f0 = plogis(reg_adult_logitf0)`,
+#'   the share of the potential recruitment a species gets without adults on
+#'   the site (seed rain from outside, advance regeneration). Prefer it to
+#'   `regeneration_adult()` whenever a species must be able to establish where
+#'   it has no adults: colonisation from an empty stand, and any free run from
+#'   bare ground, need `f0 > 0`. `f0 -> 1` removes the adult effect, `f0 -> 0`
+#'   is `regeneration_adult()`.
 #'
 #' A regeneration process built with [FINN::createHybrid()] replaces the whole
 #' equation by a network. In 0.2.0 it has no Beverton-Holt cap: `createHybrid()`
@@ -183,7 +192,8 @@
 #'
 #' @seealso [FINN::createProcess()], [FINN::createHybrid()], [FINN::finn()],
 #'   [FINN::fit()], [FINN::simulateForest()], [FINN::regeneration()],
-#'   [FINN::regeneration_capped()], [FINN::regeneration_adult()]
+#'   [FINN::regeneration_capped()], [FINN::regeneration_adult()],
+#'   [FINN::regeneration_adult_effect()]
 #'
 #' @name recruitment
 #' @aliases FINN-recruitment

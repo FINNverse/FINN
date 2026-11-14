@@ -106,6 +106,7 @@ exp(as.numeric(m$reg_logK)); exp(as.numeric(m$reg_adult_logx)); exp(as.numeric(m
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\link{regeneration_capped}, \code{\link[=createProcess]{createProcess()}},
+\link{regeneration_capped}, \code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}}
+(adult density as an effect, not a gate), \code{\link[=createProcess]{createProcess()}},
 \link{recruitment} for the recruitment options and how to combine them
 }

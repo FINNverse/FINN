@@ -204,8 +204,9 @@
 #' @param reg_floor (`numeric`)\cr A small recruitment that every species gets
 #'   in every patch and time step, whatever the light and the environment, in
 #'   trees per ha and time step. Only used when this process is the
-#'   regeneration process ([FINN::regeneration()], [FINN::regeneration_capped()]
-#'   and [FINN::regeneration_adult()] add it to their expected recruitment:
+#'   regeneration process ([FINN::regeneration()], [FINN::regeneration_capped()],
+#'   [FINN::regeneration_adult()] and [FINN::regeneration_adult_effect()] add it
+#'   to their expected recruitment:
 #'   `mean = regP * exp(env) + reg_floor`). Default `1e-3`, which keeps the
 #'   recruitment likelihood finite where the light response closes and adds
 #'   next to nothing. One value for all species or one per species. Before

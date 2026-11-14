@@ -35,8 +35,10 @@ with a linear response to every environment column. Build your own with
 \code{createProcess(func = regeneration_capped)}: the regeneration equation of
 \code{\link[=regeneration_capped]{regeneration_capped()}}, whose expected recruitment is capped
 (new in 0.2.0). Alternatives: \code{\link[=regeneration]{regeneration()}} (no cap, the equation
-of the paper) and \code{\link[=regeneration_adult]{regeneration_adult()}} (recruitment limited by the
-adults of the same species on the site). See \link{recruitment} for the
+of the paper), \code{\link[=regeneration_adult]{regeneration_adult()}} (recruitment limited by the
+adults of the same species on the site) and
+\code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}} (adults raise recruitment, but a
+species without adults still recruits). See \link{recruitment} for the
 recruitment options and how they act together. Build your own with
 \code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.}
 

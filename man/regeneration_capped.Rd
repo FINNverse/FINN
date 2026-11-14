@@ -89,6 +89,7 @@ m <- finn(N_species = Nsp, regeneration_process = createProcess(
 }
 \seealso{
 \link{regeneration}, \code{\link[=regeneration_adult]{regeneration_adult()}},
+\code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}},
 \code{\link[=createProcess]{createProcess()}}, \link{recruitment} for the recruitment options and how
 to combine them
 }

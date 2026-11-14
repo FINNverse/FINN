@@ -255,8 +255,9 @@ so \code{1e-3} is the lowest tested value and is the new default.}
 \item{reg_floor}{(\code{numeric})\cr A small recruitment that every species gets
 in every patch and time step, whatever the light and the environment, in
 trees per ha and time step. Only used when this process is the
-regeneration process (\code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}}
-and \code{\link[=regeneration_adult]{regeneration_adult()}} add it to their expected recruitment:
+regeneration process (\code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}},
+\code{\link[=regeneration_adult]{regeneration_adult()}} and \code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}} add it
+to their expected recruitment:
 \code{mean = regP * exp(env) + reg_floor}). Default \code{1e-3}, which keeps the
 recruitment likelihood finite where the light response closes and adds
 next to nothing. One value for all species or one per species. Before

@@ -74,8 +74,10 @@
 #'   `createProcess(func = regeneration_capped)`: the regeneration equation of
 #'   [FINN::regeneration_capped()], whose expected recruitment is capped
 #'   (new in 0.2.0). Alternatives: [FINN::regeneration()] (no cap, the equation
-#'   of the paper) and [FINN::regeneration_adult()] (recruitment limited by the
-#'   adults of the same species on the site). See [recruitment] for the
+#'   of the paper), [FINN::regeneration_adult()] (recruitment limited by the
+#'   adults of the same species on the site) and
+#'   [FINN::regeneration_adult_effect()] (adults raise recruitment, but a
+#'   species without adults still recruits). See [recruitment] for the
 #'   recruitment options and how they act together. Build your own with
 #'   [FINN::createProcess()] or [FINN::createHybrid()].
 #' @param competition_process (`process`)\cr How trees shade each other.
@@ -1805,7 +1807,8 @@ finn_class = nn_module(
         ## (unbounded) vs FINN::regeneration_saturation (capped, with its own
         ## reg_logK parameter declared via createProcess(custom_parameters=)).
         ## The stand itself (dbh, trees) goes only to functions that ask for it,
-        ## e.g. FINN::regeneration_adult (seed source = conspecific adults).
+        ## e.g. FINN::regeneration_adult (seed source = conspecific adults) and
+        ## FINN::regeneration_adult_effect; detected by signature, not by name.
         reg_args = list(species = species,
                         parReg = self$par_regeneration[,1],
                         pred = pred,
@@ -4493,7 +4496,8 @@ finn_class = nn_module(
           self$reg_prior_lambda = obj$prior_lambda
           # setup_species_parameters() ran first, so a cap declared the old way
           # through custom_parameters is already registered and stays authoritative
-          # -- regeneration_adult() still needs that route for its other parameters.
+          # -- regeneration_adult() and regeneration_adult_effect() still need that
+          # route for their other parameters.
           if(is.null(self$reg_logK)) {
             n_cap = if(identical(obj$cap, "species")) self$N_species else 1L
             self$register_parameter("reg_logK",

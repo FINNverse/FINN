@@ -68,6 +68,7 @@ reference:
   - regeneration
   - regeneration_capped
   - regeneration_adult
+  - regeneration_adult_effect
   - competition
   - height
   - BA_stand
