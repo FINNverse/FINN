@@ -52,7 +52,11 @@ values.}
 
 \item{initEnv}{(\code{list})\cr Optional custom initial values for the parameters of
 the environmental-response network/regression. Default \code{NULL} draws random
-initial values.}
+initial values. For the linear/logistic response (no \code{hidden}) this is a
+matrix with one row per species and one column per term of \code{formula}
+(the intercept first when the formula has one). The mortality response
+starts near 0.5 per time step without it, which on yearly steps empties an
+unfitted stand within a decade; \code{initEnv = matrix(c(-4, 0), N_species, 2, byrow = TRUE)} for \code{~ 1 + temp} starts it at 2 \% per step.}
 
 \item{hidden}{(\code{integer()})\cr Hidden-layer sizes of the feed-forward neural
 network that replaces the environmental-response function (Level 1 hybrid).

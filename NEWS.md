@@ -501,6 +501,17 @@ someone who was affected.
   Results computed on the bundled data or with `makeObsData()` /
   `resolveSiteIDs()` defaults change.
 
+* **Mortality starts high on annual steps; the default is kept.** The
+  environmental response of `mortality()` is a logistic function of the
+  standardised predictors, so before any fitting it is about `sigmoid(0) =
+  0.5` per step at the average environment. On yearly steps an unfitted stand
+  therefore loses most of its basal area within ten years. `fit()` moves the
+  response quickly, but for a simulation without a fit, or when the first
+  epochs matter, give the mortality process a low starting value, e.g.
+  `createProcess(~ temp, mortality, initEnv = matrix(c(-4, 0), N_species, 2,
+  byrow = TRUE))` (`sigmoid(-4)` is 2 % per step). Documented in `?finn`,
+  `?createProcess` and `?mortality`; no behaviour change.
+
 * **Bare ground is bare: `init_cohort = NULL` starts with no stems.**
   `simulateForest()` / `predict()` and `fit()` without an `init_cohort` used to
   start every patch with one 1-cm stem of every species, although the help said

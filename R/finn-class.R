@@ -66,6 +66,10 @@
 #'   `createProcess(func = mortality)`, the mortality equation of
 #'   [FINN::mortality()] with a logistic response to every environment column.
 #'   Build your own with [FINN::createProcess()] or [FINN::createHybrid()].
+#'   Before any fitting the response is about 0.5 per time step at the average
+#'   environment, so on yearly steps an unfitted stand loses most of its trees
+#'   within ten years; for a simulation without a fit give the process a low
+#'   starting value with `createProcess(initEnv = )`, see [FINN::mortality()].
 #' @param growth_process (`process`)\cr How trees grow in diameter. Default
 #'   `createProcess(func = growth)`, the growth equation of [FINN::growth()]
 #'   with a linear response to every environment column. Build your own with

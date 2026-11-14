@@ -54,3 +54,27 @@ A \code{torch} tensor of per-cohort mortality probabilities; or, if
 \description{
 Mortality
 }
+\section{The starting value on annual steps}{
+
+The environmental response is \code{sigmoid(pred)}, and before any fitting \code{pred}
+is about 0 at the average environment, so an unfitted model kills about half
+of every cohort per time step. On yearly steps that empties a stand within
+ten years. \code{\link[=fit]{fit()}} moves the response quickly; for a simulation
+without a fit, or when the first epochs matter, start it low with
+\code{createProcess(initEnv = )}, as in the example.
+}
+
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# mortality as the mortality process of a model, responding to one predictor;
+# growth enters in \%/yr (growth_scale = 0.01, the default). The response
+# starts at sigmoid(-4), about 2 \% per year, instead of the unfitted 50 \%.
+m <- finn(N_species = 2,
+          mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01,
+                                            initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
+
+env <- data.frame(siteID = 1L, year = 1:30, temp = 8)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+head(sim$wide$site)
+\dontshow{\}) # examplesIf}
+}

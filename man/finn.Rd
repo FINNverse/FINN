@@ -24,7 +24,11 @@ the coding).}
 \item{mortality_process}{(\code{process})\cr How trees die. Default
 \code{createProcess(func = mortality)}, the mortality equation of
 \code{\link[=mortality]{mortality()}} with a logistic response to every environment column.
-Build your own with \code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.}
+Build your own with \code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.
+Before any fitting the response is about 0.5 per time step at the average
+environment, so on yearly steps an unfitted stand loses most of its trees
+within ten years; for a simulation without a fit give the process a low
+starting value with \code{createProcess(initEnv = )}, see \code{\link[=mortality]{mortality()}}.}
 
 \item{growth_process}{(\code{process})\cr How trees grow in diameter. Default
 \code{createProcess(func = growth)}, the growth equation of \code{\link[=growth]{growth()}}

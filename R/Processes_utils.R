@@ -55,7 +55,12 @@
 #'   values.
 #' @param initEnv (`list`)\cr Optional custom initial values for the parameters of
 #'   the environmental-response network/regression. Default `NULL` draws random
-#'   initial values.
+#'   initial values. For the linear/logistic response (no `hidden`) this is a
+#'   matrix with one row per species and one column per term of `formula`
+#'   (the intercept first when the formula has one). The mortality response
+#'   starts near 0.5 per time step without it, which on yearly steps empties an
+#'   unfitted stand within a decade; `initEnv = matrix(c(-4, 0), N_species, 2,
+#'   byrow = TRUE)` for `~ 1 + temp` starts it at 2 % per step.
 #' @param hidden (`integer()`)\cr Hidden-layer sizes of the feed-forward neural
 #'   network that replaces the environmental-response function (Level 1 hybrid).
 #'   Default `NULL` keeps the environmental response mechanistic (linear/logistic).
