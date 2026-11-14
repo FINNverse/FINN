@@ -63,10 +63,10 @@ diameter increment over the whole observation interval
 compounds its simulated rates the same way. The two only differ when an
 observation interval spans several time steps (\code{period_length} in the
 data). If unsure, keep the default: with annual time steps it is the
-annual growth rate. \code{\link[=makeObsData]{makeObsData()}} returns the increment between
-two censuses, which is the per-step rate when one step is one census
-interval (as in the bundled FIA data); with annual steps and an interval
-of several years, annualise it or choose \code{"period"}. The terms follow
+annual growth rate. \code{\link[=makeObsData]{makeObsData()}} returns the annual rate (as in
+the bundled FIA data); with \code{makeObsData(rates = "interval")} it returns
+the increment between two censuses, which is the per-step rate only when
+one step is one census interval. The terms follow
 Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from the
 change over a census interval.}
 

@@ -29,6 +29,24 @@ toy_tree_dt <- function() {
   )
 }
 
+# The bundled FIA tables on a THREE-STEP axis, one step per inventory: env
+# years 0, 1, 2 and the two remeasurements at years 1 and 2, without
+# `period_length`. The datasets themselves are annual (env 1..22, observations
+# at years 10 and 20 with period_length 10); this compressed copy is only for the
+# tests of the engine's step bookkeeping (anchors, windows, observed recruits,
+# input checks), which name individual timesteps and are about the mechanics,
+# not about the data. The climate is static, so any three rows of env are the
+# same climate.
+fia_census_steps <- function(sites = 1:4) {
+  obs <- data.table::copy(FINN::fia_obs_dt[siteID %in% sites])
+  obs[, year := data.table::frank(year, ties.method = "dense"), by = siteID]
+  obs[, period_length := NULL]
+  env <- data.table::copy(FINN::fia_env_dt[siteID %in% sites & year %in% 1:3])
+  env[, year := year - 1L]
+  list(obs = obs, env = env, it = data.table::copy(FINN::fia_init_trees[siteID %in% sites]),
+       Nsp = max(FINN::fia_obs_dt$species))
+}
+
 # Fit a tiny FINN model on a 4-site subset of the bundled FIA datasets (the real
 # input format). Torch-gated: callers MUST skip_if_no_torch() first. Returns the
 # fitted model together with the env / init_cohort it was fit on, so the

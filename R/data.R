@@ -13,11 +13,29 @@
 #' semantics on them, and `data.table::copy()` one before modifying it by
 #' reference (`:=`), as with any package dataset.
 #'
+#' The tables are on an **annual** time axis: one simulation step is one year.
+#' The first inventory (2001-02) is the initial state, year 0; the two
+#' remeasurements are observations at the number of years since it, 10 and 20
+#' (21 for one training site and 22 for one holdout site, whose third
+#' inventory came late), each with `period_length`, the years since the
+#' previous inventory. Growth and mortality are yearly rates; [fit()] compares
+#' them with the mean of the simulated yearly rates over the `period_length`
+#' years before each inventory, and compares `reg` with the recruits simulated
+#' over those years. Before FINN 0.2.0 the tables had one step per ten-year
+#' interval (`year` 1 and 2, rates over the interval); `makeObsData(rates =
+#' "interval")` and `resolveSiteIDs(time_axis = "census")` still build such
+#' tables.
+#'
 #' @format `fia_obs_dt` and `fia_obs_test`: one row per site x year x species
-#'   (4400 rows, 13 columns). Year 1 and 2 are the two remeasurements; the
-#'   year-0 initial state is in `fia_init_trees` / `fia_init_test`.
+#'   (4400 rows, 14 columns). The year-0 initial state is in `fia_init_trees` /
+#'   `fia_init_test`.
 #'   \describe{
-#'     \item{`siteID`, `year`}{integer site index (`1..200`) and census (`1`, `2`).}
+#'     \item{`siteID`, `year`}{integer site index (`1..200`) and the years since
+#'       the site's first inventory (`10`, `20`; `21` or `22` for one site
+#'       each).}
+#'     \item{`period_length`}{years since the previous inventory (`10`; `11`
+#'       or `12` for the late inventory): the window over which the simulation
+#'       is aggregated before it meets the observation.}
 #'     \item{`species`, `species_name`}{species index `1..11` and its name;
 #'       `"other"` pools the species outside the 98 % most abundant stems.}
 #'     \item{`ba`}{living basal area, m2 -- the mean over the site's patches
@@ -25,12 +43,16 @@
 #'     \item{`trees`}{living stems, mean per patch (hence fractional).}
 #'     \item{`dbh`}{mean diameter at breast height of living trees, cm (`NA`
 #'       when there are none).}
-#'     \item{`growth`, `growth_n`}{relative dbh growth rate of the survivors
-#'       (tree-weighted over patches) and the number of trees behind it.}
+#'     \item{`growth`, `growth_n`}{mean annual relative dbh growth rate of the
+#'       survivors, `(dbh / dbh_before)^(1 / period_length) - 1` per tree
+#'       (tree-weighted over patches), and the number of trees behind it.}
 #'     \item{`n_at_risk`, `n_died`, `mort`}{trees alive at the start of the
-#'       interval and how many of them died, summed over patches, and their
-#'       ratio (the binomial mortality loss consumes the two counts).}
-#'     \item{`reg`}{recruits, trees per hectare (mean over patches).}
+#'       interval and how many of them had died by its end, summed over
+#'       patches, and the annual mortality rate
+#'       `1 - (1 - n_died / n_at_risk)^(1 / period_length)`. The binomial
+#'       mortality loss scores `mort` weighted by `n_at_risk`.}
+#'     \item{`reg`}{recruits over the interval, trees per hectare (mean over
+#'       patches).}
 #'   }
 #' @source Subsampled by `dev/make_extdata.R` (`set.seed(42)`) from the Oregon
 #'   FIA plots prepared in the (private) `FINNverse/FINN-fia` analysis repo:
@@ -41,7 +63,9 @@
 #' @family fia datasets
 #' @examples
 #' library(data.table)
-#' fia_obs_dt[year == 1, .(sites = uniqueN(siteID), ba = mean(ba)), by = species_name]
+#' fia_obs_dt[year == 10, .(sites = uniqueN(siteID), ba = mean(ba)), by = species_name]
+#' # the observation windows: inventory year x interval length, sites
+#' unique(fia_obs_dt[, .(siteID, year, period_length)])[, .N, by = .(year, period_length)]
 "fia_obs_dt"
 
 #' @rdname fia_obs_dt
@@ -52,14 +76,16 @@
 #' Climate per site and year for the [fia_obs_dt] training sites (`fia_env_dt`)
 #' and the [fia_obs_test] holdout sites (`fia_env_test`), in **natural units**
 #' (not standardised -- [fit()] z-scales internally with `env_autoscale`).
-#' Year 0 is the initial state and years 1 and 2 the two censuses, so every
-#' site x year in the observation tables is covered.
+#' One row per simulated year `1..22`: the row of year `k` drives the year
+#' that ends `k` years after the first inventory, so every site x year in the
+#' observation tables is covered, and the years after a site's last
+#' inventory are simulated but not scored. The climate is the plot's
+#' WorldClim normal, the same in every year.
 #'
-#' @format A `data.table` with 600 rows and 8 columns: 200 sites x 3 years, one
-#'   row per site x year (climate is a site property; up to FINN 0.2.0 the
-#'   tables repeated every row once per patch of the source plot).
+#' @format A `data.table` with 4400 rows and 8 columns: 200 sites x 22 years,
+#'   one row per site x year.
 #'   \describe{
-#'     \item{`siteID`, `year`}{site index and year (`0`, `1`, `2`).}
+#'     \item{`siteID`, `year`}{site index and simulated year (`1..22`).}
 #'     \item{`temp`, `tempmax`, `tempmin`}{annual mean, warmest-month maximum
 #'       and coldest-month minimum temperature, degrees C (bioclim 1, 5, 6).}
 #'     \item{`prec`, `precwarmq`}{annual and warmest-quarter precipitation, mm

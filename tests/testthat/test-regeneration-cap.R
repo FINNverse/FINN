@@ -40,7 +40,9 @@ test_that("fit() resolves max_obs_recruits and starts the cap there", {
     m
   }
   m <- run()
-  expect_equal(m$reg_prior_value, max(d$reg, na.rm = TRUE))
+  # the bundled data carry period_length (ten-year intervals), so the prior is
+  # the largest observed recruitment per year
+  expect_equal(m$reg_prior_value, max(d$reg / d$period_length, na.rm = TRUE))
   # epochs = 0 is set-up only, so the cap still sits exactly on the prior
   expect_equal(as.numeric(m$reg_logK)[1], log(m$reg_prior_value), tolerance = 1e-6)
 

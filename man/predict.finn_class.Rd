@@ -150,8 +150,8 @@ head(sim$long$site)
 # the cohorts of the final timestep, kept because of `return_cohorts`
 head(sim$long$cohort)
 
-# a 50-year succession from bare ground, with the climate of year 0 repeated
-succession <- fia_env_dt[siteID \%in\% sites & year == 0][rep(1:3, each = 50)]
+# a 50-year succession from bare ground, with the climate of year 1 repeated
+succession <- fia_env_dt[siteID \%in\% sites & year == 1][rep(1:3, each = 50)]
 succession[, year := rep(1:50, times = 3)]
 sim50 <- simulateForest(m, env = succession, patches = 4)
 sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year \%in\% c(10, 50)]

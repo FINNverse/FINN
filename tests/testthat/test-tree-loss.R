@@ -12,15 +12,13 @@ library(data.table)
 # those arrays - a target per slot [site, patch, cohort] - and `tl_table()` turns one into
 # the table of the trees that exist in a layout.
 
+# the bundled data on the three-step axis of fia_census_steps() (helper.R): the
+# tests name individual timesteps and windows
 tl_data = function(years_obs = c(1, 2), period = 1L, n_sites = 4L) {
-  obs = data.table::copy(FINN::fia_obs_dt)
-  env = data.table::copy(FINN::fia_env_dt)
-  it  = data.table::copy(FINN::fia_init_trees)
-  sites = utils::head(sort(unique(obs$siteID)), n_sites)
-  obs = obs[siteID %in% sites & year %in% years_obs]
+  d = fia_census_steps(seq_len(n_sites))
+  obs = d$obs[year %in% years_obs]
   obs[, period_length := period]
-  list(obs = obs, env = env[siteID %in% sites], it = it[siteID %in% sites],
-       Nsp = max(obs$species))
+  list(obs = obs, env = d$env, it = d$it, Nsp = max(obs$species))
 }
 
 tl_model = function(d, light_mask = TRUE) {
@@ -315,7 +313,7 @@ test_that("binned initial cohorts cannot be scored per tree", {
 
 
 # ---- windows longer than one year -------------------------------------------------------
-# The bundled FIA data carries three env years, so `period > 1` needs its own panel: 3 sites,
+# The FIA panel of tl_data() carries three env years, so `period > 1` needs its own panel: 3 sites,
 # 2 patches, one tree per cohort, 10 years. Mortality is set high enough that cohorts die
 # INSIDE a window, which is the only condition under which the whole-window rule is
 # testable at all. `lr = 0` freezes the trajectory, the six aggregate responses are NA, so

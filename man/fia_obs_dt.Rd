@@ -7,10 +7,15 @@
 \title{Oregon FIA calibration data: training sites}
 \format{
 \code{fia_obs_dt} and \code{fia_obs_test}: one row per site x year x species
-(4400 rows, 13 columns). Year 1 and 2 are the two remeasurements; the
-year-0 initial state is in \code{fia_init_trees} / \code{fia_init_test}.
+(4400 rows, 14 columns). The year-0 initial state is in \code{fia_init_trees} /
+\code{fia_init_test}.
 \describe{
-\item{\code{siteID}, \code{year}}{integer site index (\verb{1..200}) and census (\code{1}, \code{2}).}
+\item{\code{siteID}, \code{year}}{integer site index (\verb{1..200}) and the years since
+the site's first inventory (\code{10}, \code{20}; \code{21} or \code{22} for one site
+each).}
+\item{\code{period_length}}{years since the previous inventory (\code{10}; \code{11}
+or \code{12} for the late inventory): the window over which the simulation
+is aggregated before it meets the observation.}
 \item{\code{species}, \code{species_name}}{species index \verb{1..11} and its name;
 \code{"other"} pools the species outside the 98 \% most abundant stems.}
 \item{\code{ba}}{living basal area, m2 -- the mean over the site's patches
@@ -18,15 +23,19 @@ year-0 initial state is in \code{fia_init_trees} / \code{fia_init_test}.
 \item{\code{trees}}{living stems, mean per patch (hence fractional).}
 \item{\code{dbh}}{mean diameter at breast height of living trees, cm (\code{NA}
 when there are none).}
-\item{\code{growth}, \code{growth_n}}{relative dbh growth rate of the survivors
-(tree-weighted over patches) and the number of trees behind it.}
+\item{\code{growth}, \code{growth_n}}{mean annual relative dbh growth rate of the
+survivors, \code{(dbh / dbh_before)^(1 / period_length) - 1} per tree
+(tree-weighted over patches), and the number of trees behind it.}
 \item{\code{n_at_risk}, \code{n_died}, \code{mort}}{trees alive at the start of the
-interval and how many of them died, summed over patches, and their
-ratio (the binomial mortality loss consumes the two counts).}
-\item{\code{reg}}{recruits, trees per hectare (mean over patches).}
+interval and how many of them had died by its end, summed over
+patches, and the annual mortality rate
+\code{1 - (1 - n_died / n_at_risk)^(1 / period_length)}. The binomial
+mortality loss scores \code{mort} weighted by \code{n_at_risk}.}
+\item{\code{reg}}{recruits over the interval, trees per hectare (mean over
+patches).}
 }
 
-An object of class \code{data.table} (inherits from \code{data.frame}) with 4400 rows and 13 columns.
+An object of class \code{data.table} (inherits from \code{data.frame}) with 4400 rows and 14 columns.
 }
 \source{
 Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon
@@ -54,10 +63,24 @@ without \code{\link[=makeObsData]{makeObsData()}} or \code{\link[=resolveSiteIDs
 All seven objects are \code{data.table}s. Attach \code{data.table} to use its \code{[}
 semantics on them, and \code{data.table::copy()} one before modifying it by
 reference (\verb{:=}), as with any package dataset.
+
+The tables are on an \strong{annual} time axis: one simulation step is one year.
+The first inventory (2001-02) is the initial state, year 0; the two
+remeasurements are observations at the number of years since it, 10 and 20
+(21 for one training site and 22 for one holdout site, whose third
+inventory came late), each with \code{period_length}, the years since the
+previous inventory. Growth and mortality are yearly rates; \code{\link[=fit]{fit()}} compares
+them with the mean of the simulated yearly rates over the \code{period_length}
+years before each inventory, and compares \code{reg} with the recruits simulated
+over those years. Before FINN 0.2.0 the tables had one step per ten-year
+interval (\code{year} 1 and 2, rates over the interval); \code{makeObsData(rates = "interval")} and \code{resolveSiteIDs(time_axis = "census")} still build such
+tables.
 }
 \examples{
 library(data.table)
-fia_obs_dt[year == 1, .(sites = uniqueN(siteID), ba = mean(ba)), by = species_name]
+fia_obs_dt[year == 10, .(sites = uniqueN(siteID), ba = mean(ba)), by = species_name]
+# the observation windows: inventory year x interval length, sites
+unique(fia_obs_dt[, .(siteID, year, period_length)])[, .N, by = .(year, period_length)]
 }
 \seealso{
 \link{fia_env_dt}, \link{fia_init_trees}, \link{fia_species_dt}

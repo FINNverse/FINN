@@ -54,17 +54,20 @@ One row per \code{siteID}, \code{year} and \code{species}. Columns:\tabular{ll}{
    \code{dbh} \tab mean diameter at breast height of the living trees of that species, cm \cr
    \code{ba} \tab basal area of the living trees, m2 per patch (the mean over the site's patches) \cr
    \code{trees} \tab number of living trees per patch (the mean over the patches; may be fractional) \cr
-   \code{growth} \tab relative diameter growth of the survivors per time step, \code{dbh / dbh_before - 1} (the increment between two censuses when one step is one census interval; for intervals of several steps see \code{finn(growth_rate = )}) \cr
-   \code{mort} \tab share of the trees alive at the previous census that died by this one (0 to 1) \cr
+   \code{growth} \tab mean relative diameter growth rate of the survivors per time step (per year): over an interval of \code{p} years, \code{(dbh / dbh_before)^(1 / p) - 1} per tree (to give the increment over the whole interval instead, see \code{finn(growth_rate = )}) \cr
+   \code{mort} \tab mortality rate per time step of the trees alive at the previous census: over \code{p} years, \code{1 - (1 - n_died / n_at_risk)^(1 / p)} (0 to 1) \cr
    \code{reg} \tab recruits (trees that grew past \code{recruits_dbh}) since the previous census, per hectare \cr
 }
 
 
 \code{dbh}, \code{ba} and \code{trees} describe the stand at the census; \code{growth}, \code{mort}
-and \code{reg} describe what happened since the previous census. Optional
-columns, filled in by FINN when absent:\tabular{lll}{
+and \code{reg} describe what happened since the previous census. One time step
+is normally one year: \code{year} counts years (e.g. since the first
+inventory), \code{growth} and \code{mort} are yearly rates and \code{period_length} is the
+number of years since the previous census. Optional columns, filled in by
+FINN when absent:\tabular{lll}{
    column \tab what it is \tab when absent \cr
-   \code{period_length} \tab the number of time steps since the previous census (the interval the rates refer to) \tab one step: each rate is compared with a single simulated step \cr
+   \code{period_length} \tab the number of time steps (years) since the previous census (the interval the rates refer to) \tab one step: each rate is compared with a single simulated step \cr
    \code{n_at_risk} \tab trees alive at the previous census behind \code{mort} \tab 1: every mortality observation weighs the same \cr
    \code{growth_n} \tab trees behind the \code{growth} mean \tab 1: every growth observation weighs the same \cr
 }
@@ -72,7 +75,9 @@ columns, filled in by FINN when absent:\tabular{lll}{
 
 With \code{period_length}, the simulated growth and mortality of the interval's
 steps are averaged and the simulated recruitment is summed before they are
-compared with the observation. \code{n_at_risk} and \code{growth_n} weight the
+compared with the observation: a ten-year inventory interval is ten
+simulated years, and the yearly rates of \code{data} are compared with the mean
+of the ten simulated yearly rates. \code{n_at_risk} and \code{growth_n} weight the
 mortality and growth terms by the number of trees behind each observation
 (a mortality rate from 100 trees says more than one from a single tree).
 \code{\link[=makeObsData]{makeObsData()}} produces all of them. Further optional columns exist
@@ -103,10 +108,11 @@ areas in m2 per patch of \code{patch_size} ha, recruits per hectare. The
 per-hectare quantities depend on \code{patch_size}, so pass the plot size of
 the inventory to \code{fit(patch_size = )}.
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{head(fia_obs_dt[, .(siteID, year, species, dbh, ba, trees, growth, mort, reg, n_at_risk, growth_n)], 2)
-#>    siteID  year species    dbh    ba trees growth  mort   reg n_at_risk growth_n
-#> 1:      1     1       1 92.837 0.342   0.5  0.036     0     0         2        2
-#> 2:      1     1       2     NA 0.000   0.0     NA    NA     0         0        0
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{head(fia_obs_dt[, .(siteID, year, period_length, species, dbh, ba, trees, growth, mort,
+                    reg, n_at_risk, growth_n)], 2)
+#>    siteID  year period_length species    dbh    ba trees  growth  mort   reg n_at_risk growth_n
+#> 1:      1    10            10       1 92.837 0.342   0.5 0.00356     0     0         2        2
+#> 2:      1    10            10       2     NA 0.000   0.0      NA    NA     0         0        0
 }\if{html}{\out{</div>}}
 }
 
@@ -127,10 +133,14 @@ data the predictors are the bioclimatic variables of each plot:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{head(fia_env_dt, 3)
 #>    siteID  year  temp tempmax tempmin  prec precseas precwarmq
-#> 1:      1     0  3.96    24.7   -10.4   547     30.0       101
-#> 2:      1     1  3.96    24.7   -10.4   547     30.0       101
-#> 3:      1     2  3.96    24.7   -10.4   547     30.0       101
+#> 1:      1     1  3.96    24.7   -10.4   547     30.0       101
+#> 2:      1     2  3.96    24.7   -10.4   547     30.0       101
+#> 3:      1     3  3.96    24.7   -10.4   547     30.0       101
 }\if{html}{\out{</div>}}
+
+The row of year \code{k} drives the simulated year that ends at \code{k}, starting
+from the initial trees at year 0, so an inventory at year 10 is compared
+with the stand after ten simulated years and \code{env} starts at year 1.
 
 A climate that does not change between years is repeated for every year,
 as here; a year-by-year climate gives every step its own row. Which

@@ -99,10 +99,10 @@
 #'   compounds its simulated rates the same way. The two only differ when an
 #'   observation interval spans several time steps (`period_length` in the
 #'   data). If unsure, keep the default: with annual time steps it is the
-#'   annual growth rate. [FINN::makeObsData()] returns the increment between
-#'   two censuses, which is the per-step rate when one step is one census
-#'   interval (as in the bundled FIA data); with annual steps and an interval
-#'   of several years, annualise it or choose `"period"`. The terms follow
+#'   annual growth rate. [FINN::makeObsData()] returns the annual rate (as in
+#'   the bundled FIA data); with `makeObsData(rates = "interval")` it returns
+#'   the increment between two censuses, which is the per-step rate only when
+#'   one step is one census interval. The terms follow
 #'   Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from the
 #'   change over a census interval.
 #' @param recruit_obs_weight (`numeric(1)`)\cr Only for inventories that do not
@@ -924,10 +924,10 @@ check_patch_arguments = function(model, patches, patch_size, init_cohort, patche
 #'     plot_progress = FALSE)
 #'
 #' # `fia_init_trees` is a pure initial state, so name the census the trees are
-#' # scored against and the interval, in timesteps, that reaches it
+#' # scored against and the interval, in timesteps (years), that reaches it
 #' trees <- fia_init_trees[siteID %in% sites,
-#'                         .(siteID, patchID, species, dbh, year = 1L,
-#'                           period_length = 1)]
+#'                         .(siteID, patchID, species, dbh, year = 10L,
+#'                           period_length = 10)]
 #' pred  <- predictTrees(m, tree_data = trees,
 #'                       env = fia_env_dt[siteID %in% sites], patch_size = 0.06)
 #' head(pred)
@@ -1041,8 +1041,8 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #' # the cohorts of the final timestep, kept because of `return_cohorts`
 #' head(sim$long$cohort)
 #'
-#' # a 50-year succession from bare ground, with the climate of year 0 repeated
-#' succession <- fia_env_dt[siteID %in% sites & year == 0][rep(1:3, each = 50)]
+#' # a 50-year succession from bare ground, with the climate of year 1 repeated
+#' succession <- fia_env_dt[siteID %in% sites & year == 1][rep(1:3, each = 50)]
 #' succession[, year := rep(1:50, times = 3)]
 #' sim50 <- simulateForest(m, env = succession, patches = 4)
 #' sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year %in% c(10, 50)]

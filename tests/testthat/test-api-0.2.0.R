@@ -122,8 +122,7 @@ test_that("loss_weights + weight_scale = FALSE is weights + weight_scale = \"raw
 
 test_that("loss_recruit = \"observed\" is recruits = \"observed\"", {
   skip_if_no_torch()
-  d <- api_setup()
-  d$obs <- copy(d$obs)[, period_length := ifelse(year == 1, 2, 1)]
+  d <- api_setup()   # the two ten-year intervals cover years 1-20 of env
   m_new <- api_fit(api_model(d$Nsp), d, loss_recruit = "observed")
   expect_warning(m_old <- api_fit(api_model(d$Nsp), d, recruits = "observed"), "loss_recruit")
   expect_equal(api_pars(m_new), api_pars(m_old), tolerance = 0)
@@ -208,7 +207,7 @@ test_that("fit() and predict() check env and disturbance", {
   expect_error(api_fit(m, api_set(d, env = na_env), epochs = 1L), "missing values")
   short <- d$env[!(siteID == 2 & year == 2)]
   expect_error(api_fit(m, api_set(d, env = short), epochs = 1L), "same years")
-  late <- copy(d$obs)[year == 2, year := 5L]
+  late <- copy(d$obs)[year == 20, year := 25L]   # env runs 1..22
   expect_error(api_fit(m, api_set(d, obs = late), epochs = 1L), "not in `env`")
   dist <- d$env[, .(siteID, year, intensity = 0)]
   expect_no_error(api_fit(m, d, epochs = 1L, disturbance = dist))

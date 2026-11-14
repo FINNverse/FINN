@@ -7,13 +7,18 @@ library(data.table)
 # process function on hand-built stands through the model it is bound to; the
 # last tests fit a tiny FIA subset. Torch-gated.
 
-build_adult_model <- function(Nsp, logx = log(20), logA = log(20)) {
+# `mort0`: the starting yearly mortality. The default environment weights start
+# at 0, i.e. a mortality of sigmoid(0) = 0.5 per year, under which the four
+# test stands die out before their first census at year 10 and nothing is scored.
+build_adult_model <- function(Nsp, logx = log(20), logA = log(20), mort0 = NULL) {
   FINN.seed(1)
+  mort_init <- if (is.null(mort0)) NULL else list(cbind(rep(stats::qlogis(mort0), Nsp), 0, 0))
   finn(
     N_species            = Nsp, recruits_dbh = 12.9,
     competition_process  = createProcess(~0, FINN::competition, optimizeSpecies = TRUE),
     growth_process       = createProcess(~ temp + prec, FINN::growth,    optimizeSpecies = TRUE, optimizeEnv = TRUE),
-    mortality_process    = createProcess(~ temp + prec, FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+    mortality_process    = createProcess(~ temp + prec, FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE,
+                                         initEnv = mort_init),
     regeneration_process = createProcess(
       ~ temp + prec, FINN::regeneration_adult,
       custom_parameters = list(reg_logK       = rep(log(50), Nsp),
@@ -79,7 +84,7 @@ test_that("regeneration_adult fits, and its parameters move", {
   obs <- copy(FINN::fia_obs_dt); env <- copy(FINN::fia_env_dt); it <- copy(FINN::fia_init_trees)
   sites <- head(sort(unique(obs$siteID)), 4L)
   Nsp <- max(obs$species)
-  m <- build_adult_model(Nsp)
+  m <- build_adult_model(Nsp, mort0 = 0.02)   # 2 % a year: the stands live to their censuses
   before <- list(x = as.numeric(m$reg_adult_logx), A = as.numeric(m$reg_adult_logA))
   suppressMessages(
     fit(m, env = env[siteID %in% sites], data = obs[siteID %in% sites],

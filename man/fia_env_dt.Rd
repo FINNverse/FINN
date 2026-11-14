@@ -6,11 +6,10 @@
 \alias{fia_env_test}
 \title{Oregon FIA calibration data: site climate}
 \format{
-A \code{data.table} with 600 rows and 8 columns: 200 sites x 3 years, one
-row per site x year (climate is a site property; up to FINN 0.2.0 the
-tables repeated every row once per patch of the source plot).
+A \code{data.table} with 4400 rows and 8 columns: 200 sites x 22 years,
+one row per site x year.
 \describe{
-\item{\code{siteID}, \code{year}}{site index and year (\code{0}, \code{1}, \code{2}).}
+\item{\code{siteID}, \code{year}}{site index and simulated year (\verb{1..22}).}
 \item{\code{temp}, \code{tempmax}, \code{tempmin}}{annual mean, warmest-month maximum
 and coldest-month minimum temperature, degrees C (bioclim 1, 5, 6).}
 \item{\code{prec}, \code{precwarmq}}{annual and warmest-quarter precipitation, mm
@@ -19,7 +18,7 @@ and coldest-month minimum temperature, degrees C (bioclim 1, 5, 6).}
 (bioclim 15).}
 }
 
-An object of class \code{data.table} (inherits from \code{data.frame}) with 600 rows and 8 columns.
+An object of class \code{data.table} (inherits from \code{data.frame}) with 4400 rows and 8 columns.
 }
 \source{
 Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon
@@ -37,8 +36,11 @@ fia_env_test
 Climate per site and year for the \link{fia_obs_dt} training sites (\code{fia_env_dt})
 and the \link{fia_obs_test} holdout sites (\code{fia_env_test}), in \strong{natural units}
 (not standardised -- \code{\link[=fit]{fit()}} z-scales internally with \code{env_autoscale}).
-Year 0 is the initial state and years 1 and 2 the two censuses, so every
-site x year in the observation tables is covered.
+One row per simulated year \verb{1..22}: the row of year \code{k} drives the year
+that ends \code{k} years after the first inventory, so every site x year in the
+observation tables is covered, and the years after a site's last
+inventory are simulated but not scored. The climate is the plot's
+WorldClim normal, the same in every year.
 }
 \seealso{
 Other fia datasets: 

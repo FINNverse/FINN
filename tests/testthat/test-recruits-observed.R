@@ -7,9 +7,10 @@
 ro_setup <- function(sites = 1:4) {
   Nsp  <- max(fia_obs_dt$species)
   obs  <- data.table::copy(fia_obs_dt[siteID %in% sites])
-  # env runs over the years 0, 1, 2 (timesteps 1-3); the census at year 1 closes a
-  # two-year interval (timesteps 1-2), the one at year 2 a one-year interval
-  obs[, period_length := ifelse(year == 1, 2, 1)]
+  # env runs over the years 1..22 (timesteps 1-22); the census at year 10 closes the
+  # ten-year interval of timesteps 1-10, the one at year 20 that of timesteps 11-20
+  # (period_length 10 on these sites), and years 21-22 lie after the last census
+  stopifnot(all(obs$period_length == 10), setequal(obs$year, c(10, 20)))
   list(obs = obs, env = fia_env_dt[siteID %in% sites], Nsp = Nsp,
        init = makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp))
 }
@@ -83,11 +84,13 @@ test_that("the fed recruitment sums to the observed reg over each interval", {
   set.seed(3)
   rec[, reg := round(stats::runif(.N, 50, 200)) * period_length]
   rec[species == 2, reg := 0]
-  sim <- simulateForest(m, env = d$env, init_cohort = d$init, patches = 4, patch_size = 0.06,
+  # a simulation with observed recruits ends at the last census (fit() simulates
+  # past it and feeds nothing; simulateForest() refuses, see below)
+  sim <- simulateForest(m, env = d$env[year <= 20], init_cohort = d$init, patches = 4, patch_size = 0.06,
                         recruits = "observed", obs_recruits = rec)
   out <- data.table::as.data.table(sim$wide$site)
-  # timestep k = k-th year of env (0, 1, 2); census year 1 covers timesteps 1-2, year 2 timestep 3
-  out[, census := ifelse(year <= 2L, 1L, 2L)]
+  # timestep k = year k of env; census year 10 covers years 1-10, year 20 years 11-20
+  out[, census := data.table::fifelse(year <= 10L, 10L, 20L)]
   per_int <- out[, .(r_mean_ha = sum(r_mean_ha), reg_patch = sum(reg)), by = .(siteID, species, census)]
   chk <- merge(per_int, rec, by.x = c("siteID", "species", "census"), by.y = c("siteID", "species", "year"))
   expect_equal(nrow(chk), 2L * d$Nsp * 2L)
@@ -104,16 +107,17 @@ test_that("the fed recruitment sums to the observed reg over each interval", {
 test_that("per-site windows are fed per site, and years after a site's last census get 0", {
   skip_if_no_torch()
   d <- ro_setup(sites = 1:3)
-  # site 2 has no census at year 2: per-site path, and its timestep 3 is never scored
-  d$obs <- d$obs[!(siteID == 2 & year == 2)]
+  # site 2 has no census at year 20: per-site path, and its years 11-22 are never scored
+  d$obs <- d$obs[!(siteID == 2 & year == 20)]
   m <- ro_model(d$Nsp)
   ro_fit(m, d, loss_recruit = "observed", shuffle = FALSE)
   expect_true(m$per_site_period)
-  p <- merge(data.table::as.data.table(m$pred$wide$site)[, census := ifelse(year <= 2L, 1L, 2L)],
+  p <- merge(data.table::as.data.table(m$pred$wide$site)[
+               , census := data.table::fifelse(year <= 10L, 10L, data.table::fifelse(year <= 20L, 20L, NA_integer_))],
              d$obs[, .(siteID, species, census = year, reg_obs = reg, period_length)],
              by = c("siteID", "species", "census"), all.x = TRUE)
   expect_equal(p[!is.na(reg_obs), r_mean_ha], p[!is.na(reg_obs), reg_obs / period_length], tolerance = 1e-5)
-  expect_true(all(p[siteID == 2 & year == 3L, r_mean_ha] == 0))
+  expect_true(all(p[siteID == 2 & year > 10L, r_mean_ha] == 0))
 })
 
 test_that("observed recruits refuse what they cannot feed", {
@@ -124,11 +128,11 @@ test_that("observed recruits refuse what they cannot feed", {
   bad <- data.table::copy(d$obs); bad[1, reg := NA]
   expect_error(ro_fit(m, list(obs = bad, env = d$env, init = d$init), loss_recruit = "observed"),
                "1 site x species x interval cell")
-  # without period_length the census at year 1 scores timestep 2 alone: timestep 1 has no recruitment
+  # without period_length the census at year 10 scores timestep 10 alone: timesteps 1-9 have no recruitment
   nopl <- data.table::copy(d$obs)[, period_length := NULL]
   expect_error(ro_fit(m, list(obs = nopl, env = d$env, init = d$init), loss_recruit = "observed"),
                "before or between")
-  ovl <- data.table::copy(d$obs)[year == 2, period_length := 2]
+  ovl <- data.table::copy(d$obs)[year == 20, period_length := 11]
   expect_error(ro_fit(m, list(obs = ovl, env = d$env, init = d$init), loss_recruit = "observed"),
                "more than one observed interval")
   expect_error(ro_fit(m, d, loss_recruit = "observed", reanchor = TRUE), "reanchor")
@@ -139,7 +143,7 @@ test_that("observed recruits refuse what they cannot feed", {
   expect_error(simulateForest(m, env = d$env, init_cohort = d$init, patches = 4, patch_size = 0.06,
                               obs_recruits = d$obs), "only used with")
   # a simulation beyond the last observed interval
-  short <- d$obs[year == 1]
+  short <- d$obs[year == 10]
   expect_error(simulateForest(m, env = d$env, init_cohort = d$init, patches = 4, patch_size = 0.06,
                               recruits = "observed", obs_recruits = short), "not an autonomous simulator")
 })

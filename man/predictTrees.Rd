@@ -74,10 +74,10 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
     plot_progress = FALSE)
 
 # `fia_init_trees` is a pure initial state, so name the census the trees are
-# scored against and the interval, in timesteps, that reaches it
+# scored against and the interval, in timesteps (years), that reaches it
 trees <- fia_init_trees[siteID \%in\% sites,
-                        .(siteID, patchID, species, dbh, year = 1L,
-                          period_length = 1)]
+                        .(siteID, patchID, species, dbh, year = 10L,
+                          period_length = 10)]
 pred  <- predictTrees(m, tree_data = trees,
                       env = fia_env_dt[siteID \%in\% sites], patch_size = 0.06)
 head(pred)

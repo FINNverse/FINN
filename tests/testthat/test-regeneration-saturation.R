@@ -80,5 +80,5 @@ test_that("regeneration_saturation without reg_logK errors clearly", {
   expect_silent(suppressMessages(suppressWarnings(
       fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
           epochs = 1L, patches = 4, patch_size = 0.06, plot_progress = FALSE))))
-  expect_equal(m$reg_prior_value, max(d$obs$reg, na.rm = TRUE))
+  expect_equal(m$reg_prior_value, max(d$obs$reg / d$obs$period_length, na.rm = TRUE))
 })
