@@ -1780,7 +1780,6 @@ finn_class = nn_module(
           light_mask = isTRUE(self$light_mask)
         )
 
-        # browser()
         ### Regeneration ####
         if(!inherits(self$process_regeneration, "hybrid"))pred = pred_reg
         else pred = env[["reg"]][,i,]
