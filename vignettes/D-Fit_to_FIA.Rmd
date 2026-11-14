@@ -20,10 +20,9 @@ Dynamic forest models are usually developed through a combination of encoding ec
 
 We fit FINN to 200 sites and evaluate on 200 **held-out** sites.
 
-The calibration of the model for all species parameters relies on the a torch backend and therefor takes several minutes, the vignette is **precompiled**: `vignettes/build.R` knits `D-Fit_to_FIA.Rmd.orig`
-once on a developer machine and commits the resulting static `.Rmd`. So the code
-you see is exactly the code that produced the output, and the package
-builds anywhere without torch.
+The calibration needs a torch backend and takes several minutes, so this
+vignette is **precompiled**: the code was run once and its output committed with
+it. The code you see is exactly the code that produced the output next to it.
 
 
 ``` r
@@ -40,14 +39,10 @@ EPOCHS <- 500L
 
 ## The data
 
-The input tables are built by **`dev/make_extdata.R`**, which draws 400 sites
-from the full Oregon FIA set in `data-raw/` and splits them into two train and test data. 
-The **climate** (`fia_env_dt`) was created in the FINN-fia
-analysis repo (`scripts/03_attach_environment.R` → `07_prepare_finn_inputs.R`);
-see `data-raw/README.md` for the full chain.
-
-The data consists of 200 sites to fit on, and 200
-holdout sites for evaluation. A fitted FINN model should generalize to other sites. So the holdout is a genuine out-of-sample test.
+The input tables are a seeded sample of 400 Oregon FIA plots with their
+WorldClim climate, split into 200 sites to fit on and 200 holdout sites for
+evaluation (`?fia_obs_dt`). A fitted FINN model should generalize to other
+sites, so the holdout is a genuine out-of-sample test.
 
 
 ``` r
