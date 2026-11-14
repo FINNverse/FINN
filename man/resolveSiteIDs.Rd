@@ -42,7 +42,9 @@ A list with:
 calendar year).
 \item \code{tree_dt}: tree table with indices and standardized species.
 \item \code{env_dt}: environment table with indices, the years of the
-simulation.
+simulation: \code{siteID}, \code{year} and the predictors, what
+\code{fit(env = )} takes (\code{siteID_dt} maps the ids back to the
+site names).
 \item \code{obs_dt}: site-aggregated observations by species, with
 \code{period_length}.
 \item \code{obs_dt_patches}: patch-level observations by species.

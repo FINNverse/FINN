@@ -43,7 +43,9 @@
 #'     calendar year).
 #'   \item \code{tree_dt}: tree table with indices and standardized species.
 #'   \item \code{env_dt}: environment table with indices, the years of the
-#'     simulation.
+#'     simulation: \code{siteID}, \code{year} and the predictors, what
+#'     \code{fit(env = )} takes (\code{siteID_dt} maps the ids back to the
+#'     site names).
 #'   \item \code{obs_dt}: site-aggregated observations by species, with
 #'     \code{period_length}.
 #'   \item \code{obs_dt_patches}: patch-level observations by species.
@@ -136,10 +138,12 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE, ti
   } else {
     env_dt <- merge(env_dt, unique(siteID_dt[,.(siteName, siteID, year, step)]), by = c("siteName","year"), all = FALSE)
   }
-  env_dt[, OrigYear := year,]
+  # what fit(env = ) takes: siteID, year and the predictors, nothing else (a
+  # character siteName is refused by fit(), and a numeric calendar-year column
+  # would enter every `~ .` formula as a predictor); siteID_dt keeps the map
   env_dt[, year := step,]
-  env_dt <- env_dt[, -"step"]
-  data.table::setcolorder(env_dt, c("siteName", "year"))
+  env_dt <- env_dt[, -c("step", "siteName"), with = FALSE]
+  data.table::setcolorder(env_dt, c("siteID", "year"))
   data.table::setorder(env_dt, siteID, year)
 
   # The unit of growth and mort in obs_dt (makeObsData(rates = )), read off

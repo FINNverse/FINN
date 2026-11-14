@@ -18,7 +18,8 @@ test_that("annual axis: years since the first inventory, env 1..Tmax, no year-0 
   expect_equal(unique(res$obs_dt$year), 10)               # the 2010 inventory, 10 years on
   expect_equal(unique(res$obs_dt$period_length), 10)
   expect_equal(res$env_dt$year, 1:10)                     # no row 0
-  expect_equal(res$env_dt$OrigYear, 2001:2010)
+  # fit()'s env: siteID, year and the predictors only
+  expect_identical(names(res$env_dt), c("siteID", "year", "temp", "prec"))
   expect_setequal(res$tree_dt$year, c(0, 10))
   # the yearly mortality rate survives the aggregation to the site
   expect_equal(res$obs_dt[species_name == "oak", mort], 1 - 0.5^(1/10), tolerance = 1e-10)
