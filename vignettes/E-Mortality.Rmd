@@ -324,9 +324,12 @@ the same code path, so a validation cannot drift from the objective it checks.
 Its cost is that the scored mortality is no longer a property of the simulated
 trajectory.
 
-The bundled 200-site sample carries no tree fates, but the raw tree list of the
-**Preparing your data for FINN** vignette does: eight Oregon FIA plots, four
-patches each, three inventories. `makeObsData()` already derives each tree's
+The bundled sample carries the tree fates as `fia_tree_dt` and `fia_tree_test`,
+and the **Fitting FINN to forest inventory data** vignette fits the 200 sites
+with this route and reports the holdout AUC and the mortality by size class.
+Here the mechanism is shown on a tree list built from raw data, the eight Oregon
+FIA plots of the **Preparing your data for FINN** vignette, four patches each,
+three inventories. `makeObsData()` already derives each tree's
 start-of-interval state, so `tree_data` is a selection of its columns. The
 `year` of a row is the census that *closes* the interval, `dbh` the diameter at
 its start, `died` the fate over it; trees that recruited during the interval
@@ -398,7 +401,8 @@ tree_pred[, .(trees = .N, deaths = sum(died),
 ```
 
 Eight plots and two dozen deaths are a demonstration of the mechanism, not a
-mortality model, and the trees scored are the trees fitted. What the route buys
+mortality model, and the trees scored are the trees fitted; the 200-site fit
+with its holdout is in the **Fitting FINN to forest inventory data** vignette. What the route buys
 shows in a drought or disturbance study, where the question is how the hazard of
 a tree of a given size and species responds to the environment, and the cell
 mean would let the simulated size distribution answer instead.

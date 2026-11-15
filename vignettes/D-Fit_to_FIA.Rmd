@@ -766,6 +766,108 @@ holdout cannot show it. It is also the reason to keep the climate formula
 small: a response curve fitted to two collinear drivers can fit the training
 block and still extrapolate in opposite directions.
 
+## Scoring mortality per tree
+
+The mortality term above compares the mean death probability over the simulated
+cohorts of a site, census and species with the pooled rate of the inventory. That
+mean carries a compositional confound: mortality changes several-fold from the
+smallest to the largest trees, so the cell mean moves whenever the simulated size
+distribution moves, whether or not the hazard function is right. The bundled
+sample carries every tree behind those counts, `fia_tree_dt` and
+`fia_tree_test`: one row per tree alive at the start of an interval, with its
+diameter then and its fate. With `loss_aggregation = c(mortality = "tree")` the
+mortality term is scored on these trees instead, each at its measured diameter
+with the light of the observed stand, against its 0/1 fate (see `?finn_loss`,
+*Scoring individual trees*). Everything else stays as in the mechanistic fit.
+
+
+``` r
+FINN.seed(42)
+m_tree <- finn(
+  N_species            = uniqueN(obs_dt$species),
+  recruits_dbh         = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_tree,
+  env = env_dt, data = obs_dt, init_cohort = init_cohorts, device = "cpu",
+  epochs = EPOCHS, batchsize = 40L, patches = 4, patch_size = 0.06, lr = 0.01,
+  loss_aggregation = c(mortality = "tree"),   # the mortality term on the observed trees
+  tree_data        = fia_tree_dt,
+  plot_progress    = FALSE
+)
+```
+
+`predictTrees()` runs the same per-tree code path on any tree list, so both
+fits are scored on the holdout trees the same way: the probability that each
+of the 10,109 holdout trees dies over its interval, against what happened to
+it. The AUC needs no weighting here, every tree is one trial.
+
+
+``` r
+auc_binom <- function(p, pos, neg) {
+  g <- data.table(p = p, pos = pos, neg = neg)[, .(pos = sum(pos), neg = sum(neg)), by = p][order(p)]
+  neg_below <- cumsum(g$neg) - g$neg
+  den <- sum(g$pos) * sum(g$neg)
+  if (den == 0) return(NA_real_)
+  sum(g$pos * (neg_below + 0.5 * g$neg)) / den
+}
+m$eval(); m_tree$eval()
+tree_pred <- function(model, label)
+  cbind(fia_tree_test, model = label,
+        mort_pred = predictTrees(model, tree_data = fia_tree_test, env = env_test, patch_size = 0.06)$mort_pred)
+tp <- rbind(tree_pred(m, "site-level mortality"), tree_pred(m_tree, "per-tree mortality"))
+tp[, .(trees = .N, deaths = sum(died), AUC = round(auc_binom(mort_pred, died, 1 - died), 3)), by = model]
+#>                   model trees deaths   AUC
+#>                  <char> <int>  <num> <num>
+#> 1: site-level mortality 10109    734  0.58
+#> 2:   per-tree mortality 10109    734  0.59
+```
+
+Both fits rank the holdout trees alike, AUC 0.58 and 0.59: on this sample the
+per-tree term buys no ranking skill, which is the picture of the mortality
+vignette, where two censuses carry little transferable mortality signal.
+
+Where the two differ is in the size classes. Predicted and observed yearly
+mortality of the holdout trees by diameter at the start of the interval, in
+percent per year (a tree's interval probability `p` over `period_length` years
+is the yearly rate `1 - (1 - p)^(1 / period_length)`):
+
+
+``` r
+annual <- function(p, years) 1 - (1 - p)^(1 / years)
+tp[, dbh_class := cut(dbh, c(0, 20, 30, 45, 61, 80, 100, Inf),
+                      labels = c("13-20", "20-30", "30-45", "45-61", "61-80", "80-100", ">100"))]
+observed <- tp[model == "per-tree mortality",
+               .(trees = .N, deaths = sum(died),
+                 observed = round(100 * annual(mean(died), mean(period_length)), 2)), by = dbh_class]
+predicted <- dcast(tp[, .(pred = round(100 * mean(annual(mort_pred, period_length)), 2)), by = .(dbh_class, model)],
+                   dbh_class ~ model, value.var = "pred")
+merge(observed, predicted, by = "dbh_class")[order(dbh_class)]
+#> Key: <dbh_class>
+#>    dbh_class trees deaths observed per-tree mortality site-level mortality
+#>       <fctr> <int>  <num>    <num>              <num>                <num>
+#> 1:     13-20  3593    338     0.98               1.41                 2.77
+#> 2:     20-30  2866    201     0.72               1.06                 2.10
+#> 3:     30-45  1618     93     0.59               1.01                 1.80
+#> 4:     45-61   553     34     0.63               0.99                 1.00
+#> 5:     61-80   812     45     0.57               0.66                 0.63
+#> 6:    80-100   450     16     0.36               0.58                 0.48
+#> 7:      >100   217      7     0.33               0.30                 0.18
+```
+
+The site-level fit reproduces the pooled rate of a cell and leaves the shape
+over size to the simulated size distribution: it predicts nearly three times
+the observed mortality of the trees below 20 cm (2.8 against 1.0 % a year) and
+about half of that of the trees above 100 cm (0.18 against 0.33 %), the
+large-tree arm of the size response that site-level rates leave unidentified.
+Scored per tree, the same hazard function stays within a factor of 1.5 of the
+observation in every class and meets it above 100 cm (0.30 against 0.33 %).
+What the route does not buy here is calibration overall: both fits predict
+more deaths than the holdout saw in the classes below 45 cm.
+
 ## Two fitting strategies for regeneration
 
 Regeneration is the response with the least information in it: 87% of the
