@@ -9,7 +9,7 @@
 #' without [makeObsData()] or [resolveSiteIDs()]. The `D-Fit_to_FIA` and
 #' `E-Mortality` vignettes are the worked examples.
 #'
-#' All seven objects are `data.table`s. Attach `data.table` to use its `[`
+#' All nine objects are `data.table`s. Attach `data.table` to use its `[`
 #' semantics on them, and `data.table::copy()` one before modifying it by
 #' reference (`:=`), as with any package dataset.
 #'
@@ -18,10 +18,11 @@
 #' remeasurements are observations at the number of years since it, 10 and 20
 #' (21 for one training site and 22 for one holdout site, whose third
 #' inventory came late), each with `period_length`, the years since the
-#' previous inventory. Growth and mortality are yearly rates; [fit()] compares
-#' them with the mean of the simulated yearly rates over the `period_length`
-#' years before each inventory, and compares `reg` with the recruits simulated
-#' over those years. Before FINN 0.2.0 the tables had one step per ten-year
+#' previous inventory. Growth and mortality are yearly rates; [fit()] compounds
+#' the simulated yearly rates of the `period_length` years before each
+#' inventory into the same per-year rate before comparing, and compares `reg`
+#' with the recruits simulated over those years. The trees behind the
+#' mortality counts are in [fia_tree_dt]. Before FINN 0.2.0 the tables had one step per ten-year
 #' interval (`year` 1 and 2, rates over the interval); `makeObsData(rates =
 #' "interval")` and `resolveSiteIDs(time_axis = "census")` still build such
 #' tables.
@@ -58,7 +59,7 @@
 #'   Analysis (FIA) database, with WorldClim bioclimatic variables attached per
 #'   plot. The preparation script and the provenance of the source tables are
 #'   in the package repository (`dev/make_extdata.R`, `data-raw/README.md`).
-#' @seealso [fia_env_dt], [fia_init_trees], [fia_species_dt]
+#' @seealso [fia_env_dt], [fia_init_trees], [fia_tree_dt], [fia_species_dt]
 #' @family fia datasets
 #' @examples
 #' library(data.table)
@@ -129,6 +130,57 @@
 
 #' @rdname fia_init_trees
 "fia_init_test"
+
+#' Oregon FIA calibration data: the trees behind the mortality counts
+#'
+#' One row per tree and remeasurement interval for the [fia_obs_dt] training
+#' sites (`fia_tree_dt`) and the [fia_obs_test] holdout sites (`fia_tree_test`):
+#' every tree alive at the start of an interval, with its diameter then and its
+#' fate over the interval. These are the closed cohorts whose counts
+#' (`n_at_risk`, `n_died`) the site tables carry, and the `tree_data` of
+#' `fit(loss_aggregation = c(mortality = "tree"))` and [predictTrees()], which
+#' score the mortality function on every observed tree instead of on the
+#' site's pooled rate (see [finn_loss]). The ids, time axis and species coding
+#' are those of the site tables, so the two join on `siteID`, `year` and
+#' `species`. All trees of the FIA macroplot are kept: the per-tree loss
+#' scores fates and needs no area expansion.
+#'
+#' In a few cells (21 of the training and 22 of the holdout site x year x
+#' species cells) the tree table holds trees that the site table's counts do
+#' not: the site table has no row for a species whose trees had all died by a
+#' census. The tree table keeps them (5 and 7 deaths); everywhere else the
+#' counts agree exactly. Two holdout sites whose first inventory found only
+#' dead trees have no tree at risk and so no row.
+#'
+#' @format A `data.table` with one row per tree and interval (9979 rows and
+#'   661 deaths / 10109 rows and 734 deaths) and 8 columns:
+#'   \describe{
+#'     \item{`siteID`, `year`}{site index and the census that closes the
+#'       interval, on the axis of [fia_obs_dt] (`10`, `20`; `21` or `22`).}
+#'     \item{`patchID`}{patch (FIA subplot) index, as in [fia_init_trees].}
+#'     \item{`species`}{species index `1..11` ([fia_species_dt]), the species
+#'       the tree was recorded as at the start of the interval.}
+#'     \item{`dbh`}{diameter at breast height at the start of the interval, cm.}
+#'     \item{`growth`}{the tree's yearly relative growth rate over the interval,
+#'       `(dbh_end / dbh)^(1 / period_length) - 1`; `NA` for a tree that died.}
+#'     \item{`died`}{`1` if the tree was dead at the end of the interval, `0`
+#'       if alive.}
+#'     \item{`period_length`}{years from the start to the end of the interval,
+#'       as in [fia_obs_dt].}
+#'   }
+#' @inherit fia_obs_dt source
+#' @seealso [fia_obs_dt], [predictTrees()], [finn_loss]
+#' @family fia datasets
+#' @examples
+#' library(data.table)
+#' # deaths and trees at risk per interval, and the yearly mortality by size class
+#' fia_tree_dt[, .(trees = .N, deaths = sum(died)), by = year]
+#' fia_tree_dt[, .(trees = .N, annual_mortality = round(1 - (1 - mean(died))^(1 / 10), 4)),
+#'             by = .(dbh_class = cut(dbh, c(0, 20, 30, 45, 61, 80, 100, Inf)))][order(dbh_class)]
+"fia_tree_dt"
+
+#' @rdname fia_tree_dt
+"fia_tree_test"
 
 #' Oregon FIA calibration data: species coding
 #'

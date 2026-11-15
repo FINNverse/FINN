@@ -19,9 +19,12 @@
 #   fit/simulate as-is, split into TRAIN and a disjoint HOLDOUT so the vignettes
 #   can report out-of-sample performance. These ship as package DATASETS
 #   (data/*.rda, documented in R/data.R), not as CSVs:
-#     - train:   fia_obs_dt, fia_env_dt (RAW climate), fia_init_trees
-#     - holdout: fia_obs_test, fia_env_test, fia_init_test
+#     - train:   fia_obs_dt, fia_env_dt (RAW climate), fia_init_trees, fia_tree_dt
+#     - holdout: fia_obs_test, fia_env_test, fia_init_test, fia_tree_test
 #     - shared:  fia_species_dt  (species coding is derived from TRAIN)
+#   fia_tree_dt / fia_tree_test hold one row per tree and remeasurement interval
+#   (the trees alive at the interval start, with their fate), the `tree_data`
+#   of fit(loss_aggregation = c(mortality = "tree")) and predictTrees().
 #   All on the ANNUAL time axis of FINN 0.2.0 (one simulation step = one year):
 #   `year` = years since the site's first inventory (10 and 20, for two sites
 #   21 or 22), `period_length` = years since the previous inventory, growth and
@@ -125,6 +128,29 @@ annual_mort <- function(n_died, n_at_risk, p)
   fifelse(n_at_risk > 0, 1 - (1 - n_died / n_at_risk)^(1 / p), NA_real_)
 
 ## ---------------------------------------------------------------------------
+## Per-tree intervals: the trees behind the mortality counts, one row per tree
+## alive at the start of a remeasurement interval, with its fate over it. The
+## same makeObsData() tree table the counts above come from (so a tree is keyed
+## to the species it STARTED the interval as, species_before, exactly as
+## n_at_risk / n_died are), on the calendar offsets of `cal`. `dbh` is the
+## diameter at the interval start, `growth` the tree's yearly rate (NA for a
+## tree that died), `died` its fate. All macroplot trees stay: the per-tree
+## loss scores fates, it needs no area expansion.
+tree_src <- suppressMessages(
+  makeObsData(rate_src, plotsize = 0.06, aggregate_by_site = FALSE,
+              minNyears = NULL, dbh_growth_thresh = NULL, rates = "annual")
+)$tree_dt
+tree_all <- tree_src[living_before == TRUE,
+                     .(siteName, patchName, year, species_name = species_before,
+                       dbh = dbh_before, growth, died = as.numeric(status == "dead"))]
+tree_all <- merge(tree_all, site_key, by = "siteName")
+tree_all <- merge(tree_all, unique(full_tree[, .(siteName, patchName, patchID)]),
+                  by = c("siteName", "patchName"))
+tree_all <- merge(tree_all, cal[, .(siteID, OrigYear, offset, period_length)],
+                  by.x = c("siteID", "year"), by.y = c("siteID", "OrigYear"))
+tree_all[, year := offset][, offset := NULL]
+
+## ---------------------------------------------------------------------------
 ## Vignette "fit-to-fia": a TRAIN sample and a disjoint HOLDOUT sample.
 ##
 ## The vignette fits on the train sites and evaluates on sites the model has
@@ -205,7 +231,28 @@ build_split <- function(sites) {
   i <- merge(i, sp_map, by = "species_name")
   setorder(o, siteID, year, species); setorder(e, siteID, year)
   setorder(i, siteID, patchID, species)
-  list(obs = o, env = e, init = i)
+
+  # the per-tree intervals of the same sites, with the same ids and species coding
+  t <- ri(tree_all[siteID %in% sites])
+  t[!(species_name %in% keep), species_name := "other"]
+  t <- merge(t, sp_map, by = "species_name")
+  t <- t[, .(siteID, year, patchID, species, dbh, growth, died, period_length)]
+  setorder(t, siteID, year, patchID, species, dbh)
+  # The trees are the closed cohorts behind the site table's counts. The site
+  # table was left-joined onto the upstream obs_dt.csv, which has no row for a
+  # species whose trees had all died (or been cut) by a census, so in a few
+  # cells it carries fewer trees at risk and fewer deaths than the tree list;
+  # the tree list keeps them (they are real fates). Every cell of the site
+  # table must be covered, and the counts may only be exceeded, never missed.
+  chk_t <- merge(o[, .(siteID, year, species, n_at_risk, n_died)],
+                 t[, .(n = .N, d = sum(died)), by = .(siteID, year, species)],
+                 by = c("siteID", "year", "species"), all = TRUE)
+  chk_t[is.na(n), `:=`(n = 0L, d = 0)]
+  stopifnot(!anyNA(chk_t$n_at_risk), all(chk_t$n >= chk_t$n_at_risk), all(chk_t$d >= chk_t$n_died))
+  extra <- chk_t[n != n_at_risk | d != n_died]
+  cat(sprintf("per-tree table: %d cells hold %d trees (%d deaths) that the site table's counts miss (upstream rows absent)\n",
+              nrow(extra), extra[, sum(n - n_at_risk)], extra[, sum(d - n_died)]))
+  list(obs = o, env = e, init = i, tree = t)
 }
 
 tr <- build_split(fit_sites)
@@ -227,10 +274,12 @@ save_dataset <- function(x, name) {
 save_dataset(tr$obs,                   "fia_obs_dt")
 save_dataset(unique(tr$env[, ..env_out_cols]), "fia_env_dt")   # RAW units; one row per site x year (the source has one per patch, identical)
 save_dataset(tr$init,                  "fia_init_trees")
+save_dataset(tr$tree,                  "fia_tree_dt")
 # --- holdout (never seen during fitting) ---
 save_dataset(te$obs,                   "fia_obs_test")
 save_dataset(unique(te$env[, ..env_out_cols]), "fia_env_test")
 save_dataset(te$init,                  "fia_init_test")
+save_dataset(te$tree,                  "fia_tree_test")
 # --- shared species coding ---
 save_dataset(species_f,                "fia_species_dt")
 # note: no env-scales table — the model stores the standardization constants
@@ -293,3 +342,7 @@ cat(sprintf("annual axis: env years 1..%d; inventories (year: period_length x si
 cat(sprintf("annual rates (train) -- growth %.4f..%.4f, mort %.4f..%.4f\n",
             min(tr$obs$growth, na.rm = TRUE), max(tr$obs$growth, na.rm = TRUE),
             min(tr$obs$mort, na.rm = TRUE), max(tr$obs$mort, na.rm = TRUE)))
+cat(sprintf("per-tree intervals -- train: %d trees, %d deaths | holdout: %d trees, %d deaths\n",
+            nrow(tr$tree), sum(tr$tree$died), nrow(te$tree), sum(te$tree$died)))
+cat("\n=== data/*.rda ===\n")
+for (f in list.files("data", full.names = TRUE)) cat(sprintf("  %-22s %6.1f KB\n", basename(f), file.size(f)/1024))

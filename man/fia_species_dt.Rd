@@ -25,7 +25,8 @@ sites, so \code{species} is \verb{1..11} in every table.
 Other fia datasets: 
 \code{\link{fia_env_dt}},
 \code{\link{fia_init_trees}},
-\code{\link{fia_obs_dt}}
+\code{\link{fia_obs_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

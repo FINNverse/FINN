@@ -45,7 +45,8 @@ WorldClim normal, the same in every year.
 Other fia datasets: 
 \code{\link{fia_init_trees}},
 \code{\link{fia_obs_dt}},
-\code{\link{fia_species_dt}}
+\code{\link{fia_species_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

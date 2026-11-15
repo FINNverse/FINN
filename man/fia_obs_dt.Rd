@@ -59,7 +59,7 @@ without \code{\link[=makeObsData]{makeObsData()}} or \code{\link[=resolveSiteIDs
 \code{E-Mortality} vignettes are the worked examples.
 }
 \details{
-All seven objects are \code{data.table}s. Attach \code{data.table} to use its \code{[}
+All nine objects are \code{data.table}s. Attach \code{data.table} to use its \code{[}
 semantics on them, and \code{data.table::copy()} one before modifying it by
 reference (\verb{:=}), as with any package dataset.
 
@@ -68,10 +68,11 @@ The first inventory (2001-02) is the initial state, year 0; the two
 remeasurements are observations at the number of years since it, 10 and 20
 (21 for one training site and 22 for one holdout site, whose third
 inventory came late), each with \code{period_length}, the years since the
-previous inventory. Growth and mortality are yearly rates; \code{\link[=fit]{fit()}} compares
-them with the mean of the simulated yearly rates over the \code{period_length}
-years before each inventory, and compares \code{reg} with the recruits simulated
-over those years. Before FINN 0.2.0 the tables had one step per ten-year
+previous inventory. Growth and mortality are yearly rates; \code{\link[=fit]{fit()}} compounds
+the simulated yearly rates of the \code{period_length} years before each
+inventory into the same per-year rate before comparing, and compares \code{reg}
+with the recruits simulated over those years. The trees behind the
+mortality counts are in \link{fia_tree_dt}. Before FINN 0.2.0 the tables had one step per ten-year
 interval (\code{year} 1 and 2, rates over the interval); \code{makeObsData(rates = "interval")} and \code{resolveSiteIDs(time_axis = "census")} still build such
 tables.
 }
@@ -82,12 +83,13 @@ fia_obs_dt[year == 10, .(sites = uniqueN(siteID), ba = mean(ba)), by = species_n
 unique(fia_obs_dt[, .(siteID, year, period_length)])[, .N, by = .(year, period_length)]
 }
 \seealso{
-\link{fia_env_dt}, \link{fia_init_trees}, \link{fia_species_dt}
+\link{fia_env_dt}, \link{fia_init_trees}, \link{fia_tree_dt}, \link{fia_species_dt}
 
 Other fia datasets: 
 \code{\link{fia_env_dt}},
 \code{\link{fia_init_trees}},
-\code{\link{fia_species_dt}}
+\code{\link{fia_species_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

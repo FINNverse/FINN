@@ -47,7 +47,8 @@ cohorts a fit or simulation starts from
 Other fia datasets: 
 \code{\link{fia_env_dt}},
 \code{\link{fia_obs_dt}},
-\code{\link{fia_species_dt}}
+\code{\link{fia_species_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

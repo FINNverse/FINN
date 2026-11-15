@@ -92,6 +92,7 @@ reference:
   - fia_obs_dt
   - fia_env_dt
   - fia_init_trees
+  - fia_tree_dt
   - fia_species_dt
 
 - title: Environmental scaling
