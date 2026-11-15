@@ -41,8 +41,9 @@ EPOCHS <- 500L
 
 with the yearly rate `mort = 1 - (1 - n_died / n_at_risk)^(1 / period_length)`
 derived from them: FINN simulates yearly steps, and an inventory interval of
-`period_length` years is that many simulated years, whose mortality `fit()`
-averages before it meets the observation. The counts are exactly the
+`period_length` years is that many simulated years, whose yearly mortalities
+`fit()` compounds into the same per-year rate before it meets the observation.
+The counts are exactly the
 `cbind(died, survived)` response of a binomial GLM, and it is deliberate. A bare
 proportion throws away the sample size: it cannot tell a site where 1 of 1 trees
 died from one where 60 of 60 did, even though the second carries sixty times the
@@ -190,17 +191,19 @@ fit(m_mort,
 ## Scoring mortality: why not Spearman
 
 The model simulates yearly steps, so its mortality is compared with an
-observation as `fit()` compares it: the simulated yearly mortality averaged over
-the `period_length` years before the census.
+observation as `fit()` compares it: the simulated yearly mortalities of the
+`period_length` years before the census compounded into one rate per year,
+`1 - exp(mean(log1p(-m)))`, the functional behind the observed
+`1 - (1 - n_died / n_at_risk)^(1 / period_length)`.
 
 
 ``` r
-# the simulated yearly mortality, averaged over each observation's interval
+# the simulated yearly mortality, compounded over each observation's interval
 at_census <- function(site, obs_l) {
   win <- unique(obs_l[, .(siteID, census = year, period_length)])
   win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
   merge(site[variable == "mort", .(siteID, year, species, value)], win, by = c("siteID", "year"))[
-    , .(variable = "mort", value = mean(value)), by = .(siteID, year = census, species)]
+    , .(variable = "mort", value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species)]
 }
 pred_of <- function(model, label, env, init, obs_l, split) {
   model$eval()
@@ -234,9 +237,9 @@ obs_pred[is.finite(obs) & is.finite(value),
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
 #> 1: Hybrid (mortality = NN) holdout     0.06   994
-#> 2:   Process (mechanistic) holdout     0.04   994
-#> 3: Hybrid (mortality = NN)   train     0.21  1003
-#> 4:   Process (mechanistic)   train     0.23  1003
+#> 2:   Process (mechanistic) holdout     0.05   994
+#> 3: Hybrid (mortality = NN)   train     0.23  1003
+#> 4:   Process (mechanistic)   train     0.21  1003
 ```
 
 **AUC** asks the question the binomial actually poses: does the model give a
@@ -269,10 +272,10 @@ auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
 auc_tab[order(split, -AUC)]
 #>                      model   split   AUC deaths at_risk
 #>                     <char>  <char> <num>  <int>   <int>
-#> 1: Hybrid (mortality = NN) holdout 0.527    727   10013
-#> 2:   Process (mechanistic) holdout 0.520    727   10013
-#> 3: Hybrid (mortality = NN)   train 0.659    656    9907
-#> 4:   Process (mechanistic)   train 0.648    656    9907
+#> 1:   Process (mechanistic) holdout 0.524    727   10013
+#> 2: Hybrid (mortality = NN) holdout 0.513    727   10013
+#> 3:   Process (mechanistic)   train 0.642    656    9907
+#> 4: Hybrid (mortality = NN)   train 0.640    656    9907
 ```
 
 0.5 is coin-flipping, 1.0 is perfect ranking.
@@ -390,8 +393,8 @@ tree_pred[, .(trees = .N, deaths = sum(died),
               AUC = round(auc_binom(mort_pred, died, 1 - died), 3)), by = year]
 #>     year trees deaths   AUC
 #>    <int> <int>  <num> <num>
-#> 1:    10   130      9 0.930
-#> 2:    20   127     12 0.937
+#> 1:    10   130      9 0.934
+#> 2:    20   127     12 0.938
 ```
 
 Eight plots and two dozen deaths are a demonstration of the mechanism, not a

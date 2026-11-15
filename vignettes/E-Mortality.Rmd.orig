@@ -51,8 +51,9 @@ EPOCHS <- 500L
 
 with the yearly rate `mort = 1 - (1 - n_died / n_at_risk)^(1 / period_length)`
 derived from them: FINN simulates yearly steps, and an inventory interval of
-`period_length` years is that many simulated years, whose mortality `fit()`
-averages before it meets the observation. The counts are exactly the
+`period_length` years is that many simulated years, whose yearly mortalities
+`fit()` compounds into the same per-year rate before it meets the observation.
+The counts are exactly the
 `cbind(died, survived)` response of a binomial GLM, and it is deliberate. A bare
 proportion throws away the sample size: it cannot tell a site where 1 of 1 trees
 died from one where 60 of 60 did, even though the second carries sixty times the
@@ -179,16 +180,18 @@ fit(m_mort,
 ## Scoring mortality: why not Spearman
 
 The model simulates yearly steps, so its mortality is compared with an
-observation as `fit()` compares it: the simulated yearly mortality averaged over
-the `period_length` years before the census.
+observation as `fit()` compares it: the simulated yearly mortalities of the
+`period_length` years before the census compounded into one rate per year,
+`1 - exp(mean(log1p(-m)))`, the functional behind the observed
+`1 - (1 - n_died / n_at_risk)^(1 / period_length)`.
 
 ```{r predict}
-# the simulated yearly mortality, averaged over each observation's interval
+# the simulated yearly mortality, compounded over each observation's interval
 at_census <- function(site, obs_l) {
   win <- unique(obs_l[, .(siteID, census = year, period_length)])
   win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
   merge(site[variable == "mort", .(siteID, year, species, value)], win, by = c("siteID", "year"))[
-    , .(variable = "mort", value = mean(value)), by = .(siteID, year = census, species)]
+    , .(variable = "mort", value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species)]
 }
 pred_of <- function(model, label, env, init, obs_l, split) {
   model$eval()

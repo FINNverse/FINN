@@ -360,9 +360,11 @@ and **RMSE** (in each response's own units), matched on site × year × species.
 
 The simulation runs in yearly steps, so a prediction is put together the way
 `fit()` compares it with an inventory: the stand (`dbh`, `ba`, `trees`) at the
-year of the census, the yearly growth and mortality rates averaged over the
-`period_length` years before it, and the expected recruits per hectare
-(`r_mean_ha`) summed over those years.
+year of the census, the yearly growth and mortality rates of the
+`period_length` years before it compounded into one rate per year -- the
+geometric mean of `1 + g` minus one, and one minus the geometric mean survival,
+the functional `makeObsData()` derives the observed rates with -- and the
+expected recruits per hectare (`r_mean_ha`) summed over those years.
 
 ```{r assess-code}
 # the simulated counterpart of every observation, as fit() scores it
@@ -374,8 +376,10 @@ at_census <- function(site, obs_l) {
   rbindlist(list(
     s[variable %in% c("dbh", "ba", "trees") & year == census,
       .(siteID, year = census, species, variable, value)],
-    s[variable %in% c("growth", "mort"),
-      .(value = mean(value)), by = .(siteID, year = census, species, variable)],
+    s[variable == "growth",
+      .(value = exp(mean(log1p(value))) - 1), by = .(siteID, year = census, species, variable)],
+    s[variable == "mort",
+      .(value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species, variable)],
     s[variable == "r_mean_ha",
       .(variable = "reg", value = sum(value)), by = .(siteID, year = census, species)]
   ), use.names = TRUE)
@@ -582,7 +586,7 @@ blocked[variable %in% c("dbh", "ba", "trees", "growth") & is.finite(obs) & is.fi
 The blocked rows are the transfer skill, and they are the ones to report when
 the model is meant to be applied beyond the sampled conditions. Here the rank
 correlations of the state variables hold up on the warm block (growth's drops
-from 0.56 to 0.44) while the errors do not: the basal-area RMSE doubles and the
+from 0.53 to 0.42) while the errors do not: the basal-area RMSE doubles and the
 stem error rises by more than a third (the growth RMSE, a yearly rate, does not
 move at two decimals). The model orders the warm sites but misplaces their
 level, which is what
@@ -788,7 +792,7 @@ burst[, .(cells = .N, share_of_sq_error = round(sum((obs - trees)^2) / total_sq_
           max_reg = round(max(reg), 1)), by = .(top_1pct_recruitment = top)]
 ```
 
-One percent of the cells carries about a seventh of the squared stem error, and
+One percent of the cells carries about a sixth of the squared stem error, and
 the seed-to-seed spread in the stem metrics, a hundredth in Spearman and a few
 hundredths in RMSE, is the same mechanism at work: a site that receives a burst
 in one draw and not in the next. That is why a single stems R² on a holdout

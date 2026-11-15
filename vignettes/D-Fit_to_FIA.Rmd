@@ -365,23 +365,23 @@ dcast(steps[, max_step := round(max_step, 3)], block ~ epoch, value.var = "max_s
 #> Key: <block>
 #>                             block   100   150   200   250   300   350   400
 #>                            <char> <num> <num> <num> <num> <num> <num> <num>
-#> 1:             nn_growth.0.weight 0.346 0.368 0.281 0.243 0.244 0.242 0.227
-#> 2:          nn_mortality.0.weight 0.620 0.387 0.262 0.239 0.164 0.145 0.144
-#> 3:       nn_regeneration.0.weight 1.190 0.762 0.647 0.594 0.429 0.295 0.308
-#> 4:  par_competition_unconstrained 0.560 0.535 0.286 0.360 0.545 0.358 0.280
-#> 5:       par_growth_unconstrained 0.971 0.401 0.533 0.472 0.420 0.405 0.471
-#> 6:    par_mortality_unconstrained 0.442 0.288 0.228 0.154 0.141 0.120 0.138
-#> 7: par_regeneration_unconstrained 0.947 1.482 1.267 1.164 0.700 0.622 0.745
+#> 1:             nn_growth.0.weight 0.353 0.229 0.261 0.235 0.214 0.225 0.214
+#> 2:          nn_mortality.0.weight 0.360 0.293 0.228 0.299 0.228 0.240 0.175
+#> 3:       nn_regeneration.0.weight 1.119 0.742 0.651 0.606 0.443 0.342 0.304
+#> 4:  par_competition_unconstrained 0.566 0.521 0.403 0.387 0.370 0.462 0.357
+#> 5:       par_growth_unconstrained 1.159 0.360 0.506 0.509 0.521 0.413 0.324
+#> 6:    par_mortality_unconstrained 0.212 0.257 0.196 0.160 0.126 0.117 0.120
+#> 7: par_regeneration_unconstrained 1.027 1.194 0.935 1.369 0.794 0.483 0.382
 #> 8:         par_theta_recruits_raw 0.000 0.000 0.000 0.000 0.000 0.000 0.000
 #>      450   500
 #>    <num> <num>
-#> 1: 0.199 0.172
-#> 2: 0.140 0.149
-#> 3: 0.200 0.188
-#> 4: 0.382 0.176
-#> 5: 0.298 0.212
-#> 6: 0.137 0.130
-#> 7: 0.353 0.316
+#> 1: 0.168 0.183
+#> 2: 0.226 0.181
+#> 3: 0.291 0.234
+#> 4: 0.290 0.502
+#> 5: 0.346 0.342
+#> 6: 0.097 0.126
+#> 7: 0.542 0.402
 #> 8: 0.000 0.000
 ```
 
@@ -411,56 +411,56 @@ FINN model summary
 ### GROWTH
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable    sp1    sp2    sp3     sp4     sp5    sp6   sp7  sp8     sp9   sp10
-     prec 0.1427 1.0908 0.0609 0.00102 0.00519 0.0188 0.343 1.40 0.00906 10.092
-     temp 0.0229 0.0312 0.1717 0.06795 0.03011 0.5106 2.097 2.83 0.44867  0.103
+ variable    sp1    sp2    sp3      sp4    sp5   sp6   sp7   sp8     sp9   sp10
+     temp 0.0156 0.0368 0.1640 8.74e-02 0.0447 0.408 0.689 63.56 0.64630  0.473
+     prec 0.1123 1.3256 0.0793 2.09e-05 0.0137 0.012 0.186  1.98 0.00302 17.478
    sp11
- 0.2350
- 0.0867
+ 0.0625
+ 0.1975
 
 Average conditional effects (mean; species in columns):
- variable      sp1       sp2      sp3       sp4       sp5     sp6     sp7
-     prec  0.00312  0.009504 -0.00293 -0.000424 -0.000803 0.00278 0.00349
-     temp -0.00132 -0.000863  0.00338 -0.002722  0.001727 0.01394 0.00547
+ variable      sp1      sp2      sp3       sp4      sp5     sp6     sp7
+     prec  0.00277  0.01093 -0.00320 -6.18e-05 -0.00119 0.00224 0.00238
+     temp -0.00112 -0.00111  0.00334 -3.10e-03  0.00195 0.01290 0.00557
       sp8       sp9     sp10     sp11
- -0.00563  0.000999 -0.01580  0.00334
- -0.00665 -0.006810  0.00106 -0.00191
+ -0.00543  0.000547 -0.01700  0.00337
+ -0.00685 -0.006636  0.00203 -0.00171
 
 ### MORTALITY
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable   sp1    sp2   sp3   sp4   sp5   sp6   sp7     sp8     sp9  sp10
-     temp 0.609 0.9488 0.281 0.548 2.618 0.244 0.113 26.2738 0.00848 0.238
-     prec 0.691 0.0685 1.248 1.099 0.516 0.038 0.630  0.0174 0.00693 0.393
-   sp11
- 0.0475
- 0.0156
+ variable   sp1    sp2   sp3  sp4   sp5    sp6    sp7   sp8   sp9   sp10
+     temp 0.535 0.8828 0.368 1.01 5.343 0.3185 0.0428 4.132 0.242 0.1232
+     prec 0.587 0.0381 1.673 1.36 0.778 0.0539 0.5759 0.477 0.135 0.0497
+    sp11
+ 0.09982
+ 0.00419
 
 Average conditional effects (mean; species in columns):
- variable      sp1     sp2     sp3      sp4     sp5       sp6      sp7
-     temp  0.00864 0.00405 0.00515 -0.00364  0.0187 -0.001714 -0.00759
-     prec -0.00793 0.00197 0.01149  0.00459 -0.0104  0.000903 -0.01852
-       sp8     sp9    sp10      sp11
- -0.009954 -0.0020 -0.0111 -0.001486
- -0.000382  0.0014 -0.0144 -0.000925
+ variable      sp1      sp2     sp3      sp4     sp5       sp6      sp7
+     temp  0.00934  0.00506 0.00468 -0.00394  0.0202 -0.001464 -0.00288
+     prec -0.00803 -0.00159 0.01018  0.00525 -0.0122  0.000937 -0.01427
+      sp8     sp9     sp10      sp11
+ -0.01045 0.00518 -0.00638 -0.001439
+  0.00629 0.00265 -0.00350 -0.000319
 
 ### REGENERATION
 
 Analytical ALE importance (rate-normalised) (species in columns):
- variable    sp1    sp2   sp3     sp4    sp5      sp6   sp7   sp8   sp9 sp10
-     prec 0.0862 0.9292 0.195 0.91471 0.0929 1.09e+00 0.204 0.344 1.036 1.06
-     temp 0.7831 0.0913 0.848 0.00663 1.0631 8.52e-05 1.129 1.430 0.718 0.46
+ variable    sp1    sp2   sp3    sp4   sp5      sp6   sp7  sp8   sp9  sp10
+     prec 0.0765 0.9329 0.190 0.9156 0.097 1.093432 0.212 0.44 1.043 1.054
+     temp 0.8020 0.0877 0.843 0.0065 1.066 0.000744 1.141 1.44 0.703 0.467
   sp11
- 1.483
- 0.321
+ 1.400
+ 0.228
 
 Average conditional effects (mean; species in columns):
  variable    sp1     sp2    sp3      sp4    sp5     sp6    sp7    sp8    sp9
-     prec 0.0821 -0.5972 -0.397 -0.11986 -0.131 0.26710  0.239 0.0114 0.1217
-     temp 0.2777  0.0907 -0.446 -0.00787 -0.225 0.00211 -0.313 0.0347 0.0951
+     prec 0.0781 -0.5967 -0.377 -0.11965 -0.130 0.25587  0.233 0.0133 0.1267
+     temp 0.2844  0.0888 -0.428 -0.00778 -0.221 0.00596 -0.304 0.0349 0.0976
    sp10    sp11
-  0.274  0.1166
- -0.194 -0.0542
+  0.263  0.1349
+ -0.188 -0.0545
 ```
 
 The niche and ALE sections below unpack this overview into per-driver response
@@ -476,9 +476,11 @@ and **RMSE** (in each response's own units), matched on site × year × species.
 
 The simulation runs in yearly steps, so a prediction is put together the way
 `fit()` compares it with an inventory: the stand (`dbh`, `ba`, `trees`) at the
-year of the census, the yearly growth and mortality rates averaged over the
-`period_length` years before it, and the expected recruits per hectare
-(`r_mean_ha`) summed over those years.
+year of the census, the yearly growth and mortality rates of the
+`period_length` years before it compounded into one rate per year -- the
+geometric mean of `1 + g` minus one, and one minus the geometric mean survival,
+the functional `makeObsData()` derives the observed rates with -- and the
+expected recruits per hectare (`r_mean_ha`) summed over those years.
 
 
 ``` r
@@ -491,8 +493,10 @@ at_census <- function(site, obs_l) {
   rbindlist(list(
     s[variable %in% c("dbh", "ba", "trees") & year == census,
       .(siteID, year = census, species, variable, value)],
-    s[variable %in% c("growth", "mort"),
-      .(value = mean(value)), by = .(siteID, year = census, species, variable)],
+    s[variable == "growth",
+      .(value = exp(mean(log1p(value))) - 1), by = .(siteID, year = census, species, variable)],
+    s[variable == "mort",
+      .(value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species, variable)],
     s[variable == "r_mean_ha",
       .(variable = "reg", value = sum(value)), by = .(siteID, year = census, species)]
   ), use.names = TRUE)
@@ -526,32 +530,32 @@ comparison[order(variable, model)]
 #> Key: <variable, model>
 #>     variable                 model spearman_train spearman_holdout rmse_train
 #>       <char>                <char>          <num>            <num>      <num>
-#>  1:       ba  Hybrid (growth = NN)           0.80             0.79       0.13
-#>  2:       ba Process (mechanistic)           0.80             0.79       0.13
-#>  3:      dbh  Hybrid (growth = NN)           0.81             0.75      13.81
-#>  4:      dbh Process (mechanistic)           0.82             0.74      13.13
-#>  5:   growth  Hybrid (growth = NN)           0.59             0.53       0.01
-#>  6:   growth Process (mechanistic)           0.58             0.54       0.01
-#>  7:     mort  Hybrid (growth = NN)           0.23             0.05       0.11
-#>  8:     mort Process (mechanistic)           0.23             0.04       0.11
-#>  9:      reg  Hybrid (growth = NN)           0.40             0.40       6.23
-#> 10:      reg Process (mechanistic)           0.41             0.41       6.22
-#> 11:    trees  Hybrid (growth = NN)           0.78             0.77       0.77
-#> 12:    trees Process (mechanistic)           0.79             0.78       0.74
+#>  1:       ba  Hybrid (growth = NN)           0.81             0.79       0.12
+#>  2:       ba Process (mechanistic)           0.81             0.80       0.13
+#>  3:      dbh  Hybrid (growth = NN)           0.83             0.75      13.06
+#>  4:      dbh Process (mechanistic)           0.82             0.74      13.49
+#>  5:   growth  Hybrid (growth = NN)           0.56             0.53       0.01
+#>  6:   growth Process (mechanistic)           0.57             0.58       0.01
+#>  7:     mort  Hybrid (growth = NN)           0.21             0.05       0.11
+#>  8:     mort Process (mechanistic)           0.21             0.05       0.10
+#>  9:      reg  Hybrid (growth = NN)           0.38             0.40       6.22
+#> 10:      reg Process (mechanistic)           0.41             0.41       6.18
+#> 11:    trees  Hybrid (growth = NN)           0.79             0.77       0.77
+#> 12:    trees Process (mechanistic)           0.79             0.78       0.75
 #>     rmse_holdout
 #>            <num>
 #>  1:         0.09
-#>  2:         0.09
-#>  3:        13.56
-#>  4:        14.09
+#>  2:         0.10
+#>  3:        13.92
+#>  4:        14.20
 #>  5:         0.01
 #>  6:         0.01
 #>  7:         0.09
 #>  8:         0.09
-#>  9:         6.00
-#> 10:         6.04
-#> 11:         0.78
-#> 12:         0.79
+#>  9:         6.37
+#> 10:         6.02
+#> 11:         0.81
+#> 12:         0.78
 ```
 
 
@@ -636,15 +640,15 @@ ref[variable %in% c("dbh", "ba", "trees") & is.finite(obs) & is.finite(value),
     by = .(variable, model)][order(variable, model)]
 #>    variable                       model spearman  rmse
 #>      <char>                      <char>    <num> <num>
-#> 1:       ba        Hybrid (growth = NN)     0.78  0.11
+#> 1:       ba        Hybrid (growth = NN)     0.77  0.11
 #> 2:       ba Persistence (year 10 as is)     0.96  0.08
 #> 3:       ba       Process (mechanistic)     0.78  0.12
-#> 4:      dbh        Hybrid (growth = NN)     0.70 15.06
+#> 4:      dbh        Hybrid (growth = NN)     0.70 15.42
 #> 5:      dbh Persistence (year 10 as is)     0.91  6.79
-#> 6:      dbh       Process (mechanistic)     0.68 15.49
-#> 7:    trees        Hybrid (growth = NN)     0.75  0.93
+#> 6:      dbh       Process (mechanistic)     0.67 15.73
+#> 7:    trees        Hybrid (growth = NN)     0.75  0.96
 #> 8:    trees Persistence (year 10 as is)     0.96  0.60
-#> 9:    trees       Process (mechanistic)     0.75  0.93
+#> 9:    trees       Process (mechanistic)     0.75  0.92
 ```
 
 Persistence wins on all three state variables, and not narrowly. That is the
@@ -740,20 +744,20 @@ blocked[variable %in% c("dbh", "ba", "trees", "growth") & is.finite(obs) & is.fi
         by = .(variable, holdout = model)][order(variable, holdout)]
 #>    variable                            holdout spearman  rmse     n
 #>      <char>                             <char>    <num> <num> <int>
-#> 1:       ba blocked holdout (40 warmest sites)     0.73  0.22   880
+#> 1:       ba blocked holdout (40 warmest sites)     0.75  0.22   880
 #> 2:       ba         random holdout (200 sites)     0.79  0.10  4400
-#> 3:      dbh blocked holdout (40 warmest sites)     0.81 20.01   195
-#> 4:      dbh         random holdout (200 sites)     0.73 14.28  1048
-#> 5:   growth blocked holdout (40 warmest sites)     0.44  0.01   187
-#> 6:   growth         random holdout (200 sites)     0.56  0.01  1000
-#> 7:    trees blocked holdout (40 warmest sites)     0.70  1.15   880
-#> 8:    trees         random holdout (200 sites)     0.77  0.84  4400
+#> 3:      dbh blocked holdout (40 warmest sites)     0.77 20.74   195
+#> 4:      dbh         random holdout (200 sites)     0.71 15.38  1048
+#> 5:   growth blocked holdout (40 warmest sites)     0.42  0.01   187
+#> 6:   growth         random holdout (200 sites)     0.53  0.01  1000
+#> 7:    trees blocked holdout (40 warmest sites)     0.73  1.22   880
+#> 8:    trees         random holdout (200 sites)     0.77  0.82  4400
 ```
 
 The blocked rows are the transfer skill, and they are the ones to report when
 the model is meant to be applied beyond the sampled conditions. Here the rank
 correlations of the state variables hold up on the warm block (growth's drops
-from 0.56 to 0.44) while the errors do not: the basal-area RMSE doubles and the
+from 0.53 to 0.42) while the errors do not: the basal-area RMSE doubles and the
 stem error rises by more than a third (the growth RMSE, a yearly rate, does not
 move at two decimals). The model orders the warm sites but misplaces their
 level, which is what
@@ -956,24 +960,24 @@ strategies[is.finite(obs) & is.finite(value),
            by = .(variable, model)][order(variable, model)]
 #>     variable                      model spearman  rmse
 #>       <char>                     <char>    <num> <num>
-#>  1:       ba                      Joint     0.79  0.09
-#>  2:       ba    Joint + recruitment cap     0.80  0.10
+#>  1:       ba                      Joint     0.80  0.10
+#>  2:       ba    Joint + recruitment cap     0.79  0.10
 #>  3:       ba Staged (regeneration last)     0.78  0.09
-#>  4:      dbh                      Joint     0.74 14.09
-#>  5:      dbh    Joint + recruitment cap     0.74 14.46
-#>  6:      dbh Staged (regeneration last)     0.72 14.59
-#>  7:   growth                      Joint     0.54  0.01
-#>  8:   growth    Joint + recruitment cap     0.56  0.01
+#>  4:      dbh                      Joint     0.74 14.20
+#>  5:      dbh    Joint + recruitment cap     0.74 14.18
+#>  6:      dbh Staged (regeneration last)     0.73 14.55
+#>  7:   growth                      Joint     0.58  0.01
+#>  8:   growth    Joint + recruitment cap     0.55  0.01
 #>  9:   growth Staged (regeneration last)     0.55  0.01
-#> 10:     mort                      Joint     0.04  0.09
+#> 10:     mort                      Joint     0.05  0.09
 #> 11:     mort    Joint + recruitment cap     0.07  0.09
-#> 12:     mort Staged (regeneration last)     0.06  0.09
-#> 13:      reg                      Joint     0.41  6.04
+#> 12:     mort Staged (regeneration last)     0.05  0.09
+#> 13:      reg                      Joint     0.41  6.02
 #> 14:      reg    Joint + recruitment cap     0.41  6.03
 #> 15:      reg Staged (regeneration last)     0.39  6.11
-#> 16:    trees                      Joint     0.78  0.79
-#> 17:    trees    Joint + recruitment cap     0.78  0.78
-#> 18:    trees Staged (regeneration last)     0.76  0.81
+#> 16:    trees                      Joint     0.78  0.78
+#> 17:    trees    Joint + recruitment cap     0.77  0.77
+#> 18:    trees Staged (regeneration last)     0.76  0.80
 ```
 
 The stem count deserves a closer look, because its skill is the least stable of
@@ -995,11 +999,11 @@ trees_by_seed <- reps[variable == "trees" & is.finite(obs),
 trees_by_seed
 #>     seed spearman  rmse
 #>    <int>    <num> <num>
-#> 1:     1    0.779 0.773
-#> 2:     2    0.779 0.797
-#> 3:     3    0.777 0.782
-#> 4:     4    0.778 0.778
-#> 5:     5    0.773 0.786
+#> 1:     1    0.780 0.758
+#> 2:     2    0.779 0.782
+#> 3:     3    0.776 0.776
+#> 4:     4    0.774 0.782
+#> 5:     5    0.774 0.762
 
 # which cells carry the stem error? those whose predicted recruitment is in the
 # top 1 % of the same simulation
@@ -1013,11 +1017,11 @@ burst[, .(cells = .N, share_of_sq_error = round(sum((obs - trees)^2) / total_sq_
           max_reg = round(max(reg), 1)), by = .(top_1pct_recruitment = top)]
 #>    top_1pct_recruitment cells share_of_sq_error max_reg
 #>                  <lgcl> <int>             <num>   <num>
-#> 1:                FALSE 21780              0.85    11.3
-#> 2:                 TRUE   220              0.15    41.3
+#> 1:                FALSE 21780              0.84    11.3
+#> 2:                 TRUE   220              0.16    39.7
 ```
 
-One percent of the cells carries about a seventh of the squared stem error, and
+One percent of the cells carries about a sixth of the squared stem error, and
 the seed-to-seed spread in the stem metrics, a hundredth in Spearman and a few
 hundredths in RMSE, is the same mechanism at work: a site that receives a burst
 in one draw and not in the next. That is why a single stems R² on a holdout
@@ -1032,9 +1036,9 @@ strategies[variable == "reg", .(max_predicted_reg = round(max(value), 1),
                                 p99 = round(quantile(value, 0.99), 1)), by = model]
 #>                         model max_predicted_reg   p99
 #>                        <char>             <num> <num>
-#> 1:                      Joint              39.8  11.3
-#> 2: Staged (regeneration last)              34.4  14.2
-#> 3:    Joint + recruitment cap               6.9   5.7
+#> 1:                      Joint              39.8  11.2
+#> 2: Staged (regeneration last)              38.9  14.3
+#> 3:    Joint + recruitment cap               7.1   5.9
 ```
 
 ## Interpreting the growth process with ALE
