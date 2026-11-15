@@ -23,8 +23,13 @@ interface agreed for them:
   for `"gpu"`.
 * Data preparation on annual simulation steps: `makeObsData()` returns yearly
   rates and `period_length`, `resolveSiteIDs()` an annual time axis; the Oregon
-  FIA calibration sample ships as lazy-loaded datasets (`fia_obs_dt` and six
-  more) on that axis, in place of CSV files under `inst/extdata`.
+  FIA calibration sample ships as lazy-loaded datasets (`fia_obs_dt` and eight
+  more, including the per-tree tables `fia_tree_dt` / `fia_tree_test`) on that
+  axis, in place of CSV files under `inst/extdata`.
+* `fit()` compounds the simulated yearly rates of an observation interval into
+  the per-year rate the observation carries (the functional `makeObsData()`
+  uses), and the mortality response starts at about 2 % per year instead of
+  torch's random start.
 
 Defaults that do not reproduce 0.1.0, each with the value that restores it, are
 listed in the two tables at the top of the 0.2.0 section of NEWS.md with the
@@ -53,22 +58,22 @@ the submitted tarball; add their results here.
 Local run with the torch backend installed, `R CMD check --as-cran --no-manual`
 (the machine has no pdflatex; the Rd files pass every Rd check):
 
-0 errors | 1 warning | 1 note
+0 errors | 1 warning | 0 notes
 
 * checking whether package 'FINN' can be installed ... WARNING
   `R_ext/Boolean.h:62:36: warning: unknown warning group
   '-Wfixed-enum-extension'`. This comes from R 4.5.0's own header with Apple
   clang 21 on the local machine, not from FINN's code; it is absent on the
   check services' compilers.
-* checking examples ... NOTE: eight examples take more than 5 s elapsed
-  (`feature_importance` 21 s, `ALE` 11 s, the others 5-9 s). Each fits a
-  small model on two or three sites of the bundled data first and needs the
-  torch backend; on the check machines, where the backend is absent, these
-  examples do not run (`@examplesIf torch::torch_is_installed()`).
+* On a loaded machine the check notes examples above 5 s elapsed
+  (`feature_importance`, `ALE` and a few more, each fitting a small model on
+  two or three sites of the bundled data first). They need the torch backend
+  and do not run on the check machines (`@examplesIf
+  torch::torch_is_installed()`).
 
-The test suite ran in full with the backend: 852 tests passed, 0 failed, 1
+The test suite ran in full with the backend: 909 tests passed, 0 failed, 1
 skipped (a thread-count test that torch's native macOS backend cannot repeat
-in one session). The tarball is 4.1 MB, the installed package 4.5 MB.
+in one session). The tarball is 4.2 MB, the installed package under 5 MB.
 
 ## Notes for the reviewer
 
