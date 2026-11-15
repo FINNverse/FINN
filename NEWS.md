@@ -101,6 +101,12 @@ and gives the same result.
   convergence checks, persistence and blocked holdouts, staged calibration, the
   recruitment cap and per-tree mortality scoring.
 
+* New datasets `fia_tree_dt` and `fia_tree_test`: the individual trees behind
+  the mortality counts of `fia_obs_dt` and `fia_obs_test` (dbh, growth, fate
+  and interval length per tree, all macroplot trees). The FIA vignette uses
+  them to score mortality per tree (`loss_aggregation = c(mortality = "tree")`)
+  and compares the size-mortality curve of that fit with the site-level fit.
+
 * `resolveSiteIDs()` returns `env_dt` with one row per site and year; it used to
   repeat each row once per patch, which `climateDF2array()` now rejects, so
   `fit()` failed on the output of the documented data-preparation pipeline.
