@@ -503,16 +503,41 @@ someone who was affected.
   Results computed on the bundled data or with `makeObsData()` /
   `resolveSiteIDs()` defaults change.
 
-* **Mortality starts high on annual steps; the default is kept.** The
-  environmental response of `mortality()` is a logistic function of the
-  standardised predictors, so before any fitting it is about `sigmoid(0) =
-  0.5` per step at the average environment. On yearly steps an unfitted stand
-  therefore loses most of its basal area within ten years. `fit()` moves the
-  response quickly, but for a simulation without a fit, or when the first
-  epochs matter, give the mortality process a low starting value, e.g.
-  `createProcess(~ temp, mortality, initEnv = matrix(c(-4, 0), N_species, 2,
-  byrow = TRUE))` (`sigmoid(-4)` is 2 % per step). Documented in `?finn`,
-  `?createProcess` and `?mortality`; no behaviour change.
+* **The simulated rates of an interval are compounded as the observed rates
+  are.** `makeObsData(rates = "annual")` derives a yearly growth rate as
+  `(dbh / dbh_before)^(1 / p) - 1` and a yearly mortality as
+  `1 - (1 - d / n)^(1 / p)` over an interval of `p` years, but `fit()` compared
+  them with the arithmetic mean of the simulated yearly rates over the
+  `period_length` window. With one disturbance year in a window the two differ
+  a lot: a mortality of 0.5 in one year and 0.01 in nine is observed as
+  0.0754, and the mean is 0.059. `fit()` now compounds the window the same
+  way, growth as `exp(mean(log1p(g))) - 1` and mortality as `1 -
+  exp(mean(log1p(-m)))`, with the same masks as before: a year outside a
+  site's window or without trees counts as growth 0 and survival 1, and the
+  denominator is the full `period_length`, since the observed rate is derived
+  from the counts over the whole interval. Mortality is clamped below `1 -
+  1e-4` before the log (sigmoid saturates to exactly 1 in float32 above a
+  logit of 17.3), growth is not clamped (the package's growth is non-negative).
+  The per-tree route follows for growth (`loss_aggregation = "tree"`,
+  `loss_resolution = "tree"`, `predictTrees()`); its mortality was already the
+  compounded interval probability against the tree's 0/1 fate. The constant
+  increment of `finn(growth_rate = "period")` is unchanged, as is the census
+  axis, where one step is one interval. Vignettes D and E score the fitted
+  models with the same functional. Fits on data with `period_length > 1`
+  change; the identity snapshots of the test suite were regenerated.
+
+* **Mortality starts at about 2 % per year.** The environmental response of
+  `mortality()` started at torch's random weights, i.e. at `sigmoid(0) = 0.5`
+  per step at the average environment, so on yearly steps an unfitted stand
+  lost most of its basal area within ten years and the first epochs of a fit
+  began from a dying stand. Without `createProcess(initEnv = )` the response
+  now starts with an intercept of `qlogis(0.02)` and every other weight 0
+  (with `hidden` layers the output bias carries the intercept); the species
+  terms for light, size and growth move the start by at most about one logit
+  unit. A formula without an intercept (`~ 0 + temp`) keeps torch's start.
+  `?finn`, `?createProcess` and `?mortality` say so. Fits and simulations
+  that did not set `initEnv` for mortality start from another point and so
+  change.
 
 * **Bare ground is bare: `init_cohort = NULL` starts with no stems.**
   `simulateForest()` / `predict()` and `fit()` without an `init_cohort` used to

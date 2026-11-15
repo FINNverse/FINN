@@ -298,9 +298,13 @@ obs_mort <- function(n_died, n_at_risk, period_length, rates = c("annual", "inte
 #' @details
 #' FINN simulates the forest in steps of one year. With \code{rates = "annual"}
 #' the observation table is in the units that \code{fit()} compares with such a
-#' simulation: \code{fit()} averages the simulated yearly growth and mortality
-#' over the \code{period_length} years before each census and sums the
-#' simulated recruits over them (see \code{\link{finn_data}}). The counts
+#' simulation: \code{fit()} compounds the simulated yearly growth and mortality
+#' of the \code{period_length} years before each census into one rate per year
+#' with the same functional (the geometric mean of \eqn{1 + g} minus one, one
+#' minus the geometric mean survival), and sums the simulated recruits over
+#' them (see \code{\link{finn_data}}). \code{rates = "interval"} belongs with
+#' \code{resolveSiteIDs(time_axis = "census")}, where one simulation step is
+#' one census interval and nothing is compounded. The counts
 #' (\code{n_at_risk}, \code{n_died}, \code{growth_n}) and \code{reg} stay
 #' quantities of the whole interval in both modes: the counts weight the
 #' likelihood by the number of trees behind an observation, and \code{reg} is
@@ -392,8 +396,8 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
   tree_dt[status == "alive", rel_growth := dbh/dbh_before - 1,]
   # `growth` is the per-tree rate behind obs_dt$growth: annual by default, so a
   # census interval of p years gives (dbh/dbh_before)^(1/p) - 1, the constant
-  # yearly rate that compounds to the observed increment. That is what fit()
-  # compares with the mean of the simulated yearly rates over the interval.
+  # yearly rate that compounds to the observed increment. fit() compounds the
+  # simulated yearly rates over the interval the same way before comparing.
   # `rel_growth` stays the increment over the whole interval.
   tree_dt[, growth := NA_real_]
   if (rates == "annual") {

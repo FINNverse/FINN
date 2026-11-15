@@ -146,9 +146,7 @@ height = function(dbh, parHeight) {
 #' # environment; `continuous = TRUE` compares every pair of cohorts instead of
 #' # binning them into height quantiles
 #' m <- finn(N_species = 2,
-#'           competition_process = createProcess(func = competition, continuous = TRUE),
-#'           mortality_process   = createProcess(~ 1 + temp, mortality,
-#'                                               initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
+#'           competition_process = createProcess(func = competition, continuous = TRUE))
 #'
 #' # a 30-year simulation from bare ground; an unfitted model uses `env` as
 #' # given (no scaling constants yet), so the predictor is passed standardised
@@ -232,27 +230,31 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 #' @return A `torch` tensor of per-cohort mortality probabilities; or, if
 #'   `debug = TRUE`, a list of the intermediate components.
 #'
-#' @section The starting value on annual steps:
-#' The environmental response is `sigmoid(pred)`, and before any fitting `pred`
-#' is about 0 at the average environment, so an unfitted model kills about half
-#' of every cohort per time step. On yearly steps that empties a stand within
-#' ten years. [FINN::fit()] moves the response quickly; for a simulation
-#' without a fit, or when the first epochs matter, start it low with
-#' `createProcess(initEnv = )`, as in the example.
+#' @section The starting value:
+#' The environmental response is `sigmoid(pred)`. Before any fitting it starts
+#' at about 2 % mortality per time step: the intercept of the response is
+#' `qlogis(0.02)` and its other weights are 0 (with `createProcess(hidden = )`
+#' the bias of the output layer carries the intercept), and the species terms
+#' for light, size and growth move it by at most about one logit unit. Until
+#' 0.2.0 the weights started at torch's random values, i.e. at `sigmoid(0) =
+#' 0.5` per step, which on yearly steps emptied an unfitted stand within a
+#' decade. `createProcess(initEnv = )` sets another start; a formula without
+#' an intercept (`~ 0 + temp`) leaves torch's start in place.
 #'
 #' @examplesIf torch::torch_is_installed()
 #' # mortality as the mortality process of a model, responding to one predictor;
-#' # growth enters in %/yr (growth_scale = 0.01, the default). The response
-#' # starts at sigmoid(-4), about 2 % per year, instead of the unfitted 50 %.
+#' # growth enters in %/yr (growth_scale = 0.01, the default)
 #' m <- finn(N_species = 2,
-#'           mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01,
-#'                                             initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
+#'           mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01))
 #'
 #' # a 30-year simulation from bare ground; an unfitted model uses `env` as
 #' # given (no scaling constants yet), so the predictor is passed standardised
 #' env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 #' sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
 #' tail(sim$wide$site)
+#'
+#' # the start of the environmental response: qlogis(0.02) and 0 per species
+#' as.matrix(m$nn_mortality$parameters[[1]])
 #'
 #' @export
 mortality = function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL, growth_scale = 0.01) {
@@ -306,12 +308,8 @@ mortality_hybrid = function(dbh, species, trees, parMort, pred, light, base_stee
 #'
 #' @examplesIf torch::torch_is_installed()
 #' # growth as the growth process of a model: the equation above with its two
-#' # species parameters, and a linear response to one environmental predictor.
-#' # Mortality starts low (see ?mortality), so the simulated stand builds up.
-#' m <- finn(N_species = 2,
-#'           growth_process    = createProcess(~ 1 + temp, growth),
-#'           mortality_process = createProcess(~ 1 + temp, mortality,
-#'                                             initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
+#' # species parameters, and a linear response to one environmental predictor
+#' m <- finn(N_species = 2, growth_process = createProcess(~ 1 + temp, growth))
 #'
 #' # a 30-year simulation from bare ground on one site. A model that was not
 #' # fitted has no scaling constants for `env` yet and uses it as given, so the
@@ -377,12 +375,9 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #'
 #' @examplesIf torch::torch_is_installed()
 #' # the uncapped regeneration of the paper instead of the default
-#' # regeneration_capped(); recruits enter at 1 cm (recruits_dbh). Mortality
-#' # starts low (see ?mortality), so the recruits survive.
+#' # regeneration_capped(); recruits enter at 1 cm (recruits_dbh)
 #' m <- finn(N_species = 2, recruits_dbh = 1,
-#'           regeneration_process = createProcess(~ 1 + temp, regeneration),
-#'           mortality_process    = createProcess(~ 1 + temp, mortality,
-#'                                                initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
+#'           regeneration_process = createProcess(~ 1 + temp, regeneration))
 #'
 #' # a 30-year simulation from bare ground; an unfitted model uses `env` as
 #' # given (no scaling constants yet), so the predictor is passed standardised

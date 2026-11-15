@@ -54,29 +54,32 @@ A \code{torch} tensor of per-cohort mortality probabilities; or, if
 \description{
 Mortality
 }
-\section{The starting value on annual steps}{
+\section{The starting value}{
 
-The environmental response is \code{sigmoid(pred)}, and before any fitting \code{pred}
-is about 0 at the average environment, so an unfitted model kills about half
-of every cohort per time step. On yearly steps that empties a stand within
-ten years. \code{\link[=fit]{fit()}} moves the response quickly; for a simulation
-without a fit, or when the first epochs matter, start it low with
-\code{createProcess(initEnv = )}, as in the example.
+The environmental response is \code{sigmoid(pred)}. Before any fitting it starts
+at about 2 \% mortality per time step: the intercept of the response is
+\code{qlogis(0.02)} and its other weights are 0 (with \code{createProcess(hidden = )}
+the bias of the output layer carries the intercept), and the species terms
+for light, size and growth move it by at most about one logit unit. Until
+0.2.0 the weights started at torch's random values, i.e. at \code{sigmoid(0) = 0.5} per step, which on yearly steps emptied an unfitted stand within a
+decade. \code{createProcess(initEnv = )} sets another start; a formula without
+an intercept (\code{~ 0 + temp}) leaves torch's start in place.
 }
 
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 # mortality as the mortality process of a model, responding to one predictor;
-# growth enters in \%/yr (growth_scale = 0.01, the default). The response
-# starts at sigmoid(-4), about 2 \% per year, instead of the unfitted 50 \%.
+# growth enters in \%/yr (growth_scale = 0.01, the default)
 m <- finn(N_species = 2,
-          mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01,
-                                            initEnv = matrix(c(-4, 0), 2, 2, byrow = TRUE)))
+          mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01))
 
 # a 30-year simulation from bare ground; an unfitted model uses `env` as
 # given (no scaling constants yet), so the predictor is passed standardised
 env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
 tail(sim$wide$site)
+
+# the start of the environmental response: qlogis(0.02) and 0 per species
+as.matrix(m$nn_mortality$parameters[[1]])
 \dontshow{\}) # examplesIf}
 }

@@ -45,9 +45,11 @@ enters through another term (e.g. \code{dbh = "none"} and \code{ba = "none"} onc
 size distribution is scored through size classes, below).
 
 The rates are compared over the observation interval: with
-\code{period_length} in \code{data}, simulated growth and mortality are averaged
-over the interval's steps and simulated recruitment is summed, before they
-meet the observation (see \link{finn_data}). Growth is compared as a \emph{relative}
+\code{period_length} in \code{data}, the simulated yearly growth and mortality are
+compounded into one rate per year (the geometric mean of \code{1 + g}, one minus
+the geometric mean survival -- as \code{\link[=makeObsData]{makeObsData()}} derives the observed
+rates) and simulated recruitment is summed, before they meet the
+observation (see \link{finn_data} and \code{\link[=fit]{fit()}}). Growth is compared as a \emph{relative}
 rate (\code{dbh / dbh_before - 1}), the model's own quantity; training against
 the absolute increment was tested and was worse and more seed-variable,
 because it couples the growth parameters to whichever trees happen to be

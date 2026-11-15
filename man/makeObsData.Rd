@@ -95,9 +95,13 @@ filters sites, harmonizes years, optionally aggregates by site.
 \details{
 FINN simulates the forest in steps of one year. With \code{rates = "annual"}
 the observation table is in the units that \code{fit()} compares with such a
-simulation: \code{fit()} averages the simulated yearly growth and mortality
-over the \code{period_length} years before each census and sums the
-simulated recruits over them (see \code{\link{finn_data}}). The counts
+simulation: \code{fit()} compounds the simulated yearly growth and mortality
+of the \code{period_length} years before each census into one rate per year
+with the same functional (the geometric mean of \eqn{1 + g} minus one, one
+minus the geometric mean survival), and sums the simulated recruits over
+them (see \code{\link{finn_data}}). \code{rates = "interval"} belongs with
+\code{resolveSiteIDs(time_axis = "census")}, where one simulation step is
+one census interval and nothing is compounded. The counts
 (\code{n_at_risk}, \code{n_died}, \code{growth_n}) and \code{reg} stay
 quantities of the whole interval in both modes: the counts weight the
 likelihood by the number of trees behind an observation, and \code{reg} is

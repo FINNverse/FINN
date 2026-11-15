@@ -49,8 +49,10 @@ simulates a stand forward and reports site-level states, this evaluates the
 growth and mortality kernels on trees you observed: light is computed from
 the observed stand, the kernels run on those trees at their observed
 diameters, and the annual rates are accumulated over each site's
-remeasurement interval — growth as the mean of the annual rates, mortality as
-the complement of the product of annual survivals.
+remeasurement interval — growth as the per-year rate of the compounded
+annual rates (the geometric mean of \code{1 + g}, as \code{\link[=makeObsData]{makeObsData()}} derives the
+observed rate), mortality as the complement of the product of annual
+survivals.
 
 It is the same code path \code{fit(..., loss_aggregation = c(growth = "tree", mortality = "tree"))} scores, so a validation report cannot drift from the
 objective it is validating.

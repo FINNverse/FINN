@@ -187,7 +187,8 @@ test_that("no recruit cohort enters the per-tree residual", {
 test_that("the interval prediction compounds the annual rates", {
   skip_if_no_torch()
   # Mortality is the compounded per-step probability 1 - prod(1 - m), not the sampled
-  # fate; growth follows the aggregate convention. Three lr = 0 fits share one trajectory,
+  # fate; growth is the per-year rate of the compounded increment (the geometric mean of
+  # 1 + g), as the aggregate path scores it. Three lr = 0 fits share one trajectory,
   # so the two-year window must be the exact composition of the two one-year ones.
   runs = lapply(list(list(1, 1L), list(2, 1L), list(2, 2L)), function(a) {
     d = tl_data(years_obs = a[[1]], period = a[[2]])
@@ -203,7 +204,7 @@ test_that("the interval prediction compounds the annual rates", {
   ok = p[[1]]$n > 0.5 & p[[2]]$n > 0.5 & p[[3]]$n > 1.5
   expect_gt(sum(ok), 20)
   expect_equal(p[[3]]$mort[ok], 1 - (1 - p[[1]]$mort[ok])*(1 - p[[2]]$mort[ok]), tolerance = 1e-5)
-  expect_equal(p[[3]]$growth[ok], (p[[1]]$growth[ok] + p[[2]]$growth[ok])/2, tolerance = 1e-5)
+  expect_equal(p[[3]]$growth[ok], sqrt((1 + p[[1]]$growth[ok])*(1 + p[[2]]$growth[ok])) - 1, tolerance = 1e-5)
 })
 
 
@@ -412,9 +413,9 @@ test_that("update_step and growth_period_scale reach the per-tree terms", {
   expect_identical(p$tree_pred$n, a$tree_pred$n)
   expect_equal(p$tree_pred$mort, a$tree_pred$mort, tolerance = 1e-12)   # mortality is unscaled
   whole = a$tree_pred$n >= 3.5
-  # compounded over the window, and never above the same rate compounded (AM >= GM)
+  # the increment compounded over the four years is exactly the per-year rate compounded
   expect_gt(mean(p$tree_pred$growth[whole]), 3*mean(a$tree_pred$growth[whole]))
-  expect_true(all(1 + p$tree_pred$growth[whole] <= (1 + a$tree_pred$growth[whole])^4 + 1e-8))
+  expect_equal(1 + p$tree_pred$growth[whole], (1 + a$tree_pred$growth[whole])^4, tolerance = 1e-5)
 })
 
 

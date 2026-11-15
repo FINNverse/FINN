@@ -25,10 +25,10 @@ the coding).}
 \code{createProcess(func = mortality)}, the mortality equation of
 \code{\link[=mortality]{mortality()}} with a logistic response to every environment column.
 Build your own with \code{\link[=createProcess]{createProcess()}} or \code{\link[=createHybrid]{createHybrid()}}.
-Before any fitting the response is about 0.5 per time step at the average
-environment, so on yearly steps an unfitted stand loses most of its trees
-within ten years; for a simulation without a fit give the process a low
-starting value with \code{createProcess(initEnv = )}, see \code{\link[=mortality]{mortality()}}.}
+Its environmental response starts at about 2 \% mortality per time step
+(an intercept of \code{qlogis(0.02)}, every other weight 0), so that an unfitted
+stand on yearly steps does not die out; \code{createProcess(initEnv = )} sets
+another start, see \code{\link[=mortality]{mortality()}}.}
 
 \item{growth_process}{(\code{process})\cr How trees grow in diameter. Default
 \code{createProcess(func = growth)}, the growth equation of \code{\link[=growth]{growth()}}
@@ -60,8 +60,9 @@ recruits are the trees the inventory counts as recruits.}
 is, so that \code{\link[=fit]{fit()}} compares it with the right simulated quantity.
 \code{"annual"} (default): a rate per time step -- with annual steps the mean
 annual relative growth rate over the observation interval (each year's
-\code{dbh / dbh_before - 1}, averaged). FINN compares it with the mean of its
-simulated per-step rates over the interval. \code{"period"}: the relative
+\code{dbh / dbh_before - 1}, compounded to one rate per year). FINN compounds
+its simulated per-step rates over the interval the same way, so the two
+are the same quantity (see \code{\link[=fit]{fit()}}). \code{"period"}: the relative
 diameter increment over the whole observation interval
 (\code{dbh_end / dbh_start - 1}), which compounds the per-step rates; FINN then
 compounds its simulated rates the same way. The two only differ when an

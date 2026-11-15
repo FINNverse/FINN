@@ -66,10 +66,10 @@
 #'   `createProcess(func = mortality)`, the mortality equation of
 #'   [FINN::mortality()] with a logistic response to every environment column.
 #'   Build your own with [FINN::createProcess()] or [FINN::createHybrid()].
-#'   Before any fitting the response is about 0.5 per time step at the average
-#'   environment, so on yearly steps an unfitted stand loses most of its trees
-#'   within ten years; for a simulation without a fit give the process a low
-#'   starting value with `createProcess(initEnv = )`, see [FINN::mortality()].
+#'   Its environmental response starts at about 2 % mortality per time step
+#'   (an intercept of `qlogis(0.02)`, every other weight 0), so that an unfitted
+#'   stand on yearly steps does not die out; `createProcess(initEnv = )` sets
+#'   another start, see [FINN::mortality()].
 #' @param growth_process (`process`)\cr How trees grow in diameter. Default
 #'   `createProcess(func = growth)`, the growth equation of [FINN::growth()]
 #'   with a linear response to every environment column. Build your own with
@@ -96,8 +96,9 @@
 #'   is, so that [FINN::fit()] compares it with the right simulated quantity.
 #'   `"annual"` (default): a rate per time step -- with annual steps the mean
 #'   annual relative growth rate over the observation interval (each year's
-#'   `dbh / dbh_before - 1`, averaged). FINN compares it with the mean of its
-#'   simulated per-step rates over the interval. `"period"`: the relative
+#'   `dbh / dbh_before - 1`, compounded to one rate per year). FINN compounds
+#'   its simulated per-step rates over the interval the same way, so the two
+#'   are the same quantity (see [fit()]). `"period"`: the relative
 #'   diameter increment over the whole observation interval
 #'   (`dbh_end / dbh_start - 1`), which compounds the per-step rates; FINN then
 #'   compounds its simulated rates the same way. The two only differ when an
@@ -244,6 +245,19 @@ finn = function(N_species,
 #' needed. After `epochs` passes over the data the model holds the estimated
 #' parameters; `fit()` changes the model in place and also returns it. The
 #' per-response losses of every epoch are in `model$history`.
+#'
+#' **Rates over an observation interval.** An inventory interval of
+#' `period_length` years is that many simulated years. The simulated yearly
+#' rates of those years are compounded into one rate per year before they meet
+#' the observation, with the same functional [makeObsData()] uses for the
+#' observed rate: growth as the geometric mean of `1 + g` minus one, mortality
+#' as one minus the geometric mean of the yearly survival `1 - m`; the recruits
+#' are summed and the stand variables are taken at the census year. A year in
+#' which a species has no trees in the simulation counts as growth 0 and
+#' survival 1, and the rate is spread over the full `period_length`, because
+#' the observed rate is derived from the counts over the whole interval. With
+#' `finn(growth_rate = "period")` growth is the compounded increment over the
+#' interval instead.
 #'
 #' **Reading the progress.** With the default `loss_weights = "auto"` every
 #' response's loss is reported as a fraction of the loss a constant prediction
@@ -855,8 +869,10 @@ check_patch_arguments = function(model, patches, patch_size, init_cohort, patche
 #' growth and mortality kernels on trees you observed: light is computed from
 #' the observed stand, the kernels run on those trees at their observed
 #' diameters, and the annual rates are accumulated over each site's
-#' remeasurement interval — growth as the mean of the annual rates, mortality as
-#' the complement of the product of annual survivals.
+#' remeasurement interval — growth as the per-year rate of the compounded
+#' annual rates (the geometric mean of `1 + g`, as [makeObsData()] derives the
+#' observed rate), mortality as the complement of the product of annual
+#' survivals.
 #'
 #' It is the same code path `fit(..., loss_aggregation = c(growth = "tree",
 #' mortality = "tree"))` scores, so a validation report cannot drift from the
@@ -1745,7 +1761,9 @@ finn_class = nn_module(
           keep = tree_tracked()$to(dtype = torch_float32())
           idx = torch_where(keep$gt(0.5), tree_slot_idx(),
                             torch_full_like(cohort_ids$to(dtype = torch_long()), tree_gen_n + 1L))$flatten()
-          gi = if(isTRUE(self$growth_period_scale)) torch_log1p(g) else g
+          # log(1 + g) accumulates in both modes: the window's growth is read back as
+          # the compounded increment (growth_rate = "period") or its per-year rate
+          gi = torch_log1p(g)
           tree_acc[[1]] = tree_acc[[1]]$scatter_add(1, idx, (gi*keep)$flatten())
           tree_acc[[2]] = tree_acc[[2]]$scatter_add(1, idx, (torch_log((1-m)$clamp(1e-6, 1))$negative()*keep)$flatten())
           tree_acc[[3]] = tree_acc[[3]]$scatter_add(1, idx, keep$flatten())
@@ -2045,7 +2063,7 @@ finn_class = nn_module(
             n_entered = tree_acc[[4]]$narrow(1, 1, tree_gen_n)
             n_alive = tree_acc[[5]]$narrow(1, 1, tree_gen_n)
             g_acc = tree_acc[[1]]$narrow(1, 1, tree_gen_n)
-            g_pred = if(isTRUE(self$growth_period_scale)) torch_expm1(g_acc) else g_acc/n_ok$clamp(min = 1)
+            g_pred = if(isTRUE(self$growth_period_scale)) torch_expm1(g_acc) else torch_expm1(g_acc/n_ok$clamp(min = 1))
             p_death = torch_expm1(tree_acc[[2]]$narrow(1, 1, tree_gen_n)$negative())$negative()
             # fast-setup (9c03a90) keeps a killed tracked cohort to the end of its
             # window, so no target is hidden any more; F1 (5badcda) counts the units
@@ -2086,8 +2104,12 @@ finn_class = nn_module(
               M3 = M$unsqueeze(3)
               denom = p_t$clamp(min = 1)$unsqueeze(2)
               G = Result[[4]][,1:i,,drop = FALSE]
-              g_pred = if (isTRUE(self$growth_period_scale)) (G*M3 + 1)$prod(2) - 1 else (G*M3)$sum(2)/denom
-              m_pred = (Result[[5]][,1:i,,drop = FALSE]*M3)$sum(2)/denom
+              # the yearly rates of the window compounded into the per-year rate the
+              # observation carries (window_growth / window_mortality in utils.R): a
+              # year outside the site's window or without trees counts as growth 0 and
+              # survival 1, and the denominator is the observation's period_length
+              g_pred = if (isTRUE(self$growth_period_scale)) (G*M3 + 1)$prod(2) - 1 else window_growth(G, M3, denom)
+              m_pred = window_mortality(Result[[5]][,1:i,,drop = FALSE], M3, denom)
               r_pred = (Result[[7]][,1:i,,drop = FALSE]*M3)$sum(2)
               if(!tree_mode && !stand_empty) {
                 loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
@@ -2105,9 +2127,9 @@ finn_class = nn_module(
               # at their real diameters. The mse and binomial closures already
               # mask NaN, so padding slots and non-survivors drop out.
               if (!is.null(tree_obs)) {
-                # tp$growth is the window MEAN of the annual rates (matching the
-                # annualised observation) and tp$mortality the interval death
-                # probability (matching the observed 0/1 over the interval).
+                # tp$growth is the per-year rate of the compounded window growth
+                # (matching the yearly observation) and tp$mortality the interval
+                # death probability (matching the observed 0/1 over the interval).
                 tp = private$tree_predictions(tree_obs, tmp_index, env, i, M, p_t)
                 if (identical(self$loss_agg$growth$type, "tree")) {
                   loss[4] = self$loss_growth_func(tree_obs$growth[, tmp_index, , ], tp$growth)
@@ -2141,12 +2163,15 @@ finn_class = nn_module(
             ## scoring growth at full period magnitude -- annualising the target
             ## instead collapses growth's variance and flattens its env response.
             if(!tree_mode && !stand_empty) {
+              # the window's yearly rates compounded into the per-year rate (see the
+              # per-site branch above and window_growth / window_mortality in utils.R)
+              win = (i-period+1):(i)
               g_pred = if (isTRUE(self$growth_period_scale))
-                         (Result[[4]][,(i-period+1):(i),] + 1)$prod(2) - 1
-                       else Result[[4]][,(i-period+1):(i),]$mean(2)
+                         (Result[[4]][,win,,drop = FALSE] + 1)$prod(2) - 1
+                       else window_growth(Result[[4]][,win,,drop = FALSE], NULL, period)
               loss[4] = self$loss_growth_func(y[,tmp_index,,4], g_pred, y[,tmp_index,,9])
               # mort rates
-              loss[5] = self$loss_mortality_func(y[,tmp_index,,5], Result[[5]][,(i-period+1):(i),]$mean(2), y[,tmp_index,,8])
+              loss[5] = self$loss_mortality_func(y[,tmp_index,,5], window_mortality(Result[[5]][,win,,drop = FALSE], NULL, period), y[,tmp_index,,8])
             }
             # reg rates ha
             loss[6] = self$loss_regeneration_func(y[,tmp_index,,6], Result[[7]][,(i-period+1):(i),]$sum(2) )#(Result[[7]][,(i-period+1),] - Result[[7]][,i,])$clamp(min = 0.0)  )
@@ -3628,6 +3653,37 @@ finn_class = nn_module(
       which(ok)
     },
 
+    # The default start of the mortality environment response, about 2 % per
+    # step: the weights of the linear response (or of the output layer of a
+    # network) are set to 0 and its intercept (or bias) to qlogis(0.02). Before
+    # 0.2.0 the weights were torch's random start, which puts the response at
+    # sigmoid(0) = 0.5 at the average environment and empties an unfitted stand
+    # within a decade on annual steps. The species parameters of mortality()
+    # (light, size and growth terms, drawn in +-0.2) move the start by at most
+    # about one logit unit, so there is no second baseline to double-count.
+    # The linear response has no bias of its own: its intercept is the
+    # "(Intercept)" column of the model matrix, the first column when the
+    # formula has one; without an intercept nothing can be set and the start
+    # is left as it is.
+    start_mortality_low = function(nn, obj) {
+      z0 = stats::qlogis(0.02)
+      # terms() needs a data argument to expand a `.` in the formula; any one column does
+      has_intercept = is.null(obj$formula) ||
+        attr(stats::terms(obj$formula, data = data.frame(.finn_env = 1)), "intercept") == 1L
+      pars = nn$parameters
+      torch::with_no_grad({
+        if (is.null(obj$hidden) || length(obj$hidden) == 0L) {
+          if (!has_intercept) return(invisible(NULL))
+          w = pars[[1]]
+          w$zero_()
+          w[, 1] = z0
+        } else {
+          pars[[length(pars)]]$fill_(z0)
+        }
+      })
+      invisible(NULL)
+    },
+
     # The components to score at this timestep under fit()'s `nonfinite` option:
     # "drop_term" keeps every finite term, "skip_step" keeps all or nothing. Both
     # count the non-finite responses (finite_terms), which fit() reports.
@@ -3807,8 +3863,9 @@ finn_class = nn_module(
     #
     # The rates are accumulated over the SAME per-site window the aggregated path
     # uses (mask `M`, one column per simulated year), because the observation is
-    # an interval quantity: growth is the mean of the annual rates, mortality the
-    # complement of the product of annual survivals. Evaluating a single year
+    # an interval quantity: growth is the per-year rate of the compounded annual
+    # rates (the geometric mean of 1 + g, as makeObsData() derives it), mortality
+    # the complement of the product of annual survivals. Evaluating a single year
     # instead would compare one year's climate - including its drought anomaly -
     # against a decade's mean. The stand is held at its state at the interval
     # start, so light and the diameters are computed once and only the
@@ -3846,10 +3903,12 @@ finn_class = nn_module(
         m = self$mortality_func(dbh = dbh4, species = sp4, trees = n4, parMort = self$par_mortality,
                                 pred = pred_m, light = light4, growth = g)
         w4 = M[, j_from:i, drop = FALSE]$unsqueeze(3)$unsqueeze(4)
-        g_sum = (g * w4)$sum(2)
+        # growth in log space too, so the window reads back as the per-year rate
+        # of the compounded increment, the quantity makeObsData() reports
+        g_sum = (torch_log1p(g) * w4)$sum(2)
         lsurv = ((1 - m$clamp(1e-6, 1 - 1e-6))$log() * w4)$sum(2)
         denom = p_t$clamp(min = 1)$reshape(c(-1, 1, 1))
-        return(list(growth = g_sum / denom, mortality = 1 - lsurv$exp()))
+        return(list(growth = torch_expm1(g_sum / denom), mortality = 1 - lsurv$exp()))
       }
       # hybrid processes take the raw environment and their own networks: year by year
       g_sum = NULL; lsurv = NULL
@@ -3867,12 +3926,13 @@ finn_class = nn_module(
         # The survival product is accumulated in LOG space: the direct form,
         # prod (1 - m_j)^w_j, needs a tensor exponent, and torch's backward for
         # that is not defined for the mask's dtype.
-        g_sum = if (is.null(g_sum)) g * w3 else g_sum + g * w3
+        lg_j  = torch_log1p(g) * w3
+        g_sum = if (is.null(g_sum)) lg_j else g_sum + lg_j
         ls_j  = (1 - m$clamp(1e-6, 1 - 1e-6))$log() * w3
         lsurv = if (is.null(lsurv)) ls_j else lsurv + ls_j
       }
       denom = p_t$clamp(min = 1)$reshape(c(-1, 1, 1))
-      list(growth = g_sum / denom, mortality = 1 - lsurv$exp())
+      list(growth = torch_expm1(g_sum / denom), mortality = 1 - lsurv$exp())
     },
 
     # Observed stem counts per diameter class -> [sites, obs_years, species, K+1].
@@ -4374,6 +4434,8 @@ finn_class = nn_module(
 
           if(!is.null(obj$initEnv)) {
             for(i in 1:length(nn$parameters)) nn$parameters[[i]]$set_data( obj$initEnv[[i]] )
+          } else if(type == "mortality" && is.null(obj$NN)) {
+            private$start_mortality_low(nn, obj)
           }
 
         } else {

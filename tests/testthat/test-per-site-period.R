@@ -47,8 +47,10 @@ mk_obs <- function(sched) {
   rbindlist(lapply(seq_len(nrow(rows)), function(k) {
     s <- rows$siteID[k]; y <- rows$year[k]; p <- rows$period_length[k]
     o <- pred[siteID == s & year == y, .(siteID, year, species, dbh, ba, trees)]
+    # the window's yearly rates compounded into one rate per year, as fit() scores them
     w <- pred[siteID == s & year > y - p & year <= y,
-              .(growth = mean(growth), mort = mean(mort), reg = sum(r_mean_ha)), by = species]
+              .(growth = exp(mean(log1p(growth))) - 1, mort = 1 - exp(mean(log1p(-mort))),
+                reg = sum(r_mean_ha)), by = species]
     o <- merge(o, w, by = "species"); o[, `:=`(period_length = p, species_name = paste0("sp", species))]
   }))[order(siteID, year, species)]
 }

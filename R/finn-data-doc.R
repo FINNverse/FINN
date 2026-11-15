@@ -65,10 +65,12 @@
 #' | `growth_n` | trees behind the `growth` mean | 1: every growth observation weighs the same |
 #'
 #' With `period_length`, the simulated growth and mortality of the interval's
-#' steps are averaged and the simulated recruitment is summed before they are
-#' compared with the observation: a ten-year inventory interval is ten
-#' simulated years, and the yearly rates of `data` are compared with the mean
-#' of the ten simulated yearly rates. `n_at_risk` and `growth_n` weight the
+#' steps are compounded into one rate per year and the simulated recruitment is
+#' summed before they are compared with the observation: a ten-year inventory
+#' interval is ten simulated years, and the yearly rates of `data` are compared
+#' with the geometric mean of `1 + g` minus one and with one minus the
+#' geometric mean survival of the ten simulated years -- the functional
+#' [makeObsData()] derives the observed rates with. `n_at_risk` and `growth_n` weight the
 #' mortality and growth terms by the number of trees behind each observation
 #' (a mortality rate from 100 trees says more than one from a single tree).
 #' [FINN::makeObsData()] produces all of them. Further optional columns exist

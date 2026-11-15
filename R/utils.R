@@ -434,6 +434,34 @@ dnbinom_torch = function(pred, true, theta) {
 
 
 
+# The simulated yearly rates of an observation window, compounded into the
+# per-year rate makeObsData(rates = "annual") reports: growth as the geometric
+# mean of 1 + g over the window, mortality as 1 minus the geometric mean
+# survival. `x` is [sites, years, species] over the years 1..i (or the window),
+# `w` an optional [sites, years, 1] mask of the years inside each site's window,
+# `p` the window length per site ([sites, 1]) or one number. A year the mask
+# excludes, and a year in which a species has no trees (its rate is 0),
+# contributes growth 0 and survival 1 while the denominator stays the full
+# period_length: the observed rate is derived from the counts over the whole
+# interval, so the simulated one is spread over the whole interval too.
+# Mortality is clamped below 1 - 1e-4 before the log: sigmoid saturates to
+# exactly 1 in float32 (logit > 17.3), where log(0) would make the gradient
+# infinite; 1e-4 bounds it at 1e4. Growth is not clamped: the package's growth
+# is non-negative, and a custom process that goes below -1 should fail visibly.
+# The input is cloned first: log1p() and clamp() save their input for the
+# backward pass, and the caller passes a view of the Result tensors, which the
+# time loop keeps writing into before the per-site path runs its one backward.
+window_growth = function(g, w = NULL, p) {
+  lg = torch_log1p(g$clone())
+  if (!is.null(w)) lg = lg*w
+  torch_expm1(lg$sum(2)/p)
+}
+window_mortality = function(m, w = NULL, p) {
+  ls = torch_log1p(-m$clone()$clamp(max = 1 - 1e-4))
+  if (!is.null(w)) ls = ls*w
+  1 - torch_exp(ls$sum(2)/p)
+}
+
 # `"cuda"` is what everyone who has used torch directly reaches for, and
 # match.arg()'s "should be one of cpu, gpu" does not say that it is accepted.
 resolve_device = function(device) {

@@ -350,6 +350,19 @@ needed. After \code{epochs} passes over the data the model holds the estimated
 parameters; \code{fit()} changes the model in place and also returns it. The
 per-response losses of every epoch are in \code{model$history}.
 
+\strong{Rates over an observation interval.} An inventory interval of
+\code{period_length} years is that many simulated years. The simulated yearly
+rates of those years are compounded into one rate per year before they meet
+the observation, with the same functional \code{\link[=makeObsData]{makeObsData()}} uses for the
+observed rate: growth as the geometric mean of \code{1 + g} minus one, mortality
+as one minus the geometric mean of the yearly survival \code{1 - m}; the recruits
+are summed and the stand variables are taken at the census year. A year in
+which a species has no trees in the simulation counts as growth 0 and
+survival 1, and the rate is spread over the full \code{period_length}, because
+the observed rate is derived from the counts over the whole interval. With
+\code{finn(growth_rate = "period")} growth is the compounded increment over the
+interval instead.
+
 \strong{Reading the progress.} With the default \code{loss_weights = "auto"} every
 response's loss is reported as a fraction of the loss a constant prediction
 (the mean of the observations) would get: \code{1} means no better than the

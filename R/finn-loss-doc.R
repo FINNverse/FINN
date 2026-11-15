@@ -40,9 +40,11 @@
 #' size distribution is scored through size classes, below).
 #'
 #' The rates are compared over the observation interval: with
-#' `period_length` in `data`, simulated growth and mortality are averaged
-#' over the interval's steps and simulated recruitment is summed, before they
-#' meet the observation (see [finn_data]). Growth is compared as a *relative*
+#' `period_length` in `data`, the simulated yearly growth and mortality are
+#' compounded into one rate per year (the geometric mean of `1 + g`, one minus
+#' the geometric mean survival -- as [makeObsData()] derives the observed
+#' rates) and simulated recruitment is summed, before they meet the
+#' observation (see [finn_data] and [fit()]). Growth is compared as a *relative*
 #' rate (`dbh / dbh_before - 1`), the model's own quantity; training against
 #' the absolute increment was tested and was worse and more seed-variable,
 #' because it couples the growth parameters to whichever trees happen to be

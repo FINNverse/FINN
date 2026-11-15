@@ -74,10 +74,12 @@ FINN when absent:\tabular{lll}{
 
 
 With \code{period_length}, the simulated growth and mortality of the interval's
-steps are averaged and the simulated recruitment is summed before they are
-compared with the observation: a ten-year inventory interval is ten
-simulated years, and the yearly rates of \code{data} are compared with the mean
-of the ten simulated yearly rates. \code{n_at_risk} and \code{growth_n} weight the
+steps are compounded into one rate per year and the simulated recruitment is
+summed before they are compared with the observation: a ten-year inventory
+interval is ten simulated years, and the yearly rates of \code{data} are compared
+with the geometric mean of \code{1 + g} minus one and with one minus the
+geometric mean survival of the ten simulated years -- the functional
+\code{\link[=makeObsData]{makeObsData()}} derives the observed rates with. \code{n_at_risk} and \code{growth_n} weight the
 mortality and growth terms by the number of trees behind each observation
 (a mortality rate from 100 trees says more than one from a single tree).
 \code{\link[=makeObsData]{makeObsData()}} produces all of them. Further optional columns exist

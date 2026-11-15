@@ -7,9 +7,10 @@ library(data.table)
 # process function on hand-built stands through the model it is bound to; the
 # last tests fit a tiny FIA subset. Torch-gated.
 
-# `mort0`: the starting yearly mortality. The default environment weights start
-# at 0, i.e. a mortality of sigmoid(0) = 0.5 per year, under which the four
-# test stands die out before their first census at year 10 and nothing is scored.
+# `mort0`: a starting yearly mortality other than the default, which is about
+# 2 % a year since 0.2.0 (before, the weights started at torch's random values,
+# i.e. sigmoid(0) = 0.5 per year, under which the four test stands died out
+# before their first census at year 10 and nothing was scored).
 build_adult_model <- function(Nsp, logx = log(20), logA = log(20), mort0 = NULL) {
   FINN.seed(1)
   mort_init <- if (is.null(mort0)) NULL else list(cbind(rep(stats::qlogis(mort0), Nsp), 0, 0))
@@ -84,7 +85,7 @@ test_that("regeneration_adult fits, and its parameters move", {
   obs <- copy(FINN::fia_obs_dt); env <- copy(FINN::fia_env_dt); it <- copy(FINN::fia_init_trees)
   sites <- head(sort(unique(obs$siteID)), 4L)
   Nsp <- max(obs$species)
-  m <- build_adult_model(Nsp, mort0 = 0.02)   # 2 % a year: the stands live to their censuses
+  m <- build_adult_model(Nsp)   # the default start, about 2 % a year: the stands live to their censuses
   before <- list(x = as.numeric(m$reg_adult_logx), A = as.numeric(m$reg_adult_logA))
   suppressMessages(
     fit(m, env = env[siteID %in% sites], data = obs[siteID %in% sites],
