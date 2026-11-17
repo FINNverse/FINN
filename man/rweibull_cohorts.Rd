@@ -30,15 +30,18 @@ rweibull_cohorts(
 \item{species}{Integer vector specifying the species ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.}
 }
 \value{
-A data frame containing the cohort data with columns for site ID, patch ID, cohort ID, species, number of trees, and DBH.
+A data frame with one row per non-empty diameter class and the columns \code{siteID}, \code{patchID}, \code{cohortID} (numbered over the whole table), \code{species}, \code{dbh} (cm) and \code{trees}, the format of \code{CohortMat(obs_df = )}.
 }
 \description{
 This function generates cohort data for tree populations using the Weibull distribution based on specified tree counts, diameter at breast height (DBH) shape, and scale parameters.
 }
 \details{
-The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes, and the cohort data is generated accordingly.
+The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes of width \code{dbh_class_range}, and each non-empty class becomes one cohort.
 }
 \examples{
+set.seed(1)
+# a stand of two species on one patch: 300 saplings of species 3 around
+# 1 cm and 10 large trees of species 4 around 50 cm, in 0.1 cm classes
 obs_df <- rweibull_cohorts(
   trees = c(300, 10),
   dbh_shape = c(3, 3),
@@ -49,4 +52,9 @@ obs_df <- rweibull_cohorts(
   species = c(3, 4)
 )
 head(obs_df)
+# trees and cohorts per species
+aggregate(cbind(trees, cohorts = 1) ~ species, data = obs_df, FUN = sum)
+}
+\seealso{
+\link{CohortMat} to turn the table into an initial state
 }

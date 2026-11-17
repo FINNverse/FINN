@@ -205,11 +205,50 @@ than a Spearman correlation of about 0.08 out of sample): use the staged
 route of the previous section.
 \item \strong{Check before interpreting recruitment}: compare the predicted and the
 observed total recruitment, and the regeneration loss in \code{m$history}
-against its intercept-only baseline (with \code{weights = "auto"}, a value of 1
+against its intercept-only baseline (with \code{loss_weights = "auto"}, a value of 1
 is no better than predicting the mean).
 }
 }
 
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# three sites of the bundled Oregon FIA sample and two epochs per fit, to
+# show the options; a real calibration uses all sites and many epochs
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+obs   <- fia_obs_dt[siteID \%in\% sites]
+env   <- fia_env_dt[siteID \%in\% sites]
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+
+# the default regeneration process: a cap shared by all species with its
+# prior from the data, and a trained recruit dispersion with a floor of 0.5
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createProcess(~ temp + prec, growth),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+fit(m, data = obs, env = env, init_cohort = init, epochs = 2L,
+    patch_size = 0.06, plot_progress = FALSE)
+exp(as.numeric(m$reg_logK))         # the cap, recruits per ha and year
+max(obs$reg / obs$period_length)    # its prior: the largest observed rate
+
+# a fixed recruit dispersion and no recruitment floor
+m_fixed <- finn(N_species = Nsp, recruits_dbh = 12.9,
+                growth_process       = createProcess(~ temp + prec, growth),
+                mortality_process    = createProcess(~ temp + prec, mortality),
+                regeneration_process = createProcess(~ temp + prec, regeneration_capped,
+                                                     optimizeTheta = FALSE,
+                                                     dispersion_parameter = 1,
+                                                     reg_floor = 0))
+
+# the first stage of a staged calibration: the observed recruits drive the
+# stand, the regeneration process is frozen and its loss term is dropped
+fit(m_fixed, data = obs, env = env, init_cohort = init, epochs = 2L,
+    patch_size = 0.06, plot_progress = FALSE, loss_recruit = "observed")
+do.call(rbind, m_fixed$history)     # the regeneration column (6) is 0
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 \code{\link[=createProcess]{createProcess()}}, \code{\link[=createHybrid]{createHybrid()}}, \code{\link[=finn]{finn()}},
 \code{\link[=fit]{fit()}}, \code{\link[=simulateForest]{simulateForest()}}, \code{\link[=regeneration]{regeneration()}},

@@ -168,8 +168,9 @@ count \code{fit()} set, and a count fixed earlier in the session cannot be
 changed (\code{fit()} then says so).}
 
 \item{update_step}{(\code{integer(1)})\cr Every how many simulated years the
-gradient is cut and the parameters are updated (truncated backpropagation
-through time). Default \code{1}: one update per simulated year. A loss is only
+gradient is cut (truncated backpropagation through time). Default \code{1}: a
+loss sees the processes of its own year only. The parameters are updated
+once per batch, with the gradients of all cuts added up. A loss is only
 scored at a year that is a multiple of \code{update_step}, so an observation
 year off that grid is not scored, and \code{fit()} stops when none is on it.
 The simulated state runs on uncut. Larger values let the loss see a
@@ -291,11 +292,15 @@ so a teacher-forced model is still validated by single shooting.}
 
 \item{rb_gradient}{(\code{logical(1)})\cr Take the gradient of the drawn death and
 recruitment counts through their expectation instead of through the draw. The
-forward pass is unchanged to the bit -- the stand still dies and recruits
-discretely -- but the reparameterised draw and the rounding's surrogate no
-longer carry the sampler's noise into the gradient (on a national inventory
-most of the mortality gradient was draw noise without it). Default \code{TRUE}
-since 0.2.0; set \code{FALSE} to reproduce a fit made before that.}
+stand still dies and recruits discretely, but the reparameterised draw and
+the rounding's surrogate no longer carry the sampler's noise into the
+gradient (on a national inventory most of the mortality gradient was draw
+noise without it). Default \code{TRUE} since 0.2.0; set \code{FALSE} to reproduce a
+fit made before that. The setting also decides which death draw the default
+\code{createProcess(mortality_draw = "binomial")} uses: the exact binomial with
+\code{TRUE}, the Gamma draw of earlier versions with \code{FALSE} (see
+\code{\link[=createProcess]{createProcess()}}). It is stored on the model, so later simulations
+draw the same way as the last fit.}
 
 \item{trees_offset}{(\code{numeric(1)})\cr Offset added to the predicted stem count
 before the \code{trees} count likelihood, which is \code{-Inf} (poisson) or arbitrarily
@@ -324,7 +329,8 @@ Estimates the parameters of a model built with \code{\link[=finn]{finn()}} from 
 inventory data. The model simulates every site from its initial trees
 through the years of \code{env}, the simulation is compared with the observed
 stand variables and demographic rates in \code{data}, and the parameters of all
-processes -- the species parameters of the mechanistic equations, their
+processes -- the species parameters of the mechanistic equations (for a
+process built with \code{createProcess(optimizeSpecies = TRUE)}), their
 responses to the environment, and the weights of any neural-network process
 -- are adjusted together, in one joint optimization, until the simulation
 matches the observations as well as it can. The processes are never
@@ -366,14 +372,18 @@ interval instead.
 \strong{Reading the progress.} With the default \code{loss_weights = "auto"} every
 response's loss is reported as a fraction of the loss a constant prediction
 (the mean of the observations) would get: \code{1} means no better than the
-mean, below \code{1} better. The plot drawn with \code{plot_progress = TRUE} and
-\code{model$history} show these fractions per epoch. A fit has converged when
+mean, below \code{1} better. \code{model$history} holds these fractions, one vector
+per epoch in the order \code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mortality},
+\code{regeneration} (a seventh, unused entry is 0); the plot drawn with
+\code{plot_progress = TRUE} shows each of them relative to its value in the first
+epoch. A fit has converged when
 the parameters stop moving (\code{model$param_history}), not merely when the
 losses look flat; see the vignette \emph{Fitting FINN to FIA data}.
 
 \strong{Long simulated series.} Taking the gradient through a long simulation is
 slow and the signal fades. \code{fit()} therefore cuts the gradient every
-\code{update_step} years and updates the parameters at every cut; the simulated
+\code{update_step} years; the gradients of the cuts are added up and the
+parameters are updated once per batch of sites. The simulated
 state itself runs on uncut. The default of one year is the fastest and the
 most short-sighted; larger values let a loss see further back at a higher
 cost.

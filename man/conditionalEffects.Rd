@@ -24,7 +24,10 @@ conditionalEffects(
 \item{sim_seed}{(\code{integer(1)})\cr seed for the state-harvesting simulation (see \code{\link[=ALE]{ALE()}}).}
 }
 \value{
-an object of class \code{FINNconditionalEffects} (also cached on \code{model$conditional_effects}).
+an object of class \code{FINNconditionalEffects} (also cached on \code{model$conditional_effects}):
+a list with one element per process (\code{growth}, \code{mortality}, \code{regeneration}), each a list with
+one element per species holding the inputs the process was evaluated at (\code{X}), the local
+derivatives with respect to them (\code{grads}) and the predicted rate (\code{pred}).
 }
 \description{
 Computes (and caches on the model) the conditional effects — the local
@@ -53,9 +56,14 @@ m <- finn(
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
 
-# the marginal effect of each driver on each process, holding the others at their
-# observed values: one row per (species, variable, grid point)
+# the local slope of each process with respect to each of its inputs, at the
+# states the fitted model passes through: a list per process and species
 ce <- conditionalEffects(m)
-str(ce, max.level = 1)
+names(ce)
+# species 1, growth: the inputs, the slopes and the predicted rate
+str(ce$growth[[1]], max.level = 1)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=averageConditionalEffects]{averageConditionalEffects()}} for one number per driver, \code{\link[=ALE]{ALE()}} for the curves
 }

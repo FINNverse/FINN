@@ -18,7 +18,7 @@
 #'   works well without tuning. Any `torch` optimizer generator can be passed;
 #'   extra arguments for it, such as `weight_decay`, go into `...`.
 #' * `lr_scheduler` lowers the learning rate during the fit. The default
-#'   `"none"` keeps `lr` constant. `"step"` divides the learning rate by a factor
+#'   `"none"` keeps `lr` constant. `"step"` multiplies the learning rate by `gamma`
 #'   every `step_size` epochs, `"exponential"` multiplies it by `gamma` every
 #'   epoch, `"cosine"` lets it fall smoothly to `eta_min` over `T_max` epochs,
 #'   and `"plateau"` lowers it by `factor` after `patience` epochs without an

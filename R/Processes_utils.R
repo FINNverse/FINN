@@ -70,10 +70,9 @@
 #' @param optimizeEnv (`logical(1)`)\cr Should the parameters of the
 #'   environmental-response function be estimated during [FINN::fit()]? Default
 #'   `TRUE`.
-#' @param inputNN (`integer(1)`)\cr Input dimension of the environmental-response
-#'   network. Default `NULL` infers it from `formula`/`env`.
-#' @param outputNN (`integer(1)`)\cr Output dimension of the environmental-response
-#'   network. Default `NULL` uses the number of species.
+#' @param inputNN,outputNN Not used in 0.2.0: the input dimension of the
+#'   environmental-response network always follows from `formula` and `env`,
+#'   and its output dimension is the number of species. Leave at `NULL`.
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
 #'   the negative binomial distribution used to sample recruits (the size
 #'   `theta`), or its fixed value with `optimizeTheta = FALSE`. Only used when
@@ -150,13 +149,19 @@
 #'   process.
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn
 #'   from the cohort's mortality probability. Only used when this process is the
-#'   mortality process. `"binomial"` (default since 0.2.0) is the exact binomial:
-#'   each tree in the cohort gets its own reparameterised Bernoulli trial, which is
-#'   integer-valued, matches the binomial in both moments -- measured 12.011 / 8.387
-#'   against an exact 12.000 / 8.400 at `n = 40`, `p = 0.3` -- and keeps a gradient
-#'   path to `p` through a straight-through sigmoid. It expands each cell to the
-#'   largest cohort in the batch, so its memory grows with the largest `trees` value
-#'   in the data.
+#'   mortality process. `"binomial"` (default since 0.2.0) is `torch`'s exact
+#'   binomial sampler: integer-valued, exact in both moments, at constant memory.
+#'   It has no gradient of its own, which costs nothing under
+#'   `fit(rb_gradient = TRUE)` (the default), where the gradient is taken through
+#'   the expected number of deaths. Under `fit(rb_gradient = FALSE)` there is no
+#'   such path, and `"binomial"` falls back to the `"gamma"` draw.
+#'   `"bernoulli"` gives each tree of the cohort its own reparameterised Bernoulli
+#'   trial ([FINN::binomial_from_bernoulli()]), which is integer-valued, matches
+#'   the binomial in both moments -- measured 12.011 / 8.387 against an exact
+#'   12.000 / 8.400 at `n = 40`, `p = 0.3` -- and keeps a gradient path to `p`
+#'   through a straight-through sigmoid. It expands each cell to the largest
+#'   cohort in the batch, so its memory grows with the largest `trees` value in
+#'   the data.
 #'   `"poisson"` draws a Bernoulli where
 #'   the cohort holds one tree or fewer and a Poisson capped at the cohort size
 #'   otherwise: integer-valued, exact in expectation for small `n*p`, and no
@@ -278,11 +283,43 @@
 #'   recruitment options and how to combine them
 #'
 #' @examples
-#' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
+#' # A process is a recipe: createProcess() needs neither data nor torch, and the
+#' # predictors named in `formula` are looked up in `env` when the model is
+#' # fitted or simulated. Here: growth responding to temperature and precipitation
+#' growth_process <- createProcess(formula = ~ temp + prec, func = growth)
+#' class(growth_process)
+#' deparse(growth_process$formula)
 #'
-#' # the regeneration process with a smaller recruitment floor and a cap per species
-#' regeneration_process <- createProcess(~temperature, func = regeneration_capped,
-#'                                       reg_floor = 1e-4, cap = "species")
+#' # the same equation with its species parameters estimated as well (by default
+#' # only the environmental response is), and a quadratic temperature response
+#' growth_process <- createProcess(~ temp + I(temp^2) + prec, func = growth,
+#'                                 optimizeSpecies = TRUE)
+#'
+#' # level-1 hybrid: the environmental response of mortality as a small neural
+#' # network with two hidden layers; the mortality equation stays mechanistic
+#' mortality_process <- createProcess(~ temp + prec, func = mortality,
+#'                                    hidden = c(16L, 16L), dropout = 0.1)
+#'
+#' # the regeneration process with a smaller recruitment floor, a cap per
+#' # species and a fixed recruit dispersion
+#' regeneration_process <- createProcess(~ temp, func = regeneration_capped,
+#'                                       reg_floor = 1e-4, cap = "species",
+#'                                       optimizeTheta = FALSE)
+#'
+#' # competition takes no environment; continuous = TRUE compares every pair of
+#' # cohorts instead of binning them into height classes
+#' competition_process <- createProcess(func = competition, continuous = TRUE)
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # the processes become a model in finn(), here for the 11 species of the
+#' # bundled Oregon FIA data (?fia_obs_dt), whose env table has `temp` and `prec`
+#' m <- finn(N_species = 11, recruits_dbh = 12.9,
+#'           growth_process       = growth_process,
+#'           mortality_process    = mortality_process,
+#'           regeneration_process = regeneration_process,
+#'           competition_process  = competition_process)
+#' # the species parameters of growth: light requirement and size decay
+#' head(as.matrix(m$par_growth), 3)
 #'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
@@ -339,7 +376,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.frame())
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
@@ -497,7 +534,37 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @seealso [FINN::createProcess()], [FINN::finn()], [recruitment]
 #'
 #' @examples
-#' growth_process <- createHybrid(formula = ~temperature + precipitation)
+#' # A hybrid process is a recipe, like createProcess(): no data and no torch
+#' # are needed until the model is built. The default network is a small
+#' # transformer encoder
+#' growth_process <- createHybrid(formula = ~ temp + prec)
+#' class(growth_process)
+#'
+#' # a feed-forward network with two hidden layers instead, as in the Barro
+#' # Colorado Island case study of the paper
+#' mortality_process <- createHybrid(~ temp + prec, transformer = FALSE,
+#'                                   hidden = c(50L, 50L), dropout = 0.1)
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a model whose growth is a network while mortality, regeneration and
+#' # competition stay mechanistic, fitted for two epochs on three sites of the
+#' # bundled Oregon FIA data (?fia_obs_dt)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createHybrid(~ temp + prec, transformer = FALSE,
+#'                                               hidden = c(16L, 16L), dropout = 0.1),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#' # the network takes the place of the growth equation in the simulation
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init)
+#' head(sim$long$site[variable == "growth" & year == 10 & value > 0])
 #'
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
@@ -518,7 +585,7 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.frame())
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
@@ -596,12 +663,17 @@ extract_env = function(formula, env) {
 #'   \code{scale}; or \code{NULL} if there are no numeric predictors. This is the
 #'   object stored on a fitted model as \code{model$env_scaling} when it is fit
 #'   with \code{env_autoscale = TRUE}.
-#' @seealso \code{\link{apply_env_scaling}}
+#' @seealso \code{\link{apply_env_scaling}}, \code{\link{fit}} (\code{env_autoscale}),
+#'   \code{\link{finn_data}}
 #' @examples
 #' # the constants fit(env_autoscale = TRUE) stores on a model for this table
 #' compute_env_scaling(fia_env_dt)
 #' # keep one predictor on its own scale
 #' compute_env_scaling(fia_env_dt, spec = c(temp = "auto", prec = "identity"))
+#' # min-max scaling for every predictor, or a custom (robust) scaler for one
+#' head(compute_env_scaling(fia_env_dt, spec = "0to1"), 3)
+#' robust <- function(x) list(center = median(x), scale = IQR(x))
+#' head(compute_env_scaling(fia_env_dt, spec = list(temp = robust)), 3)
 #' @export
 compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))
@@ -670,7 +742,13 @@ compute_env_scaling = function(env, spec = TRUE) {
 #' # reproduce the standardization a model fit with env_autoscale = TRUE used:
 #' env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
 #' scaling <- compute_env_scaling(env)
+#' scaling
 #' apply_env_scaling(env, scaling)
+#'
+#' # new sites are put on the scale of the first table, not on their own: a
+#' # site at 6 degrees and 850 mm is the average site of `env`, so it maps to 0
+#' new_env <- data.frame(siteID = 4:5, year = 1L, temp = c(6, 10), prec = c(850, 1150))
+#' apply_env_scaling(new_env, scaling)
 #' @export
 apply_env_scaling = function(env, scaling) {
   if (is.null(scaling)) return(env)

@@ -12,7 +12,7 @@ rnbinom_torch_refined(pred, theta)
 \item{theta}{torch.Tensor Negative-binomial dispersion.}
 }
 \value{
-A \code{torch} tensor of recruit counts.
+A \code{torch} tensor of recruit counts, of the shape of \code{pred}.
 }
 \description{
 The default regeneration sampler since 0.2.0, selected with
@@ -47,5 +47,20 @@ is not in this release.
 
 For the measured consequence of both repairs on the simulated stand, and why
 the holdout cannot separate them, see \code{\link[=binomial_from_poisson]{binomial_from_poisson()}}.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+FINN.seed(1)
+# sparse recruitment: an expected 0.05 recruits per patch and year
+mu    <- torch::torch_full(c(100000), 0.05)
+theta <- torch::torch_tensor(1)
+r <- as.numeric(rnbinom_torch_refined(mu, theta))
+mean(r)    # the draw delivers the expected count ...
+table(r)   # ... as whole recruits, most patches getting none
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\link{recruitment}, \code{\link[=createProcess]{createProcess()}} (\code{regeneration_sampler},
+\code{theta_floor})
 }
 \keyword{internal}

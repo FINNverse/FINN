@@ -41,6 +41,16 @@ observation tables is covered, and the years after a site's last
 inventory are simulated but not scored. The climate is the plot's
 WorldClim normal, the same in every year.
 }
+\examples{
+library(data.table)
+head(fia_env_dt)
+# one row per site and simulated year; the climate of a site is its normal,
+# repeated for every year
+fia_env_dt[, .(sites = uniqueN(siteID), first_year = min(year), last_year = max(year))]
+# the range of the two predictors the package examples use, over the sites
+fia_env_dt[year == 1, .(temp_min = min(temp), temp_max = max(temp),
+                        prec_min = min(prec), prec_max = max(prec))]
+}
 \seealso{
 Other fia datasets: 
 \code{\link{fia_init_trees}},

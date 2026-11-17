@@ -685,6 +685,30 @@ someone who was affected.
 
 ## Bug fixes
 
+* `fit()` no longer creates or overwrites an object `counter` in the global
+  environment. The batch counter was advanced with `<<-`, which also left the
+  local counter at 1: with several batches per epoch (`batchsize` smaller than
+  the number of sites) `$history`, the progress plot and the plateau scheduler
+  saw the last batch's loss instead of the mean over the epoch's batches. With
+  one batch per epoch, the default, nothing changes.
+
+* `createProcess()` and `createHybrid()` find a formula that is held in a
+  variable of the calling function (`f <- ~ temp; createProcess(f, growth)`
+  inside a function used to stop with "object 'f' not found").
+
+* `predictTrees()` puts the model in evaluation mode and on the scoring device
+  before it predicts, as `simulateForest()` does. Straight after `fit()` the
+  model was still in training mode, so a process with `dropout` returned
+  different predictions on every call.
+
+* `makeInitCohorts(dbh_binsize = )` adds up `trees` with `na.rm = TRUE`. A
+  record without a stem count (`trees = NA`, e.g. a dead tree) used to turn its
+  whole bin into `NA`, which lost the living trees of that bin (349 of the 5350
+  stems of `fia_init_trees` with `dbh_binsize = 5`).
+
+* `mortality(debug = TRUE)` returns the list of its components (`light`,
+  `environment`, `predM`) instead of stopping with "object 'shade' not found".
+
 * `predict()` and `simulateForest()` left `requires_grad = TRUE` on every
   parameter of the model they had just simulated, so a model frozen for a staged
   calibration silently unfroze as soon as it was simulated (#55). Both now

@@ -65,6 +65,11 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
     plot_progress = FALSE)
 
 # which predictor matters for which process and species, and in which direction
-summary(m)
+s <- summary(m)
+# the printed tables are also returned
+head(s$importance$growth)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=ALE]{ALE()}}, \code{\link[=averageConditionalEffects]{averageConditionalEffects()}}, \code{\link[=feature_importance]{feature_importance()}}
 }

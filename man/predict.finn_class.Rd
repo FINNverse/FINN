@@ -103,8 +103,10 @@ all users want.}
 \value{
 A named list. \verb{$long$site} (and \verb{$wide$site}) give the site-level
 results, averaged over the patches: columns \code{siteID}, \code{year}, \code{species},
-\code{variable} (\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mort}, \code{r_mean_ha}, ...) and
-\code{value}. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
+\code{variable} (\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mort}, \code{reg}, \code{r_mean_ha}) and
+\code{value}; \verb{$wide$site} has one column per variable instead. \code{siteID} is the
+id used in \code{env}; \code{year} is the simulation step, counted from 1 (the k-th
+year of a site's \code{env} is step k), whatever the values of \code{env$year}. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
 the per-cohort state (\code{dbh}, \code{trees}, \code{species}, growth \code{g}, mortality \code{m},
 ...) for the requested timesteps.
 }

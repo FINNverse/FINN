@@ -12,7 +12,7 @@ height(dbh, parHeight)
 \item{parHeight}{A numeric value representing the species height allometry.}
 }
 \value{
-A numeric value representing the calculated height of the tree.
+A numeric vector (or torch.Tensor, for tensor input) with the height of the tree in m.
 }
 \description{
 Calculate the height of a tree based on its diameter at breast height and an allometry parameter
@@ -33,9 +33,16 @@ Values below 0.3 suit small trees and shrubs; set \code{createProcess(lower = )}
 them.
 }
 \examples{
+# a 30-cm tree of a species with parHeight = 0.5 is about 12 m tall
 height(30, 0.5)
+# the same diameter for a tall-growing and a short-growing species
 height(c(30), c(0.5,0.3))
+# two diameters of one species
 height(c(30,20), c(0.5))
+
+# the height curve of three species; the asymptote is (exp(parHeight) - 1) * 100 m
+dbh <- seq(0, 150, by = 10)
+round(sapply(c(low = 0.3, mid = 0.5, tall = 0.7), function(p) height(dbh, p)), 1)
 
 }
 \references{
@@ -43,4 +50,7 @@ Koch, G. W., Sillett, S. C., Jennings, G. M. & Davis, S. D. (2004).
 The limits to tree height. Nature 428, 851-854.
 
 \figure{height_plot1.png}{Parameter range}
+}
+\seealso{
+\code{\link[=competition]{competition()}}, which ranks the cohorts of a patch by this height
 }

@@ -7,19 +7,29 @@
 array2obsDF(obs_array)
 }
 \arguments{
-\item{obs_array}{A list containing three arrays: species, dbh, and trees.}
+\item{obs_array}{A list containing three arrays \code{species}, \code{dbh} and
+\code{trees}, each of dimension sites x patches x cohorts.}
 }
 \value{
-A data.frame with columns siteID, patchID, cohortID, species, dbh, and trees.
+A data.frame with one row per cohort and the columns \code{siteID},
+\code{patchID}, \code{cohortID} (the positions in the three array dimensions),
+\code{species}, \code{dbh} and \code{trees}. Slots with \code{dbh} of 0 or \code{NA} (no cohort) are
+left out.
 }
 \description{
-This function transforms arrays of species, dbh, and trees back into an observation data table.
+This function transforms arrays of species, dbh, and trees back into a
+cohort table, the inverse of \code{\link[=obsDF2arrays]{obsDF2arrays()}}.
 }
 \examples{
+# 2 sites x 2 patches x 2 cohort slots; a dbh of 0 marks an empty slot
 obs_array <- list(
-  species = array(c("A", "B"), dim = c(2, 2, 2)),
-  dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)),
-  trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
+  species = array(c(1, 2), dim = c(2, 2, 2)),
+  dbh = array(c(10, 20, 30, 0), dim = c(2, 2, 2)),
+  trees = array(c(100, 200, 150, 0), dim = c(2, 2, 2)))
 result <- array2obsDF(obs_array)
+result   # six cohorts: the two empty slots are dropped
 
+}
+\seealso{
+\code{\link[=obsDF2arrays]{obsDF2arrays()}}, \link{CohortMat}
 }

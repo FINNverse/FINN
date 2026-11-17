@@ -30,7 +30,7 @@ FINN's uncapped mechanistic regeneration process: the mean number of recruits
 a species contributes to one patch in one simulation step, in stems per
 hectare, \code{mean = regP * exp(pred) + reg_floor}. \code{regP} is the patch's light
 response, a sigmoid in the available light centred on the species' light
-requirement \code{parReg} and rescaled to \verb{[0, 1]}, so a shade-tolerant species
+requirement \code{parReg} and shifted to be 0 without light, so a shade-tolerant species
 (small \code{parReg}) recruits under a closed canopy and a light-demanding one does
 not. \code{exp(pred)} is the species' environmental response, and \code{reg_floor}
 (\code{\link[=createProcess]{createProcess()}}, default \code{1e-3}) is an additive floor that keeps a

@@ -24,7 +24,17 @@ for ensuring reproducibility in scripts that rely on both R and Torch for random
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the same seed gives the same draws, in R and in torch
 FINN.seed(123)
-# Now both R and Torch are seeded with 123, ensuring reproducible results
+a <- c(runif(1), as.numeric(torch::torch_rand(1)))
+FINN.seed(123)
+b <- c(runif(1), as.numeric(torch::torch_rand(1)))
+identical(a, b)
+
+# seed before finn() and fit() to make a fit reproducible: the starting
+# values of the parameters and the simulated deaths and recruits are random
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[base:Random]{base::set.seed()}}, \code{\link[torch:torch_manual_seed]{torch::torch_manual_seed()}}
 }

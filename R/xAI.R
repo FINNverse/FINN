@@ -197,15 +197,21 @@ ALE_ce = function(X, ce) {
 #'   (rows = processes, columns = environmental predictors, one coloured line per species).
 #' @param process (`character`|`NULL`)\cr If given (one of `"growth"`, `"mortality"`,
 #'   `"regeneration"`) only that process is plotted. `NULL` (default) plots all three.
-#' @param scale (`logical(1)`)\cr If `TRUE` each curve is divided by the SD of its
-#'   process x species rate, yielding dimensionless, comparable effects (the curve's
-#'   variance then equals the Sobol-style normalised importance). Default `FALSE`.
+#' @param scale (`logical(1)`)\cr Only for the plot (`plot = TRUE`): if `TRUE` each
+#'   drawn curve is divided by the SD of its process x species rate, yielding
+#'   dimensionless, comparable effects (the curve's variance then equals the
+#'   Sobol-style normalised importance). The returned tables are not changed; they
+#'   carry the SD as `rate_sd`. Default `FALSE`.
 #' @param ... Not supported yet.
 #'
-#' @return A list with one table per process (e.g. `$growth`, `$mortality`,
-#'   `$regeneration`). Each table gives the accumulated local effect (`ale`) of
-#'   every driver (`var`) across its observed range (`x`), per `species`. When
-#'   `plot = TRUE` the effects are also drawn.
+#' @return A list of class `FINNale` with one table per process (`$growth`,
+#'   `$mortality`, `$regeneration`). Each table gives the accumulated local
+#'   effect (`ale`, on the scale of the process rate) of every driver (`var`)
+#'   across its observed range (`x`), per `species`, and `rate_sd`, the SD of
+#'   that process x species rate. When `plot = TRUE` the effects are also drawn.
+#' @seealso [plot.FINNale()] to draw the curves, [conditionalEffects()] and
+#'   [averageConditionalEffects()] for the local slopes behind them,
+#'   [summary.finn_class()] and [feature_importance()] for variable importance
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
@@ -231,10 +237,10 @@ ALE_ce = function(X, ce) {
 #' ale <- ALE(m, plot = FALSE)
 #' head(ale$growth)
 #'
-#' # `scale = TRUE` divides each curve by the SD of its process x species rate, so
-#' # growth in cm/yr and mortality on the probability scale become comparable
-#' ale_s <- ALE(m, plot = FALSE, scale = TRUE)
-#' vapply(ale_s, function(d) max(abs(d$ale)), numeric(1))
+#' # the curves of one process, one panel per driver and one line per species;
+#' # `scale = TRUE` divides each drawn curve by the SD of its process x species
+#' # rate, so that the panels of different processes become comparable
+#' ALE(m, process = "growth", scale = TRUE)
 #' @export
 ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L, plot = TRUE, process = NULL, scale = FALSE, ...) {
 
@@ -286,6 +292,8 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #' @param ... currently ignored.
 #' @return invisibly, the `ggplot` object.
 #'
+#' @seealso [ALE()]
+#'
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' # a small model fitted on two Oregon FIA sites (see ?fit), then its ALE curves
@@ -303,6 +311,8 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #'
 #' ale <- ALE(m, plot = FALSE)
 #' plot(ale, process = "growth")
+#' # all three processes on a common, dimensionless scale
+#' plot(ale, scale = TRUE)
 #'
 #' @method plot FINNale
 #' @export
@@ -372,7 +382,11 @@ plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
 #' @param init_cohort (`CohortMat`|`NULL`)\cr initial cohort; `NULL` uses the cached training init_cohort.
 #' @param env_autoscale (`logical(1)`)\cr see [ALE()].
 #' @param sim_seed (`integer(1)`)\cr seed for the state-harvesting simulation (see [ALE()]).
-#' @return an object of class `FINNconditionalEffects` (also cached on `model$conditional_effects`).
+#' @return an object of class `FINNconditionalEffects` (also cached on `model$conditional_effects`):
+#'   a list with one element per process (`growth`, `mortality`, `regeneration`), each a list with
+#'   one element per species holding the inputs the process was evaluated at (`X`), the local
+#'   derivatives with respect to them (`grads`) and the predicted rate (`pred`).
+#' @seealso [averageConditionalEffects()] for one number per driver, [ALE()] for the curves
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
@@ -392,10 +406,12 @@ plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
 #' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
 #'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
 #'
-#' # the marginal effect of each driver on each process, holding the others at their
-#' # observed values: one row per (species, variable, grid point)
+#' # the local slope of each process with respect to each of its inputs, at the
+#' # states the fitted model passes through: a list per process and species
 #' ce <- conditionalEffects(m)
-#' str(ce, max.level = 1)
+#' names(ce)
+#' # species 1, growth: the inputs, the slopes and the predicted rate
+#' str(ce$growth[[1]], max.level = 1)
 #' @export
 conditionalEffects = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L) {
   .finn_get_ce(model, env, init_cohort, env_autoscale, sim_seed)
@@ -416,6 +432,7 @@ conditionalEffects = function(model, env = NULL, init_cohort = NULL, env_autosca
 #'   (dbh, light, growth) each process depends on.
 #' @return a named list (one entry per process) of data.frames with columns
 #'   `species, variable, mean_effect`.
+#' @seealso [conditionalEffects()], [summary.finn_class()], which prints these effects
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
@@ -439,7 +456,9 @@ conditionalEffects = function(model, env = NULL, init_cohort = NULL, env_autosca
 #' # which is the linear-model coefficient a mechanistic process would report and
 #' # the closest thing a neural-network process has to one
 #' ace <- averageConditionalEffects(m)
-#' str(ace, max.level = 1)
+#' head(ace$growth)
+#' # with the stand-state inputs of each process (dbh, light, ...) as well
+#' head(averageConditionalEffects(m, env_only = FALSE)$mortality)
 #' @export
 averageConditionalEffects = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L, env_only = TRUE) {
   ce  = .finn_get_ce(model, env, init_cohort, env_autoscale, sim_seed)
@@ -521,6 +540,7 @@ averageConditionalEffects = function(model, env = NULL, init_cohort = NULL, env_
 #' @param ... passed to [predict()] (e.g. `patches`, `patch_size`).
 #' @return a named list (one per process) of data.frames with columns
 #'   `species, variable, importance`, sorted within species.
+#' @seealso [summary.finn_class()] (`importance = "permutation"`), [ALE()]
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' # a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
@@ -540,10 +560,12 @@ averageConditionalEffects = function(model, env = NULL, init_cohort = NULL, env_
 #' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
 #'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
 #'
-#' # permutation importance: how much the fit degrades when a driver is shuffled.
-#' # `nperm` is small here to keep the example quick; use more for a real reading.
+#' # permutation importance: how much the simulated rate of a process shifts
+#' # when a driver is shuffled between sites and years. `nperm` is small here
+#' # to keep the example quick; use more for a real reading.
 #' fi <- feature_importance(m, nperm = 2L, seed = 1L)
-#' str(fi, max.level = 1)
+#' head(fi$growth)
+#' # `method = "sobol"` gives the dimensionless Sobol-style score instead
 #' @export
 feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L, method = c("rmse", "sobol"), seed = NULL, sim_seed = 42L, env_autoscale = TRUE, ...) {
 
@@ -644,6 +666,8 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' @param ... passed through (e.g. to [predict()] for the permutation option).
 #' @return invisibly, a list with `importance`, `average_conditional_effects`, and `method`.
 #'
+#' @seealso [ALE()], [averageConditionalEffects()], [feature_importance()]
+#'
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' # a small model fitted on two Oregon FIA sites (see ?fit)
@@ -660,7 +684,9 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'     plot_progress = FALSE)
 #'
 #' # which predictor matters for which process and species, and in which direction
-#' summary(m)
+#' s <- summary(m)
+#' # the printed tables are also returned
+#' head(s$importance$growth)
 #'
 #' @method summary finn_class
 #' @export

@@ -185,6 +185,39 @@
 #'
 #' @seealso [FINN::fit()], [finn_loss], [fia_obs_dt], [fia_env_dt],
 #'   [fia_init_trees], `vignette("C-Data_preparation", package = "FINN")`
+#' @examples
+#' library(data.table)
+#' # the input tables of a fit, here for three sites of the bundled Oregon FIA
+#' # sample
+#' sites <- 1:3
+#' obs <- fia_obs_dt[siteID %in% sites]
+#' env <- fia_env_dt[siteID %in% sites, .(siteID, year, temp, prec)]
+#'
+#' # `data`: one row per site, census year and species
+#' head(obs[, .(siteID, year, species, dbh, ba, trees, growth, mort, reg, period_length)])
+#' # `env`: one row per site and simulated year, up to the last census
+#' env[, .(first_year = min(year), last_year = max(year)), by = siteID]
+#' obs[, .(census_years = toString(unique(year))), by = siteID]
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # `init_cohort`: the trees of the first census
+#' Nsp  <- max(fia_obs_dt$species)
+#' init <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' init$dims   # sites, patches (the patch count of the fit), cohorts
+#'
+#' # fit() checks the tables before anything runs. `epochs = 0` stops after
+#' # that set-up, which is a quick way to test a new data set
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#' fit(m, data = obs, env = env, init_cohort = init, epochs = 0L,
+#'     patch_size = 0.06, plot_progress = FALSE)
+#' m$env_scaling   # the standardisation of the predictors, learned from `env`
+#'
+#' # an `env` that ends before the last census is refused, with the reason
+#' try(fit(m, data = obs, env = env[year <= 15], init_cohort = init, epochs = 0L,
+#'         patch_size = 0.06, plot_progress = FALSE))
 #' @name finn_data
 #' @aliases finn-data
 NULL

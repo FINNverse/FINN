@@ -7,18 +7,28 @@
 BA_stem(dbh)
 }
 \arguments{
-\item{dbh}{torch.Tensor The diameter at breast height of the tree.}
+\item{dbh}{torch.Tensor (or numeric vector) The diameter at breast height of the tree, in cm.}
 }
 \value{
-torch.Tensor The basal area of the tree.
+An object of the type of \code{dbh} (a torch.Tensor for a tensor) with the basal area of one
+stem, in m^2.
 }
 \description{
-This function calculates the basal area of a tree given the diameter at breast height (dbh).
+This function calculates the basal area of a tree given the diameter at breast height (dbh): the
+area of a circle of that diameter, \code{pi * (dbh / 200)^2}, in square metres for a \code{dbh} in centimetres.
+It is the tensor counterpart of \code{\link[=dbh2ba]{dbh2ba()}}.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
-dbh = torch::torch_tensor(50)
+# one stem of 10, 30 and 50 cm: 0.008, 0.071 and 0.196 m^2
+dbh = torch::torch_tensor(c(10, 30, 50))
 basal_area = BA_stem(dbh)
 print(basal_area)
+
+# the same numbers without torch
+BA_stem(c(10, 30, 50))
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=BA_stand]{BA_stand()}} for the basal area per hectare of a cohort, \code{\link[=dbh2ba]{dbh2ba()}}
 }

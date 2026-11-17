@@ -98,3 +98,8 @@ inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = en
 inputs$initCohorts$dims  # sites, patches, cohorts
 \dontshow{\}) # examplesIf}
 }
+\seealso{
+\code{\link{makeObsData}} for the step before,
+\code{\link{makeInitCohorts}} for the initial cohorts on their own,
+\code{\link{fit}} and \code{\link{finn_data}} for where the tables go
+}

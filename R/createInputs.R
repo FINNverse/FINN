@@ -55,6 +55,10 @@
 #'   \item \code{initCohort_dt} (optional): trees used to build cohorts.
 #' }
 #'
+#' @seealso \code{\link{makeObsData}} for the step before,
+#'   \code{\link{makeInitCohorts}} for the initial cohorts on their own,
+#'   \code{\link{fit}} and \code{\link{finn_data}} for where the tables go
+#'
 #' @examples
 #' library(data.table)
 #' # eight Oregon FIA plots, three inventories each; see the data-preparation vignette
@@ -239,8 +243,14 @@ resolveSiteIDs <- function(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE, ti
 #'
 #' @param dbh numeric vector of diameters (cm).
 #' @return numeric vector of basal areas (m^2).
+#' @seealso [FINN::BA_stem()] and [FINN::BA_stand()], the versions for `torch`
+#'   tensors
 #' @examples
 #' dbh2ba(c(10, 30, 50))   # basal area of one stem of 10, 30 and 50 cm
+#'
+#' # basal area per hectare of a 0.06 ha plot from its tree list
+#' dbh <- c(12.9, 25.4, 31.0, 48.3)
+#' sum(dbh2ba(dbh)) / 0.06
 #' @export
 dbh2ba <- function(dbh){
   return((dbh/200)^2 * pi)
@@ -282,7 +292,8 @@ obs_mort <- function(n_died, n_at_risk, period_length, rates = c("annual", "inte
 #' @param Npatches integer or NULL. If set, keep only sites with exactly this many patches.
 #' @param Nspecies integer or NULL. Cap species to the top N (others merged to "other").
 #' @param NspeciesQuantile numeric in (0,1] or NULL. Choose the smallest N covering
-#'   this fraction of individuals; overrides \code{Nspecies} if supplied.
+#'   this fraction of individuals. Used only when \code{Nspecies} is \code{NULL}:
+#'   if both are given, \code{Nspecies} takes precedence.
 #' @param rates \code{"annual"} (default) or \code{"interval"}: the unit of
 #'   \code{growth} and \code{mort}. \code{"annual"} returns them per year, for a
 #'   model simulated in yearly steps: a tree's growth over an interval of
@@ -345,6 +356,11 @@ obs_mort <- function(n_died, n_at_risk, period_length, rates = c("annual", "inte
 #'     quantity behind \code{obs_dt$growth} and the \code{growth} column of
 #'     \code{fit(tree_data = )}); an input column \code{growth} is replaced.
 #' }
+#'
+#' @seealso \code{\link{resolveSiteIDs}} for the next step (integer ids, the
+#'   annual time axis, the initial cohorts), \code{\link{finn_data}} for the
+#'   tables \code{\link{fit}} takes, \code{\link{fia_obs_dt}} for a finished
+#'   example, and \code{vignette("C-Data_preparation", package = "FINN")}
 #'
 #' @examples
 #' library(data.table)
@@ -572,8 +588,12 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #' constructs a \code{FINN::CohortMat} object.
 #'
 #' @description
-#' This function prepares \code{obs_df} in the exact format expected by
-#' \code{FINN::CohortMat$new()} and calls it. The required long-table schema is:
+#' Builds the initial state of a fit or a simulation, the \code{init_cohort} of
+#' \code{\link{fit}} and \code{\link{simulateForest}}, from the trees of the
+#' first inventory: every tree becomes a cohort of its own, or, with
+#' \code{dbh_binsize}, the trees of a patch and species are pooled into
+#' diameter classes. The function prepares \code{obs_df} in the format expected by
+#' \code{\link{CohortMat}} and calls it. The long-table schema of \code{obs_df} is:
 #' \itemize{
 #'   \item \strong{siteID} integer index of sites \eqn{1..S}.
 #'   \item \strong{patchID} integer index of patches within site \eqn{1..P_s}.
@@ -585,8 +605,8 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #' @details
 #' Internally calls:
 #' \preformatted{
-#' FINN::CohortMat$new(
-#'   obs_df = <data.frame with columns siteID, patchID, species, dbh, trees>,
+#' FINN::CohortMat(
+#'   obs_df = <data.frame with columns siteID, patchID, cohortID, species, dbh, trees>,
 #'   dbh    = NULL,
 #'   trees  = NULL,
 #'   species= NULL,
@@ -595,19 +615,21 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #'   device = "cpu"
 #' )
 #' }
-#' Key fields of the resulting R6 object:
+#' Key fields of the resulting \code{CohortMat} (a \code{torch} \code{nn_module}):
 #' \itemize{
 #'   \item \code{dbh}, \code{trees}, \code{species}: tensors per cohort.
 #'   \item \code{dims}: integer vector \code{c(S, P, K)} for sites, patches, cohorts.
 #'   \item \code{sp}: integer number of species.
-#'   \item \code{device}: "cpu" or "cuda".
+#'   \item \code{device_r}: the device given at construction ("cpu").
 #'   \item \code{dbh_r}, \code{trees_r}, \code{species_r}: R arrays.
 #'   \item \code{obsDF2arrays}: method converting \code{obs_df} into arrays.
 #' }
 #'
 #' @param init_trees data.table of initial trees with columns
-#'   \code{siteID}, \code{patchID}, \code{species}, \code{dbh}, \code{treeName};
-#'   optional \code{trees} for pre-counted individuals.
+#'   \code{siteID}, \code{patchID}, \code{species}, \code{dbh} (cm),
+#'   \code{treeName} and \code{trees} (the number of trees the row stands
+#'   for, usually 1). Without \code{dbh_binsize} a column \code{cohortID} is
+#'   added to the table by reference.
 #' @param dbh_binsize numeric or NULL. Bin width in cm. If NULL, keep exact DBH.
 #' @param min_dbh numeric or NULL. Lower bound for binning. If NULL, uses min DBH.
 #' @param Nspecies integer. Number of species levels passed to \code{sp}.
@@ -619,10 +641,13 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #'   If \code{TRUE}, a list with:
 #'   \itemize{
 #'     \item \code{initCohort}: the \code{CohortMat} object.
-#'     \item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat$new()}.
+#'     \item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat()},
+#'       with the \code{cohortID} of every row.
 #'   }
 #'
-#' @seealso \code{\link[FINN]{CohortMat}}
+#' @seealso \code{\link[FINN]{CohortMat}}, \code{\link{resolveSiteIDs}}, which
+#'   calls this function for the first inventory, \code{\link{fit}} and
+#'   \code{\link{simulateForest}} (\code{init_cohort}), \code{\link{finn_data}}
 #'
 #' @import data.table
 #' @export
@@ -633,16 +658,28 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #'                         Nspecies = max(fia_obs_dt$species))
 #' dim(init$dbh)   # sites x patches x cohorts
 #'
-#' # 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation
-#' binned <- makeInitCohorts(fia_init_trees[siteID %in% 1:3], dbh_binsize = 5,
+#' sum(init$trees_r)   # the living trees of the three sites
+#'
+#' # 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation.
+#' # Binning adds up `trees`; rows without a count (the records of dead trees
+#' # in this table, trees = NA) carry no stems, so leave them out first, or a
+#' # bin holding only such rows becomes an empty cohort
+#' living <- fia_init_trees[siteID %in% 1:3 & !is.na(trees)]
+#' binned <- makeInitCohorts(living, dbh_binsize = 5,
 #'                           Nspecies = max(fia_obs_dt$species))
 #' dim(binned$dbh)
+#' sum(binned$trees_r)   # the same trees in fewer cohorts
+#'
+#' # the cohort table behind the tensors, with the cohort of every tree
+#' tab <- makeInitCohorts(living, Nspecies = max(fia_obs_dt$species),
+#'                        treeID_table = TRUE)
+#' head(tab$init_trees[, .(siteID, patchID, cohortID, species, dbh, trees, treeName)])
 makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspecies, treeID_table = FALSE, singleCohortTreeNames = NULL){
   if(!is.null(dbh_binsize)){
     if(is.null(min_dbh)) min_dbh = min(init_trees$dbh, na.rm = TRUE)
     dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = TRUE) + dbh_binsize, by = dbh_binsize)
     init_trees <- init_trees[!(treeName %in% singleCohortTreeNames),.(
-      trees = sum(trees)),
+      trees = sum(trees, na.rm = TRUE)),
       by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
                cut(dbh, breaks = dbh_intervals, labels = dbh_intervals[-1]-dbh_binsize/2, include.lowest = TRUE)

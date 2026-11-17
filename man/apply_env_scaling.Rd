@@ -26,7 +26,13 @@ from \code{env}, so calibration and prediction use an identical transformation
 # reproduce the standardization a model fit with env_autoscale = TRUE used:
 env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
 scaling <- compute_env_scaling(env)
+scaling
 apply_env_scaling(env, scaling)
+
+# new sites are put on the scale of the first table, not on their own: a
+# site at 6 degrees and 850 mm is the average site of `env`, so it maps to 0
+new_env <- data.frame(siteID = 4:5, year = 1L, temp = c(6, 10), prec = c(850, 1150))
+apply_env_scaling(new_env, scaling)
 }
 \seealso{
 \code{\link{compute_env_scaling}}, \code{\link{fit}}

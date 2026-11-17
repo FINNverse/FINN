@@ -15,8 +15,10 @@ makeInitCohorts(
 }
 \arguments{
 \item{init_trees}{data.table of initial trees with columns
-\code{siteID}, \code{patchID}, \code{species}, \code{dbh}, \code{treeName};
-optional \code{trees} for pre-counted individuals.}
+\code{siteID}, \code{patchID}, \code{species}, \code{dbh} (cm),
+\code{treeName} and \code{trees} (the number of trees the row stands
+for, usually 1). Without \code{dbh_binsize} a column \code{cohortID} is
+added to the table by reference.}
 
 \item{dbh_binsize}{numeric or NULL. Bin width in cm. If NULL, keep exact DBH.}
 
@@ -34,12 +36,17 @@ If \code{treeID_table = FALSE}, a \code{FINN::CohortMat} object.
 If \code{TRUE}, a list with:
 \itemize{
 \item \code{initCohort}: the \code{CohortMat} object.
-\item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat$new()}.
+\item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat()},
+with the \code{cohortID} of every row.
 }
 }
 \description{
-This function prepares \code{obs_df} in the exact format expected by
-\code{FINN::CohortMat$new()} and calls it. The required long-table schema is:
+Builds the initial state of a fit or a simulation, the \code{init_cohort} of
+\code{\link{fit}} and \code{\link{simulateForest}}, from the trees of the
+first inventory: every tree becomes a cohort of its own, or, with
+\code{dbh_binsize}, the trees of a patch and species are pooled into
+diameter classes. The function prepares \code{obs_df} in the format expected by
+\code{\link{CohortMat}} and calls it. The long-table schema of \code{obs_df} is:
 \itemize{
 \item \strong{siteID} integer index of sites \eqn{1..S}.
 \item \strong{patchID} integer index of patches within site \eqn{1..P_s}.
@@ -54,8 +61,8 @@ constructs a \code{FINN::CohortMat} object.
 
 Internally calls:
 \preformatted{
-FINN::CohortMat$new(
-  obs_df = <data.frame with columns siteID, patchID, species, dbh, trees>,
+FINN::CohortMat(
+  obs_df = <data.frame with columns siteID, patchID, cohortID, species, dbh, trees>,
   dbh    = NULL,
   trees  = NULL,
   species= NULL,
@@ -64,12 +71,12 @@ FINN::CohortMat$new(
   device = "cpu"
 )
 }
-Key fields of the resulting R6 object:
+Key fields of the resulting \code{CohortMat} (a \code{torch} \code{nn_module}):
 \itemize{
 \item \code{dbh}, \code{trees}, \code{species}: tensors per cohort.
 \item \code{dims}: integer vector \code{c(S, P, K)} for sites, patches, cohorts.
 \item \code{sp}: integer number of species.
-\item \code{device}: "cpu" or "cuda".
+\item \code{device_r}: the device given at construction ("cpu").
 \item \code{dbh_r}, \code{trees_r}, \code{species_r}: R arrays.
 \item \code{obsDF2arrays}: method converting \code{obs_df} into arrays.
 }
@@ -82,12 +89,26 @@ init <- makeInitCohorts(fia_init_trees[siteID \%in\% 1:3],
                         Nspecies = max(fia_obs_dt$species))
 dim(init$dbh)   # sites x patches x cohorts
 
-# 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation
-binned <- makeInitCohorts(fia_init_trees[siteID \%in\% 1:3], dbh_binsize = 5,
+sum(init$trees_r)   # the living trees of the three sites
+
+# 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation.
+# Binning adds up `trees`; rows without a count (the records of dead trees
+# in this table, trees = NA) carry no stems, so leave them out first, or a
+# bin holding only such rows becomes an empty cohort
+living <- fia_init_trees[siteID \%in\% 1:3 & !is.na(trees)]
+binned <- makeInitCohorts(living, dbh_binsize = 5,
                           Nspecies = max(fia_obs_dt$species))
 dim(binned$dbh)
+sum(binned$trees_r)   # the same trees in fewer cohorts
+
+# the cohort table behind the tensors, with the cohort of every tree
+tab <- makeInitCohorts(living, Nspecies = max(fia_obs_dt$species),
+                       treeID_table = TRUE)
+head(tab$init_trees[, .(siteID, patchID, cohortID, species, dbh, trees, treeName)])
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[FINN]{CohortMat}}
+\code{\link[FINN]{CohortMat}}, \code{\link{resolveSiteIDs}}, which
+calls this function for the first inventory, \code{\link{fit}} and
+\code{\link{simulateForest}} (\code{init_cohort}), \code{\link{finn_data}}
 }

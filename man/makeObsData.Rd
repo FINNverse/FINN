@@ -41,7 +41,8 @@ interval differs. Default NULL.}
 \item{Nspecies}{integer or NULL. Cap species to the top N (others merged to "other").}
 
 \item{NspeciesQuantile}{numeric in (0,1] or NULL. Choose the smallest N covering
-this fraction of individuals; overrides \code{Nspecies} if supplied.}
+this fraction of individuals. Used only when \code{Nspecies} is \code{NULL}:
+if both are given, \code{Nspecies} takes precedence.}
 
 \item{rates}{\code{"annual"} (default) or \code{"interval"}: the unit of
 \code{growth} and \code{mort}. \code{"annual"} returns them per year, for a
@@ -140,4 +141,10 @@ obs10 <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_si
                      fix_period_length = 10, NspeciesQuantile = 0.98, rates = "interval")
 obs10$obs_dt[growth_n > 0, .(siteName, year, species_name, growth, growth_n)][1:5]
 
+}
+\seealso{
+\code{\link{resolveSiteIDs}} for the next step (integer ids, the
+annual time axis, the initial cohorts), \code{\link{finn_data}} for the
+tables \code{\link{fit}} takes, \code{\link{fia_obs_dt}} for a finished
+example, and \code{vignette("C-Data_preparation", package = "FINN")}
 }

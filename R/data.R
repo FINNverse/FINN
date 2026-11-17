@@ -95,6 +95,15 @@
 #'   }
 #' @inherit fia_obs_dt source
 #' @family fia datasets
+#' @examples
+#' library(data.table)
+#' head(fia_env_dt)
+#' # one row per site and simulated year; the climate of a site is its normal,
+#' # repeated for every year
+#' fia_env_dt[, .(sites = uniqueN(siteID), first_year = min(year), last_year = max(year))]
+#' # the range of the two predictors the package examples use, over the sites
+#' fia_env_dt[year == 1, .(temp_min = min(temp), temp_max = max(temp),
+#'                         prec_min = min(prec), prec_max = max(prec))]
 "fia_env_dt"
 
 #' @rdname fia_env_dt
@@ -126,6 +135,17 @@
 #'   them are `NA` by construction.
 #' @inherit fia_obs_dt source
 #' @family fia datasets
+#' @examples
+#' library(data.table)
+#' head(fia_init_trees[, .(siteID, patchID, species, species_name, dbh, trees, treeName)])
+#' # living stems and their mean diameter per species at the first inventory
+#' fia_init_trees[!is.na(trees), .(stems = sum(trees), mean_dbh = round(mean(dbh), 1)),
+#'                by = species_name][order(-stems)]
+#' @examplesIf torch::torch_is_installed()
+#' # the initial state of a fit or a simulation, here for three sites: one
+#' # cohort per tree
+#' init <- makeInitCohorts(fia_init_trees[siteID %in% 1:3], Nspecies = 11)
+#' init$dims   # sites, patches, cohorts
 "fia_init_trees"
 
 #' @rdname fia_init_trees
@@ -191,4 +211,10 @@
 #'   and `species_name` (Latin name, or `"other"` for the pooled rare species).
 #' @inherit fia_obs_dt source
 #' @family fia datasets
+#' @examples
+#' library(data.table)
+#' fia_species_dt
+#' # put names on a table that carries only the species index
+#' deaths <- fia_tree_dt[, .(trees = .N, died = sum(died)), by = species]
+#' merge(fia_species_dt, deaths, by = "species")
 "fia_species_dt"
