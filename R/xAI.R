@@ -44,8 +44,13 @@ ALE_ce = function(X, ce) {
   model$env_scaling = scaling
   model$record_raws = FALSE
 
-  years      = env_dt$year   |> unique() |> length()
-  sitesTotal = env_dt$siteID |> unique() |> length()
+  # sorted, not order of appearance: model$raw_* are recorded in the simulation's
+  # own (sorted) site and year order, so an unsorted `env` paired each stand state
+  # with another site's or year's predictors (#72, B35)
+  env_years  = sort(unique(env_dt$year))
+  env_sites  = sort(unique(env_dt$siteID))
+  years      = length(env_years)
+  sitesTotal = length(env_sites)
   patches    = dim(model$raw_g[[1]])[2]
 
   processes = list()
@@ -58,9 +63,9 @@ ALE_ce = function(X, ce) {
     df = data.frame()
 
     for(timeInd in 1:years) {
-      time = (env_dt$year |> unique())[timeInd]
+      time = env_years[timeInd]
       for(siteInd in 1:sitesTotal) {
-        site = (env_dt$siteID |> unique())[siteInd]
+        site = env_sites[siteInd]
         for(patch in 1:patches) {
           env_tmp  = as.matrix(model.matrix(proc_formula, data = env_pred[siteID==site & year == time][1,-(1:2),drop=FALSE]))
           cols_env = colnames(env_tmp)
@@ -161,9 +166,15 @@ ALE_ce = function(X, ce) {
 }
 
 .finn_get_ce = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L) {
+  # the key is a fingerprint (row and column count, names, column sums), so two
+  # different inputs can share it; the cache is therefore used only for the
+  # default inputs, where there is nothing to collide with (#72, B36)
+  own_inputs = !is.null(env) || !is.null(init_cohort)
   if(is.null(env))         env         = model$train_env
   if(is.null(env))         stop("No `env` supplied and no training env is cached. Pass `env=` or fit the model first.")
   if(is.null(init_cohort)) init_cohort = .finn_train_ic(model)
+
+  if(own_inputs) return(.finn_conditional_effects(model, env, init_cohort, env_autoscale, sim_seed))
 
   key = .finn_ce_key(as.data.table(env), init_cohort, sim_seed, env_autoscale, model$fit_id)
   if(!is.null(model$conditional_effects) && identical(model$conditional_effects$key, key)) {
@@ -246,7 +257,9 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 
   ce = .finn_get_ce(model, env, init_cohort, env_autoscale, sim_seed)
 
-  if(!is.null(model$ale) && identical(attr(model$ale, "key"), ce$key)) {
+  # a NULL key means the effects were computed for inputs the caller passed, which
+  # are not cached; two of those would otherwise match on NULL == NULL (#72, B36)
+  if(!is.null(ce$key) && !is.null(model$ale) && identical(attr(model$ale, "key"), ce$key)) {
     out = model$ale
   } else {
     out = list()
@@ -267,7 +280,7 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
     class(out) = c("FINNale")
     attr(out, "key") = ce$key
     attr(out, "env_vars") = unique(unlist(lapply(ce$processes, function(sp) if(length(sp)) sp[[1]]$env_vars else NULL)))
-    model$ale = out
+    if(!is.null(ce$key)) model$ale = out
   }
 
   if(isTRUE(plot)) tryCatch(plot(out, process = process, scale = scale), error = function(e) warning("ALE plot could not be drawn: ", conditionMessage(e), call. = FALSE))

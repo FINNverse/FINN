@@ -1837,7 +1837,9 @@ finn_class = nn_module(
 
         ## Growth ####
         if(!inherits(self$process_growth, "hybrid")) pred = index_species(pred_growth, species)
-        else pred = env[[1]][,i,]
+        # by name: env is ordered mortality, growth, regeneration, so env[[1]] fed
+        # a hybrid growth process the mortality design matrix (#72, B2)
+        else pred = env[["growth"]][,i,]
 
         g = self$growth_func(
           dbh = dbh,
@@ -1870,7 +1872,7 @@ finn_class = nn_module(
 
         ## Mortality ####
         if(!inherits(self$process_mortality, "hybrid")) pred = index_species(pred_mort, species)
-        else pred = env[[2]][,i,]
+        else pred = env[["mort"]][,i,]
 
         m = self$mortality_func(
           dbh = dbh,
@@ -2569,10 +2571,23 @@ finn_class = nn_module(
     # light is f(BA / patch_size_ha), so scoring at another patch size than the fit
     # silently rescales competition - the one thing this route exists to rule out
     if (is.null(patch_size)) patch_size = self$patch_size_ha
+    # BA_stand() divides by this; NULL used to segfault torch_div and take the
+    # session with it on a model that was never fitted or simulated (#72, B3)
+    if (is.null(patch_size))
+      stop("`patch_size` is needed: the model carries none, because it has not been fitted or simulated yet. Pass the patch size the trees were measured on, e.g. patch_size = 0.1.", call. = FALSE)
     self$patch_size_ha = patch_size
     d = data.table::as.data.table(tree_data)
     if (!"period_length" %in% colnames(d))
       stop("`tree_data` needs a `period_length` column: the rates are interval quantities.", call. = FALSE)
+    # the tree tensors follow the sites of `tree_data`, the env array those of
+    # `env`, and torch's gather accepts the shorter index: without these checks a
+    # tree is scored against another site's climate, silently (#72, B4)
+    env = check_fit_env(env, data = d, caller = "predictTrees()")
+    check_site_sets(env, data = d, caller = "predictTrees()")
+    bad_sp = setdiff(unique(d$species), seq_len(self$N_species))
+    if (length(bad_sp))
+      stop(sprintf("predictTrees(): `tree_data` holds the species id(s) %s, but the model has %d species, numbered 1 to %d.",
+                   paste(sort(bad_sp), collapse = ", "), self$N_species, self$N_species), call. = FALSE)
     obs_years = sort(unique(d$year)); site_ids = sort(unique(d$siteID))
     tobs = private$build_tree_obs(d, site_ids, obs_years)
     envs = private$extract_env_method(env)

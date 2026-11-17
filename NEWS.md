@@ -21,6 +21,7 @@ or documentation. Each row names the setting that restores the 0.1.0 result.
 | A numeric `loss_weights` vector multiplies the baseline-scaled objective instead of replacing it | `fit(weight_scale = "auto")` | `weight_scale = FALSE` |
 | `predict()` and `simulateForest()` leave `requires_grad` as they found it instead of switching every parameter on (#55) | always | - |
 | `resolveSiteIDs()` numbers sites, patches and species by radix order instead of the collation locale's | always | reproduces 0.1.0 where `LC_COLLATE` was already `C` |
+| A hybrid growth process reads the growth predictors and a hybrid mortality process the mortality predictors (#72, B2) | always | - (0.1.0 and 0.2.0-rc fed each the other's; identical where the two formulas are the same) |
 
 The sections *The stem-count gradient*, *The death draw*, *The recruit draw*, *The
 mortality limits* and *The recruitment cap* under **The release in detail** carry
@@ -691,6 +692,41 @@ someone who was affected.
   the number of sites) `$history`, the progress plot and the plateau scheduler
   saw the last batch's loss instead of the mean over the epoch's batches. With
   one batch per epoch, the default, nothing changes.
+
+* A hybrid growth process is given the growth design matrix and a hybrid
+  mortality process the mortality one. The environment list is ordered
+  mortality, growth, regeneration, and the two were read by position, so
+  `createHybrid()` growth was fitted and simulated on the mortality formula and
+  vice versa. Regeneration and `predictTrees()` always read theirs by name, so
+  the two routes disagreed for the same model. Nothing changes where the growth
+  and mortality formulas are the same, which is every example in the package;
+  formulas of different width stopped with "mat1 and mat2 shapes cannot be
+  multiplied".
+
+* `createHybrid(hidden = )` accepts a single hidden layer. `hidden = 16L` used
+  to build the layer stack with `2:length(hidden)`, which counts backwards from
+  2 to 1, and the first `fit()` stopped with "Expecting a single value:
+  [extent=0]". The default `hidden = c(50L, 50L)` is unaffected.
+
+* `predictTrees()` checks that `tree_data` and `env` hold the same sites, that
+  every observed year is in `env` and that the species ids are those of the
+  model. The tree tensors follow the sites of `tree_data` and the environment
+  array those of `env`, and torch's gather accepts the shorter index, so a tree
+  could be scored against another site's climate without any message.
+
+* `predictTrees()` on a model that has never been fitted or simulated asks for
+  `patch_size` instead of ending the R session. `BA_stand()` divided by a `NULL`
+  patch size, which segfaults `torch_div()`.
+
+* `conditionalEffects()`, `ALE()` and `summary()` pair each stand state with its
+  own site's and year's predictors when `env` is not sorted by `siteID` and
+  `year`. The recorded states follow the simulation's sorted order and the
+  predictors were taken in order of appearance.
+
+* `conditionalEffects()` and `ALE()` recompute when `env` or `init_cohort` is
+  passed explicitly. The cache key is a fingerprint (row and column count,
+  column names, column sums), so two different inputs could share it and the
+  first call's result was returned for the second.
 
 * `createProcess()` and `createHybrid()` find a formula that is held in a
   variable of the calling function (`f <- ~ temp; createProcess(f, growth)`
