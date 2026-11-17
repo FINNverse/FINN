@@ -40,10 +40,12 @@ the negative binomial distribution used to sample recruits, or its fixed
 value with \code{optimizeTheta = FALSE}. Only used when this object is the
 regeneration process. See \link{recruitment}.}
 
-\item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the
-default network architecture entirely.}
+\item{NN}{(\code{nn_module})\cr Not supported in 0.2.0. A custom module was
+accepted and then ignored, so a non-\code{NULL} value now raises an error; shape
+the default network with \code{hidden}, \code{dropout} and \code{transformer} instead.}
 
-\item{dropout}{(\code{numeric(1)})\cr Dropout rate of the network.}
+\item{dropout}{(\code{numeric(1)})\cr Dropout rate of the network. Default \code{0.3};
+the Barro Colorado Island case study of Pichler & Käber (2026) used \code{0.1}.}
 
 \item{encoder_layers}{(\code{integer(1)})\cr Number of transformer encoder layers.
 Only used when \code{transformer = TRUE}.}
@@ -68,8 +70,8 @@ sublayer within each transformer encoder layer. Only used when
 \code{transformer = TRUE}.}
 
 \item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn,
-\code{"binomial"} (default since 0.2.0), \code{"poisson"} or \code{"gamma"}; see
-\code{\link[=createProcess]{createProcess()}}. Only used
+\code{"binomial"} (default since 0.2.0), \code{"bernoulli"}, \code{"poisson"} or \code{"gamma"};
+see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the mortality process.}
 
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,

@@ -101,7 +101,7 @@ response actually learned are the same — `ALE()`, `conditionalEffects()` and
 is what makes a level-1 or level-2 process arguable rather than merely accurate.
 
 This vignette stays at level 0 throughout. [Fitting FINN to forest inventory
-data](D-Fit_to_FIA.html) fits a level-1 growth process to real data, and [the
+data](D-Fit_to_FIA.html) fits a level-2 growth process to real data, and [the
 mortality vignette](E-Mortality.html) does the same for mortality.
 
 # Installation

@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{regeneration}
 \alias{regeneration}
-\title{Calculate the regeneration of forest patches based on the input parameters}
+\title{Regeneration without a recruitment cap}
 \usage{
 regeneration(species, parReg, pred, light, debug = FALSE)
 }
@@ -20,10 +20,27 @@ In general low values for high regeneration and high values for low regeneration
 \item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
 }
 \value{
-torch.Tensor Regeneration values for forest patches.
+torch.Tensor Mean recruitment per species, stems ha^-1 step^-1,
+shaped \verb{[sites, patches, species]} -- a per-HECTARE rate, not a per-patch
+count: \code{forward()} multiplies it by \code{patch_size_ha} itself before the
+recruit draw. It includes the additive \code{reg_floor} and is unbounded above.
 }
 \description{
-This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
+FINN's uncapped mechanistic regeneration process: the mean number of recruits
+a species contributes to one patch in one simulation step, in stems per
+hectare, \code{mean = regP * exp(pred) + reg_floor}. \code{regP} is the patch's light
+response, a sigmoid in the available light centred on the species' light
+requirement \code{parReg} and rescaled to \verb{[0, 1]}, so a shade-tolerant species
+(small \code{parReg}) recruits under a closed canopy and a light-demanding one does
+not. \code{exp(pred)} is the species' environmental response, and \code{reg_floor}
+(\code{\link[=createProcess]{createProcess()}}, default \code{1e-3}) is an additive floor that keeps a
+species from being lost for good.
+
+The mean is unbounded in \code{pred}, so a steep climate coefficient can turn a
+favourable site into a recruitment burst of hundreds of stems in one year.
+\code{\link[=regeneration_capped]{regeneration_capped()}} adds a Beverton-Holt cap and is the default
+regeneration process since 0.2.0; this function is the uncapped process of
+Pichler & Käber (2026) and stays available as the opt-in.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}

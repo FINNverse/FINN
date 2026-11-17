@@ -210,7 +210,15 @@ array2obsDF <- function(obs_array) {
 
 #' Cohort Matrix Class
 #'
-#' An R6 class for managing cohorts of trees in forest models. This class allows for the initialization, transformation, and manipulation of cohorts represented by arrays of dbh, trees, and species.
+#' @description
+#' A `torch` `nn_module` holding the cohorts of every site and patch as three
+#' aligned tensors -- `dbh`, `trees` and `species` -- each shaped
+#' `[sites, patches, cohorts]`. It is FINN's initial state: build it from an
+#' inventory with [FINN::makeInitCohorts()] or from a cohort table with
+#' `obs_df`, and pass it to [FINN::fit()], [FINN::predict.finn_class()] or
+#' [FINN::simulateForest()] as `init_cohort`. The three tensors are registered as
+#' buffers, so a `CohortMat` moves between devices with the model and carries no
+#' gradient. `asDF()` converts it back to a cohort table.
 #'
 #' @field dbh A tensor representing the diameter at breast height for each cohort.
 #' @field trees A tensor representing the number of trees in each cohort.
@@ -235,11 +243,22 @@ array2obsDF <- function(obs_array) {
 #' @param sp An integer representing the number of species. Defaults to `self$sp`.
 #' @param device A character string specifying the device to use ('cpu' or 'cuda'). Defaults to `self$device`.
 #'
+#' @return A `CohortMat`, a `torch` `nn_module` whose `dbh`, `trees` and
+#'   `species` buffers hold the cohorts as `[sites, patches, cohorts]` tensors.
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # the bundled Oregon FIA trees as an initial state, and back to a table
+#' init = FINN::makeInitCohorts(FINN::fia_init_trees,
+#'                              Nspecies = max(FINN::fia_init_trees$species))
+#' init$dbh$shape   # sites x patches x cohorts
+#' head(init$asDF())
+#'
 #' @export
 CohortMat = torch::nn_module("CohortMat",
 
   #' @description
-  #' Initialize the CohortMat class
+  #' Build the cohort tensors, either from a cohort table (`obs_df`) or from
+  #' arrays of `dbh`, `trees` and `species`
   #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
   #' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
   #' @param trees A tensor or array representing the number of trees. Defaults to `self$trees`.
@@ -281,11 +300,11 @@ CohortMat = torch::nn_module("CohortMat",
     if (!inherits(self$species, "torch_tensor")) self$register_buffer("species", torch::torch_tensor(self$species, dtype = torch::torch_int64()))
   },
 
-  #'  @description
+  #' @description
+  #' Convert the cohort tensors back to a cohort table
   #'
-  #' Convert the tensors to a data frame format
-  #'
-  #' @return data.table object
+  #' @return A `data.table` with one row per cohort and the columns `siteID`,
+  #'   `patchID`, `cohortID`, `species`, `dbh` and `trees`.
   asDF = function() {
     array2obsDF(list(dbh = torch::as_array(self$dbh), trees = torch::as_array(self$trees), species = torch::as_array(self$species)))
   },

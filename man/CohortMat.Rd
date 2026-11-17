@@ -27,19 +27,29 @@ CohortMat(
 
 \item{sp}{An integer representing the number of species. Defaults to \code{self$sp}.}
 
-\item{device}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.
-@description
-
-Convert the tensors to a data frame format}
+\item{device}{A character string specifying the device to use ('cpu' or 'cuda'). Defaults to \code{self$device}.}
 }
 \value{
-data.table object
+A \code{CohortMat}, a \code{torch} \code{nn_module} whose \code{dbh}, \code{trees} and
+\code{species} buffers hold the cohorts as \verb{[sites, patches, cohorts]} tensors.
+
+A \code{data.table} with one row per cohort and the columns \code{siteID},
+\code{patchID}, \code{cohortID}, \code{species}, \code{dbh} and \code{trees}.
 }
 \description{
-Initialize the CohortMat class
-}
-\details{
-An R6 class for managing cohorts of trees in forest models. This class allows for the initialization, transformation, and manipulation of cohorts represented by arrays of dbh, trees, and species.
+A \code{torch} \code{nn_module} holding the cohorts of every site and patch as three
+aligned tensors -- \code{dbh}, \code{trees} and \code{species} -- each shaped
+\verb{[sites, patches, cohorts]}. It is FINN's initial state: build it from an
+inventory with \code{\link[=makeInitCohorts]{makeInitCohorts()}} or from a cohort table with
+\code{obs_df}, and pass it to \code{\link[=fit]{fit()}}, \code{\link[=predict.finn_class]{predict.finn_class()}} or
+\code{\link[=simulateForest]{simulateForest()}} as \code{init_cohort}. The three tensors are registered as
+buffers, so a \code{CohortMat} moves between devices with the model and carries no
+gradient. \code{asDF()} converts it back to a cohort table.
+
+Build the cohort tensors, either from a cohort table (\code{obs_df}) or from
+arrays of \code{dbh}, \code{trees} and \code{species}
+
+Convert the cohort tensors back to a cohort table
 }
 \section{Fields}{
 
@@ -71,3 +81,12 @@ cohorts were built from \code{obs_df} (the lookup table from array position to
 user id); \code{NULL} when built from arrays, where the site dimension is \code{1:N}.}
 }}
 
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the bundled Oregon FIA trees as an initial state, and back to a table
+init = FINN::makeInitCohorts(FINN::fia_init_trees,
+                             Nspecies = max(FINN::fia_init_trees$species))
+init$dbh$shape   # sites x patches x cohorts
+head(init$asDF())
+\dontshow{\}) # examplesIf}
+}

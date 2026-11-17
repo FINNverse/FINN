@@ -84,13 +84,19 @@ this process is the regeneration process. See \link{recruitment}.}
 \item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the default
 environmental-response network architecture.}
 
-\item{upper}{(\code{numeric()})\cr Upper boundaries (natural scale) for the
-species-specific process parameters. For the competition process the
-defaults are \code{c(log(2.3), 2.0)}: the height parameter is capped so that no
-species grows taller than 130 m (see \code{\link[=height]{height()}}).}
-
-\item{lower}{(\code{numeric()})\cr Lower boundaries (natural scale) for the
-species-specific process parameters.}
+\item{upper, lower}{(\code{numeric()})\cr Boundaries (natural scale) for the
+species-specific process parameters, one value per parameter of the process.
+They are guard rails that keep the optimiser inside the range in which the
+equations stay meaningful, not ranges taken from the data, and \code{fit()} does
+not move them. The defaults, as \code{lower} / \code{upper}:
+growth \code{c(0.01, 0.01)} / \code{c(0.99, 4.0)} (light requirement of the shade
+response, size decay); mortality \code{c(-10, -10, -10)} / \code{c(10, 10, 10)} (the
+shade, size and growth coefficients of the logit); regeneration \code{0.01} /
+\code{0.99} (light requirement); competition \code{c(0.3, 0.0)} / \code{c(log(2.3), 2.0)}
+(height parameter, competition strength), where the height parameter is
+capped so that no species grows taller than 130 m (see \code{\link[=height]{height()}}).
+A parameter that ends a fit at its bound is not identified by the data;
+widening the bounds is a decision for 0.2.1.}
 
 \item{dropout}{(\code{numeric(1)})\cr Dropout rate of the environmental-response
 network. Ignored unless \code{hidden} is set.}
@@ -166,7 +172,12 @@ stand.}
 negative binomial. Only used when this process is the regeneration process and
 \code{sample_regeneration = TRUE}. \code{"refined"} (default since 0.2.0) samples
 exactly below \code{lambda = 2} and drops both guards below, neither of which
-applies to \code{torch_poisson}; see \code{\link[=rnbinom_torch_refined]{rnbinom_torch_refined()}}.
+applies to \code{torch_poisson}; see \code{\link[=rnbinom_torch_refined]{rnbinom_torch_refined()}}. Above
+\code{lambda = 2} it is still the floored Gaussian draw, which delivers about
+half a recruit per draw too few (measured over 1e6 draws: -0.43 at
+\code{lambda = 2.5}, -0.50 from \code{lambda = 20}, against about 0 with rounding).
+Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+is not in this release.
 \code{"gaussian"} (the behaviour of every
 published FINN result) offsets the Gamma draw by \code{+0.001}, clamps the
 probability at \code{1e-4} and pushes the result through

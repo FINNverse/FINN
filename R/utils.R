@@ -196,6 +196,8 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
 
   # Use Poisson approximation for small lambda and Gaussian approximation for large lambda
   poisson_samples_small_lambda = torch_poisson(lmbd)
+  # floor() loses about 0.5 recruits per draw above lambda 2; round() is planned
+  # for 0.2.1, where it changes results (see ?rnbinom_torch_refined)
   poisson_samples_large_lambda = gaussian_samples$clamp(min = 0)$floor()
 
   # Interpolate between the two approaches
@@ -236,8 +238,10 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 #'
 #' @description
 #' The alternative mortality draw, selected with
-#' `createProcess(mortality_draw = "poisson")`; [binomial_from_gamma()] stays the
-#' default. A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is
+#' `createProcess(mortality_draw = "poisson")`. The default since 0.2.0 is
+#' `mortality_draw = "binomial"`, the exact binomial; [binomial_from_gamma()]
+#' (`mortality_draw = "gamma"`) reproduces results published before 0.2.0.
+#' A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is
 #' drawn as one; every larger cohort is drawn from a Poisson capped at `n`.
 #'
 #' @details
@@ -401,6 +405,14 @@ rnbinom_torch = function(pred, theta) {
 #' rounds the floor away but also rounds the signal away: at a FINN patch of
 #' 0.0168 ha the per-cell mean is 0.001-0.008, and over 2e6 draws the delivered
 #' fraction of the calibrated mean was 0.000-0.048 at `theta = 1`.
+#'
+#' One bias is left and is not repaired in 0.2.0: above `lambda = 2` the draw is
+#' the Gaussian approximation FLOORED, so it delivers about half a recruit per
+#' draw too few (measured over 1e6 draws: -0.43 at `lambda = 2.5`, -0.50 from
+#' `lambda = 20`, against about 0 with rounding). It bites only where a cell's
+#' mean recruitment is above two, which the per-patch means above are not.
+#' Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+#' is not in this release.
 #'
 #' For the measured consequence of both repairs on the simulated stand, and why
 #' the holdout cannot separate them, see [binomial_from_poisson()].

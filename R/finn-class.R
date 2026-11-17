@@ -1805,7 +1805,7 @@ finn_class = nn_module(
         ## Density dependence (e.g. a Beverton-Holt cap) is now the responsibility
         ## of the regeneration process function itself -- see FINN::regeneration
         ## (unbounded) vs FINN::regeneration_saturation (capped, with its own
-        ## reg_logK parameter declared via createProcess(custom_parameters=)).
+        ## reg_logK parameter, which regeneration_capped() declares itself).
         ## The stand itself (dbh, trees) goes only to functions that ask for it,
         ## e.g. FINN::regeneration_adult (seed source = conspecific adults) and
         ## FINN::regeneration_adult_effect; detected by signature, not by name.

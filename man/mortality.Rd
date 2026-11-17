@@ -18,17 +18,18 @@ mortality(
 )
 }
 \arguments{
-\item{dbh}{dbh}
+\item{dbh}{torch.Tensor Diameter of each cohort, in cm.}
 
-\item{species}{species}
+\item{species}{torch.Tensor Species index of each cohort.}
 
-\item{trees}{trees}
+\item{trees}{torch.Tensor Number of trees in each cohort.}
 
-\item{parMort}{parMort}
+\item{parMort}{torch.Tensor Mortality parameters per species, three columns:
+the shade, size and growth coefficients of the logit.}
 
-\item{pred}{predictions}
+\item{pred}{torch.Tensor Environmental response per species, on the logit scale.}
 
-\item{light}{available light}
+\item{light}{torch.Tensor Available light for each cohort.}
 
 \item{base_steepness}{numeric Steepness of the shade-response sigmoid. Defaults to 5.}
 
@@ -52,7 +53,18 @@ A \code{torch} tensor of per-cohort mortality probabilities; or, if
 \code{debug = TRUE}, a list of the intermediate components.
 }
 \description{
-Mortality
+FINN's mechanistic mortality process: the probability that a tree of a cohort
+dies in one simulation step. It is a logistic function of four terms,
+\code{p = sigmoid(pred + light * parMort[, 1] + parMort[, 2] * dbh/100 + growth/growth_scale * parMort[, 3])},
+with one coefficient per species for each of shade, size and growth. \code{pred} is
+the species' environmental response on the logit scale, so a species with no
+environmental predictors dies at a constant rate. Growth enters as the rate the
+growth process produced in the same step, which is what makes mortality depend
+on a tree's recent performance rather than on its size alone.
+
+The probability is clamped to \verb{[mortality_floor, mortality_ceiling]} (default
+\code{0.001} / \code{0.999} per simulation step) and the number of deaths is then drawn
+with \code{mortality_draw}; both are settings of \code{\link[=createProcess]{createProcess()}}.
 }
 \section{The starting value}{
 

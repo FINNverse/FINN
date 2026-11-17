@@ -27,3 +27,5 @@
 ^CLAUDE\.md$
 ^CONTRIBUTING\.md$
 ^README\.html$
+^vignettes/.*\.Rmd\.orig$
+^vignettes/build\.R$

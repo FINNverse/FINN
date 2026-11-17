@@ -106,12 +106,19 @@
 #'   when this process is the regeneration process and its `func` uses the cap.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the default
 #'   environmental-response network architecture.
-#' @param upper (`numeric()`)\cr Upper boundaries (natural scale) for the
-#'   species-specific process parameters. For the competition process the
-#'   defaults are `c(log(2.3), 2.0)`: the height parameter is capped so that no
-#'   species grows taller than 130 m (see [FINN::height()]).
-#' @param lower (`numeric()`)\cr Lower boundaries (natural scale) for the
-#'   species-specific process parameters.
+#' @param upper,lower (`numeric()`)\cr Boundaries (natural scale) for the
+#'   species-specific process parameters, one value per parameter of the process.
+#'   They are guard rails that keep the optimiser inside the range in which the
+#'   equations stay meaningful, not ranges taken from the data, and `fit()` does
+#'   not move them. The defaults, as `lower` / `upper`:
+#'   growth `c(0.01, 0.01)` / `c(0.99, 4.0)` (light requirement of the shade
+#'   response, size decay); mortality `c(-10, -10, -10)` / `c(10, 10, 10)` (the
+#'   shade, size and growth coefficients of the logit); regeneration `0.01` /
+#'   `0.99` (light requirement); competition `c(0.3, 0.0)` / `c(log(2.3), 2.0)`
+#'   (height parameter, competition strength), where the height parameter is
+#'   capped so that no species grows taller than 130 m (see [FINN::height()]).
+#'   A parameter that ends a fit at its bound is not identified by the data;
+#'   widening the bounds is a decision for 0.2.1.
 #' @param dropout (`numeric(1)`)\cr Dropout rate of the environmental-response
 #'   network. Ignored unless `hidden` is set.
 #' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
@@ -233,7 +240,12 @@
 #'   negative binomial. Only used when this process is the regeneration process and
 #'   `sample_regeneration = TRUE`. `"refined"` (default since 0.2.0) samples
 #'   exactly below `lambda = 2` and drops both guards below, neither of which
-#'   applies to `torch_poisson`; see [FINN::rnbinom_torch_refined()].
+#'   applies to `torch_poisson`; see [FINN::rnbinom_torch_refined()]. Above
+#'   `lambda = 2` it is still the floored Gaussian draw, which delivers about
+#'   half a recruit per draw too few (measured over 1e6 draws: -0.43 at
+#'   `lambda = 2.5`, -0.50 from `lambda = 20`, against about 0 with rounding).
+#'   Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+#'   is not in this release.
 #'   `"gaussian"` (the behaviour of every
 #'   published FINN result) offsets the Gamma draw by `+0.001`, clamps the
 #'   probability at `1e-4` and pushes the result through
@@ -431,9 +443,11 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #'   [FINN::createProcess()], but not used in 0.2.0: the hybrid regeneration
 #'   network has no Beverton-Holt cap. See [FINN::regeneration_capped()] for the
 #'   cap of the mechanistic process.
-#' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the
-#'   default network architecture entirely.
-#' @param dropout (`numeric(1)`)\cr Dropout rate of the network.
+#' @param NN (`nn_module`)\cr Not supported in 0.2.0. A custom module was
+#'   accepted and then ignored, so a non-`NULL` value now raises an error; shape
+#'   the default network with `hidden`, `dropout` and `transformer` instead.
+#' @param dropout (`numeric(1)`)\cr Dropout rate of the network. Default `0.3`;
+#'   the Barro Colorado Island case study of Pichler & Käber (2026) used `0.1`.
 #' @param encoder_layers (`integer(1)`)\cr Number of transformer encoder layers.
 #'   Only used when `transformer = TRUE`.
 #' @param hidden (`integer()`)\cr Hidden-layer sizes of the feed-forward network.
@@ -444,8 +458,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #'   process. With `FALSE` the expected number of recruits per patch is rounded,
 #'   so wherever it is below 0.5 no recruit enters at all. See [recruitment].
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
-#'   `"binomial"` (default since 0.2.0), `"poisson"` or `"gamma"`; see
-#'   [FINN::createProcess()]. Only used
+#'   `"binomial"` (default since 0.2.0), `"bernoulli"`, `"poisson"` or `"gamma"`;
+#'   see [FINN::createProcess()]. Only used
 #'   when this object is the mortality process.
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   mortality probability is clamped to per simulation step before the death
@@ -490,6 +504,9 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
                         theta_floor = 0.5, optimizeTheta = TRUE,
                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
+  # NN was never stored, so a custom module was accepted and silently dropped (#59)
+  if(!is.null(NN))
+    stop("`NN` is not supported in 0.2.0: a custom network is accepted and then ignored. Shape the default network with `hidden`, `dropout` and `transformer`.", call. = FALSE)
   out = list()
   out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)

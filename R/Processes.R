@@ -207,12 +207,27 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 
 #' Mortality
 #'
-#' @param dbh dbh
-#' @param species species
-#' @param trees trees
-#' @param parMort parMort
-#' @param pred predictions
-#' @param light available light
+#' @description
+#' FINN's mechanistic mortality process: the probability that a tree of a cohort
+#' dies in one simulation step. It is a logistic function of four terms,
+#' `p = sigmoid(pred + light * parMort[, 1] + parMort[, 2] * dbh/100 + growth/growth_scale * parMort[, 3])`,
+#' with one coefficient per species for each of shade, size and growth. `pred` is
+#' the species' environmental response on the logit scale, so a species with no
+#' environmental predictors dies at a constant rate. Growth enters as the rate the
+#' growth process produced in the same step, which is what makes mortality depend
+#' on a tree's recent performance rather than on its size alone.
+#'
+#' The probability is clamped to `[mortality_floor, mortality_ceiling]` (default
+#' `0.001` / `0.999` per simulation step) and the number of deaths is then drawn
+#' with `mortality_draw`; both are settings of [FINN::createProcess()].
+#'
+#' @param dbh torch.Tensor Diameter of each cohort, in cm.
+#' @param species torch.Tensor Species index of each cohort.
+#' @param trees torch.Tensor Number of trees in each cohort.
+#' @param parMort torch.Tensor Mortality parameters per species, three columns:
+#'   the shade, size and growth coefficients of the logit.
+#' @param pred torch.Tensor Environmental response per species, on the logit scale.
+#' @param light torch.Tensor Available light for each cohort.
 #' @param base_steepness numeric Steepness of the shade-response sigmoid. Defaults to 5.
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #' @param growth torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.
@@ -355,9 +370,24 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 }
 
 
-#' Calculate the regeneration of forest patches based on the input parameters
+#' Regeneration without a recruitment cap
 #'
-#' This function calculates the regeneration of forest patches based on species information, regeneration parameters, prediction values, and available light.
+#' @description
+#' FINN's uncapped mechanistic regeneration process: the mean number of recruits
+#' a species contributes to one patch in one simulation step, in stems per
+#' hectare, `mean = regP * exp(pred) + reg_floor`. `regP` is the patch's light
+#' response, a sigmoid in the available light centred on the species' light
+#' requirement `parReg` and rescaled to `[0, 1]`, so a shade-tolerant species
+#' (small `parReg`) recruits under a closed canopy and a light-demanding one does
+#' not. `exp(pred)` is the species' environmental response, and `reg_floor`
+#' ([FINN::createProcess()], default `1e-3`) is an additive floor that keeps a
+#' species from being lost for good.
+#'
+#' The mean is unbounded in `pred`, so a steep climate coefficient can turn a
+#' favourable site into a recruitment burst of hundreds of stems in one year.
+#' [FINN::regeneration_capped()] adds a Beverton-Holt cap and is the default
+#' regeneration process since 0.2.0; this function is the uncapped process of
+#' Pichler & Käber (2026) and stays available as the opt-in.
 #'
 #' @param species torch.Tensor species information.
 #' @param parReg torch.Tensor Regeneration parameters. 0 <= parReg <= 1
@@ -367,7 +397,10 @@ growth_hybrid= function(dbh, species, parGrowth, pred, light, light_steepness = 
 #' @param light torch.Tensor Available light variable for calculation.
 #' @param debug logical If TRUE, return the intermediate components as a list. Defaults to FALSE.
 #'
-#' @return torch.Tensor Regeneration values for forest patches.
+#' @return torch.Tensor Mean recruitment per species, stems ha^-1 step^-1,
+#'   shaped `[sites, patches, species]` -- a per-HECTARE rate, not a per-patch
+#'   count: `forward()` multiplies it by `patch_size_ha` itself before the
+#'   recruit draw. It includes the additive `reg_floor` and is unbounded above.
 #'
 #' @seealso [FINN::regeneration_capped()] (the default regeneration process since
 #'   0.2.0), [FINN::regeneration_adult()], [recruitment] for the recruitment
@@ -473,8 +506,8 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #'
 #' @return torch.Tensor Mean recruitment, stems ha^-1 step^-1,
 #'   `[sites, patches, species]` -- a per-HECTARE rate, not a per-patch count.
-#'   `forward()` multiplies it by `patch_size_ha` itself before the recruit draw
-#'   (`R/finn-class.R:1591-1593`), and `reg` is scored on the per-hectare value.
+#'   `forward()` multiplies it by `patch_size_ha` itself before the recruit draw,
+#'   and `reg` is scored on the per-hectare value.
 #'
 #' @seealso [FINN::regeneration], [FINN::regeneration_adult()],
 #'   [FINN::regeneration_adult_effect()],

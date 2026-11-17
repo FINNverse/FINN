@@ -16,8 +16,10 @@ A \code{torch} tensor of integer death counts, never exceeding \code{n}.
 }
 \description{
 The alternative mortality draw, selected with
-\code{createProcess(mortality_draw = "poisson")}; \code{\link[=binomial_from_gamma]{binomial_from_gamma()}} stays the
-default. A cohort of one tree or fewer (\code{n <= 1.5}) is a Bernoulli trial and is
+\code{createProcess(mortality_draw = "poisson")}. The default since 0.2.0 is
+\code{mortality_draw = "binomial"}, the exact binomial; \code{\link[=binomial_from_gamma]{binomial_from_gamma()}}
+(\code{mortality_draw = "gamma"}) reproduces results published before 0.2.0.
+A cohort of one tree or fewer (\code{n <= 1.5}) is a Bernoulli trial and is
 drawn as one; every larger cohort is drawn from a Poisson capped at \code{n}.
 }
 \details{
