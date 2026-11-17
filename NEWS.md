@@ -1,5 +1,31 @@
 # FINN 0.2.0
 
+## Changes that alter results
+
+These change the numbers a fit or a simulation produces. Everything else in this
+release is new behaviour behind a new argument, a rename that keeps the old name,
+or documentation. Each row names the setting that restores the 0.1.0 result.
+
+| change | new default | restore 0.1.0 |
+|---|---|---|
+| Offset of the `trees` likelihood at a simulated zero count | `fit(trees_offset = 0.01)` | `trees_offset = NULL` |
+| Count gradients taken through the expected deaths and recruits, not through the draw | `fit(rb_gradient = TRUE)` | `rb_gradient = FALSE` |
+| Exact binomial death draw instead of the moment-matched Gamma | `createProcess(mortality_draw = "binomial")` | `mortality_draw = "gamma"` |
+| Exact recruit draw below `lambda = 2` instead of the Gaussian approximation | `createProcess(regeneration_sampler = "refined")` | `regeneration_sampler = "gaussian"` |
+| Limits of the mortality probability, per simulation step | `createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)` | `0.01` / `0.99` |
+| Recruitment capped by a Beverton-Holt term, with a prior on the cap | `finn()`'s default regeneration process is `regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)` | `FINN::regeneration` |
+| Lower bound on the recruit dispersion, in the draw and the likelihood alike | `createProcess(theta_floor = 0.5)` | `theta_floor = 0` or `NULL` |
+| Growth enters `mortality()` in %/yr instead of as the raw rate | `createProcess(growth_scale = 0.01)` | `growth_scale = 1` |
+| Binned competition takes its height quantiles over the live cohorts only | `createProcess(light_mask = TRUE)` | `light_mask = FALSE` |
+| Additive recruitment floor | `createProcess(reg_floor = 1e-3)` | `reg_floor = 0.2` |
+| A numeric `loss_weights` vector multiplies the baseline-scaled objective instead of replacing it | `fit(weight_scale = "auto")` | `weight_scale = FALSE` |
+| `predict()` and `simulateForest()` leave `requires_grad` as they found it instead of switching every parameter on (#55) | always | - |
+| `resolveSiteIDs()` numbers sites, patches and species by radix order instead of the collation locale's | always | reproduces 0.1.0 where `LC_COLLATE` was already `C` |
+
+The sections *The stem-count gradient*, *The death draw*, *The recruit draw*, *The
+mortality limits* and *The recruitment cap* under **The release in detail** carry
+the measurements behind the first six rows.
+
 ## The interface of `finn()` and `fit()`
 
 Agreed for the release so that the two central functions read for an
@@ -215,8 +241,8 @@ the largest `trees` value in the data.
 `createProcess(regeneration_sampler = "refined")` becomes the default. It samples exactly below
 `lambda = 2` and drops the `+0.001` offset and the `1e-4` clamp, which together
 imposed a recruitment floor of 0.0011 per cell-year -- at a 0.0168 ha patch,
-0.066 recruits per hectare and year **per species**. `"gamma"` and `"gaussian"`
-restore the previous draws.
+0.066 recruits per hectare and year **per species**.
+`regeneration_sampler = "gaussian"` restores the previous draw.
 
 ### The mortality limits
 
@@ -293,7 +319,6 @@ The penalty is added **after** the `loss_weights = "auto"` baseline scaling, so
 | A non-finite loss term drops that term, or the whole timestep; occurrences counted | `fit(nonfinite = )`, `$nonfinite_counts` | `"drop_term"` |
 | Set-up only, no training | `fit(epochs = 0)` | — |
 | Per-predictor scaling: `"auto"`, `"identity"`, `"0to1"` or a function | `fit(env_autoscale = )` | `TRUE`, which z-scores as before; the new strings are opt-in |
-| Beverton-Holt cap on recruitment | `regeneration_saturation()` | new export |
 | Recruitment limited by conspecific adults | `regeneration_adult()` | new export |
 | Conspecific adult density as an effect on recruitment, with a share `f0` recruited without adults | `regeneration_adult_effect()` | new export |
 | A process function declares and calibrates its own named parameters | `createProcess(custom_parameters = )` | `NULL` |
@@ -301,8 +326,6 @@ The penalty is added **after** the `loss_weights = "auto"` baseline scaling, so
 | Observation operator mapping predicted and observed recruitment per ha into the tallied-count space of the sampling design (applied under the `"nbinom"` regeneration likelihood only, #65) | `finn(recruit_obs_weight = )` | `1.0` |
 | Score growth over the whole remeasurement interval | `finn(growth_rate = )` | `"annual"` |
 | **Binned competition takes its height quantiles over the live cohorts only.** A default that does **not** reproduce 0.1.0 — see below | `createProcess(light_mask = )` | **`TRUE`** (was unmasked) |
-| Bernoulli/Poisson death draw instead of the rounded Gamma | `createProcess(mortality_draw = )`, `createHybrid()`, `binomial_from_poisson()` | `"gamma"` |
-| Recruit draw without the `+0.001` offset and the `1e-4` clamp | `createProcess(regeneration_sampler = )`, `createHybrid()`, `rnbinom_torch_refined()` | `"gaussian"` |
 | A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree | `simulateForest(return_cohorts = TRUE)`, `$pred` | — |
 | **A numeric `weights` vector multiplies the baseline-scaled objective instead of replacing it.** A default that does **not** reproduce 0.1.0 | `fit(loss_weights = )`, `fit(weight_scale = )` | **`"auto"`**; `weight_scale = FALSE` restores the old meaning |
 | **Growth enters `mortality()` in %/yr.** A default that does **not** reproduce 0.1.0 — existing code changes its answer | `mortality(growth_scale = )`, overridable per model with `createProcess(growth_scale = )` | **`0.01`** (was the raw rate); `growth_scale = 1` restores 0.1.0 |
@@ -395,10 +418,13 @@ someone who was affected.
   development branch's `fit(shooting = "multiple")`, which re-anchored to the
   tree table itself, was dropped before release in favour of these.
 
-* **Two opt-in numerical repairs to the stochastic draws
-  (`createProcess(mortality_draw = , regeneration_sampler = )`).** Both default to
-  the previous behaviour, which is bit-identical (`tests/testthat/test-identity.R`,
-  config `sample_reg`). `mortality_draw = "poisson"` replaces the Gamma matched to
+* **Two repairs to the stochastic draws
+  (`createProcess(mortality_draw = , regeneration_sampler = )`).** Both are on by
+  default in 0.2.0: `mortality_draw = "binomial"` and
+  `regeneration_sampler = "refined"`. `mortality_draw = "gamma"` and
+  `regeneration_sampler = "gaussian"` restore the draws of 0.1.0, which are
+  bit-identical to it (`tests/testthat/test-identity.R`, config `sample_reg`).
+  The integer-valued alternative `mortality_draw = "poisson"` replaces the Gamma matched to
   the binomial's first two moments by a Bernoulli draw where the cohort holds one
   tree or fewer and a Poisson capped at the cohort size otherwise: the default
   draw is rounded straight-through by the forward pass and then delivers 0.68-0.72
@@ -431,18 +457,6 @@ someone who was affected.
   `compute_env_scaling()` / `apply_env_scaling()`. Dispatch is fully backward
   compatible: the previous `TRUE` / `FALSE` / `NULL` forms behave exactly as before.
 
-* **Saturating regeneration process (`FINN::regeneration_saturation`).** A new,
-  exported regeneration process function that adds a Beverton-Holt density cap
-  `recruits = K*m/(K+m)` on top of the standard mechanistic recruitment, keeping
-  regeneration bounded at high propagule pressure. It is a drop-in alternative to
-  `FINN::regeneration`, used as the `regeneration_process` in `finn()`. The fitted
-  carrying capacity is a normal process parameter, declared through
-  `createProcess(custom_parameters = list(reg_logK = ...))`: a length-1 init gives
-  one shared `K`, a length-`N_species` init a per-species `K` (`K = exp(reg_logK)`,
-  read back with `exp(as.numeric(m$reg_logK))`). This replaces the earlier
-  (unreleased) `finn(regeneration_saturation = )` model-level option, so the cap
-  now composes like any other process rather than as a special case.
-
 * **Recruitment observation weight (`finn(recruit_obs_weight = )`).** An
   observation operator, not a weight of the loss term: it multiplies predicted
   and observed recruitment per ha alike before the regeneration likelihood, so
@@ -456,10 +470,6 @@ someone who was affected.
 * **Custom process parameters (`createProcess(custom_parameters = )`).** Lets a
   user-supplied process function declare and calibrate its own named parameters,
   beyond FINN's built-in per-species and per-environment coefficients.
-
-* **Regeneration observation operator.** An internal hook mapping latent
-  recruitment to what an inventory actually records — a building block for the
-  inventory simulator.
 
 ## Behaviour changes
 
@@ -674,6 +684,16 @@ someone who was affected.
   and `predictTrees()` by 3e-6 (FINN-bwi fits/2026-11-06-finn-speed-review).
 
 ## Bug fixes
+
+* `predict()` and `simulateForest()` left `requires_grad = TRUE` on every
+  parameter of the model they had just simulated, so a model frozen for a staged
+  calibration silently unfroze as soon as it was simulated (#55). Both now
+  restore the state they found.
+
+* `createHybrid(NN = )` was documented as replacing the network architecture but
+  was never stored, so a custom module was accepted and then ignored (#59). A
+  non-`NULL` `NN` now raises an error; shape the default network with `hidden`,
+  `dropout` and `transformer`.
 
 * **A stand that dies out before a census is now scored.** When every cohort
   of a batch had died, the padding pass left no cohort slot and the census
