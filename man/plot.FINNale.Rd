@@ -45,5 +45,10 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
 
 ale <- ALE(m, plot = FALSE)
 plot(ale, process = "growth")
+# all three processes on a common, dimensionless scale
+plot(ale, scale = TRUE)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=ALE]{ALE()}}
 }

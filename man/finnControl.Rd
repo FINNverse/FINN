@@ -54,7 +54,7 @@ Adam (\link[torch:optim_ignite_adam]{torch::optim_ignite_adam}), adapts the step
 works well without tuning. Any \code{torch} optimizer generator can be passed;
 extra arguments for it, such as \code{weight_decay}, go into \code{...}.
 \item \code{lr_scheduler} lowers the learning rate during the fit. The default
-\code{"none"} keeps \code{lr} constant. \code{"step"} divides the learning rate by a factor
+\code{"none"} keeps \code{lr} constant. \code{"step"} multiplies the learning rate by \code{gamma}
 every \code{step_size} epochs, \code{"exponential"} multiplies it by \code{gamma} every
 epoch, \code{"cosine"} lets it fall smoothly to \code{eta_min} over \code{T_max} epochs,
 and \code{"plateau"} lowers it by \code{factor} after \code{patience} epochs without an

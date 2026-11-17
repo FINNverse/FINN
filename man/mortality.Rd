@@ -31,9 +31,11 @@ the shade, size and growth coefficients of the logit.}
 
 \item{light}{torch.Tensor Available light for each cohort.}
 
-\item{base_steepness}{numeric Steepness of the shade-response sigmoid. Defaults to 5.}
+\item{base_steepness}{numeric Not used by this function; kept in the signature for custom
+mortality functions written against it.}
 
-\item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
+\item{debug}{logical Leave at FALSE. \code{TRUE} is not supported by this function in 0.2.0 (it
+stops with an error).}
 
 \item{growth}{torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.}
 
@@ -49,8 +51,8 @@ wrapper function: the kernel reads \code{self$record_raws} from its own
 environment and a wrapper leaves that unbound.}
 }
 \value{
-A \code{torch} tensor of per-cohort mortality probabilities; or, if
-\code{debug = TRUE}, a list of the intermediate components.
+A \code{torch} tensor of per-cohort mortality probabilities per simulation step,
+\verb{[sites, patches, cohorts]}.
 }
 \description{
 FINN's mechanistic mortality process: the probability that a tree of a cohort
@@ -94,4 +96,9 @@ tail(sim$wide$site)
 # the start of the environmental response: qlogis(0.02) and 0 per species
 as.matrix(m$nn_mortality$parameters[[1]])
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=createProcess]{createProcess()}} (\code{mortality_draw}, \code{mortality_floor}, \code{growth_scale}),
+\code{\link[=growth]{growth()}}, \code{\link[=finn]{finn()}}, \code{\link[=predictTrees]{predictTrees()}} to evaluate the fitted function on
+observed trees
 }

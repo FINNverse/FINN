@@ -62,6 +62,11 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
 # which is the linear-model coefficient a mechanistic process would report and
 # the closest thing a neural-network process has to one
 ace <- averageConditionalEffects(m)
-str(ace, max.level = 1)
+head(ace$growth)
+# with the stand-state inputs of each process (dbh, light, ...) as well
+head(averageConditionalEffects(m, env_only = FALSE)$mortality)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=conditionalEffects]{conditionalEffects()}}, \code{\link[=summary.finn_class]{summary.finn_class()}}, which prints these effects
 }

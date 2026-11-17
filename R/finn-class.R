@@ -87,9 +87,12 @@
 #' they are stochastic replicates of the same site: more of them means a
 #' smoother trajectory, at a cost that grows with their number.
 #'
-#' **What is estimated, and how.** Everything at once. The per-species
-#' parameters of each process, the weights of each environmental response and,
-#' where a process is a network, that network's weights form one parameter
+#' **What is estimated, and how.** Everything that is switched on, at once. A
+#' process built with [FINN::createProcess()] estimates the weights of its
+#' environmental response by default (`optimizeEnv = TRUE`), and its per-species
+#' parameters only when asked to (`optimizeSpecies = TRUE`; by default they keep
+#' their starting values). These, and where a process is a network that
+#' network's weights, form one parameter
 #' vector, and [FINN::fit()] moves it by gradient descent *through the
 #' simulation*: the model is run forward over the observed years, the simulated
 #' stand variables and rates are compared with the observations, and the
@@ -319,7 +322,8 @@ finn = function(N_species,
 #' inventory data. The model simulates every site from its initial trees
 #' through the years of `env`, the simulation is compared with the observed
 #' stand variables and demographic rates in `data`, and the parameters of all
-#' processes -- the species parameters of the mechanistic equations, their
+#' processes -- the species parameters of the mechanistic equations (for a
+#' process built with `createProcess(optimizeSpecies = TRUE)`), their
 #' responses to the environment, and the weights of any neural-network process
 #' -- are adjusted together, in one joint optimization, until the simulation
 #' matches the observations as well as it can. The processes are never
@@ -361,14 +365,18 @@ finn = function(N_species,
 #' **Reading the progress.** With the default `loss_weights = "auto"` every
 #' response's loss is reported as a fraction of the loss a constant prediction
 #' (the mean of the observations) would get: `1` means no better than the
-#' mean, below `1` better. The plot drawn with `plot_progress = TRUE` and
-#' `model$history` show these fractions per epoch. A fit has converged when
+#' mean, below `1` better. `model$history` holds these fractions, one vector
+#' per epoch in the order `dbh`, `ba`, `trees`, `growth`, `mortality`,
+#' `regeneration` (a seventh, unused entry is 0); the plot drawn with
+#' `plot_progress = TRUE` shows each of them relative to its value in the first
+#' epoch. A fit has converged when
 #' the parameters stop moving (`model$param_history`), not merely when the
 #' losses look flat; see the vignette *Fitting FINN to FIA data*.
 #'
 #' **Long simulated series.** Taking the gradient through a long simulation is
 #' slow and the signal fades. `fit()` therefore cuts the gradient every
-#' `update_step` years and updates the parameters at every cut; the simulated
+#' `update_step` years; the gradients of the cuts are added up and the
+#' parameters are updated once per batch of sites. The simulated
 #' state itself runs on uncut. The default of one year is the fastest and the
 #' most short-sighted; larger values let a loss see further back at a higher
 #' cost.
@@ -547,8 +555,9 @@ finn = function(N_species,
 #'   count `fit()` set, and a count fixed earlier in the session cannot be
 #'   changed (`fit()` then says so).
 #' @param update_step (`integer(1)`)\cr Every how many simulated years the
-#'   gradient is cut and the parameters are updated (truncated backpropagation
-#'   through time). Default `1`: one update per simulated year. A loss is only
+#'   gradient is cut (truncated backpropagation through time). Default `1`: a
+#'   loss sees the processes of its own year only. The parameters are updated
+#'   once per batch, with the gradients of all cuts added up. A loss is only
 #'   scored at a year that is a multiple of `update_step`, so an observation
 #'   year off that grid is not scored, and `fit()` stops when none is on it.
 #'   The simulated state runs on uncut. Larger values let the loss see a
@@ -656,11 +665,15 @@ finn = function(N_species,
 #'   so a teacher-forced model is still validated by single shooting.
 #' @param rb_gradient (`logical(1)`)\cr Take the gradient of the drawn death and
 #'   recruitment counts through their expectation instead of through the draw. The
-#'   forward pass is unchanged to the bit -- the stand still dies and recruits
-#'   discretely -- but the reparameterised draw and the rounding's surrogate no
-#'   longer carry the sampler's noise into the gradient (on a national inventory
-#'   most of the mortality gradient was draw noise without it). Default `TRUE`
-#'   since 0.2.0; set `FALSE` to reproduce a fit made before that.
+#'   stand still dies and recruits discretely, but the reparameterised draw and
+#'   the rounding's surrogate no longer carry the sampler's noise into the
+#'   gradient (on a national inventory most of the mortality gradient was draw
+#'   noise without it). Default `TRUE` since 0.2.0; set `FALSE` to reproduce a
+#'   fit made before that. The setting also decides which death draw the default
+#'   `createProcess(mortality_draw = "binomial")` uses: the exact binomial with
+#'   `TRUE`, the Gamma draw of earlier versions with `FALSE` (see
+#'   [FINN::createProcess()]). It is stored on the model, so later simulations
+#'   draw the same way as the last fit.
 #' @param trees_offset (`numeric(1)`)\cr Offset added to the predicted stem count
 #'   before the `trees` count likelihood, which is `-Inf` (poisson) or arbitrarily
 #'   steep (nbinom) where a species' simulated count is exactly zero and the
@@ -1030,15 +1043,22 @@ check_patch_arguments = function(model, patches, patch_size, init_cohort, patche
 #'   observed-tree tensors is the number of distinct `patchID`s in `tree_data`
 #'   (it used to be `patches`, and the extra patches were empty). Kept so
 #'   existing calls run unchanged.
-#' @param patch_size (`numeric(1)`)\cr Patch size. Defaults to the one the model
-#'   was fitted with (`model$patch_size_ha`); pass a value only to override it.
+#' @param patch_size (`numeric(1)`)\cr Area of one patch in ha. Defaults to the
+#'   one the model was last fitted or simulated with (`model$patch_size_ha`);
+#'   pass a value only to override it. A model that was never fitted or
+#'   simulated has none, so give it here. The value is stored on the model.
 #' @param device (`character(1)`)\cr `"cpu"` or `"gpu"`; `"cuda"` is accepted as a
 #'   synonym for `"gpu"`.
 #' @return One row per row of `tree_data`, in the same order (`.row` records the
-#'   original position), with `growth_pred` (mean annual relative growth over
-#'   the interval) and `mort_pred` (probability of dying during the interval).
+#'   original position), with `growth_pred` (the relative growth rate per year
+#'   over the interval, compounded as described above) and `mort_pred`
+#'   (probability of dying during the interval).
 #'   Bind these onto `tree_data` directly rather than joining on
 #'   siteID/year/patchID, which would be many-to-many.
+#'
+#' @seealso [FINN::predict.finn_class()] / [FINN::simulateForest()] for the
+#'   simulated stand, [finn_loss] for the per-tree losses that share this code,
+#'   [fia_tree_dt] for a table of observed trees with their fates
 #'
 #' @export
 #' @examplesIf torch::torch_is_installed()
@@ -1066,6 +1086,14 @@ check_patch_arguments = function(model, patches, patch_size, init_cohort, patche
 #' pred  <- predictTrees(m, tree_data = trees,
 #'                       env = fia_env_dt[siteID %in% sites], patch_size = 0.06)
 #' head(pred)
+#'
+#' # the bundled tree table carries the observed fates, so prediction and
+#' # observation can be compared tree by tree: here the predicted probability
+#' # of dying within the interval for the trees that died and those that lived
+#' obs_trees <- fia_tree_dt[siteID %in% sites]
+#' p <- predictTrees(m, tree_data = obs_trees, env = fia_env_dt[siteID %in% sites],
+#'                   patch_size = 0.06)
+#' tapply(p$mort_pred, obs_trees$died, mean)
 predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
   model$predict_trees(tree_data = tree_data, env = env, patches = patches,
                       patch_size = patch_size, device = resolve_device(device))
@@ -1144,8 +1172,10 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'
 #' @return A named list. `$long$site` (and `$wide$site`) give the site-level
 #'   results, averaged over the patches: columns `siteID`, `year`, `species`,
-#'   `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `r_mean_ha`, ...) and
-#'   `value`. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
+#'   `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `reg`, `r_mean_ha`) and
+#'   `value`; `$wide$site` has one column per variable instead. `siteID` is the
+#'   id used in `env`; `year` is the simulation step, counted from 1 (the k-th
+#'   year of a site's `env` is step k), whatever the values of `env$year`. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
 #'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
 #'   ...) for the requested timesteps.
 #' @seealso [FINN::fit()], [finn_data] for the input tables, [recruitment] for

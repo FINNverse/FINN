@@ -177,9 +177,12 @@ table rather than from \code{patches}. From bare ground (\code{init_cohort = NUL
 they are stochastic replicates of the same site: more of them means a
 smoother trajectory, at a cost that grows with their number.
 
-\strong{What is estimated, and how.} Everything at once. The per-species
-parameters of each process, the weights of each environmental response and,
-where a process is a network, that network's weights form one parameter
+\strong{What is estimated, and how.} Everything that is switched on, at once. A
+process built with \code{\link[=createProcess]{createProcess()}} estimates the weights of its
+environmental response by default (\code{optimizeEnv = TRUE}), and its per-species
+parameters only when asked to (\code{optimizeSpecies = TRUE}; by default they keep
+their starting values). These, and where a process is a network that
+network's weights, form one parameter
 vector, and \code{\link[=fit]{fit()}} moves it by gradient descent \emph{through the
 simulation}: the model is run forward over the observed years, the simulated
 stand variables and rates are compared with the observations, and the

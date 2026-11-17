@@ -2,17 +2,24 @@
 % Please edit documentation in R/CohortMat.R
 \name{obsDF2arrays}
 \alias{obsDF2arrays}
-\title{Convert observation data frame to arrays}
+\title{Convert a cohort table to arrays}
 \usage{
 obsDF2arrays(obs_dt, additional_cols = character(0))
 }
 \arguments{
-\item{obs_dt}{data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.}
+\item{obs_dt}{data.frame The cohort table, with the columns \code{siteID},
+\code{patchID}, \code{cohortID} (integers; \code{cohortID} numbers the cohorts within a
+patch from 1), \code{species} (integer code), \code{dbh} (cm) and \code{trees} (number of
+trees in the cohort; rounded to whole trees).}
 
-\item{additional_cols}{character vector Optional. Additional columns to be included as arrays.}
+\item{additional_cols}{character vector Optional. Further numeric columns of
+\code{obs_dt} to return as arrays of the same shape.}
 }
 \value{
-A list of arrays for species, dbh, trees, and additional columns. The
+A named list of arrays \code{species}, \code{dbh}, \code{trees} (and one per
+\code{additional_cols}), each of dimension sites x patches x largest number of
+cohorts in a patch. Slots without a cohort hold \code{dbh = 0}, \code{trees = 0} and
+the placeholder \code{species = 1}. The
 site dimension follows the sorted user \code{siteID}s (sorted with
 \code{method = "radix"}, so independent of the locale); the user ids in that
 order are attached as attribute \code{"site_ids"}, so a site set that is not
@@ -21,7 +28,10 @@ order are attached as attribute \code{"site_ids"}, so a site set that is not
 \code{env}.
 }
 \description{
-Convert observation data frame to arrays
+Reshapes a long cohort table (one row per cohort) into the
+\verb{[sites, patches, cohorts]} arrays FINN works on. It is the step behind
+\code{CohortMat(obs_df = )} and \code{\link[=makeInitCohorts]{makeInitCohorts()}}; \code{\link[=array2obsDF]{array2obsDF()}}
+is the way back.
 }
 \examples{
 obs_dt <- data.frame(
@@ -29,4 +39,10 @@ obs_dt <- data.frame(
   species = c(1, 2, 1), dbh = c(10, 20, 30), trees = c(100, 200, 150),
   height = c(5, 10, 15))
 result <- obsDF2arrays(obs_dt, additional_cols = c("height"))
+dim(result$dbh)     # 2 sites x 2 patches x 2 cohort slots
+result$dbh[1, , ]   # site 1: one cohort in each patch
+result$trees[2, , ] # site 2: patch 1 holds a cohort in slot 2, patch 2 is empty
+}
+\seealso{
+\code{\link[=array2obsDF]{array2obsDF()}}, \link{CohortMat}, \code{\link[=makeInitCohorts]{makeInitCohorts()}}
 }

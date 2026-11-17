@@ -42,7 +42,23 @@ long simulation to equilibrium separates the two draws by a factor of several
 in basal area and stem number, while the fitted loss moves far less, because
 the rounded deficit is a bias on the trajectory and not on the parameters.
 }
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+FINN.seed(1)
+# cohorts of one tree are Bernoulli trials, larger cohorts a capped Poisson
+n <- torch::torch_tensor(rep(c(1, 40), each = 10000))
+p <- torch::torch_full(c(20000), 0.1)
+d <- as.numeric(binomial_from_poisson(n, p))
+# mean deaths per cohort: expected 0.1 (one tree) and 4 (forty trees)
+tapply(d, rep(c("n = 1", "n = 40"), each = 10000), mean)
+range(d)   # whole trees, and never more than the cohort holds
+\dontshow{\}) # examplesIf}
+}
 \references{
 Lin et al. (2026). \doi{10.48550/arXiv.2610.36827}
+}
+\seealso{
+\code{\link[=binomial_from_gamma]{binomial_from_gamma()}}, \code{\link[=binomial_from_bernoulli]{binomial_from_bernoulli()}},
+\code{\link[=createProcess]{createProcess()}} (\code{mortality_draw})
 }
 \keyword{internal}

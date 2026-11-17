@@ -70,11 +70,9 @@ parameters be estimated during \code{\link[=fit]{fit()}}? Default \code{FALSE}.}
 environmental-response function be estimated during \code{\link[=fit]{fit()}}? Default
 \code{TRUE}.}
 
-\item{inputNN}{(\code{integer(1)})\cr Input dimension of the environmental-response
-network. Default \code{NULL} infers it from \code{formula}/\code{env}.}
-
-\item{outputNN}{(\code{integer(1)})\cr Output dimension of the environmental-response
-network. Default \code{NULL} uses the number of species.}
+\item{inputNN, outputNN}{Not used in 0.2.0: the input dimension of the
+environmental-response network always follows from \code{formula} and \code{env},
+and its output dimension is the number of species. Leave at \code{NULL}.}
 
 \item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
 the negative binomial distribution used to sample recruits (the size
@@ -145,13 +143,19 @@ space and apply any link inside the function (e.g. store \verb{log K} and use
 
 \item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn
 from the cohort's mortality probability. Only used when this process is the
-mortality process. \code{"binomial"} (default since 0.2.0) is the exact binomial:
-each tree in the cohort gets its own reparameterised Bernoulli trial, which is
-integer-valued, matches the binomial in both moments -- measured 12.011 / 8.387
-against an exact 12.000 / 8.400 at \code{n = 40}, \code{p = 0.3} -- and keeps a gradient
-path to \code{p} through a straight-through sigmoid. It expands each cell to the
-largest cohort in the batch, so its memory grows with the largest \code{trees} value
-in the data.
+mortality process. \code{"binomial"} (default since 0.2.0) is \code{torch}'s exact
+binomial sampler: integer-valued, exact in both moments, at constant memory.
+It has no gradient of its own, which costs nothing under
+\code{fit(rb_gradient = TRUE)} (the default), where the gradient is taken through
+the expected number of deaths. Under \code{fit(rb_gradient = FALSE)} there is no
+such path, and \code{"binomial"} falls back to the \code{"gamma"} draw.
+\code{"bernoulli"} gives each tree of the cohort its own reparameterised Bernoulli
+trial (\code{\link[=binomial_from_bernoulli]{binomial_from_bernoulli()}}), which is integer-valued, matches
+the binomial in both moments -- measured 12.011 / 8.387 against an exact
+12.000 / 8.400 at \code{n = 40}, \code{p = 0.3} -- and keeps a gradient path to \code{p}
+through a straight-through sigmoid. It expands each cell to the largest
+cohort in the batch, so its memory grows with the largest \code{trees} value in
+the data.
 \code{"poisson"} draws a Bernoulli where
 the cohort holds one tree or fewer and a Poisson capped at the cohort size
 otherwise: integer-valued, exact in expectation for small \code{n*p}, and no
@@ -334,12 +338,44 @@ process-parameter scale) within which the species-specific process parameters
 are constrained during optimization.
 }
 \examples{
-growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
+# A process is a recipe: createProcess() needs neither data nor torch, and the
+# predictors named in `formula` are looked up in `env` when the model is
+# fitted or simulated. Here: growth responding to temperature and precipitation
+growth_process <- createProcess(formula = ~ temp + prec, func = growth)
+class(growth_process)
+deparse(growth_process$formula)
 
-# the regeneration process with a smaller recruitment floor and a cap per species
-regeneration_process <- createProcess(~temperature, func = regeneration_capped,
-                                      reg_floor = 1e-4, cap = "species")
+# the same equation with its species parameters estimated as well (by default
+# only the environmental response is), and a quadratic temperature response
+growth_process <- createProcess(~ temp + I(temp^2) + prec, func = growth,
+                                optimizeSpecies = TRUE)
 
+# level-1 hybrid: the environmental response of mortality as a small neural
+# network with two hidden layers; the mortality equation stays mechanistic
+mortality_process <- createProcess(~ temp + prec, func = mortality,
+                                   hidden = c(16L, 16L), dropout = 0.1)
+
+# the regeneration process with a smaller recruitment floor, a cap per
+# species and a fixed recruit dispersion
+regeneration_process <- createProcess(~ temp, func = regeneration_capped,
+                                      reg_floor = 1e-4, cap = "species",
+                                      optimizeTheta = FALSE)
+
+# competition takes no environment; continuous = TRUE compares every pair of
+# cohorts instead of binning them into height classes
+competition_process <- createProcess(func = competition, continuous = TRUE)
+
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the processes become a model in finn(), here for the 11 species of the
+# bundled Oregon FIA data (?fia_obs_dt), whose env table has `temp` and `prec`
+m <- finn(N_species = 11, recruits_dbh = 12.9,
+          growth_process       = growth_process,
+          mortality_process    = mortality_process,
+          regeneration_process = regeneration_process,
+          competition_process  = competition_process)
+# the species parameters of growth: light requirement and size decay
+head(as.matrix(m$par_growth), 3)
+\dontshow{\}) # examplesIf}
 }
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest

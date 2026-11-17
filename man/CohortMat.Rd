@@ -33,7 +33,7 @@ CohortMat(
 A \code{CohortMat}, a \code{torch} \code{nn_module} whose \code{dbh}, \code{trees} and
 \code{species} buffers hold the cohorts as \verb{[sites, patches, cohorts]} tensors.
 
-A \code{data.table} with one row per cohort and the columns \code{siteID},
+A \code{data.frame} with one row per cohort and the columns \code{siteID},
 \code{patchID}, \code{cohortID}, \code{species}, \code{dbh} and \code{trees}.
 }
 \description{
@@ -44,7 +44,8 @@ inventory with \code{\link[=makeInitCohorts]{makeInitCohorts()}} or from a cohor
 \code{obs_df}, and pass it to \code{\link[=fit]{fit()}}, \code{\link[=predict.finn_class]{predict.finn_class()}} or
 \code{\link[=simulateForest]{simulateForest()}} as \code{init_cohort}. The three tensors are registered as
 buffers, so a \code{CohortMat} moves between devices with the model and carries no
-gradient. \code{asDF()} converts it back to a cohort table.
+gradient. \code{asDF()} converts it back to a cohort table (a \code{data.frame} with
+\code{siteID}, \code{patchID}, \code{cohortID}, \code{species}, \code{dbh}, \code{trees}).
 
 Build the cohort tensors, either from a cohort table (\code{obs_df}) or from
 arrays of \code{dbh}, \code{trees} and \code{species}
@@ -64,8 +65,6 @@ Convert the cohort tensors back to a cohort table
 
 \item{\code{sp}}{An integer representing the number of species.}
 
-\item{\code{device}}{A character string specifying the device to use ('cpu' or 'cuda').}
-
 \item{\code{dbh_r}}{A numeric array representing the diameter at breast height in R array format.}
 
 \item{\code{trees_r}}{A numeric array representing the number of trees in R array format.}
@@ -83,10 +82,29 @@ user id); \code{NULL} when built from arrays, where the site dimension is \code{
 
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
-# the bundled Oregon FIA trees as an initial state, and back to a table
-init = FINN::makeInitCohorts(FINN::fia_init_trees,
-                             Nspecies = max(FINN::fia_init_trees$species))
+# from a cohort table: one site, two patches, three cohorts
+cohorts <- data.frame(siteID = 1, patchID = c(1, 1, 2), cohortID = c(1, 2, 1),
+                      species = c(1, 2, 1), dbh = c(35, 12, 20), trees = c(3, 10, 6))
+init <- CohortMat(obs_df = cohorts, sp = 2)
 init$dbh$shape   # sites x patches x cohorts
-head(init$asDF())
+init$trees_r     # the same content as an R array; empty slots hold 0
+init$asDF()      # and back to a table
+
+# from arrays: every patch of two sites starts with one cohort of twenty
+# 10-cm trees of species 1
+dims <- c(2, 4, 1)
+init2 <- CohortMat(dbh = array(10, dims), trees = array(20, dims),
+                   species = array(1L, dims), dims = dims, sp = 2)
+head(init2$asDF(), 3)
+
+# trees of the bundled Oregon FIA data as an initial state (?fia_init_trees)
+first3 <- fia_init_trees[fia_init_trees$siteID \%in\% 1:3, ]
+init3 <- makeInitCohorts(first3, Nspecies = max(fia_init_trees$species))
+init3$dims
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=makeInitCohorts]{makeInitCohorts()}} to build one from a tree list,
+\code{\link[=obsDF2arrays]{obsDF2arrays()}} and \code{\link[=array2obsDF]{array2obsDF()}} for the conversion
+between table and arrays, \link{finn_data} for the role of \code{init_cohort}
 }

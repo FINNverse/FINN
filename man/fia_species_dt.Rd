@@ -21,6 +21,13 @@ fia_species_dt
 The species index shared by all \verb{fia_*} tables. Derived from the training
 sites, so \code{species} is \verb{1..11} in every table.
 }
+\examples{
+library(data.table)
+fia_species_dt
+# put names on a table that carries only the species index
+deaths <- fia_tree_dt[, .(trees = .N, died = sum(died)), by = species]
+merge(fia_species_dt, deaths, by = "species")
+}
 \seealso{
 Other fia datasets: 
 \code{\link{fia_env_dt}},

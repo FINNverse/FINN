@@ -227,6 +227,41 @@
 #' \doi{10.1111/2041-210x.70347}
 #'
 #' @seealso [FINN::fit()], [finn_data], [recruitment], [FINN::predictTrees()]
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # three sites of the bundled Oregon FIA sample and two epochs per fit, to
+#' # show the arguments; a real calibration uses all sites and many epochs
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' obs   <- fia_obs_dt[siteID %in% sites]
+#' env   <- fia_env_dt[siteID %in% sites]
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createProcess(~ temp + prec, growth),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#'
+#' # the defaults: six likelihoods, balanced by their intercept-only baselines
+#' fit(m, data = obs, env = env, init_cohort = init, epochs = 2L,
+#'     patch_size = 0.06, plot_progress = FALSE)
+#' m$loss_baseline   # the loss of predicting the mean, per response
+#' m$loss_weights    # 1 / baseline: the weight of each response
+#' # the six terms per epoch (1 = no better than the mean); the seventh
+#' # column is not used
+#' do.call(rbind, m$history)
+#'
+#' # another likelihood for the stem counts, and mean dbh left out of the loss
+#' fit(m, data = obs, env = env, init_cohort = init, epochs = 2L,
+#'     patch_size = 0.06, plot_progress = FALSE,
+#'     loss_family = c(trees = "nbinom", dbh = "none"))
+#' do.call(rbind, m$history)
+#'
+#' # mortality scored on every observed tree instead of on the site's rate
+#' fit(m, data = obs, env = env, init_cohort = init, epochs = 2L,
+#'     patch_size = 0.06, plot_progress = FALSE,
+#'     tree_data = fia_tree_dt[siteID %in% sites],
+#'     loss_aggregation = c(mortality = "tree"))
 #' @name finn_loss
 #' @aliases finn-loss
 NULL

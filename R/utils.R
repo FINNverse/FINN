@@ -206,21 +206,42 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
   return(poisson_samples)
 }
 
-# `mortality_floor` of createProcess()/createHybrid(): one probability in (0, 0.99).
+# `mortality_floor` / `mortality_ceiling` of createProcess()/createHybrid(): one probability in (0, 1).
 check_mortality_limit = function(value, what) {
   if (!is.numeric(value) || length(value) != 1L || is.na(value) || value <= 0 || value >= 1)
     stop("`", what, "` must be one number in (0, 1).", call. = FALSE)
   as.numeric(value)
 }
 
-#' Sample from binomial with gradient
+#' Draw deaths from a Gamma matched to the binomial
 #'
-#' @param n number of trials
-#' @param p probability of success
-#' @param sample_size sample size
+#' @description
+#' The mortality draw of FINN before 0.2.0, selected with
+#' `createProcess(mortality_draw = "gamma")`: a Gamma distribution with the mean
+#' `n * p` and the variance `n * p * (1 - p)` of the binomial, sampled with
+#' `rsample()` so that the draw carries a pathwise gradient to `n` and `p`. The
+#' draw is continuous, not an integer count; the simulation rounds it afterwards.
+#' See [binomial_from_poisson()] for what that rounding costs and
+#' [FINN::createProcess()] for the other draws.
 #'
-#' @return A `torch` tensor of binomial samples drawn via the gamma-Poisson
-#'   relationship.
+#' @param n torch.Tensor Number of trees at risk per cohort.
+#' @param p torch.Tensor Mortality probability per cohort, strictly between 0
+#'   and 1 (the Gamma's shape `n * p / (1 - p)` degenerates at both ends).
+#' @param sample_size integer Number of draws; only the default `1` is used by
+#'   FINN (the leading sample dimension is dropped).
+#'
+#' @return A `torch` tensor of the shape of `n` with continuous, positive draws
+#'   whose mean is `n * p` and whose variance is `n * p * (1 - p)`.
+#' @seealso [binomial_from_poisson()], [binomial_from_bernoulli()],
+#'   [FINN::createProcess()] (`mortality_draw`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' n <- torch::torch_full(c(10000), 40)   # 10 000 cohorts of 40 trees
+#' p <- torch::torch_full(c(10000), 0.3)
+#' d <- as.numeric(binomial_from_gamma(n, p))
+#' # the binomial has mean 12 and variance 8.4; the draws are not integers
+#' c(mean = mean(d), var = var(d))
+#' head(d, 3)
 #' @keywords internal
 #' @export
 binomial_from_gamma = function(n, p, sample_size=1) {
@@ -270,6 +291,17 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 #' @return A `torch` tensor of integer death counts, never exceeding `n`.
 #' @references
 #' Lin et al. (2026). \doi{10.48550/arXiv.2610.36827}
+#' @seealso [binomial_from_gamma()], [binomial_from_bernoulli()],
+#'   [FINN::createProcess()] (`mortality_draw`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' # cohorts of one tree are Bernoulli trials, larger cohorts a capped Poisson
+#' n <- torch::torch_tensor(rep(c(1, 40), each = 10000))
+#' p <- torch::torch_full(c(20000), 0.1)
+#' d <- as.numeric(binomial_from_poisson(n, p))
+#' # mean deaths per cohort: expected 0.1 (one tree) and 4 (forty trees)
+#' tapply(d, rep(c("n = 1", "n = 40"), each = 10000), mean)
+#' range(d)   # whole trees, and never more than the cohort holds
 #' @keywords internal
 #' @export
 binomial_from_poisson = function(n, p) {
@@ -281,9 +313,34 @@ binomial_from_poisson = function(n, p) {
 
 #' Draw binomial counts from per-trial Bernoulli probabilities
 #'
-#' @param n torch.Tensor Number of Bernoulli trials per element.
-#' @param p torch.Tensor Success probability per element.
-#' @return torch.Tensor The number of successes per element.
+#' @description
+#' The mortality draw selected with `createProcess(mortality_draw =
+#' "bernoulli")`: every element of `n` gets `max(n)` reparameterised Bernoulli
+#' trials with probability `p`, of which the first `n` are kept and summed. The
+#' result is integer-valued and matches the binomial in mean and variance, and
+#' it keeps a gradient path to `p` (a straight-through sigmoid) and to `n` (a
+#' soft mask). The price is memory: the trials are laid out along an extra
+#' dimension of length `max(n)`, so the cost grows with the largest cohort.
+#'
+#' @param n torch.Tensor Number of Bernoulli trials (trees at risk) per
+#'   element, with at least two dimensions (FINN passes
+#'   `[sites, patches, cohorts]`) and a largest value of at least 1.
+#' @param p torch.Tensor Success (death) probability per element, of the shape
+#'   of `n`.
+#' @return A `torch` tensor of the shape of `n`: the number of successes per
+#'   element, a whole number between 0 and `n`.
+#' @seealso [binomial_from_gamma()], [binomial_from_poisson()],
+#'   [FINN::createProcess()] (`mortality_draw`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' # one site, 5000 patches, two cohorts of 5 and 40 trees, 30 % mortality
+#' n <- torch::torch_tensor(array(rep(c(5, 40), each = 5000), dim = c(1, 5000, 2)))
+#' p <- torch::torch_full(c(1, 5000, 2), 0.3)
+#' deaths <- torch::as_array(binomial_from_bernoulli(n, p))
+#' dim(deaths)
+#' # binomial mean n * p = 1.5 and 12, variance n * p * (1 - p) = 1.05 and 8.4
+#' sapply(c("n = 5" = 1, "n = 40" = 2),
+#'        function(k) c(mean = mean(deaths[1, , k]), var = var(deaths[1, , k])))
 #' @export
 binomial_from_bernoulli = function(n, p) {
 
@@ -333,9 +390,18 @@ binomial_from_bernoulli = function(n, p) {
 #'     `torch::torch_manual_seed()` to set the seed for Torch's random number generator. This is useful
 #'     for ensuring reproducibility in scripts that rely on both R and Torch for random operations.
 #'
+#' @seealso [base::set.seed()], [torch::torch_manual_seed()]
+#'
 #' @examplesIf torch::torch_is_installed()
+#' # the same seed gives the same draws, in R and in torch
 #' FINN.seed(123)
-#' # Now both R and Torch are seeded with 123, ensuring reproducible results
+#' a <- c(runif(1), as.numeric(torch::torch_rand(1)))
+#' FINN.seed(123)
+#' b <- c(runif(1), as.numeric(torch::torch_rand(1)))
+#' identical(a, b)
+#'
+#' # seed before finn() and fit() to make a fit reproducible: the starting
+#' # values of the parameters and the simulated deaths and recruits are random
 #'
 #' @import torch
 #' @export
@@ -420,7 +486,17 @@ rnbinom_torch = function(pred, theta) {
 #' @param pred torch.Tensor Expected recruits per patch.
 #' @param theta torch.Tensor Negative-binomial dispersion.
 #'
-#' @return A `torch` tensor of recruit counts.
+#' @return A `torch` tensor of recruit counts, of the shape of `pred`.
+#' @seealso [recruitment], [FINN::createProcess()] (`regeneration_sampler`,
+#'   `theta_floor`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' # sparse recruitment: an expected 0.05 recruits per patch and year
+#' mu    <- torch::torch_full(c(100000), 0.05)
+#' theta <- torch::torch_tensor(1)
+#' r <- as.numeric(rnbinom_torch_refined(mu, theta))
+#' mean(r)    # the draw delivers the expected count ...
+#' table(r)   # ... as whole recruits, most patches getting none
 #' @keywords internal
 #' @export
 rnbinom_torch_refined = function(pred, theta) {

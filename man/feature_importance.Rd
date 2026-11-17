@@ -84,9 +84,14 @@ m <- finn(
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
 
-# permutation importance: how much the fit degrades when a driver is shuffled.
-# `nperm` is small here to keep the example quick; use more for a real reading.
+# permutation importance: how much the simulated rate of a process shifts
+# when a driver is shuffled between sites and years. `nperm` is small here
+# to keep the example quick; use more for a real reading.
 fi <- feature_importance(m, nperm = 2L, seed = 1L)
-str(fi, max.level = 1)
+head(fi$growth)
+# `method = "sobol"` gives the dimensionless Sobol-style score instead
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=summary.finn_class]{summary.finn_class()}} (\code{importance = "permutation"}), \code{\link[=ALE]{ALE()}}
 }

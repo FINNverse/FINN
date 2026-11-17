@@ -30,15 +30,22 @@
 #' `site`, `patch`, and `cohort`, corresponding to the processed site-level,
 #' patch-level, and cohort-level predictions, respectively.
 #'
+#' @seealso [FINN::predict.finn_class()] / [FINN::simulateForest()], which
+#'   call this function and return its result as `$wide` and `$long`
+#'
 #' @examples
-#' # a minimal prediction object of the shape pred2DF() expects
-#' # (normally produced by predict()/simulateForest()):
+#' # a minimal prediction object of the shape pred2DF() expects: one array
+#' # [site, year, species] per variable. predict()/simulateForest() build it
+#' # from the simulation and return the tables, so pred2DF() is rarely called
+#' # directly.
 #' metrics <- c("dbh", "ba", "trees", "growth", "mort", "reg", "r_mean_ha")
 #' arr <- array(1, dim = c(1, 2, 3), dimnames = list(1, 1:2, 1:3))  # [site, year, species]
 #' pred <- list(Predictions = list(Site = stats::setNames(
 #'   lapply(metrics, function(m) arr), metrics)))
 #' result <- pred2DF(pred, format = "long")
 #' head(result$site)
+#' # one column per variable instead of one row
+#' head(pred2DF(pred, format = "wide")$site, 3)
 #'
 #' @export
 pred2DF <- function(pred, format = "wide") {

@@ -43,6 +43,19 @@ like at the first census, from which \code{\link[=makeInitCohorts]{makeInitCohor
 cohorts a fit or simulation starts from
 (\code{makeInitCohorts(fia_init_trees, Nspecies = 11)}).
 }
+\examples{
+library(data.table)
+head(fia_init_trees[, .(siteID, patchID, species, species_name, dbh, trees, treeName)])
+# living stems and their mean diameter per species at the first inventory
+fia_init_trees[!is.na(trees), .(stems = sum(trees), mean_dbh = round(mean(dbh), 1)),
+               by = species_name][order(-stems)]
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the initial state of a fit or a simulation, here for three sites: one
+# cohort per tree
+init <- makeInitCohorts(fia_init_trees[siteID \%in\% 1:3], Nspecies = 11)
+init$dims   # sites, patches, cohorts
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 Other fia datasets: 
 \code{\link{fia_env_dt}},

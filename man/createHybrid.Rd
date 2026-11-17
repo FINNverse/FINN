@@ -155,8 +155,38 @@ or kept fixed at their (random) initial values, and \code{dispersion_parameter}/
 are only used when this object is the regeneration process.
 }
 \examples{
-growth_process <- createHybrid(formula = ~temperature + precipitation)
+# A hybrid process is a recipe, like createProcess(): no data and no torch
+# are needed until the model is built. The default network is a small
+# transformer encoder
+growth_process <- createHybrid(formula = ~ temp + prec)
+class(growth_process)
 
+# a feed-forward network with two hidden layers instead, as in the Barro
+# Colorado Island case study of the paper
+mortality_process <- createHybrid(~ temp + prec, transformer = FALSE,
+                                  hidden = c(50L, 50L), dropout = 0.1)
+
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a model whose growth is a network while mortality, regeneration and
+# competition stay mechanistic, fitted for two epochs on three sites of the
+# bundled Oregon FIA data (?fia_obs_dt)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createHybrid(~ temp + prec, transformer = FALSE,
+                                              hidden = c(16L, 16L), dropout = 0.1),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+# the network takes the place of the growth equation in the simulation
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init)
+head(sim$long$site[variable == "growth" & year == 10 & value > 0])
+\dontshow{\}) # examplesIf}
 }
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest

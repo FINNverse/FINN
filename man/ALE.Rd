@@ -40,17 +40,20 @@ simulation, so the (stochastic) conditional effects / ALE are reproducible and c
 \item{process}{(\code{character}|\code{NULL})\cr If given (one of \code{"growth"}, \code{"mortality"},
 \code{"regeneration"}) only that process is plotted. \code{NULL} (default) plots all three.}
 
-\item{scale}{(\code{logical(1)})\cr If \code{TRUE} each curve is divided by the SD of its
-process x species rate, yielding dimensionless, comparable effects (the curve's
-variance then equals the Sobol-style normalised importance). Default \code{FALSE}.}
+\item{scale}{(\code{logical(1)})\cr Only for the plot (\code{plot = TRUE}): if \code{TRUE} each
+drawn curve is divided by the SD of its process x species rate, yielding
+dimensionless, comparable effects (the curve's variance then equals the
+Sobol-style normalised importance). The returned tables are not changed; they
+carry the SD as \code{rate_sd}. Default \code{FALSE}.}
 
 \item{...}{Not supported yet.}
 }
 \value{
-A list with one table per process (e.g. \verb{$growth}, \verb{$mortality},
-\verb{$regeneration}). Each table gives the accumulated local effect (\code{ale}) of
-every driver (\code{var}) across its observed range (\code{x}), per \code{species}. When
-\code{plot = TRUE} the effects are also drawn.
+A list of class \code{FINNale} with one table per process (\verb{$growth},
+\verb{$mortality}, \verb{$regeneration}). Each table gives the accumulated local
+effect (\code{ale}, on the scale of the process rate) of every driver (\code{var})
+across its observed range (\code{x}), per \code{species}, and \code{rate_sd}, the SD of
+that process x species rate. When \code{plot = TRUE} the effects are also drawn.
 }
 \description{
 Calculates accumulated local effects (ALE) for the three processes
@@ -81,9 +84,14 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
 ale <- ALE(m, plot = FALSE)
 head(ale$growth)
 
-# `scale = TRUE` divides each curve by the SD of its process x species rate, so
-# growth in cm/yr and mortality on the probability scale become comparable
-ale_s <- ALE(m, plot = FALSE, scale = TRUE)
-vapply(ale_s, function(d) max(abs(d$ale)), numeric(1))
+# the curves of one process, one panel per driver and one line per species;
+# `scale = TRUE` divides each drawn curve by the SD of its process x species
+# rate, so that the panels of different processes become comparable
+ALE(m, process = "growth", scale = TRUE)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=plot.FINNale]{plot.FINNale()}} to draw the curves, \code{\link[=conditionalEffects]{conditionalEffects()}} and
+\code{\link[=averageConditionalEffects]{averageConditionalEffects()}} for the local slopes behind them,
+\code{\link[=summary.finn_class]{summary.finn_class()}} and \code{\link[=feature_importance]{feature_importance()}} for variable importance
 }
