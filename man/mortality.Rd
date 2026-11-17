@@ -34,8 +34,9 @@ the shade, size and growth coefficients of the logit.}
 \item{base_steepness}{numeric Not used by this function; kept in the signature for custom
 mortality functions written against it.}
 
-\item{debug}{logical Leave at FALSE. \code{TRUE} is not supported by this function in 0.2.0 (it
-stops with an error).}
+\item{debug}{logical If TRUE, return a list with the light (\code{light}), the mortality
+probability before any further step (\code{environment}) and the returned probability
+(\code{predM}, identical to \code{environment}). Defaults to FALSE.}
 
 \item{growth}{torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.}
 

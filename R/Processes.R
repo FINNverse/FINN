@@ -263,8 +263,9 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 #' @param light torch.Tensor Available light for each cohort.
 #' @param base_steepness numeric Not used by this function; kept in the signature for custom
 #'   mortality functions written against it.
-#' @param debug logical Leave at FALSE. `TRUE` is not supported by this function in 0.2.0 (it
-#'   stops with an error).
+#' @param debug logical If TRUE, return a list with the light (`light`), the mortality
+#'   probability before any further step (`environment`) and the returned probability
+#'   (`predM`, identical to `environment`). Defaults to FALSE.
 #' @param growth torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.
 #' @param growth_scale numeric Growth enters the logit as `growth / growth_scale`.
 #'   The default 0.01 expresses the annual relative growth in %/yr (about one
@@ -323,7 +324,7 @@ mortality = function(dbh, species, trees, parMort, pred, light, base_steepness =
 
   environment = torch::torch_sigmoid(pred+growth/growth_scale*parMort[,3][species]+light*parMort[,1][species] +  parMort[,2][species]*(dbh / ( 100)))
   predM = environment
-  if(debug == TRUE) out = list(shade = shade, light = light, environment = environment, gPSize = gPSize, predM = predM)
+  if(debug == TRUE) out = list(light = light, environment = environment, predM = predM)
   else out = predM
   return(out)
 }

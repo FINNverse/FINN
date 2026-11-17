@@ -2562,6 +2562,10 @@ finn_class = nn_module(
   predict_trees = function(tree_data, env, patches = 100L, patch_size = NULL, device = c("cpu", "gpu")) {
     device = resolve_device(device)
     self$device = if (identical(device, "gpu")) "cuda" else "cpu"
+    # as simulate(): the model on the scoring device and in eval mode, so that
+    # dropout is off after fit() (which leaves the model in training mode)
+    self$to(device = self$device)
+    self$eval()
     # light is f(BA / patch_size_ha), so scoring at another patch size than the fit
     # silently rescales competition - the one thing this route exists to rule out
     if (is.null(patch_size)) patch_size = self$patch_size_ha

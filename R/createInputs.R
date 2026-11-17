@@ -661,8 +661,9 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #' sum(init$trees_r)   # the living trees of the three sites
 #'
 #' # 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation.
-#' # Binning adds up `trees`, so rows without a count (the records of dead
-#' # trees in this table, trees = NA) are left out first
+#' # Binning adds up `trees`; rows without a count (the records of dead trees
+#' # in this table, trees = NA) carry no stems, so leave them out first, or a
+#' # bin holding only such rows becomes an empty cohort
 #' living <- fia_init_trees[siteID %in% 1:3 & !is.na(trees)]
 #' binned <- makeInitCohorts(living, dbh_binsize = 5,
 #'                           Nspecies = max(fia_obs_dt$species))
@@ -678,7 +679,7 @@ makeInitCohorts <- function(init_trees, dbh_binsize = NULL, min_dbh = NULL, Nspe
     if(is.null(min_dbh)) min_dbh = min(init_trees$dbh, na.rm = TRUE)
     dbh_intervals = seq(min_dbh, max(init_trees$dbh, na.rm = TRUE) + dbh_binsize, by = dbh_binsize)
     init_trees <- init_trees[!(treeName %in% singleCohortTreeNames),.(
-      trees = sum(trees)),
+      trees = sum(trees, na.rm = TRUE)),
       by = .(siteID, patchID, species,
              dbh = as.numeric(as.character(
                cut(dbh, breaks = dbh_intervals, labels = dbh_intervals[-1]-dbh_binsize/2, include.lowest = TRUE)

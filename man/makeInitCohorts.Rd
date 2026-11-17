@@ -92,8 +92,9 @@ dim(init$dbh)   # sites x patches x cohorts
 sum(init$trees_r)   # the living trees of the three sites
 
 # 5 cm diameter bins instead: fewer cohorts, so a much cheaper simulation.
-# Binning adds up `trees`, so rows without a count (the records of dead
-# trees in this table, trees = NA) are left out first
+# Binning adds up `trees`; rows without a count (the records of dead trees
+# in this table, trees = NA) carry no stems, so leave them out first, or a
+# bin holding only such rows becomes an empty cohort
 living <- fia_init_trees[siteID \%in\% 1:3 & !is.na(trees)]
 binned <- makeInitCohorts(living, dbh_binsize = 5,
                           Nspecies = max(fia_obs_dt$species))
