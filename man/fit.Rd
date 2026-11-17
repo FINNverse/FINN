@@ -411,6 +411,54 @@ not. The per-tree mortality loss is not affected by either bound; it clamps
 at \code{1e-6}. See \code{\link[=createProcess]{createProcess()}}.
 }
 
+\section{The arguments that shape the loss, and how they combine}{
+
+
+Ten arguments change what \code{fit()} optimises. They are not alternatives to one
+another: each sits on its own axis, and a fit picks one value on every axis.
+\link{finn_loss} carries the detail; this is the map.\tabular{llll}{
+   axis \tab argument \tab what it decides \tab default \cr
+   which responses are scored \tab \verb{loss_family = c(<response> = "none")} \tab leaves that response out of the loss entirely \tab all six scored \cr
+   which likelihood \tab \code{loss_family} \tab the distribution each response is compared with \tab \code{mse}, \code{mse}, \code{poisson}, \code{mse}, \code{binomial}, \code{nbinom} \cr
+   how the simulation is summarised \tab \code{loss_aggregation} \tab what the cohorts are reduced to before they meet an observation: \code{"mean"}, \code{"sum"}, \code{"size_classes"}, \code{"quantiles"}, \code{"tree"} \tab mean for \code{dbh}, \code{growth}, \code{mortality}; sum for \code{ba}, \code{trees}, \code{regeneration} \cr
+   at what resolution growth and mortality are scored \tab \code{loss_resolution} \tab \code{"site"}: per site, year and species. \code{"tree"}: per simulated cohort that started as an observed tree \tab \code{"site"} \cr
+   how the six terms are combined \tab \code{loss_weights}, \code{weight_scale} \tab \code{"auto"} divides each term by its intercept-only baseline; a numeric vector then multiplies those balanced terms, or the raw ones under \code{weight_scale = "raw"} \tab \code{"auto"}, \code{"auto"} \cr
+   where the recruits come from \tab \code{loss_recruit} \tab \code{"observed"} feeds the observed recruitment into the simulation, freezes the regeneration process and drops its loss term \tab \code{"simulated"} \cr
+   how the state is propagated \tab \code{reanchor} + \code{anchor_cohorts}, \code{anchor_mode}, \code{anchor_min_dbh}; \code{teacher_forcing} \tab the estimator -- see the table below \tab single shooting \cr
+   how far the gradient reaches \tab \code{update_step} \tab truncated backpropagation through time: the gradient is cut every \code{update_step} years, the state is not \tab \code{1} \cr
+}
+
+
+\strong{The three estimators} differ in how much of the trajectory each gradient
+sees, and therefore in what the fit is asked to get right:\tabular{llll}{
+    \tab state over the horizon \tab scored responses \tab needs \cr
+   single shooting (default) \tab initialised once, free-running to the end; error compounds across every census \tab all six \tab \code{init_cohort} \cr
+   multiple shooting (\code{reanchor = TRUE}) \tab free-running within a census interval, rebuilt from the observed trees at each anchor after that step's loss \tab all six \tab \code{anchor_cohorts} per observed timestep \cr
+   direct estimation (\code{teacher_forcing = TRUE}) \tab never carried forward: reset to the observed stand at every timestep \tab \code{growth}, \code{mortality}, \code{regeneration} only -- \code{dbh}, \code{ba} and \code{trees} leave the loss, because predicting them needs a trajectory \tab \code{anchor_cohorts} for every observed timestep but the last \cr
+}
+
+
+\code{update_step} is a different axis from all three: it cuts the gradient but
+keeps the state, so under single shooting the stand still compounds while the
+parameters only see \code{update_step} years at a time. It is inert under teacher
+forcing, where there is no multi-year trajectory to truncate.
+
+\strong{What cannot be combined:}
+\itemize{
+\item \code{reanchor} and \code{teacher_forcing} -- different estimators, not settings of one.
+\item \code{loss_aggregation = "tree"} and \code{loss_resolution = "tree"} -- the two per-tree
+routes score different objects (the observed tree at its measured diameter
+against the simulated cohort it became) and cannot run in one fit;
+\link{finn_loss} compares them side by side.
+}
+
+\strong{What a value silently implies:} \code{loss_recruit = "observed"} removes the
+regeneration term, so a fit under it cannot be compared with one under
+\code{"simulated"} by its total loss; \code{teacher_forcing = TRUE} removes three more;
+and \code{loss_weights = "auto"} rescales whatever is left, so the total loss is
+only comparable between fits that score the same set of responses.
+}
+
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
 library(data.table)

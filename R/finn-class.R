@@ -25,6 +25,22 @@
 #' \if{html}{\figure{FINN-overview.jpg}{options: width="100\%" alt="One time step of FINN: the cohorts of a patch and the site's environment enter competition, growth, mortality and regeneration, which produce the cohorts of the next step and the simulated stand variables."}}
 #' \if{latex}{\figure{FINN-overview.jpg}{options: width=12cm}}
 #'
+#' *One simulation step.* The cohorts of a patch at time t -- their size,
+#' species, number of trees and cohort id -- and the site's environment are the
+#' inputs. Competition turns the cohorts into the light each of them receives;
+#' growth, mortality and regeneration then act on every cohort, each of them
+#' either a mechanistic equation (the gear) or, in a hybrid model, a neural
+#' network, and each with its own response to the environment. The distribution
+#' drawn beside a process is the one its outcome is drawn from or scored with:
+#' Gaussian for growth, binomial for the deaths, negative binomial for the
+#' recruits. Out come the cohorts of the next step and the quantities FINN
+#' reports for every site and year -- mean diameter, basal area, number of trees,
+#' and the growth, mortality and recruitment rates.
+#'
+#' The figure is Figure 1 of Pichler & Käber (2026), reproduced from the preprint
+#' version of that paper (arXiv:2508.01228), which is published under CC BY 4.0.
+#' The caption above is ours, not the paper's.
+#'
 #' **How FINN simulates a forest.** A site is a set of patches (small plots of
 #' `patch_size` ha). On each patch the trees are kept as cohorts, each with a
 #' species, a diameter at breast height (dbh, cm) and a number of trees. Every
@@ -58,6 +74,61 @@
 #' column of the environment table (`formula = ~.`) and its default settings.
 #' Passing `NULL` for a process is still accepted and means the same default.
 #' The competition process cannot depend on the environment in this version.
+#'
+#' **Patches, and why there are several.** FINN is a gap model: how much light a
+#' tree gets depends on the trees standing next to it, so the unit of simulation
+#' is a patch small enough that one large tree shades it (`patch_size`, in ha).
+#' A site is simulated as several such patches that share the site's
+#' environment, and a site's stand variables are the mean over its patches. The
+#' patches mean two different things depending on where the simulation starts.
+#' With an `init_cohort` built from an inventory they are the inventory's own
+#' subplots, each carrying its real trees, and the patch count comes from that
+#' table rather than from `patches`. From bare ground (`init_cohort = NULL`)
+#' they are stochastic replicates of the same site: more of them means a
+#' smoother trajectory, at a cost that grows with their number.
+#'
+#' **What is estimated, and how.** Everything at once. The per-species
+#' parameters of each process, the weights of each environmental response and,
+#' where a process is a network, that network's weights form one parameter
+#' vector, and [FINN::fit()] moves it by gradient descent *through the
+#' simulation*: the model is run forward over the observed years, the simulated
+#' stand variables and rates are compared with the observations, and the
+#' gradient is carried back through the time loop by automatic differentiation.
+#' No process is fitted on its own and plugged in afterwards. That is what lets
+#' a process that has been replaced by a network still be identified: it has to
+#' produce a stand that the other three processes can also live with.
+#'
+#' **Mechanistic, hybrid, or in between.** Each process is set independently:
+#' * *fully mechanistic* -- the equation, with a linear or logistic response to
+#'   the environment. Every parameter has a meaning and a unit.
+#' * *level 1* -- the equation, but its environmental response is a small
+#'   network (`createProcess(hidden = c(20, 20))`). The demography stays the
+#'   package's equation, so the model still extrapolates the way that equation
+#'   says it should, while the response to climate is free in shape.
+#' * *level 2* -- the equation itself replaced by a network
+#'   ([FINN::createHybrid()]). The data get the most freedom and the fitted
+#'   process the least interpretation.
+#'
+#' Competition is mechanistic at every level. A mixed model is the normal case:
+#' the process you suspect is misspecified goes to level 1 or 2, the others stay
+#' mechanistic, and the comparison between the two fits is the result.
+#'
+#' **Setting up a first model.** Three choices carry most of the outcome.
+#' `recruits_dbh` must be the diameter at which your inventory starts counting
+#' trees, or the simulation recruits trees the data never recorded.
+#' `patch_size` must be the area one plot of that inventory covers. And a
+#' process' `formula` should name the predictors you would defend in a
+#' regression rather than every column of `env`, because each one costs a
+#' coefficient per species.
+#'
+#' **Checking a fitted model.** `fit(plot_progress = TRUE)` and `$history` say
+#' whether the fit moved and which response drove it; [FINN::summary.finn_class()] reports
+#' the parameters; [FINN::ALE()] shows the fitted environmental responses,
+#' including those of a network; [FINN::simulateForest()] from bare ground shows
+#' what the model does outside the observation window. The last one is worth the
+#' time: a model that predicts the holdout well and grows an implausible stand
+#' from bare ground has usually learned the observed window rather than the
+#' dynamics that produced it.
 #'
 #' @param N_species (`integer(1)`)\cr Number of species in the data. Species are
 #'   coded `1, ..., N_species` in every table ([FINN::resolveSiteIDs()] does
@@ -139,6 +210,34 @@
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
+#'
+#' # --- the bundled data -------------------------------------------------
+#' # 200 plots of the US Forest Inventory and Analysis programme in Oregon,
+#' # 11 tree species, four subplots per plot, each plot measured twice about
+#' # ten years apart. `year` counts years from the start of the panel.
+#' #  * fia_obs_dt     one row per plot, year and species: the stand variables
+#' #                   (dbh, ba, trees) and the rates (growth, mort, reg) that
+#' #                   an inventory yields -- these are what fit() scores
+#' #  * fia_env_dt     climate of every plot and year (temp, prec, ...)
+#' #  * fia_init_trees the individual trees of the first census, the state the
+#' #                   simulation starts from
+#' #  * fia_species_dt the species codes 1..11 and their names
+#' head(fia_obs_dt)
+#' fia_species_dt
+#'
+#' op <- par(mfrow = c(1, 2))
+#' # what the model has to reproduce: the stand of each plot, per year
+#' stand <- fia_obs_dt[, .(ba = sum(ba, na.rm = TRUE)), by = .(siteID, year)]
+#' plot(stand$year, stand$ba, pch = 16, col = "#2b6a4d40",
+#'      xlab = "year of the panel", ylab = "basal area (m^2/ha)",
+#'      main = "observed stands")
+#' # and the size distribution it starts from
+#' hist(fia_init_trees$dbh[which(fia_init_trees$living)], breaks = 40, col = "grey80",
+#'      border = "white", xlab = "dbh at the first census (cm)",
+#'      main = "initial trees")
+#' par(op)
+#'
+#' # --- the workflow -----------------------------------------------------
 #' # The whole workflow on three Oregon FIA sites: build, estimate, simulate.
 #' # A real calibration uses all sites and hundreds of epochs.
 #' sites <- 1:3
@@ -302,6 +401,50 @@ finn = function(N_species,
 #' which made simulated low-mortality stands lose stems the observations did
 #' not. The per-tree mortality loss is not affected by either bound; it clamps
 #' at `1e-6`. See [FINN::createProcess()].
+#'
+#' @section The arguments that shape the loss, and how they combine:
+#'
+#' Ten arguments change what `fit()` optimises. They are not alternatives to one
+#' another: each sits on its own axis, and a fit picks one value on every axis.
+#' [finn_loss] carries the detail; this is the map.
+#'
+#' | axis | argument | what it decides | default |
+#' |---|---|---|---|
+#' | which responses are scored | `loss_family = c(<response> = "none")` | leaves that response out of the loss entirely | all six scored |
+#' | which likelihood | `loss_family` | the distribution each response is compared with | `mse`, `mse`, `poisson`, `mse`, `binomial`, `nbinom` |
+#' | how the simulation is summarised | `loss_aggregation` | what the cohorts are reduced to before they meet an observation: `"mean"`, `"sum"`, `"size_classes"`, `"quantiles"`, `"tree"` | mean for `dbh`, `growth`, `mortality`; sum for `ba`, `trees`, `regeneration` |
+#' | at what resolution growth and mortality are scored | `loss_resolution` | `"site"`: per site, year and species. `"tree"`: per simulated cohort that started as an observed tree | `"site"` |
+#' | how the six terms are combined | `loss_weights`, `weight_scale` | `"auto"` divides each term by its intercept-only baseline; a numeric vector then multiplies those balanced terms, or the raw ones under `weight_scale = "raw"` | `"auto"`, `"auto"` |
+#' | where the recruits come from | `loss_recruit` | `"observed"` feeds the observed recruitment into the simulation, freezes the regeneration process and drops its loss term | `"simulated"` |
+#' | how the state is propagated | `reanchor` + `anchor_cohorts`, `anchor_mode`, `anchor_min_dbh`; `teacher_forcing` | the estimator -- see the table below | single shooting |
+#' | how far the gradient reaches | `update_step` | truncated backpropagation through time: the gradient is cut every `update_step` years, the state is not | `1` |
+#'
+#' **The three estimators** differ in how much of the trajectory each gradient
+#' sees, and therefore in what the fit is asked to get right:
+#'
+#' | | state over the horizon | scored responses | needs |
+#' |---|---|---|---|
+#' | single shooting (default) | initialised once, free-running to the end; error compounds across every census | all six | `init_cohort` |
+#' | multiple shooting (`reanchor = TRUE`) | free-running within a census interval, rebuilt from the observed trees at each anchor after that step's loss | all six | `anchor_cohorts` per observed timestep |
+#' | direct estimation (`teacher_forcing = TRUE`) | never carried forward: reset to the observed stand at every timestep | `growth`, `mortality`, `regeneration` only -- `dbh`, `ba` and `trees` leave the loss, because predicting them needs a trajectory | `anchor_cohorts` for every observed timestep but the last |
+#'
+#' `update_step` is a different axis from all three: it cuts the gradient but
+#' keeps the state, so under single shooting the stand still compounds while the
+#' parameters only see `update_step` years at a time. It is inert under teacher
+#' forcing, where there is no multi-year trajectory to truncate.
+#'
+#' **What cannot be combined:**
+#' * `reanchor` and `teacher_forcing` -- different estimators, not settings of one.
+#' * `loss_aggregation = "tree"` and `loss_resolution = "tree"` -- the two per-tree
+#'   routes score different objects (the observed tree at its measured diameter
+#'   against the simulated cohort it became) and cannot run in one fit;
+#'   [finn_loss] compares them side by side.
+#'
+#' **What a value silently implies:** `loss_recruit = "observed"` removes the
+#' regeneration term, so a fit under it cannot be compared with one under
+#' `"simulated"` by its total loss; `teacher_forcing = TRUE` removes three more;
+#' and `loss_weights = "auto"` rescales whatever is left, so the total loss is
+#' only comparable between fits that score the same set of responses.
 #'
 #' @param model (`finn_class`)\cr The model built by [FINN::finn()].
 #' @param data (`data.frame`)\cr The observations: one row per site, census year
