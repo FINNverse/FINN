@@ -3495,7 +3495,7 @@ finn_class = nn_module(
         }
 
         batch_loss[counter, ] =  as.numeric(loss$data()$cpu())
-        counter <<- counter + 1
+        counter = counter + 1
       })
 
       # too expensive with many parameters

@@ -339,7 +339,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.frame())
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
@@ -518,7 +518,7 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.frame())
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
