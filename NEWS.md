@@ -685,6 +685,17 @@ someone who was affected.
 
 ## Bug fixes
 
+* `fit()` no longer creates or overwrites an object `counter` in the global
+  environment. The batch counter was advanced with `<<-`, which also left the
+  local counter at 1: with several batches per epoch (`batchsize` smaller than
+  the number of sites) `$history`, the progress plot and the plateau scheduler
+  saw the last batch's loss instead of the mean over the epoch's batches. With
+  one batch per epoch, the default, nothing changes.
+
+* `createProcess()` and `createHybrid()` find a formula that is held in a
+  variable of the calling function (`f <- ~ temp; createProcess(f, growth)`
+  inside a function used to stop with "object 'f' not found").
+
 * `predict()` and `simulateForest()` left `requires_grad = TRUE` on every
   parameter of the model they had just simulated, so a model frozen for a staged
   calibration silently unfroze as soon as it was simulated (#55). Both now
