@@ -53,6 +53,10 @@ site names).
 \item \code{initCohorts} (optional): FINN \code{CohortMat} object.
 \item \code{initCohort_dt} (optional): trees used to build cohorts.
 }
+\code{initCohorts} holds torch tensors, which \code{saveRDS()} cannot store:
+after \code{readRDS()} they fail with "external pointer is not valid". The
+tables survive, so rebuild the cohorts after reading:
+\code{x$initCohorts <- makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt))}.
 }
 \description{
 Joins tree, environment, and observation tables; assigns integer indices

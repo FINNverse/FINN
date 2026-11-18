@@ -47,11 +47,19 @@ axis it now builds the initial cohorts from the first inventory.
 ## Test environments
 
 * local macOS 26.5 (aarch64), R 4.5.0, `R CMD check --as-cran` on the built
-  tarball with the torch backend (libtorch) installed, so every example and
-  test ran.
+  tarball, twice: with the torch backend (libtorch) installed, so every example
+  and test ran, and with the backend hidden, as on the check machines (examples
+  and backend tests skip). Both: 0 errors, the one warning below, and a NOTE
+  "unable to verify current time" (no time server reachable from the machine).
+* GitHub Actions: ubuntu-latest (R-devel, R-release, R-oldrel-1),
+  macos-latest and windows-latest (R-release), without the backend: OK.
 
-TO DO BEFORE SUBMISSION: win-builder (R-devel and R-release) and mac-builder on
-the submitted tarball; add their results here.
+* win-builder, R-devel (2026-11-17 r90926 ucrt) and R-release (4.6.2 ucrt).
+  The run before the final fixes gave one NOTE on both, "height/width
+  attributes should be in pixels" for the figure in `?finn`, now given in
+  pixels; and on R-devel a URL NOTE for https://www.gnu.org/licenses/gpl-3.0
+  (README.md), a connection timeout to www.gnu.org from the check machine; the
+  URL resolves.
 
 ## R CMD check results
 

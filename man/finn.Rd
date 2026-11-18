@@ -111,7 +111,7 @@ the environment table as a predictor. Pass a process built with
 the equation (its \code{func}), or to fix parameters; pass one built with
 \code{\link[=createHybrid]{createHybrid()}} to replace the whole process by a neural network.
 
-\if{html}{\figure{FINN-overview.jpg}{options: width="100\%" alt="One time step of FINN: the cohorts of a patch and the site's environment enter competition, growth, mortality and regeneration, which produce the cohorts of the next step and the simulated stand variables."}}
+\if{html}{\figure{FINN-overview.jpg}{options: width="700" alt="One time step of FINN: the cohorts of a patch and the site's environment enter competition, growth, mortality and regeneration, which produce the cohorts of the next step and the simulated stand variables."}}
 \if{latex}{\figure{FINN-overview.jpg}{options: width=12cm}}
 
 \emph{One simulation step.} The cohorts of a patch at time t -- their size,

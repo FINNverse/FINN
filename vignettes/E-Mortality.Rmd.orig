@@ -140,7 +140,7 @@ m <- finn(
   recruits_dbh         = 12.9,   # DBH (cm) assigned to a new recruit; ~ FIA's 12.7 cm (5 in) minimum
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_capped, optimizeSpecies = TRUE, optimizeEnv = TRUE),
   mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
@@ -164,7 +164,7 @@ m_mort <- finn(
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_capped, optimizeSpecies = TRUE, optimizeEnv = TRUE),
   mortality_process    = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE)
 )
 ```
@@ -344,7 +344,7 @@ m_tree <- finn(
   N_species            = Nsp_8, recruits_dbh = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_capped, optimizeSpecies = TRUE, optimizeEnv = TRUE),
   mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 fit(m_tree,
