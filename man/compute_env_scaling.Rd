@@ -45,6 +45,17 @@ stored \code{(variable, center, scale)} table is applied by
 mode. A predictor with (near-)zero standard deviation is given \code{scale = 1}
 (centred only) to avoid division by zero.
 }
+\examples{
+# the constants fit(env_autoscale = TRUE) stores on a model for this table
+compute_env_scaling(fia_env_dt)
+# keep one predictor on its own scale
+compute_env_scaling(fia_env_dt, spec = c(temp = "auto", prec = "identity"))
+# min-max scaling for every predictor, or a custom (robust) scaler for one
+head(compute_env_scaling(fia_env_dt, spec = "0to1"), 3)
+robust <- function(x) list(center = median(x), scale = IQR(x))
+head(compute_env_scaling(fia_env_dt, spec = list(temp = robust)), 3)
+}
 \seealso{
-\code{\link{apply_env_scaling}}
+\code{\link{apply_env_scaling}}, \code{\link{fit}} (\code{env_autoscale}),
+\code{\link{finn_data}}
 }

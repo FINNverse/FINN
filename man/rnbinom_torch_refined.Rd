@@ -12,12 +12,13 @@ rnbinom_torch_refined(pred, theta)
 \item{theta}{torch.Tensor Negative-binomial dispersion.}
 }
 \value{
-A \code{torch} tensor of recruit counts.
+A \code{torch} tensor of recruit counts, of the shape of \code{pred}.
 }
 \description{
-The alternative regeneration sampler, selected with
-\code{createProcess(regeneration_sampler = "refined")}; \code{rnbinom_torch()} stays the
-default. Three differences: the probability clamp is \code{1e-10} instead of \code{1e-4},
+The default regeneration sampler since 0.2.0, selected with
+\code{createProcess(regeneration_sampler = "refined")}; \code{rnbinom_torch()}
+(\code{regeneration_sampler = "gaussian"}) reproduces results published before
+0.2.0. Three differences: the probability clamp is \code{1e-10} instead of \code{1e-4},
 the Gamma draw is clamped at that same \code{eps} instead of taking \code{+0.001} and an
 absolute value, and the draw goes through \code{sample_poisson_refined()} (an exact
 \code{torch_poisson} below \code{lambda = 2}, the Gaussian approximation above) instead of
@@ -36,7 +37,30 @@ rounds the floor away but also rounds the signal away: at a FINN patch of
 0.0168 ha the per-cell mean is 0.001-0.008, and over 2e6 draws the delivered
 fraction of the calibrated mean was 0.000-0.048 at \code{theta = 1}.
 
+One bias is left and is not repaired in 0.2.0: above \code{lambda = 2} the draw is
+the Gaussian approximation FLOORED, so it delivers about half a recruit per
+draw too few (measured over 1e6 draws: -0.43 at \code{lambda = 2.5}, -0.50 from
+\code{lambda = 20}, against about 0 with rounding). It bites only where a cell's
+mean recruitment is above two, which the per-patch means above are not.
+Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+is not in this release.
+
 For the measured consequence of both repairs on the simulated stand, and why
 the holdout cannot separate them, see \code{\link[=binomial_from_poisson]{binomial_from_poisson()}}.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+FINN.seed(1)
+# sparse recruitment: an expected 0.05 recruits per patch and year
+mu    <- torch::torch_full(c(100000), 0.05)
+theta <- torch::torch_tensor(1)
+r <- as.numeric(rnbinom_torch_refined(mu, theta))
+mean(r)    # the draw delivers the expected count ...
+table(r)   # ... as whole recruits, most patches getting none
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\link{recruitment}, \code{\link[=createProcess]{createProcess()}} (\code{regeneration_sampler},
+\code{theta_floor})
 }
 \keyword{internal}

@@ -38,19 +38,25 @@ FINN is calibrated against clearly defined inputs:
 
 - **`obs_dt`**: demographic responses per site × year × species:
   `siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species,
-  species_name`. Year starts at 1; the initial state (year 0) is *not* included.
-  NAs are allowed in any response. Units: `ba` m², `dbh` cm, `trees` count,
-  `growth` relative growth rate, `reg` trees ha⁻¹.
+  species_name, period_length`. FINN simulates the forest in **yearly steps**,
+  so `year` counts years since the first inventory, which is the initial state
+  (year 0) and *not* included; with inventories ten years apart the
+  observations sit at years 10 and 20, each with `period_length = 10`, the
+  years since the previous inventory. NAs are allowed in any response. Units:
+  `ba` m², `dbh` cm, `trees` count, `growth` relative growth rate per year,
+  `reg` trees ha⁻¹ over the interval.
   Mortality comes back as a **pair of counts**, `n_at_risk` (trees alive at the
   start of the interval) and `n_died` (how many of them were dead at the end),
-  with the rate `mort = n_died / n_at_risk` derived for convenience. That pair is
-  the `cbind(died, survived)` response of a binomial GLM, and it is what the
-  default `loss_family = c(..., mortality = "binomial", ...)` consumes: the counts carry the sample
-  size, so a 60-tree observation outweighs a 1-tree one.
-- **`env_dt`**: `siteID, year, <env vars…>` in **natural units**; must cover
-  every site × year in `obs_dt`. No manual scaling is needed: FINN
-  z-standardizes the predictors internally when fitting (`env_autoscale = TRUE`,
-  the default) and reuses the same constants at prediction time.
+  with the yearly rate `mort = 1 - (1 - n_died / n_at_risk)^(1 / period_length)`
+  derived from them. The pair is the `cbind(died, survived)` response of a
+  binomial GLM: the default `loss_family = c(..., mortality = "binomial", ...)`
+  weights each observation by `n_at_risk`, so a 60-tree observation outweighs a
+  1-tree one.
+- **`env_dt`**: `siteID, year, <env vars…>` in **natural units**, one row per
+  site and simulated year, from year 1 to the last inventory. No manual
+  scaling is needed: FINN z-standardizes the predictors internally when
+  fitting (`env_autoscale = TRUE`, the default) and reuses the same constants
+  at prediction time.
 - **`init_trees`**: the initial state used to build the starting cohorts:
   `siteID, patchID, year, species, dbh, trees, living`.
 - **`dist_dt`** (optional): `siteID, year, intensity` (fraction of patches
@@ -134,11 +140,36 @@ Use `Nspecies` (a hard cap) or `NspeciesQuantile` (smallest set covering a stem
 fraction) to control how many species you model; everything else becomes
 `"other"`, which FINN still tracks as a competitor.
 
+The rates come back **per year**, because FINN simulates the forest in yearly
+steps. A tree that grew from 20 to 24 cm over the ten years of an interval has
+the yearly growth rate `(24 / 20)^(1 / 10) - 1 = 0.0184`, the constant rate that
+compounds to the observed increment, and a cohort of which 1 in 2 trees died
+over the interval has the yearly mortality rate `1 - 0.5^(1 / 10) = 0.067`.
+`period_length` is the length of the interval in years. When fitting, FINN
+averages the simulated yearly growth and mortality over these ten years and sums
+the simulated recruits, so `reg` stays the recruitment of the whole interval, and
+the counts `n_at_risk`, `n_died` and `growth_n` are the trees behind each
+observation. The growth and mortality of every observation, per year and as
+compounded back over its interval:
+
+```{r annual-rates}
+obs_dt[n_at_risk > 0, .(siteName, year, species_name, period_length, growth, mort,
+                        growth_interval = (1 + growth)^period_length - 1,
+                        mort_interval   = n_died / n_at_risk)][1:6]
+```
+
+`makeObsData(rates = "interval")` returns the rates over the whole interval
+instead, for a model in which one simulation step is one census interval (the
+set-up of FINN 0.1.0). One step per interval distorts the dynamics, though:
+recruitment, competition and growth then act once per interval, and the
+mortality limits of a step become limits per decade. Keep the default.
+
 ## Environmental data
 
 Acquisition from rasters (e.g. WorldClim) needs external files, so it is shown
 but not run. The result is a table of environmental predictors in **natural
-units**, one row per site × year:
+units**, one row per site and **calendar year**, because every simulated year
+needs its environment:
 
 ```{r env-extract, eval = FALSE}
 library(terra)
@@ -150,13 +181,19 @@ env_dt[, temp := terra::extract(bio1, project(pts, crs(bio1)))[, 2]]
 ```{r env-load}
 env_dt <- fread(system.file("extdata", "example_env_dt.csv", package = "FINN"))
 head(env_dt)
+env_dt[, .(first = min(year), last = max(year), years = .N), by = siteName]
 ```
+
+The climate here is the long-term WorldClim normal of each plot, the same in
+every year, so it is simply repeated; a yearly climate series would give every
+year its own values. `env_dt` must cover every calendar year from the first
+inventory of a site to its last (precisely: to the longest first-to-last span of
+any site after the site's first inventory, since all sites share one time axis).
 
 There is **no manual standardization step**. FINN z-scales the predictors
 internally when you fit (`env_autoscale = TRUE`, the default), stores the per-variable
 mean/sd on the model, and re-applies them at prediction time. So you supply (and
-keep) `env_dt` in natural units throughout. `env_dt` must cover every
-`siteName × year` present in `obs_dt`.
+keep) `env_dt` in natural units throughout.
 
 ## Resolve IDs across tables
 
@@ -178,10 +215,25 @@ head(inputs$obs_dt)
 inputs$species_dt
 ```
 
+`resolveSiteIDs()` also sets the time axis. A calendar year becomes the number
+of years since the site's first inventory: the first inventory is year 0, the
+initial state, and leaves `obs_dt`; the next two are observations at years 10
+and 20. `env_dt` comes back with one row per site and year 1 to 20: the row of
+year *k* drives the simulated year that ends *k* years after the first
+inventory, so the inventory at year 10 is compared with the stand after ten
+simulated years.
+
+```{r time-axis}
+unique(inputs$siteID_dt[, .(siteID, year, OrigYear)])[siteID == 1]
+inputs$obs_dt[, .(rows = .N), by = .(year, period_length)]
+inputs$env_dt[siteID == 1][c(1:2, .N)]
+```
+
 ## Initial cohorts
 
 With `createInitCohorts = TRUE`, `resolveSiteIDs()` returns a ready `CohortMat`
-describing the starting state; its `dims` are `c(sites, patches, cohorts)`:
+describing the starting state, the living trees of the first inventory; its
+`dims` are `c(sites, patches, cohorts)`:
 
 ```{r init-cohorts}
 init_cohorts <- inputs$initCohorts
@@ -193,17 +245,21 @@ directly; it expects `siteID, patchID, species, dbh, treeName` (+ optional
 `trees`):
 
 ```{r init-cohorts-manual, eval = FALSE}
-init_trees <- inputs$tree_dt[living == TRUE & year == 1]
+init_trees <- inputs$tree_dt[living == TRUE & year == 0]
 makeInitCohorts(init_trees, Nspecies = uniqueN(inputs$obs_dt$species))
 ```
 
 ## Checklist before fitting
 
-- **Period length** is consistent across inventories (`fix_period_length`); FINN
-  assumes a fixed remeasure interval.
+- **One step is one year**: `year` counts years since the first inventory,
+  `growth` and `mort` are yearly rates, and `period_length` gives each
+  observation's interval in years. The intervals may differ between sites
+  (FINN then scores every site over its own interval); `fix_period_length`
+  keeps only sites with one interval length if you prefer a uniform design.
 - **The initial state** (the first inventory) is used for `init_trees`, and the
   responses in `obs_dt` start *after* it.
-- **`env_dt` covers every `siteID × year`** in `obs_dt`; missing rows break the fit.
+- **`env_dt` covers every simulated year** from 1 to the last inventory, for
+  every site; missing rows break the fit.
 - **Units**: `dbh` in cm, `ba` in m², `reg` in trees ha⁻¹; env predictors in
   natural units (FINN standardizes them internally).
 - **Species IDs** are contiguous integers `1..N`, aligned across tables; always

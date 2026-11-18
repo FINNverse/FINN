@@ -13,7 +13,11 @@ with \code{siteID}, a time column (e.g. \code{year}), and one column per variabl
 \item{env_vars}{character Names of the environmental variable columns to extract.}
 }
 \value{
-A numeric array of environmental values indexed by site, time and variable.
+A numeric array of environmental values indexed by site, time and variable:
+\verb{[site, year, variable]} for a yearly table, \verb{[site, year, month, variable]}
+with a \code{month} column and \verb{[site, year, month, day, variable]} with a \code{day}
+column. Sites and years are in increasing order; the array has no dimnames,
+and the year axis holds only the years present in the table.
 A combination of \code{siteID}, \code{year} (and \code{month}, \code{day} where present) that
 appears more than once is an error, whether or not the rows are identical.
 Missing (\code{siteID}, \code{year}) combinations become \code{NA} in the array.
@@ -21,4 +25,21 @@ Missing (\code{siteID}, \code{year}) combinations become \code{NA} in the array.
 \description{
 Reshapes a long-format climate table into the site x year x variable array
 FINN uses internally, auto-detecting the time resolution from the columns.
+}
+\examples{
+library(data.table)
+# yearly climate of three sites over 22 years -> array [site, year, variable]
+env <- fia_env_dt[siteID \%in\% 1:3]
+a <- climateDF2array(env, env_vars = c("temp", "prec"))
+dim(a)
+head(a[1, , ])                # site 1; the rows are the years 1, 2, ...
+
+# a monthly table (siteID, year, month) gives a fourth dimension of 12 months
+monthly <- CJ(siteID = 1:2, year = 2001:2002, month = 1:12)
+monthly[, temp := 10 + 8 * sin((month - 4) / 12 * 2 * pi)]
+dim(climateDF2array(monthly, env_vars = "temp"))
+}
+\seealso{
+\link{finn_data} for the \code{env} table of \code{\link[=fit]{fit()}}, which is converted
+with this function
 }

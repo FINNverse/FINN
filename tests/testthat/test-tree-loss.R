@@ -12,15 +12,13 @@ library(data.table)
 # those arrays - a target per slot [site, patch, cohort] - and `tl_table()` turns one into
 # the table of the trees that exist in a layout.
 
+# the bundled data on the three-step axis of fia_census_steps() (helper.R): the
+# tests name individual timesteps and windows
 tl_data = function(years_obs = c(1, 2), period = 1L, n_sites = 4L) {
-  obs = data.table::copy(FINN::fia_obs_dt)
-  env = data.table::copy(FINN::fia_env_dt)
-  it  = data.table::copy(FINN::fia_init_trees)
-  sites = utils::head(sort(unique(obs$siteID)), n_sites)
-  obs = obs[siteID %in% sites & year %in% years_obs]
+  d = fia_census_steps(seq_len(n_sites))
+  obs = d$obs[year %in% years_obs]
   obs[, period_length := period]
-  list(obs = obs, env = env[siteID %in% sites], it = it[siteID %in% sites],
-       Nsp = max(obs$species))
+  list(obs = obs, env = d$env, it = d$it, Nsp = max(obs$species))
 }
 
 tl_model = function(d, light_mask = TRUE) {
@@ -171,7 +169,7 @@ test_that("no recruit cohort enters the per-tree residual", {
     g = tl_model(d)
     # weight_scale = "raw": the assertion below is the hand-computed BCE, so the
     # reported loss must not carry the baseline scaling
-    tl_fit(g, d, loss_resolution = "tree", weights = rep(1, 6), weight_scale = "raw",
+    tl_fit(g, d, loss_resolution = "tree", loss_weights = rep(1, 6), weight_scale = "raw",
            tree_data = tl_table(td, g$init, year = 2))
     as.numeric(g$model$history[[1]])[4:5]
   }
@@ -189,7 +187,8 @@ test_that("no recruit cohort enters the per-tree residual", {
 test_that("the interval prediction compounds the annual rates", {
   skip_if_no_torch()
   # Mortality is the compounded per-step probability 1 - prod(1 - m), not the sampled
-  # fate; growth follows the aggregate convention. Three lr = 0 fits share one trajectory,
+  # fate; growth is the per-year rate of the compounded increment (the geometric mean of
+  # 1 + g), as the aggregate path scores it. Three lr = 0 fits share one trajectory,
   # so the two-year window must be the exact composition of the two one-year ones.
   runs = lapply(list(list(1, 1L), list(2, 1L), list(2, 2L)), function(a) {
     d = tl_data(years_obs = a[[1]], period = a[[2]])
@@ -205,7 +204,7 @@ test_that("the interval prediction compounds the annual rates", {
   ok = p[[1]]$n > 0.5 & p[[2]]$n > 0.5 & p[[3]]$n > 1.5
   expect_gt(sum(ok), 20)
   expect_equal(p[[3]]$mort[ok], 1 - (1 - p[[1]]$mort[ok])*(1 - p[[2]]$mort[ok]), tolerance = 1e-5)
-  expect_equal(p[[3]]$growth[ok], (p[[1]]$growth[ok] + p[[2]]$growth[ok])/2, tolerance = 1e-5)
+  expect_equal(p[[3]]$growth[ok], sqrt((1 + p[[1]]$growth[ok])*(1 + p[[2]]$growth[ok])) - 1, tolerance = 1e-5)
 })
 
 
@@ -283,7 +282,7 @@ test_that("tree_data is checked against the layout the interval starts from", {
                                     loss_resolution = "tree", tree_data = tb())),
                "needs `init_cohort`")
   # the weight vector is six long in both modes - one weight per response, not per resolution
-  bad("length 6", weights = rep(1, 5), tree_data = tb())
+  bad("length 6", loss_weights = rep(1, 5), tree_data = tb())
   # the two ways of scoring single trees cannot be combined on one response
   bad("cannot be combined", tree_data = tb(), loss_aggregation = c(mortality = "tree"))
   # the anchor, not init_cohort, is the layout of the interval that follows it
@@ -315,7 +314,7 @@ test_that("binned initial cohorts cannot be scored per tree", {
 
 
 # ---- windows longer than one year -------------------------------------------------------
-# The bundled FIA data carries three env years, so `period > 1` needs its own panel: 3 sites,
+# The FIA panel of tl_data() carries three env years, so `period > 1` needs its own panel: 3 sites,
 # 2 patches, one tree per cohort, 10 years. Mortality is set high enough that cohorts die
 # INSIDE a window, which is the only condition under which the whole-window rule is
 # testable at all. `lr = 0` freezes the trajectory, the six aggregate responses are NA, so
@@ -357,7 +356,7 @@ tll = if (!requireNamespace("torch", quietly = TRUE) || !torch::torch_is_install
                                              initSpecies = c(0.1, 0.1), func = FINN::regeneration, sample_regeneration = FALSE))
       m$growth_period_scale = period_scale
       suppressMessages(fit(m, env = env, data = obs, init_cohort = ic, patches = 2L, patch_size = 0.1,
-          env_autoscale = FALSE, epochs = 1L, lr = 0, weights = weights, batchsize = Nsites,
+          env_autoscale = FALSE, epochs = 1L, lr = 0, loss_weights = weights, batchsize = Nsites,
           shuffle = FALSE, plot_progress = FALSE, device = "cpu",
           loss_family = c(dbh = "mse", ba = "mse", trees = "mse", growth = "mse",
                           mortality = "binomial", regeneration = "mse"),
@@ -414,9 +413,9 @@ test_that("update_step and growth_period_scale reach the per-tree terms", {
   expect_identical(p$tree_pred$n, a$tree_pred$n)
   expect_equal(p$tree_pred$mort, a$tree_pred$mort, tolerance = 1e-12)   # mortality is unscaled
   whole = a$tree_pred$n >= 3.5
-  # compounded over the window, and never above the same rate compounded (AM >= GM)
+  # the increment compounded over the four years is exactly the per-year rate compounded
   expect_gt(mean(p$tree_pred$growth[whole]), 3*mean(a$tree_pred$growth[whole]))
-  expect_true(all(1 + p$tree_pred$growth[whole] <= (1 + a$tree_pred$growth[whole])^4 + 1e-8))
+  expect_equal(1 + p$tree_pred$growth[whole], (1 + a$tree_pred$growth[whole])^4, tolerance = 1e-5)
 })
 
 

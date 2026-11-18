@@ -39,7 +39,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Yannek K<c3><a4>ber \email{y.kaeber@posteo.de} (\href{https://orcid.org/0000-0002-7041-9849}{ORCID})
+\strong{Maintainer}: Yannek Käber \email{y.kaeber@posteo.de} (\href{https://orcid.org/0000-0002-7041-9849}{ORCID})
 
 Authors:
 \itemize{

@@ -36,13 +36,16 @@ environmental covariates).}
 during \code{\link[=fit]{fit()}}? Default \code{TRUE}.}
 
 \item{dispersion_parameter}{(\code{numeric(1)})\cr Initial dispersion parameter of
-the negative binomial distribution used to sample recruits. Only used when
-this object is the regeneration process.}
+the negative binomial distribution used to sample recruits, or its fixed
+value with \code{optimizeTheta = FALSE}. Only used when this object is the
+regeneration process. See \link{recruitment}.}
 
-\item{NN}{(\code{nn_module})\cr Optional custom \code{torch} module overriding the
-default network architecture entirely.}
+\item{NN}{(\code{nn_module})\cr Not supported in 0.2.0. A custom module was
+accepted and then ignored, so a non-\code{NULL} value now raises an error; shape
+the default network with \code{hidden}, \code{dropout} and \code{transformer} instead.}
 
-\item{dropout}{(\code{numeric(1)})\cr Dropout rate of the network.}
+\item{dropout}{(\code{numeric(1)})\cr Dropout rate of the network. Default \code{0.3};
+the Barro Colorado Island case study of Pichler & Käber (2026) used \code{0.1}.}
 
 \item{encoder_layers}{(\code{integer(1)})\cr Number of transformer encoder layers.
 Only used when \code{transformer = TRUE}.}
@@ -53,7 +56,8 @@ Only used when \code{transformer = FALSE}.}
 \item{sample_regeneration}{(\code{logical(1)})\cr Should recruits actually be sampled
 from the negative binomial regeneration distribution (\code{TRUE}), or only its
 expectation used (\code{FALSE})? Only used when this object is the regeneration
-process.}
+process. With \code{FALSE} the expected number of recruits per patch is rounded,
+so wherever it is below 0.5 no recruit enters at all. See \link{recruitment}.}
 
 \item{transformer}{(\code{logical(1)})\cr Use a transformer encoder architecture
 (\code{TRUE}, default) or a feed-forward network (\code{FALSE}).}
@@ -66,27 +70,34 @@ sublayer within each transformer encoder layer. Only used when
 \code{transformer = TRUE}.}
 
 \item{mortality_draw}{(\code{character(1)})\cr How the number of dead trees is drawn,
-\code{"binomial"} (default since 0.2.0), \code{"poisson"} or \code{"gamma"}; see
-\code{\link[=createProcess]{createProcess()}}. Only used
+\code{"binomial"} (default since 0.2.0), \code{"bernoulli"}, \code{"poisson"} or \code{"gamma"};
+see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the mortality process.}
 
 \item{regeneration_sampler}{(\code{character(1)})\cr How recruits are drawn,
 \code{"refined"} (default since 0.2.0) or \code{"gaussian"}; see \code{\link[=createProcess]{createProcess()}}. Only used
 when this object is the regeneration process.}
 
-\item{cap, prior, prior_lambda}{The Beverton-Holt cap on recruitment; see
-\code{\link[=createProcess]{createProcess()}} and \code{\link[=regeneration_capped]{regeneration_capped()}}. Only used when
-this object is the regeneration process.}
+\item{cap, prior, prior_lambda}{Accepted for symmetry with
+\code{\link[=createProcess]{createProcess()}}, but not used in 0.2.0: the hybrid regeneration
+network has no Beverton-Holt cap. See \code{\link[=regeneration_capped]{regeneration_capped()}} for the
+cap of the mechanistic process.}
 
 \item{theta_floor}{(\code{numeric(1)})\cr Lower bound on the recruit dispersion
 \code{par_theta_recruits}, default \code{0.5} since 0.2.0, \code{0} or \code{NULL} to leave it
 unbounded as in 0.1.0; see \code{\link[=createProcess]{createProcess()}}. Only used when this
-object is the regeneration process.}
+object is the regeneration process. The floor keeps the fit stable. In
+one converged pair of fits on the German national forest inventory it
+calibrated the recruitment level as well as a fixed \code{theta}, but only after
+the parameters had settled; read the level once \verb{$param_history} shows
+them settled, or fix \code{theta} (\code{optimizeTheta = FALSE}) for short fits. See
+\link{recruitment}.}
 
 \item{optimizeTheta}{(\code{logical(1)})\cr Should the recruit dispersion be
 estimated during \code{\link[=fit]{fit()}}? Default \code{TRUE}; \code{FALSE} keeps it at
-\code{dispersion_parameter}; see \code{\link[=createProcess]{createProcess()}}. Only used when this
-object is the regeneration process.}
+\code{dispersion_parameter}, which is the choice when the recruitment level is
+to be calibrated; see \code{\link[=createProcess]{createProcess()}} and \link{recruitment}. Only used
+when this object is the regeneration process.}
 
 \item{mortality_floor, mortality_ceiling}{(\code{numeric(1)})\cr The interval the
 mortality probability is clamped to per simulation step before the death
@@ -144,8 +155,38 @@ or kept fixed at their (random) initial values, and \code{dispersion_parameter}/
 are only used when this object is the regeneration process.
 }
 \examples{
-growth_process <- createHybrid(formula = ~temperature + precipitation)
+# A hybrid process is a recipe, like createProcess(): no data and no torch
+# are needed until the model is built. The default network is a small
+# transformer encoder
+growth_process <- createHybrid(formula = ~ temp + prec)
+class(growth_process)
 
+# a feed-forward network with two hidden layers instead, as in the Barro
+# Colorado Island case study of the paper
+mortality_process <- createHybrid(~ temp + prec, transformer = FALSE,
+                                  hidden = c(50L, 50L), dropout = 0.1)
+
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# a model whose growth is a network while mortality, regeneration and
+# competition stay mechanistic, fitted for two epochs on three sites of the
+# bundled Oregon FIA data (?fia_obs_dt)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createHybrid(~ temp + prec, transformer = FALSE,
+                                              hidden = c(16L, 16L), dropout = 0.1),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+    plot_progress = FALSE)
+# the network takes the place of the growth equation in the simulation
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init)
+head(sim$long$site[variable == "growth" & year == 10 & value > 0])
+\dontshow{\}) # examplesIf}
 }
 \references{
 Pichler, M., & Käber, Y. (2026). Inferring processes within dynamic forest
@@ -153,5 +194,5 @@ models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 \doi{10.1111/2041-210x.70347}
 }
 \seealso{
-\code{\link[=createProcess]{createProcess()}}, \code{\link[=finn]{finn()}}
+\code{\link[=createProcess]{createProcess()}}, \code{\link[=finn]{finn()}}, \link{recruitment}
 }

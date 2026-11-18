@@ -41,6 +41,13 @@ Install the released version of FINN from CRAN:
 install.packages("FINN")
 ```
 
+FINN runs on `torch`, and the `torch` backend (libtorch) is downloaded on first
+use rather than with the package, so install it once before the first fit:
+
+``` r
+torch::install_torch()
+```
+
 Or the development version from
 [GitHub](https://github.com/FINNverse/FINN):
 

@@ -26,11 +26,10 @@ them are \code{NA} by construction.
 An object of class \code{data.table} (inherits from \code{data.frame}) with 6083 rows and 28 columns.
 }
 \source{
-Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon
-FIA plots prepared in the (private) \code{FINNverse/FINN-fia} analysis repo:
-tree records via the FIA
-database, climate from WorldClim bioclim variables attached per plot. The
-full provenance chain is in \code{data-raw/README.md}.
+A seeded subsample of Oregon plots of the US Forest Inventory and
+Analysis (FIA) database, with WorldClim bioclimatic variables attached per
+plot. The preparation script and the provenance of the source tables are
+in the package repository (\code{dev/make_extdata.R}, \code{data-raw/README.md}).
 }
 \usage{
 fia_init_trees
@@ -44,11 +43,25 @@ like at the first census, from which \code{\link[=makeInitCohorts]{makeInitCohor
 cohorts a fit or simulation starts from
 (\code{makeInitCohorts(fia_init_trees, Nspecies = 11)}).
 }
+\examples{
+library(data.table)
+head(fia_init_trees[, .(siteID, patchID, species, species_name, dbh, trees, treeName)])
+# living stems and their mean diameter per species at the first inventory
+fia_init_trees[!is.na(trees), .(stems = sum(trees), mean_dbh = round(mean(dbh), 1)),
+               by = species_name][order(-stems)]
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the initial state of a fit or a simulation, here for three sites: one
+# cohort per tree
+init <- makeInitCohorts(fia_init_trees[siteID \%in\% 1:3], Nspecies = 11)
+init$dims   # sites, patches, cohorts
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 Other fia datasets: 
 \code{\link{fia_env_dt}},
 \code{\link{fia_obs_dt}},
-\code{\link{fia_species_dt}}
+\code{\link{fia_species_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

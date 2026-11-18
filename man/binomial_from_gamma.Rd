@@ -2,22 +2,45 @@
 % Please edit documentation in R/utils.R
 \name{binomial_from_gamma}
 \alias{binomial_from_gamma}
-\title{Sample from binomial with gradient}
+\title{Draw deaths from a Gamma matched to the binomial}
 \usage{
 binomial_from_gamma(n, p, sample_size = 1)
 }
 \arguments{
-\item{n}{number of trials}
+\item{n}{torch.Tensor Number of trees at risk per cohort.}
 
-\item{p}{probability of success}
+\item{p}{torch.Tensor Mortality probability per cohort, strictly between 0
+and 1 (the Gamma's shape \code{n * p / (1 - p)} degenerates at both ends).}
 
-\item{sample_size}{sample size}
+\item{sample_size}{integer Number of draws; only the default \code{1} is used by
+FINN (the leading sample dimension is dropped).}
 }
 \value{
-A \code{torch} tensor of binomial samples drawn via the gamma-Poisson
-relationship.
+A \code{torch} tensor of the shape of \code{n} with continuous, positive draws
+whose mean is \code{n * p} and whose variance is \code{n * p * (1 - p)}.
 }
 \description{
-Sample from binomial with gradient
+The mortality draw of FINN before 0.2.0, selected with
+\code{createProcess(mortality_draw = "gamma")}: a Gamma distribution with the mean
+\code{n * p} and the variance \code{n * p * (1 - p)} of the binomial, sampled with
+\code{rsample()} so that the draw carries a pathwise gradient to \code{n} and \code{p}. The
+draw is continuous, not an integer count; the simulation rounds it afterwards.
+See \code{\link[=binomial_from_poisson]{binomial_from_poisson()}} for what that rounding costs and
+\code{\link[=createProcess]{createProcess()}} for the other draws.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+FINN.seed(1)
+n <- torch::torch_full(c(10000), 40)   # 10 000 cohorts of 40 trees
+p <- torch::torch_full(c(10000), 0.3)
+d <- as.numeric(binomial_from_gamma(n, p))
+# the binomial has mean 12 and variance 8.4; the draws are not integers
+c(mean = mean(d), var = var(d))
+head(d, 3)
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=binomial_from_poisson]{binomial_from_poisson()}}, \code{\link[=binomial_from_bernoulli]{binomial_from_bernoulli()}},
+\code{\link[=createProcess]{createProcess()}} (\code{mortality_draw})
 }
 \keyword{internal}

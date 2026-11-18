@@ -2,11 +2,23 @@
 #' @importFrom Rcpp evalCpp
 NULL
 
-#' Convert observation data frame to arrays
+#' Convert a cohort table to arrays
 #'
-#' @param obs_dt data.frame The observation data table containing siteID, patchID, cohortID, species, dbh, and trees columns.
-#' @param additional_cols character vector Optional. Additional columns to be included as arrays.
-#' @return A list of arrays for species, dbh, trees, and additional columns. The
+#' Reshapes a long cohort table (one row per cohort) into the
+#' `[sites, patches, cohorts]` arrays FINN works on. It is the step behind
+#' `CohortMat(obs_df = )` and [FINN::makeInitCohorts()]; [FINN::array2obsDF()]
+#' is the way back.
+#'
+#' @param obs_dt data.frame The cohort table, with the columns `siteID`,
+#'   `patchID`, `cohortID` (integers; `cohortID` numbers the cohorts within a
+#'   patch from 1), `species` (integer code), `dbh` (cm) and `trees` (number of
+#'   trees in the cohort; rounded to whole trees).
+#' @param additional_cols character vector Optional. Further numeric columns of
+#'   `obs_dt` to return as arrays of the same shape.
+#' @return A named list of arrays `species`, `dbh`, `trees` (and one per
+#'   `additional_cols`), each of dimension sites x patches x largest number of
+#'   cohorts in a patch. Slots without a cohort hold `dbh = 0`, `trees = 0` and
+#'   the placeholder `species = 1`. The
 #'   site dimension follows the sorted user `siteID`s (sorted with
 #'   `method = "radix"`, so independent of the locale); the user ids in that
 #'   order are attached as attribute `"site_ids"`, so a site set that is not
@@ -19,6 +31,10 @@ NULL
 #'   species = c(1, 2, 1), dbh = c(10, 20, 30), trees = c(100, 200, 150),
 #'   height = c(5, 10, 15))
 #' result <- obsDF2arrays(obs_dt, additional_cols = c("height"))
+#' dim(result$dbh)     # 2 sites x 2 patches x 2 cohort slots
+#' result$dbh[1, , ]   # site 1: one cohort in each patch
+#' result$trees[2, , ] # site 2: patch 1 holds a cohort in slot 2, patch 2 is empty
+#' @seealso [FINN::array2obsDF()], [FINN::CohortMat], [FINN::makeInitCohorts()]
 #' @export
 obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
   # Position of each id in its sorted unique set. Sorted with method = "radix",
@@ -86,9 +102,13 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
 #' @param siteID Integer vector specifying the site ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.
 #' @param patchID Integer vector specifying the patch ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.
 #' @param species Integer vector specifying the species ID for each cohort. If a single integer is provided, it will be replicated for each draw. Default is 1.
-#' @return A data frame containing the cohort data with columns for site ID, patch ID, cohort ID, species, number of trees, and DBH.
-#' @details The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes, and the cohort data is generated accordingly.
+#' @return A data frame with one row per non-empty diameter class and the columns `siteID`, `patchID`, `cohortID` (numbered over the whole table), `species`, `dbh` (cm) and `trees`, the format of `CohortMat(obs_df = )`.
+#' @details The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes of width `dbh_class_range`, and each non-empty class becomes one cohort.
+#' @seealso [FINN::CohortMat] to turn the table into an initial state
 #' @examples
+#' set.seed(1)
+#' # a stand of two species on one patch: 300 saplings of species 3 around
+#' # 1 cm and 10 large trees of species 4 around 50 cm, in 0.1 cm classes
 #' obs_df <- rweibull_cohorts(
 #'   trees = c(300, 10),
 #'   dbh_shape = c(3, 3),
@@ -99,6 +119,8 @@ obsDF2arrays <- function(obs_dt, additional_cols = character(0)) {
 #'   species = c(3, 4)
 #' )
 #' head(obs_df)
+#' # trees and cohorts per species
+#' aggregate(cbind(trees, cohorts = 1) ~ species, data = obs_df, FUN = sum)
 #' @importFrom stats rweibull
 #' @export
 rweibull_cohorts = function(
@@ -148,18 +170,26 @@ rweibull_cohorts = function(
 
 #' Transform Arrays to Observation Data Table
 #'
-#' This function transforms arrays of species, dbh, and trees back into an observation data table.
+#' This function transforms arrays of species, dbh, and trees back into a
+#' cohort table, the inverse of [FINN::obsDF2arrays()].
 #'
-#' @param obs_array A list containing three arrays: species, dbh, and trees.
+#' @param obs_array A list containing three arrays `species`, `dbh` and
+#'   `trees`, each of dimension sites x patches x cohorts.
 #'
-#' @return A data.frame with columns siteID, patchID, cohortID, species, dbh, and trees.
+#' @return A data.frame with one row per cohort and the columns `siteID`,
+#'   `patchID`, `cohortID` (the positions in the three array dimensions),
+#'   `species`, `dbh` and `trees`. Slots with `dbh` of 0 or `NA` (no cohort) are
+#'   left out.
 #'
+#' @seealso [FINN::obsDF2arrays()], [FINN::CohortMat]
 #' @examples
+#' # 2 sites x 2 patches x 2 cohort slots; a dbh of 0 marks an empty slot
 #' obs_array <- list(
-#'   species = array(c("A", "B"), dim = c(2, 2, 2)),
-#'   dbh = array(c(10, 20, 30, 40), dim = c(2, 2, 2)),
-#'   trees = array(c(100, 200, 150, 250), dim = c(2, 2, 2)))
+#'   species = array(c(1, 2), dim = c(2, 2, 2)),
+#'   dbh = array(c(10, 20, 30, 0), dim = c(2, 2, 2)),
+#'   trees = array(c(100, 200, 150, 0), dim = c(2, 2, 2)))
 #' result <- array2obsDF(obs_array)
+#' result   # six cohorts: the two empty slots are dropped
 #'
 #' @export
 array2obsDF <- function(obs_array) {
@@ -210,14 +240,22 @@ array2obsDF <- function(obs_array) {
 
 #' Cohort Matrix Class
 #'
-#' An R6 class for managing cohorts of trees in forest models. This class allows for the initialization, transformation, and manipulation of cohorts represented by arrays of dbh, trees, and species.
+#' @description
+#' A `torch` `nn_module` holding the cohorts of every site and patch as three
+#' aligned tensors -- `dbh`, `trees` and `species` -- each shaped
+#' `[sites, patches, cohorts]`. It is FINN's initial state: build it from an
+#' inventory with [FINN::makeInitCohorts()] or from a cohort table with
+#' `obs_df`, and pass it to [FINN::fit()], [FINN::predict.finn_class()] or
+#' [FINN::simulateForest()] as `init_cohort`. The three tensors are registered as
+#' buffers, so a `CohortMat` moves between devices with the model and carries no
+#' gradient. `asDF()` converts it back to a cohort table (a `data.frame` with
+#' `siteID`, `patchID`, `cohortID`, `species`, `dbh`, `trees`).
 #'
 #' @field dbh A tensor representing the diameter at breast height for each cohort.
 #' @field trees A tensor representing the number of trees in each cohort.
 #' @field species A tensor representing the species of each cohort.
 #' @field dims A vector representing the dimensions of the arrays (sites, patches, cohorts).
 #' @field sp An integer representing the number of species.
-#' @field device A character string specifying the device to use ('cpu' or 'cuda').
 #' @field dbh_r A numeric array representing the diameter at breast height in R array format.
 #' @field trees_r A numeric array representing the number of trees in R array format.
 #' @field species_r An integer array representing the species in R array format.
@@ -227,19 +265,48 @@ array2obsDF <- function(obs_array) {
 #'   cohorts were built from `obs_df` (the lookup table from array position to
 #'   user id); `NULL` when built from arrays, where the site dimension is `1:N`.
 #'
-#' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
-#' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
-#' @param trees A tensor or array representing the number of trees. Defaults to `self$trees`.
-#' @param species A tensor or array representing the species. Defaults to `self$species`.
-#' @param dims A numeric vector representing the dimensions of the arrays (sites, patches, cohorts). Defaults to `self$dims`.
-#' @param sp An integer representing the number of species. Defaults to `self$sp`.
-#' @param device A character string specifying the device to use ('cpu' or 'cuda'). Defaults to `self$device`.
+#' @param obs_df A data frame with the columns `siteID`, `patchID`, `cohortID`, `species`, `dbh` (cm) and `trees`, one row per cohort (see [FINN::obsDF2arrays()]). If provided, the tensors are built from it and `dbh`, `trees`, `species` and `dims` are ignored.
+#' @param dbh A tensor or array `[sites, patches, cohorts]` of diameters at breast height (cm). Default `NULL`: all 0.
+#' @param trees A tensor or array `[sites, patches, cohorts]` with the number of trees per cohort. Default `NULL`: all 0.
+#' @param species A tensor or array `[sites, patches, cohorts]` of integer species codes `1..sp`. Default `NULL`: drawn at random.
+#' @param dims A numeric vector with the dimensions (sites, patches, cohorts) of the arrays that are not given. Default `c(50, 30, 10)`.
+#' @param sp An integer, the number of species. Default `10`.
+#' @param device A character string, stored as `device_r`. The tensors are created on the CPU; [FINN::fit()] and [FINN::simulateForest()] move them to the device they run on.
+#'
+#' @return A `CohortMat`, a `torch` `nn_module` whose `dbh`, `trees` and
+#'   `species` buffers hold the cohorts as `[sites, patches, cohorts]` tensors.
+#'
+#' @seealso [FINN::makeInitCohorts()] to build one from a tree list,
+#'   [FINN::obsDF2arrays()] and [FINN::array2obsDF()] for the conversion
+#'   between table and arrays, [finn_data] for the role of `init_cohort`
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # from a cohort table: one site, two patches, three cohorts
+#' cohorts <- data.frame(siteID = 1, patchID = c(1, 1, 2), cohortID = c(1, 2, 1),
+#'                       species = c(1, 2, 1), dbh = c(35, 12, 20), trees = c(3, 10, 6))
+#' init <- CohortMat(obs_df = cohorts, sp = 2)
+#' init$dbh$shape   # sites x patches x cohorts
+#' init$trees_r     # the same content as an R array; empty slots hold 0
+#' init$asDF()      # and back to a table
+#'
+#' # from arrays: every patch of two sites starts with one cohort of twenty
+#' # 10-cm trees of species 1
+#' dims <- c(2, 4, 1)
+#' init2 <- CohortMat(dbh = array(10, dims), trees = array(20, dims),
+#'                    species = array(1L, dims), dims = dims, sp = 2)
+#' head(init2$asDF(), 3)
+#'
+#' # trees of the bundled Oregon FIA data as an initial state (?fia_init_trees)
+#' first3 <- fia_init_trees[fia_init_trees$siteID %in% 1:3, ]
+#' init3 <- makeInitCohorts(first3, Nspecies = max(fia_init_trees$species))
+#' init3$dims
 #'
 #' @export
 CohortMat = torch::nn_module("CohortMat",
 
   #' @description
-  #' Initialize the CohortMat class
+  #' Build the cohort tensors, either from a cohort table (`obs_df`) or from
+  #' arrays of `dbh`, `trees` and `species`
   #' @param obs_df A data frame containing columns "siteID", "patchID", "species", "dbh", and "trees". If provided, it will be used to initialize the tensors.
   #' @param dbh A tensor or array representing the diameter at breast height. Defaults to `self$dbh`.
   #' @param trees A tensor or array representing the number of trees. Defaults to `self$trees`.
@@ -281,11 +348,11 @@ CohortMat = torch::nn_module("CohortMat",
     if (!inherits(self$species, "torch_tensor")) self$register_buffer("species", torch::torch_tensor(self$species, dtype = torch::torch_int64()))
   },
 
-  #'  @description
+  #' @description
+  #' Convert the cohort tensors back to a cohort table
   #'
-  #' Convert the tensors to a data frame format
-  #'
-  #' @return data.table object
+  #' @return A `data.frame` with one row per cohort and the columns `siteID`,
+  #'   `patchID`, `cohortID`, `species`, `dbh` and `trees`.
   asDF = function() {
     array2obsDF(list(dbh = torch::as_array(self$dbh), trees = torch::as_array(self$trees), species = torch::as_array(self$species)))
   },
@@ -305,3 +372,13 @@ CohortMat = torch::nn_module("CohortMat",
     }
   )
 )
+
+# Bare ground, the start of fit() and predict() / simulateForest() when
+# `init_cohort = NULL`: one cohort slot per patch holding no stems (dbh 0,
+# trees 0), so that every tree of the run comes from the regeneration process.
+# The slot's species index is a placeholder; with trees = 0 it carries no weight.
+bare_ground_cohorts = function(sites, patches, sp) {
+  dims = c(sites, patches, 1L)
+  CohortMat(dims = dims, dbh = array(0, dim = dims), trees = array(0, dim = dims),
+            species = array(1L, dim = dims), sp = sp)
+}

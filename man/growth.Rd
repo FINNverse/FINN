@@ -2,7 +2,7 @@
 % Please edit documentation in R/Processes.R
 \name{growth}
 \alias{growth}
-\title{Calculate growth}
+\title{Growth}
 \usage{
 growth(
   dbh,
@@ -16,25 +16,58 @@ growth(
 )
 }
 \arguments{
-\item{dbh}{torch.Tensor Diameter at breast height.}
+\item{dbh}{torch.Tensor Diameter at breast height of each cohort, in cm.}
 
-\item{species}{torch.Tensor species of tree.}
+\item{species}{torch.Tensor (int64) Species index of each cohort.}
 
-\item{parGrowth}{torch.Tensor Growth parameters.}
+\item{parGrowth}{torch.Tensor Growth parameters per species, two columns: the
+light requirement of the shade response (between 0 and 1) and the size decay
+(per cm).}
 
-\item{pred}{torch.Tensor Predicted values.}
+\item{pred}{torch.Tensor Environmental response per species, on the log scale.}
 
-\item{light}{torch.Tensor Accumulated Light.}
+\item{light}{torch.Tensor Available light for each cohort (0 to 1), from
+\code{\link[=competition]{competition()}}.}
 
 \item{light_steepness}{numeric Steepness of the light-response sigmoid. Defaults to 10.}
 
-\item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
+\item{debug}{logical If TRUE, return the intermediate components as a list
+(\code{shade}, \code{light}, \code{environment}, \code{growth}). Defaults to FALSE.}
 
-\item{trees}{torch.Tensor (Optional) Number of trees per cohort. Defaults to NULL.}
+\item{trees}{torch.Tensor (Optional) Number of trees per cohort. Not part of
+the equation; the model passes it for its records. Defaults to NULL.}
 }
 \value{
-torch.Tensor A tensor representing the forest plot growth.
+torch.Tensor The relative diameter growth of each cohort per
+simulation step, \verb{[sites, patches, cohorts]}, non-negative; or, if
+\code{debug = TRUE}, a list of the intermediate components.
 }
 \description{
-This function calculates growth based on specified parameters.
+FINN's mechanistic growth process: the relative diameter growth of a cohort in
+one simulation step, \code{growth = shade * exp(pred) * exp(-parGrowth[, 2] * dbh)},
+so that the diameter after the step is \code{dbh * (1 + growth)}. \code{shade} is the
+light response, a sigmoid in the available light centred on the species' light
+requirement \code{parGrowth[, 1]} and rescaled to run from 0 in full shade to 1 in
+full light; \code{exp(pred)} is the species' environmental response; and the last
+term lets the relative growth decline with size at the species' rate
+\code{parGrowth[, 2]} (per cm).
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# growth as the growth process of a model: the equation above with its two
+# species parameters, and a linear response to one environmental predictor
+m <- finn(N_species = 2, growth_process = createProcess(~ 1 + temp, growth))
+
+# a 30-year simulation from bare ground on one site. A model that was not
+# fitted has no scaling constants for `env` yet and uses it as given, so the
+# predictor is passed standardised (0 = an average site).
+env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+tail(sim$wide$site)
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=createProcess]{createProcess()}}, \code{\link[=mortality]{mortality()}}, which takes this
+growth as an input, \code{\link[=finn]{finn()}}, \code{\link[=predictTrees]{predictTrees()}} to evaluate the
+fitted function on observed trees
 }

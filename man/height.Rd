@@ -12,7 +12,7 @@ height(dbh, parHeight)
 \item{parHeight}{A numeric value representing the species height allometry.}
 }
 \value{
-A numeric value representing the calculated height of the tree.
+A numeric vector (or torch.Tensor, for tensor input) with the height of the tree in m.
 }
 \description{
 Calculate the height of a tree based on its diameter at breast height and an allometry parameter
@@ -24,15 +24,33 @@ The height is calculated using the formula:
 \deqn{height = \left( \exp \left( \frac{(\text{dbh} \times \text{parHeight})}{(\text{dbh} + 100)} \right) - 1 \right) \times 100 + 0.001}
 where dbh is the diameter at breast height of the tree in cm and parHeight is an allometric species specific parameter.
 
-All parameters of parHeight from 0 to 1 result in physiologicaly plausible heights.
-The range from 0.3 to 0.9 results in realistic tree heights.
-Values of parHeight close to 1 are physiologically almost impossible, below 0.3 is suitable for small tree species and shrubs.
+As the diameter grows, the height approaches \eqn{(\exp(\text{parHeight}) - 1) \times 100}{(exp(parHeight) - 1) * 100}
+m: 35 m for parHeight = 0.3, 65 m for 0.5, 101 m for 0.7. When the height
+parameter is fitted (the first column of the competition parameters), FINN keeps
+it between 0.3 and \eqn{\log(2.3) \approx 0.83}{log(2.3) = 0.83}, so no species
+can grow taller than 130 m, the physical limit of tree height (Koch et al. 2004).
+Values below 0.3 suit small trees and shrubs; set \code{createProcess(lower = )} for
+them.
+}
+\examples{
+# a 30-cm tree of a species with parHeight = 0.5 is about 12 m tall
+height(30, 0.5)
+# the same diameter for a tall-growing and a short-growing species
+height(c(30), c(0.5,0.3))
+# two diameters of one species
+height(c(30,20), c(0.5))
+
+# the height curve of three species; the asymptote is (exp(parHeight) - 1) * 100 m
+dbh <- seq(0, 150, by = 10)
+round(sapply(c(low = 0.3, mid = 0.5, tall = 0.7), function(p) height(dbh, p)), 1)
+
+}
+\references{
+Koch, G. W., Sillett, S. C., Jennings, G. M. & Davis, S. D. (2004).
+The limits to tree height. Nature 428, 851-854.
 
 \figure{height_plot1.png}{Parameter range}
 }
-\examples{
-height(30, 0.5)
-height(c(30), c(0.5,0.3))
-height(c(30,20), c(0.5))
-
+\seealso{
+\code{\link[=competition]{competition()}}, which ranks the cohorts of a patch by this height
 }

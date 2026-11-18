@@ -18,21 +18,25 @@ mortality(
 )
 }
 \arguments{
-\item{dbh}{dbh}
+\item{dbh}{torch.Tensor Diameter of each cohort, in cm.}
 
-\item{species}{species}
+\item{species}{torch.Tensor Species index of each cohort.}
 
-\item{trees}{trees}
+\item{trees}{torch.Tensor Number of trees in each cohort.}
 
-\item{parMort}{parMort}
+\item{parMort}{torch.Tensor Mortality parameters per species, three columns:
+the shade, size and growth coefficients of the logit.}
 
-\item{pred}{predictions}
+\item{pred}{torch.Tensor Environmental response per species, on the logit scale.}
 
-\item{light}{available light}
+\item{light}{torch.Tensor Available light for each cohort.}
 
-\item{base_steepness}{numeric Steepness of the shade-response sigmoid. Defaults to 5.}
+\item{base_steepness}{numeric Not used by this function; kept in the signature for custom
+mortality functions written against it.}
 
-\item{debug}{logical If TRUE, return the intermediate components as a list. Defaults to FALSE.}
+\item{debug}{logical If TRUE, return a list with the light (\code{light}), the mortality
+probability before any further step (\code{environment}) and the returned probability
+(\code{predM}, identical to \code{environment}). Defaults to FALSE.}
 
 \item{growth}{torch.Tensor (Optional) Growth entering the mortality response; defaults to the model's current growth.}
 
@@ -48,9 +52,54 @@ wrapper function: the kernel reads \code{self$record_raws} from its own
 environment and a wrapper leaves that unbound.}
 }
 \value{
-A \code{torch} tensor of per-cohort mortality probabilities; or, if
-\code{debug = TRUE}, a list of the intermediate components.
+A \code{torch} tensor of per-cohort mortality probabilities per simulation step,
+\verb{[sites, patches, cohorts]}.
 }
 \description{
-Mortality
+FINN's mechanistic mortality process: the probability that a tree of a cohort
+dies in one simulation step. It is a logistic function of four terms,
+\code{p = sigmoid(pred + light * parMort[, 1] + parMort[, 2] * dbh/100 + growth/growth_scale * parMort[, 3])},
+with one coefficient per species for each of shade, size and growth. \code{pred} is
+the species' environmental response on the logit scale, so a species with no
+environmental predictors dies at a constant rate. Growth enters as the rate the
+growth process produced in the same step, which is what makes mortality depend
+on a tree's recent performance rather than on its size alone.
+
+The probability is clamped to \verb{[mortality_floor, mortality_ceiling]} (default
+\code{0.001} / \code{0.999} per simulation step) and the number of deaths is then drawn
+with \code{mortality_draw}; both are settings of \code{\link[=createProcess]{createProcess()}}.
+}
+\section{The starting value}{
+
+The environmental response is \code{sigmoid(pred)}. Before any fitting it starts
+at about 2 \% mortality per time step: the intercept of the response is
+\code{qlogis(0.02)} and its other weights are 0 (with \code{createProcess(hidden = )}
+the bias of the output layer carries the intercept), and the species terms
+for light, size and growth move it by at most about one logit unit. Until
+0.2.0 the weights started at torch's random values, i.e. at \code{sigmoid(0) = 0.5} per step, which on yearly steps emptied an unfitted stand within a
+decade. \code{createProcess(initEnv = )} sets another start; a formula without
+an intercept (\code{~ 0 + temp}) leaves torch's start in place.
+}
+
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# mortality as the mortality process of a model, responding to one predictor;
+# growth enters in \%/yr (growth_scale = 0.01, the default)
+m <- finn(N_species = 2,
+          mortality_process = createProcess(~ 1 + temp, mortality, growth_scale = 0.01))
+
+# a 30-year simulation from bare ground; an unfitted model uses `env` as
+# given (no scaling constants yet), so the predictor is passed standardised
+env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+tail(sim$wide$site)
+
+# the start of the environmental response: qlogis(0.02) and 0 per species
+as.matrix(m$nn_mortality$parameters[[1]])
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=createProcess]{createProcess()}} (\code{mortality_draw}, \code{mortality_floor}, \code{growth_scale}),
+\code{\link[=growth]{growth()}}, \code{\link[=finn]{finn()}}, \code{\link[=predictTrees]{predictTrees()}} to evaluate the fitted function on
+observed trees
 }

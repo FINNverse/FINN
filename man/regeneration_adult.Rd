@@ -37,7 +37,7 @@ torch.Tensor mean recruitment, stems ha^-1 step^-1,
 \code{adults} (A, stems ha^-1, \verb{[sites, 1, species]}) and \code{seed} (f(A)).
 }
 \description{
-A mechanistic extension of \link{regeneration_saturation} in which
+A mechanistic extension of \link{regeneration_capped} in which
 recruitment needs a seed source: the mean recruitment of a species scales
 with the density of its own ADULTS on the site, the stems whose diameter
 exceeds an adult threshold \code{x}.
@@ -56,14 +56,20 @@ recruitment
 falls to the floor (read it as immigration from outside the site) where the
 species has no adult, and rises to the light- and environment-driven
 potential of \link{regeneration} where adults are many. The result is capped
-with the same Beverton-Holt term as \link{regeneration_saturation},
+with the same Beverton-Holt term as \link{regeneration_capped},
 \verb{K m / (K + m)}.
 
-Declare three extra parameters with \code{createProcess(custom_parameters = )}.
-As for \code{reg_logK}, a length-1 init gives one shared value and a
-length-\code{N_species} init one value per species:
+The cap \code{reg_logK} is created by \code{\link[=finn]{finn()}} as for
+\link{regeneration_capped}, with its resolution from \code{createProcess(cap = )}
+and its prior from \code{prior}/\code{prior_lambda}, so it need not be declared. A
+\code{reg_logK} declared in \code{custom_parameters} (as in the example) is kept and
+sets the resolution by its length, but its start value is replaced by the
+resolved prior at the first \code{\link[=fit]{fit()}}. Declare the two adult parameters
+with \code{createProcess(custom_parameters = )}; a length-1 init gives one shared
+value and a length-\code{N_species} init one value per species:
 \itemize{
-\item \code{reg_logK}: the log Beverton-Holt cap, stems ha^-1 step^-1;
+\item \code{reg_logK} (optional, see above): the log Beverton-Holt cap, stems ha^-1
+step^-1;
 \item \code{reg_adult_logx}: the log adult threshold, \code{x = exp(reg_adult_logx)} in the
 units of \code{dbh}. Once \code{x} falls below the smallest diameter present, every
 stem counts as an adult and \code{x} stops receiving gradient;
@@ -77,19 +83,30 @@ Called without \code{dbh}/\code{trees} (as the ALE code in \code{xAI.R} does), t
 returns recruitment with the seed source present (\code{f = 1}).
 }
 \examples{
-\dontrun{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# three sites of the bundled Oregon FIA sample (?fia_obs_dt)
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+
+FINN.seed(1)
 m <- finn(
-  N_species = Nsp,
+  N_species = Nsp, recruits_dbh = 12.9,
   regeneration_process = createProcess(
     ~ temp + prec, FINN::regeneration_adult,
     custom_parameters = list(reg_logK       = rep(log(50), Nsp),
                              reg_adult_logx = rep(log(20), Nsp),   # adult from 20 cm
                              reg_adult_logA = rep(log(20), Nsp)),  # f = 0.5 at 20 adults/ha
-    optimizeSpecies = TRUE, optimizeEnv = TRUE)
-)
-}
-
+    optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+# the fitted cap, adult threshold (cm) and half-saturation adult density (per ha)
+exp(as.numeric(m$reg_logK)); exp(as.numeric(m$reg_adult_logx)); exp(as.numeric(m$reg_adult_logA))
+\dontshow{\}) # examplesIf}
 }
 \seealso{
-\link{regeneration_saturation}, \code{\link[=createProcess]{createProcess()}}
+\link{regeneration_capped}, \code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}}
+(adult density as an effect, not a gate), \code{\link[=createProcess]{createProcess()}},
+\link{recruitment} for the recruitment options and how to combine them
 }

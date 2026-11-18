@@ -9,11 +9,10 @@ A \code{data.table} with 11 rows and 2 columns, \code{species} (integer index)
 and \code{species_name} (Latin name, or \code{"other"} for the pooled rare species).
 }
 \source{
-Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon
-FIA plots prepared in the (private) \code{FINNverse/FINN-fia} analysis repo:
-tree records via the FIA
-database, climate from WorldClim bioclim variables attached per plot. The
-full provenance chain is in \code{data-raw/README.md}.
+A seeded subsample of Oregon plots of the US Forest Inventory and
+Analysis (FIA) database, with WorldClim bioclimatic variables attached per
+plot. The preparation script and the provenance of the source tables are
+in the package repository (\code{dev/make_extdata.R}, \code{data-raw/README.md}).
 }
 \usage{
 fia_species_dt
@@ -22,11 +21,19 @@ fia_species_dt
 The species index shared by all \verb{fia_*} tables. Derived from the training
 sites, so \code{species} is \verb{1..11} in every table.
 }
+\examples{
+library(data.table)
+fia_species_dt
+# put names on a table that carries only the species index
+deaths <- fia_tree_dt[, .(trees = .N, died = sum(died)), by = species]
+merge(fia_species_dt, deaths, by = "species")
+}
 \seealso{
 Other fia datasets: 
 \code{\link{fia_env_dt}},
 \code{\link{fia_init_trees}},
-\code{\link{fia_obs_dt}}
+\code{\link{fia_obs_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

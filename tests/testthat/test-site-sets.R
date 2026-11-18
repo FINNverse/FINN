@@ -30,16 +30,16 @@ test_that("fit() stops with the offending ids when data, env and init_cohort hol
   expect_error(
     fit(fia_model(d$nsp), env = d$env, data = d$obs[siteID %in% four],
         init_cohort = makeInitCohorts(d$it[siteID %in% four], Nspecies = d$nsp),
-        epochs = 0L, patches = 2L, patch_size = 0.06, plot_progress = FALSE),
+        epochs = 0L, patches = 4L, patch_size = 0.06, plot_progress = FALSE),
     regexp = sprintf("in `env` but not in `data`: %s.*in `env` but not in `init_cohort`: %s", d$keep[5], d$keep[5]))
   expect_error(
     fit(fia_model(d$nsp), env = d$env[siteID %in% four], data = d$obs[siteID %in% four],
         init_cohort = makeInitCohorts(d$it, Nspecies = d$nsp),
-        epochs = 0L, patches = 2L, patch_size = 0.06, plot_progress = FALSE),
+        epochs = 0L, patches = 4L, patch_size = 0.06, plot_progress = FALSE),
     regexp = sprintf("in `init_cohort` but not in `env`: %s", d$keep[5]))
   expect_error(
     fit(fia_model(d$nsp), env = d$env[, siteID := as.character(siteID)], data = d$obs,
-        epochs = 0L, patches = 2L, patch_size = 0.06, plot_progress = FALSE),
+        epochs = 0L, patches = 4L, patch_size = 0.06, plot_progress = FALSE),
     regexp = "must be integer-valued.*resolveSiteIDs\\(\\)")
 })
 
@@ -51,13 +51,13 @@ test_that("non-contiguous site ids fit, are kept as a lookup, and come back in t
   expect_identical(init()$site_ids, s)
   m <- fia_model(d$nsp)
   expect_no_warning(fit(m, env = d$env[siteID %in% s], data = d$obs[siteID %in% s], init_cohort = init(),
-                        epochs = 0L, patches = 2L, patch_size = 0.06, plot_progress = FALSE))
+                        epochs = 0L, patches = 4L, patch_size = 0.06, plot_progress = FALSE))
   expect_equal(m$site_lookup$siteID, s)
   expect_equal(m$site_lookup$index, seq_along(s))
-  p <- predict(m, env = d$env[siteID %in% s], init_cohort = init(), patches = 2L, patch_size = 0.06)
+  p <- predict(m, env = d$env[siteID %in% s], init_cohort = init(), patches = 4L, patch_size = 0.06)
   expect_setequal(unique(p$long$site$siteID), s)
   expect_setequal(unique(p$wide$site$siteID), s)
-  expect_error(predict(m, env = d$env[siteID %in% s[1:3]], init_cohort = init(), patches = 2L, patch_size = 0.06),
+  expect_error(predict(m, env = d$env[siteID %in% s[1:3]], init_cohort = init(), patches = 4L, patch_size = 0.06),
                regexp = sprintf("in `init_cohort` but not in `env`: %s", s[4]))
 })
 

@@ -16,3 +16,14 @@ numeric vector of basal areas (m^2).
 Computes basal area in m^2 from diameter at breast height in cm:
 \deqn{BA = \pi \left(\frac{\mathrm{DBH}}{200}\right)^2}
 }
+\examples{
+dbh2ba(c(10, 30, 50))   # basal area of one stem of 10, 30 and 50 cm
+
+# basal area per hectare of a 0.06 ha plot from its tree list
+dbh <- c(12.9, 25.4, 31.0, 48.3)
+sum(dbh2ba(dbh)) / 0.06
+}
+\seealso{
+\code{\link[=BA_stem]{BA_stem()}} and \code{\link[=BA_stand]{BA_stand()}}, the versions for \code{torch}
+tensors
+}

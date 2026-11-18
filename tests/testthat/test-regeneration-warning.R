@@ -27,7 +27,7 @@ reg_warn_fit <- function(d, data, family) {
             mortality_process    = createProcess(~ temp, FINN::mortality))
   suppressMessages(fit(m, env = d$env, data = data,
                        init_cohort = makeInitCohorts(d$it, Nspecies = d$Nsp),
-                       epochs = 1L, patches = 1, patch_size = 0.06, lr = 0,
+                       epochs = 1L, patches = 4, patch_size = 0.06, lr = 0,
                        loss_family = family, plot_progress = FALSE))
 }
 

@@ -25,8 +25,8 @@ In general low values for high regeneration and high values for low regeneration
 \value{
 torch.Tensor Mean recruitment, stems ha^-1 step^-1,
 \verb{[sites, patches, species]} -- a per-HECTARE rate, not a per-patch count.
-\code{forward()} multiplies it by \code{patch_size_ha} itself before the recruit draw
-(\code{R/finn-class.R:1591-1593}), and \code{reg} is scored on the per-hectare value.
+\code{forward()} multiplies it by \code{patch_size_ha} itself before the recruit draw,
+and \code{reg} is scored on the per-hectare value.
 }
 \description{
 The default regeneration process since 0.2.0, and a drop-in alternative to
@@ -35,6 +35,8 @@ unbounded mean recruitment with a Beverton-Holt density dependence,
 \code{recruits = K * m / (K + m)}, where \code{m} is the mechanistic mean recruitment
 (identical to \link{regeneration}) and \code{K} is a fitted carrying capacity
 (stems ha^-1 step^-1). As \code{m} grows, recruitment saturates towards \code{K}.
+\code{regeneration_saturation()} is the same function under its older name, kept
+as a deprecated alias for one release.
 }
 \details{
 The cap is the parameter \code{reg_logK} (\code{K = exp(reg_logK)}), which \strong{FINN
@@ -49,7 +51,7 @@ A cap that only the data constrain runs to whatever the fitted window
 supports, which on a national inventory is far above anything observed. So
 the cap carries a prior, added to the objective as
 \verb{prior_lambda * (log K - log prior)^2} per cap -- the same form as the L2
-pull of a staged calibration. It is added \strong{after} the \code{weights = "auto"}
+pull of a staged calibration. It is added \strong{after} the \code{loss_weights = "auto"}
 baseline scaling, so \code{prior_lambda} means the same thing on every dataset.
 
 \code{createProcess(prior = "max_obs_recruits")}, the default, resolves the prior
@@ -74,17 +76,28 @@ overall level to the data. Every species still starts at the observed maximum.
 }
 
 \examples{
-\dontrun{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+Nsp <- max(fia_obs_dt$species)
 # the default: one cap for all species, prior from the data
-m <- finn(N_species = Nsp)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9)
 
-# one cap per species, a fixed prior, a stronger pull
-m <- finn(N_species = Nsp, regeneration_process = createProcess(
-  ~ temp + prec, FINN::regeneration_capped,
-  cap = "species", prior = 500, prior_lambda = 1))
-}
+# one cap per species, a fixed prior (stems per ha and year), a stronger pull
+m2 <- finn(N_species = Nsp, recruits_dbh = 12.9,
+           regeneration_process = createProcess(~ temp + prec, regeneration_capped,
+                                                cap = "species", prior = 500, prior_lambda = 1))
 
+# the cap is created and resolved by fit(); read it back on the natural scale
+sites <- 1:3
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% sites], Nspecies = Nsp)
+fit(m2, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
+    init_cohort = init, epochs = 1L, patch_size = 0.06, plot_progress = FALSE)
+exp(as.numeric(m2$reg_logK))   # one carrying capacity per species
+\dontshow{\}) # examplesIf}
 }
 \seealso{
-\link{regeneration}, \code{\link[=createProcess]{createProcess()}}
+\link{regeneration}, \code{\link[=regeneration_adult]{regeneration_adult()}},
+\code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}},
+\code{\link[=createProcess]{createProcess()}}, \link{recruitment} for the recruitment options and how
+to combine them
 }

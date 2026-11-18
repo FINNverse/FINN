@@ -45,66 +45,60 @@ build_NN = function(input_shape,
 
 
 
-visualize.training <- function(losses,epoch,max_epoch = 100L, main, new = FALSE, baseline = NULL){
-  if (epoch==1|new){
+# The progress plot of fit(plot_progress = TRUE): the six loss terms per epoch,
+# each as a fraction of its first-epoch value. The whole plot is redrawn every
+# epoch with the y-axis fitted to the data, so a term that rises above its
+# starting value is not cut off (the previous version fixed ylim at [0, 1] and
+# only appended the last segment); a term that is switched off ("none") or has
+# no data is NaN here and is simply not drawn.
+visualize.training <- function(losses, epoch, max_epoch = 100L, main, new = FALSE, baseline = NULL){
+  cols = c("#de324c", "#9656a2", "#95cf92", "#f4895f", "#000000", "#369acc")
+  lab  = c("dbh", "ba", "trees", "growth", "mort", "reg")
+  y = losses[, 1:6, drop = FALSE]
+  y[!is.finite(y)] = NA
+  shown = colSums(!is.na(y)) > 0
+  top = suppressWarnings(max(y, na.rm = TRUE))
+  if (!is.finite(top) || top <= 0) top = 1
+  graphics::plot(c(), c(), xlim = c(1, max(max_epoch, 2)), ylim = c(0, top * 1.05),
+                 main = main,
+                 xlab = "epoch",
+                 ylab = "loss relative to epoch 1",
+                 las = 1)
+  graphics::abline(h = 1, col = "grey80", lty = 2)
+  if (any(shown))
+    graphics::matplot(seq_len(nrow(y)), y[, shown, drop = FALSE], type = "l", lty = 1,
+                      col = cols[shown], lwd = 1.5, add = TRUE)
+  graphics::legend("topright", pch = 15, bty = "n", col = cols[shown],
+                   legend = if (any(shown)) lab[shown] else character(0))
+  invisible(NULL)
+}
 
-    graphics::plot(c(),c(),xlim=c(1, max_epoch),ylim=c(0,1.0),
-                   main= main,
-                   xlab= "epoch",
-                   ylab= "Loss in %",
-                   las = 1)
 
-      graphics::legend("topright", pch = 15, bty = "n", col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-                                    legend = c("dbh", "ba", "trees", "growth", "mort", "reg"))
 
-      matplot(losses[,1:6,drop=FALSE], type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-              lwd = 1.5,
-              las = 1, add = TRUE,
-              pch = 16)
 
-  } else{
-
-    matplot(c(epoch-1,epoch),
-            losses[(epoch-1):(epoch),1:6, drop = FALSE],
-            type = "l", lty = 1, col = c("#de324c", "#9656a2", "#95cf92","#f4895f", "#000000", "#369acc"),
-            lwd = 1.5,
-            las = 1, add = TRUE,
-            pch = 16)
+# Set torch's intra-op thread count for a fit (FINN#48). Returns the count to
+# restore on exit, or NULL when there is nothing to restore. With OpenMP the
+# count can change at any time; torch's native backend (macOS) accepts one change
+# per session, so there the count is set but not restored, and a refused change
+# is reported instead of silently running on another count.
+set_torch_threads = function(threads) {
+  if (is.null(threads)) return(NULL)
+  threads = as.integer(threads)
+  if (length(threads) != 1L || is.na(threads) || threads < 1L)
+    stop("`threads` must be NULL or one positive integer.", call. = FALSE)
+  old = torch::torch_get_num_threads()
+  if (old == threads) return(NULL)
+  torch::torch_set_num_threads(threads)
+  now = torch::torch_get_num_threads()
+  if (now != threads) {
+    message(sprintf(paste0("torch keeps %d intra-op threads: this session's thread count was already set ",
+                           "(torch's native backend allows one change per session). Restart R, or call ",
+                           "torch::torch_set_num_threads(%d) before any other, to fit on %d."),
+                    now, threads, threads))
+    return(NULL)
   }
+  if (torch::backends_openmp_is_available()) old else NULL
 }
-
-
-
-
-#' Generate random numbers from a uniform distribution
-#'
-#' This function generates random numbers from a uniform distribution with specified low and high values and size similar to np.random.uniform in Python.
-#'
-#' @param low numeric Lower bound of the uniform distribution.
-#' @param high numeric Upper bound of the uniform distribution.
-#' @param size numeric Size of the output array.
-#'
-#' @return array A numeric array of random numbers.
-#'
-#' @examples
-#' np_runif(0, 1, c(2, 3))
-#'
-#' @export
-np_runif = function(low, high, size) {
-  N = prod(size)  # Calculate total number of values to generate
-  array(runif(N, low, high), dim = size)  # Generate random numbers and reshape into desired size
-}
-
-
-check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), device="cpu", requires_grad = FALSE) {
-  pointer_check <- tryCatch(torch::as_array(tensor), error = function(e) e)
-  if(!is.null(attr(r_obj, "requires_grad"))) requires_grad = attr(r_obj, "requires_grad")
-  if(inherits(pointer_check,"error")){
-    tensor = torch::torch_tensor(r_obj, dtype=dtype, device=device, requires_grad = requires_grad)
-  }
-  return(tensor)
-}
-
 
 #' Index species
 #'
@@ -113,8 +107,7 @@ check_and_recreate = function(tensor, r_obj, dtype=torch::torch_float32(), devic
 #'
 #' @return A `torch` tensor of `pred` gathered along its species dimension by
 #'   `species`.
-#' @keywords internal
-#' @export
+#' @noRd
 index_species = function(pred, species) {
   shapes = pred$shape
   X_expanded = pred$unsqueeze(2)$expand(c(shapes[1], species$shape[2], shapes[2]))
@@ -125,76 +118,46 @@ index_species = function(pred, species) {
 
 
 
-#' Aggregate function
+#' Sum cohort values per site and species
 #'
-#' @param labels labels
-#' @param samples samples
-#' @param Results Results
-#' @param drop_rows logical Drop empty rows from the aggregated output. Defaults to TRUE.
-#' @param sp_max integer (Optional) Maximum species index to aggregate over. Defaults to NULL.
+#' The hot-path form of [aggregate_results()] used by the time loop of
+#' `forward()`: every sample is scattered into a fresh species tensor and summed
+#' over the patches in ONE `scatter_add` for all samples (stacked along a new
+#' leading dimension), instead of one `torch_zeros` + `scatter_add` + `sum` +
+#' `add_` per sample. The values are the same (a `scatter_add` accumulates each
+#' output element over the cohorts in index order whether the samples are
+#' stacked or not, and the sum over the patches is unchanged); only the number
+#' of torch calls differs, which is what costs time on the small tensors of a
+#' batch.
 #'
-#' @return A list of `torch` tensors, one per element of `samples`, each holding
-#'   the per-species aggregated result.
+#' @param labels torch.Tensor int64 species index, `[sites, patches, cohorts]`.
+#' @param samples list of torch.Tensor, each `[sites, patches, cohorts]` and of
+#'   the same dtype, the values to sum.
+#' @param sp integer Number of species (the size of the last output dimension).
+#'
+#' @return A list of `torch` tensors `[sites, sp]`, one per element of `samples`,
+#'   the per-site, per-species sums over patches and cohorts.
 #' @keywords internal
-#' @export
-aggregate_results_old = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL) {
-
-  if(drop_rows) {
-    # Drop rows for speed up - memory intensive
-    if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2]) # Not good, better to pass sp_max to function!
-
-    old_shape = labels$shape
-
-    labels_new = (labels + torch::torch_tensor(seq(1, by = sp_max, length.out = labels$shape[1])-1,
-                                               dtype = torch_int64(),
-                                               device = labels$device)$reshape(c(labels$shape[1], 1L, 1L))$expand(labels$shape))$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3]))
-
-    samples_new = lapply(samples, function(sample) {
-      return(sample$reshape(c(1, labels$shape[1]*labels$shape[2], labels$shape[3])))
-    })
-    Results_new = lapply(Results, function(result) {
-      return(result$reshape(c(1, labels$shape[1]*sp_max)))
-    })
-    Results = Results_new
-    labels = labels_new
-    samples = samples_new
+#' @noRd
+aggregate_species = function(labels, samples, sp) {
+  k = length(samples)
+  if(k == 1L) {
+    s1 = samples[[1]]
+    return(list(torch::torch_zeros(s1$shape[1], s1$shape[2], sp, dtype = s1$dtype, device = s1$device)$scatter_add(3, labels, s1)$sum(dim = 2)))
   }
-
-  for(k in 1:labels$shape[1]) {
-    #samples_tmp = [sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)) for sample in samples]
-    samples_tmp = lapply(samples, function(sample) sample[k,,,drop=FALSE]$flatten()$view(list(-1,1)))
-
-    results = groupby_mean(samples_tmp, labels[k,,,drop=FALSE]$flatten())
-    values = results[[1]]
-    positions = results[[2]]
-
-    for( v in 1:length(samples)) {
-      Results[[v]][k,positions] = Results[[v]][k,positions] + values[[v]]$squeeze()
-    }
-  }
-
-  if(drop_rows) {
-    Results = lapply(Results, function(result) {
-      return(result$reshape(c(old_shape[1], sp_max)))
-    })
-  }
-
-  return(Results)
+  st = torch::torch_stack(samples)                                          # [k, sites, patches, cohorts]
+  idx = labels$unsqueeze(1)$expand(c(k, -1, -1, -1))
+  out = torch::torch_zeros(k, st$shape[2], st$shape[3], sp, dtype = st$dtype, device = st$device)$scatter_add(4, idx, st)$sum(dim = 3)
+  lapply(seq_len(k), function(v) out[v, , ])
 }
 
 
-
+# Per-site, per-species sums (or means) of cohort values: every sample is
+# scattered into a species tensor and reduced over the patches. The time loop
+# of forward() uses the stacked form aggregate_species(); this one serves the
+# adult-density terms of the regeneration processes and the per-tree light.
 aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max = NULL, aggregation = "sum") {
 
-  # if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
-  # old_shape = labels$shape
-  # labels = labels$flatten(start_dim=1, end_dim = 2)
-  #
-  # for( v in 1:length(samples)) {
-  #   da = samples[[v]]$flatten(start_dim=1, end_dim=2)
-  #   Results[[v]]$add_(torch::torch_zeros(da$shape[1], sp_max, dtype=da$dtype, device = da$device)$scatter_add(2, labels, da$expand(c(da$shape[1], -1)))$view(c(old_shape[1:2], sp_max))$sum(dim = 2))
-  # }
-  # return(Results)
   if(is.null(sp_max)) sp_max = as.numeric(Results[[1]]$shape[2])
 
   if(length(aggregation) == 1) aggregation = rep(aggregation, length(samples))
@@ -211,143 +174,6 @@ aggregate_results = function(labels, samples, Results, drop_rows = TRUE, sp_max 
 
 }
 
-#' group by mean
-#'
-#' @param values list of value tensors
-#' @param labels labels
-#'
-#' @return A `torch` tensor of the mean of `values` within each unique group in
-#'   `labels`.
-#' @keywords internal
-#' @export
-groupby_mean = function(values, labels) {
-  uniques = unique(as.matrix(labels))
-  key_val = 1:length(uniques)
-  names(key_val) = val_key = sort(uniques)
-  names(val_key) = 1:length(uniques)
-  labels2 = as.matrix(labels)[,1]
-  labels = torch_tensor(key_val[as.character(labels2)],  dtype = torch_int64(), device = values[[1]]$device)
-  labels = labels$view(c(labels$size(1), 1))$expand(c(-1, values[[1]]$size(2)))
-  unique_labels_r = matrix(sort(unique(as.matrix(labels))), ncol = 1L)
-  unique_labels = torch_tensor(unique_labels_r, dtype = torch_int64())
-  results = lapply(values, function(value) torch_zeros_like(unique_labels, dtype = value$dtype, device = values[[1]]$device)$scatter_add_(1, labels, value))
-  new_position = torch_tensor(val_key[as.character(unique_labels_r[,1])], device = values[[1]]$device,  dtype = torch_int64())
-  return(list(results, new_position))
-}
-
-
-#' Padding tensors to remove dead cohorts (internal)
-#' @noRd
-pad_tensors_speed_up = function(value, indices, org_dim, const = 0) {
-  # KK = torch::torch_split(value$flatten(start_dim = 1, end_dim = 2), split_size = org_dim[1]*org_dim[2], dim = 1) TODO does not work...bug?!
-  KK = value$flatten(start_dim = 1, end_dim = 2)$split(1, 1)
-  KK_new = vector("list", length = length(KK))
-  for( i in 1:indices$shape[1]) {
-    KK_new[[i]] = KK[[i]][1, indices[i, ]$detach()]
-  }
-  return(torch::nn_utils_rnn_pad_sequence(KK_new, batch_first=TRUE, padding_value = const))
-}
-
-# pad_tensors_speed_up2 <- function(value, indices, org_dim, const = 0) {
-#   # Flatten the value tensor to 2D
-#   flat_value <- value$flatten(start_dim = 1, end_dim = 2)
-#
-#   # Use the boolean indices to filter out the alive cohorts
-#   alive_cohorts <- flat_value$masked_select(indices$unsqueeze(1))$view(c(indices$sum(dim = 2)$max()$item(), -1))
-#
-#   # Pad the sequences
-#   padded_tensor <- torch::nn_utils_rnn_pad_sequence(list(alive_cohorts), batch_first = TRUE, padding_value = const)
-#
-#   return(padded_tensor)
-# }
-#
-# pad_tensors_speed_up3 <- function(value, indices, org_dim, const = 0) {
-#   # Flatten the value tensor to 2D
-#   flat_value <- value$flatten(start_dim = 1, end_dim = 2)
-#
-#   # Get the shape parameters
-#   sites_patches <- indices$shape[1]
-#   cohorts <- indices$shape[2]
-#
-#   # Calculate the maximum number of alive cohorts
-#   max_alive <- indices$sum(dim = 2)$max()$item()
-#
-#   # Create a tensor to store the padded cohorts
-#   padded_tensor <- torch::torch_full(c(sites_patches, max_alive), const)
-#
-#   # Expand the indices tensor for broadcasting
-#   indices_expanded <- indices$unsqueeze(1)
-#
-#   # Gather the alive cohorts
-#   alive_cohorts <- flat_value$masked_select(indices_expanded)
-#
-#   # Reshape the alive cohorts tensor
-#   alive_cohorts_reshaped <- alive_cohorts$view(c(sites_patches, -1))
-#
-#   # Fill the padded tensor with alive cohorts
-#   padded_tensor[, 1:alive_cohorts_reshaped$shape[2]] <- alive_cohorts_reshaped
-#
-#   return(padded_tensor)
-# }
-# value <- torch_tensor(array(sample(0:5, 10*50*9, replace = TRUE), dim = c(10, 50, 9)), requires_grad = TRUE, dtype = torch_float32()) # [sites, patches, cohorts]
-# indices = (value > 0)$flatten(start_dim = 1, end_dim = 2) # boolean [sites*patches, cohorts], reporting which cohorts are alive or dead
-# org_dim <- c(10, 50, 9)
-#
-# padded_tensor <- pad_tensors_speed_up(value, indices, org_dim) # output [sites*patches, mininum number of cohort dimension required (usually == highest number of alive cohorts in all sites and patches)]
-#
-# padd
-#
-# print(padded_tensor)
-# # in this example: [5,5]
-#
-# indices = (M>0)$flatten(start_dim = 1, end_dim = 2)
-#
-# as_array(pad_tensors_speed_up(M, indices, org_dim = c(1, 10, 5)))
-#
-# M = matrix(sample(c(0, 1), 50, replace = TRUE), 10, 5)
-# M
-#
-# remove_zeros_and_pad(M[1,,])
-#
-#
-#
-# # Print the result tensor
-# print(result_tensor)
-#
-#
-# remove_zeros_and_pad = function(tensor, index) {
-#   mask = index
-#   non_zero_counts = mask$sum(dim=2)
-#   max_non_zeros = non_zero_counts$max()$item()
-#   sorted_tensor = torch_sort(mask$float(), dim=2, descending=TRUE)[[2]]
-#   sorted_tensor = tensor$gather(2, sorted_tensor)[, 1:max_non_zeros]
-#
-#   return(sorted_tensor)
-# }
-#
-# pad_tensors_speed_up(value, indices, org_dim)
-# tensor = value$flatten(start_dim = 1, end_dim = 2)
-# remove_zeros_and_pad(tensor, indices) == pad_tensors_speed_up(value, indices, org_dim)
-#
-#
-# microbenchmark::microbenchmark(remove_zeros_and_pad(tensor, indices) , pad_tensors_speed_up(value, indices, org_dim))
-
-
-#' Sample poisson relaxed
-#'
-#' @param lmbd lambda
-#' @param num_samples number of samples
-#' @param temperature temperature
-#'
-#' @return A `torch` tensor of relaxed (differentiable) Poisson samples.
-#' @keywords internal
-#' @export
-sample_poisson_relaxed = function(lmbd, num_samples=50, temperature = 1e-2) {
-  t = ((torch::torch_rand(c(num_samples,lmbd$shape))+0.0001)$log()$negative()/lmbd)$cumsum(dim=1L)
-  relaxed_indicator = torch_sigmoid((1.0 - t) / temperature)
-  N = relaxed_indicator$sum(1)
-  return(N)
-}
 
 sample_poisson_gaussian <- function(lmbd) {
   epsilon <- torch_randn_like(lmbd)
@@ -370,6 +196,8 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
 
   # Use Poisson approximation for small lambda and Gaussian approximation for large lambda
   poisson_samples_small_lambda = torch_poisson(lmbd)
+  # floor() loses about 0.5 recruits per draw above lambda 2; round() is planned
+  # for 0.2.1, where it changes results (see ?rnbinom_torch_refined)
   poisson_samples_large_lambda = gaussian_samples$clamp(min = 0)$floor()
 
   # Interpolate between the two approaches
@@ -378,21 +206,42 @@ sample_poisson_refined <- function(lmbd, temperature = 1e-2) {
   return(poisson_samples)
 }
 
-# `mortality_floor` of createProcess()/createHybrid(): one probability in (0, 0.99).
+# `mortality_floor` / `mortality_ceiling` of createProcess()/createHybrid(): one probability in (0, 1).
 check_mortality_limit = function(value, what) {
   if (!is.numeric(value) || length(value) != 1L || is.na(value) || value <= 0 || value >= 1)
     stop("`", what, "` must be one number in (0, 1).", call. = FALSE)
   as.numeric(value)
 }
 
-#' Sample from binomial with gradient
+#' Draw deaths from a Gamma matched to the binomial
 #'
-#' @param n number of trials
-#' @param p probability of success
-#' @param sample_size sample size
+#' @description
+#' The mortality draw of FINN before 0.2.0, selected with
+#' `createProcess(mortality_draw = "gamma")`: a Gamma distribution with the mean
+#' `n * p` and the variance `n * p * (1 - p)` of the binomial, sampled with
+#' `rsample()` so that the draw carries a pathwise gradient to `n` and `p`. The
+#' draw is continuous, not an integer count; the simulation rounds it afterwards.
+#' See [binomial_from_poisson()] for what that rounding costs and
+#' [FINN::createProcess()] for the other draws.
 #'
-#' @return A `torch` tensor of binomial samples drawn via the gamma-Poisson
-#'   relationship.
+#' @param n torch.Tensor Number of trees at risk per cohort.
+#' @param p torch.Tensor Mortality probability per cohort, strictly between 0
+#'   and 1 (the Gamma's shape `n * p / (1 - p)` degenerates at both ends).
+#' @param sample_size integer Number of draws; only the default `1` is used by
+#'   FINN (the leading sample dimension is dropped).
+#'
+#' @return A `torch` tensor of the shape of `n` with continuous, positive draws
+#'   whose mean is `n * p` and whose variance is `n * p * (1 - p)`.
+#' @seealso [binomial_from_poisson()], [binomial_from_bernoulli()],
+#'   [FINN::createProcess()] (`mortality_draw`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' n <- torch::torch_full(c(10000), 40)   # 10 000 cohorts of 40 trees
+#' p <- torch::torch_full(c(10000), 0.3)
+#' d <- as.numeric(binomial_from_gamma(n, p))
+#' # the binomial has mean 12 and variance 8.4; the draws are not integers
+#' c(mean = mean(d), var = var(d))
+#' head(d, 3)
 #' @keywords internal
 #' @export
 binomial_from_gamma = function(n, p, sample_size=1) {
@@ -410,8 +259,10 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 #'
 #' @description
 #' The alternative mortality draw, selected with
-#' `createProcess(mortality_draw = "poisson")`; [binomial_from_gamma()] stays the
-#' default. A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is
+#' `createProcess(mortality_draw = "poisson")`. The default since 0.2.0 is
+#' `mortality_draw = "binomial"`, the exact binomial; [binomial_from_gamma()]
+#' (`mortality_draw = "gamma"`) reproduces results published before 0.2.0.
+#' A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is
 #' drawn as one; every larger cohort is drawn from a Poisson capped at `n`.
 #'
 #' @details
@@ -440,6 +291,17 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 #' @return A `torch` tensor of integer death counts, never exceeding `n`.
 #' @references
 #' Lin et al. (2026). \doi{10.48550/arXiv.2610.36827}
+#' @seealso [binomial_from_gamma()], [binomial_from_bernoulli()],
+#'   [FINN::createProcess()] (`mortality_draw`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' # cohorts of one tree are Bernoulli trials, larger cohorts a capped Poisson
+#' n <- torch::torch_tensor(rep(c(1, 40), each = 10000))
+#' p <- torch::torch_full(c(20000), 0.1)
+#' d <- as.numeric(binomial_from_poisson(n, p))
+#' # mean deaths per cohort: expected 0.1 (one tree) and 4 (forty trees)
+#' tapply(d, rep(c("n = 1", "n = 40"), each = 10000), mean)
+#' range(d)   # whole trees, and never more than the cohort holds
 #' @keywords internal
 #' @export
 binomial_from_poisson = function(n, p) {
@@ -451,9 +313,34 @@ binomial_from_poisson = function(n, p) {
 
 #' Draw binomial counts from per-trial Bernoulli probabilities
 #'
-#' @param n torch.Tensor Number of Bernoulli trials per element.
-#' @param p torch.Tensor Success probability per element.
-#' @return torch.Tensor The number of successes per element.
+#' @description
+#' The mortality draw selected with `createProcess(mortality_draw =
+#' "bernoulli")`: every element of `n` gets `max(n)` reparameterised Bernoulli
+#' trials with probability `p`, of which the first `n` are kept and summed. The
+#' result is integer-valued and matches the binomial in mean and variance, and
+#' it keeps a gradient path to `p` (a straight-through sigmoid) and to `n` (a
+#' soft mask). The price is memory: the trials are laid out along an extra
+#' dimension of length `max(n)`, so the cost grows with the largest cohort.
+#'
+#' @param n torch.Tensor Number of Bernoulli trials (trees at risk) per
+#'   element, with at least two dimensions (FINN passes
+#'   `[sites, patches, cohorts]`) and a largest value of at least 1.
+#' @param p torch.Tensor Success (death) probability per element, of the shape
+#'   of `n`.
+#' @return A `torch` tensor of the shape of `n`: the number of successes per
+#'   element, a whole number between 0 and `n`.
+#' @seealso [binomial_from_gamma()], [binomial_from_poisson()],
+#'   [FINN::createProcess()] (`mortality_draw`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' # one site, 5000 patches, two cohorts of 5 and 40 trees, 30 % mortality
+#' n <- torch::torch_tensor(array(rep(c(5, 40), each = 5000), dim = c(1, 5000, 2)))
+#' p <- torch::torch_full(c(1, 5000, 2), 0.3)
+#' deaths <- torch::as_array(binomial_from_bernoulli(n, p))
+#' dim(deaths)
+#' # binomial mean n * p = 1.5 and 12, variance n * p * (1 - p) = 1.05 and 8.4
+#' sapply(c("n = 5" = 1, "n = 40" = 2),
+#'        function(k) c(mean = mean(deaths[1, , k]), var = var(deaths[1, , k])))
 #' @export
 binomial_from_bernoulli = function(n, p) {
 
@@ -487,16 +374,6 @@ binomial_from_bernoulli = function(n, p) {
 
 
 
-sample_poisson_gumbel <- function(lmbd, num_samples=50, temperature = 1e-2) {
-  shape <- lmbd$shape
-  gumbels <- -torch::torch_log(-torch::torch_log(torch::torch_rand(c(num_samples, shape))))
-  logits <- lmbd$log()
-  poisson_samples <- (logits + gumbels) / temperature
-  poisson_samples <- poisson_samples$exp()$cumsum(dim=1L)
-  relaxed_indicator <- torch_sigmoid((1.0 - poisson_samples) / temperature)
-  N <- relaxed_indicator$sum(1)
-  return(N)
-}
 
 
 #' Set Seed for Reproducibility in R and Torch
@@ -513,77 +390,24 @@ sample_poisson_gumbel <- function(lmbd, num_samples=50, temperature = 1e-2) {
 #'     `torch::torch_manual_seed()` to set the seed for Torch's random number generator. This is useful
 #'     for ensuring reproducibility in scripts that rely on both R and Torch for random operations.
 #'
+#' @seealso [base::set.seed()], [torch::torch_manual_seed()]
+#'
 #' @examplesIf torch::torch_is_installed()
+#' # the same seed gives the same draws, in R and in torch
 #' FINN.seed(123)
-#' # Now both R and Torch are seeded with 123, ensuring reproducible results
+#' a <- c(runif(1), as.numeric(torch::torch_rand(1)))
+#' FINN.seed(123)
+#' b <- c(runif(1), as.numeric(torch::torch_rand(1)))
+#' identical(a, b)
+#'
+#' # seed before finn() and fit() to make a fit reproducible: the starting
+#' # values of the parameters and the simulated deaths and recruits are random
 #'
 #' @import torch
 #' @export
 FINN.seed <- function(seed) {
   set.seed(seed)
   torch::torch_manual_seed(seed)
-}
-
-
-checkPars = function(inputPar, parRange, name = NULL){
-  if(is.list(inputPar)) inputPar = inputPar[[1]]
-  if(is.vector(inputPar)) {
-    Npar = 1
-    Nsp = length(inputPar)
-    inputPar = matrix(inputPar, nrow = Nsp, ncol = Npar)
-    parRange = matrix(parRange, nrow = Npar, ncol = 2)
-  }else if(is.matrix(inputPar)){
-    Npar = ncol(inputPar)
-    Nsp = nrow(inputPar)
-  }else{
-    error_message = c(
-      "Error: speciesPars and speciesPars_ranges must contain vectors or a matrices\n",
-      paste0("The object provided for ", name, " is not a vector or matrix\nstr(",name,")\n",paste0(capture.output(str(inputPar)), collapse = "\n"))
-      )
-    stop(error_message)
-  }
-  if(Npar != nrow(parRange)){
-    stop("speciesPars and speciesPars_ranges must have the same number of parameters")
-  }
-  checkedPar = matrix(nrow = Nsp, ncol = Npar)
-  j=1
-  for(j in 1:Nsp){
-    for(i in 1:Npar){
-      lower = parRange[i,1]
-      upper = parRange[i,2]
-      checkedPar[j,i] = inputPar[j,i] < upper & inputPar[j,i] > lower
-    }
-  }
-  return(list(invalid = any(!checkedPar), checkedPar = checkedPar, inputPar = inputPar, parRange = parRange))
-}
-
-checkParInput = function(speciesPars, speciesPars_ranges){
-  checked = list()
-  valid_pars = TRUE
-  for(i in names(speciesPars_ranges)){
-    checked[[i]] = checkPars(speciesPars[[i]], speciesPars_ranges[[i]], i)
-    if(checked[[i]]$invalid) valid_pars = FALSE
-  }
-  if(!valid_pars){
-    stop_message = paste("speciesPars must be within the range of speciesPars_ranges", sep = "\n")
-    stop_message <- paste(stop_message, "The following parameters are out of range:", sep = "\n")
-    for(i in names(speciesPars_ranges)){
-      if(any(!checked[[i]]$checkedPar)){
-        false_idx = which(!checked[[i]]$checkedPar, arr.ind = TRUE)
-        for(ipar in 1:nrow(false_idx)){
-          stop_message <- paste(
-            stop_message,
-            paste0(
-              "speciesPars$", i, "[", false_idx[ipar,1], ",", false_idx[ipar,2], "] = ", checked[[i]]$inputPar[false_idx[ipar,1], false_idx[ipar,2]],
-              " (min = ", checked[[i]]$parRange[false_idx[ipar,2],1], " max = ", checked[[i]]$parRange[false_idx[ipar,2],2],")"
-            ),
-            sep = "\n")
-        }
-      }
-    }
-    stop_message <- paste(stop_message, "Adjust the upper and lower range in speciesPars_ranges or adjust the parameters in initSpecies", "", sep = "\n")
-    stop(stop_message)
-  }
 }
 
 
@@ -601,43 +425,6 @@ default_speciesPars_ranges = list(
   parHeight = c(0.3, 0.7)
 )
 
-to_r = function(par, numeric = FALSE) {
-  if(numeric) {
-    tmp = par |> as.numeric()
-  } else {
-    tmp = par |> as.matrix()
-  }
-  attributes(tmp) = append(attributes(tmp), list(requires_grad = par$requires_grad))
-  return(tmp)
-}
-
-get_mort_thresholds = function(base_steepness) {
-
-  ff = function(parM, light = 1.0, base_steepness = 10) {
-    parM = torch::torch_tensor(parM, requires_grad = TRUE)
-    scaled_steepness <- base_steepness / (0.5 - abs(parM - 0.5))
-    shade = 1 - ((1 / (1 + torch::torch_exp(-scaled_steepness * (light - parM))) - 1 / (1 + torch::torch_exp(scaled_steepness * parM))) /
-                   (1 / (1 + torch::torch_exp(-scaled_steepness * (1 - parM))) - 1 / (1 + torch::torch_exp(scaled_steepness * parM))))
-    shade$backward()
-    return(parM$grad |> as.numeric())
-  }
-
-  upper_high = cbind(seq(0, 1, length.out = 100), sapply(seq(0, 1, length.out = 100), function(x) ff(x, 1.0, base_steepness = base_steepness) |> as.numeric() ))
-  upper_limit_light_max = upper_high[which(is.na(upper_high[,2]), arr.ind = TRUE)[-1][1]-1, 1]
-  upper_low = cbind(seq(0, 1, length.out = 100), sapply(seq(0, 1, length.out = 100), function(x) ff(x, 0.0, base_steepness = base_steepness) |> as.numeric() ))
-  upper_limit_light_min = upper_low[which(is.na(upper_low[,2]), arr.ind = TRUE)[-1][1]-1, 1]
-  upper_limit = c(upper_limit_light_max, upper_limit_light_min)[which.min(c(upper_limit_light_max, upper_limit_light_min))]
-  upper_limit= 0.99*upper_limit
-
-  min = rev(which(is.na(upper_high[1:50,2]), arr.ind = TRUE))
-  lower_limit_light_max = upper_high[1:50][min+1][1]
-  min = rev(which(is.na(upper_low[1:50,2]), arr.ind = TRUE))
-  lower_limit_light_min = upper_low[1:50][min+1][1]
-
-  lower_limit = c(lower_limit_light_max, lower_limit_light_min)[which.min(c(lower_limit_light_max, lower_limit_light_min))]
-  lower_limit= 1.01*lower_limit
-  return(c(lower_limit, upper_limit))
-}
 
 
 rnbinom_torch = function(pred, theta) {
@@ -663,9 +450,10 @@ rnbinom_torch = function(pred, theta) {
 #' Negative-binomial recruit draw without the recruitment floor
 #'
 #' @description
-#' The alternative regeneration sampler, selected with
-#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()` stays the
-#' default. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
+#' The default regeneration sampler since 0.2.0, selected with
+#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()`
+#' (`regeneration_sampler = "gaussian"`) reproduces results published before
+#' 0.2.0. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
 #' the Gamma draw is clamped at that same `eps` instead of taking `+0.001` and an
 #' absolute value, and the draw goes through `sample_poisson_refined()` (an exact
 #' `torch_poisson` below `lambda = 2`, the Gaussian approximation above) instead of
@@ -684,13 +472,31 @@ rnbinom_torch = function(pred, theta) {
 #' 0.0168 ha the per-cell mean is 0.001-0.008, and over 2e6 draws the delivered
 #' fraction of the calibrated mean was 0.000-0.048 at `theta = 1`.
 #'
+#' One bias is left and is not repaired in 0.2.0: above `lambda = 2` the draw is
+#' the Gaussian approximation FLOORED, so it delivers about half a recruit per
+#' draw too few (measured over 1e6 draws: -0.43 at `lambda = 2.5`, -0.50 from
+#' `lambda = 20`, against about 0 with rounding). It bites only where a cell's
+#' mean recruitment is above two, which the per-patch means above are not.
+#' Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+#' is not in this release.
+#'
 #' For the measured consequence of both repairs on the simulated stand, and why
 #' the holdout cannot separate them, see [binomial_from_poisson()].
 #'
 #' @param pred torch.Tensor Expected recruits per patch.
 #' @param theta torch.Tensor Negative-binomial dispersion.
 #'
-#' @return A `torch` tensor of recruit counts.
+#' @return A `torch` tensor of recruit counts, of the shape of `pred`.
+#' @seealso [recruitment], [FINN::createProcess()] (`regeneration_sampler`,
+#'   `theta_floor`)
+#' @examplesIf torch::torch_is_installed()
+#' FINN.seed(1)
+#' # sparse recruitment: an expected 0.05 recruits per patch and year
+#' mu    <- torch::torch_full(c(100000), 0.05)
+#' theta <- torch::torch_tensor(1)
+#' r <- as.numeric(rnbinom_torch_refined(mu, theta))
+#' mean(r)    # the draw delivers the expected count ...
+#' table(r)   # ... as whole recruits, most patches getting none
 #' @keywords internal
 #' @export
 rnbinom_torch_refined = function(pred, theta) {
@@ -716,75 +522,33 @@ dnbinom_torch = function(pred, true, theta) {
 
 
 
-#' @export
-plot.finn_class = function(x, pars = c("process", "env"), env_names = NULL, species_names = NULL, ...) {
-  if(is.null(species_names)) species_names = 1:x$N_species
-  if(tolower(pars) == "env"){
-    growth = x$parameters_r$nn_growth.0.weight
-    mort = x$parameters_r$nn_mortality.0.weight
-    reg = x$parameters_r$nn_regeneration.0.weight
-    if(any(c(is.null(growth), is.null(mort), is.null(reg)))){
-      return(print("no environmental effects fitted"))
-    }else{
-      env_effects_dt <- rbindlist(list(
-        data.table(growth, process = "growth", species = species_names),
-        data.table(mort, process = "mort", species = species_names),
-        data.table(reg, process = "reg", species = species_names)
-      ))
-      env_effects_dt <- melt(env_effects_dt, id.vars = c("species","process"))
-      if(is.null(env_names)) env_names = paste0("x",2:(ncol(growth)))
-      env_effects_dt[, variable := factor(
-        variable,
-        levels = paste0("V", 1:(ncol(growth))),
-        labels = c("intercept", env_names)),]
-      p = ggplot(env_effects_dt, aes(x = value, y = as.factor(species)))+
-        geom_bar(stat = "identity")+
-        facet_wrap(~variable)+
-        theme_bw()+
-        geom_vline(xintercept = 0)+
-        ylab("Species")
-      print(p)
-    }
-  }
-  if(tolower(pars) == "process"){
-    disp_dt <- data.table(
-      disp_recr = torch::as_array(x$par_theta_recruits),
-      species = species_names
-    )
-    par_mort <- data.table(x$par_mortality_r)
-    par_mort$species <- species_names
-    colnames(par_mort) <- c("mortLight", "mortSize", "mortGrowth","species")
-
-    par_growth <- data.table(x$par_growth_r)
-    par_growth$species <- species_names
-    colnames(par_growth) <- c("growthLight", "growthSize","species")
-
-    par_reg <- data.table(x$par_regeneration_r)
-    par_reg$species <- species_names
-    colnames(par_reg) <- c("regLight","species")
-
-    par_mort <- melt(data.table(par_mort), measure.vars = colnames(par_mort)[-length(colnames(par_mort))])
-    par_growth <- melt(data.table(par_growth), measure.vars = colnames(par_growth)[-length(colnames(par_growth))])
-    par_reg <- melt(data.table(par_reg), measure.vars = colnames(par_reg)[-length(colnames(par_reg))])
-
-    process_par_dt <- rbindlist(list(
-      data.table(par_mort, process = "mort"),
-      data.table(par_growth, process = "growth"),
-      data.table(par_reg, process = "reg"),
-      data.table(species = disp_dt$species, variable = "regDispersion", value = disp_dt$disp_recr, process = "reg")
-    ))
-    p = ggplot(process_par_dt, aes(x = value, y = as.factor(species), fill = process))+
-      geom_bar(stat = "identity")+
-      facet_wrap(~variable+process, scales = "free_x")+
-      theme_bw()+
-      geom_vline(xintercept = 0)+
-      ylab("Species ID")
-    print(p)
-  }
+# The simulated yearly rates of an observation window, compounded into the
+# per-year rate makeObsData(rates = "annual") reports: growth as the geometric
+# mean of 1 + g over the window, mortality as 1 minus the geometric mean
+# survival. `x` is [sites, years, species] over the years 1..i (or the window),
+# `w` an optional [sites, years, 1] mask of the years inside each site's window,
+# `p` the window length per site ([sites, 1]) or one number. A year the mask
+# excludes, and a year in which a species has no trees (its rate is 0),
+# contributes growth 0 and survival 1 while the denominator stays the full
+# period_length: the observed rate is derived from the counts over the whole
+# interval, so the simulated one is spread over the whole interval too.
+# Mortality is clamped below 1 - 1e-4 before the log: sigmoid saturates to
+# exactly 1 in float32 (logit > 17.3), where log(0) would make the gradient
+# infinite; 1e-4 bounds it at 1e4. Growth is not clamped: the package's growth
+# is non-negative, and a custom process that goes below -1 should fail visibly.
+# The input is cloned first: log1p() and clamp() save their input for the
+# backward pass, and the caller passes a view of the Result tensors, which the
+# time loop keeps writing into before the per-site path runs its one backward.
+window_growth = function(g, w = NULL, p) {
+  lg = torch_log1p(g$clone())
+  if (!is.null(w)) lg = lg*w
+  torch_expm1(lg$sum(2)/p)
 }
-# usage
-# plot(m1, pars = "env", env_names = env_scales_dt$variable)
-# plot(m1, pars = "process", species_names = species_dt$species_name)
+window_mortality = function(m, w = NULL, p) {
+  ls = torch_log1p(-m$clone()$clamp(max = 1 - 1e-4))
+  if (!is.null(w)) ls = ls*w
+  1 - torch_exp(ls$sum(2)/p)
+}
 
 # `"cuda"` is what everyone who has used torch directly reaches for, and
 # match.arg()'s "should be one of cpu, gpu" does not say that it is accepted.

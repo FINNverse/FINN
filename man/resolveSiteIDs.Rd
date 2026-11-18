@@ -4,36 +4,106 @@
 \alias{resolveSiteIDs}
 \title{Resolve site, patch, and year indices for FINN inputs}
 \usage{
-resolveSiteIDs(tree_dt, env_dt, obs_dt, createInitCohorts = TRUE)
+resolveSiteIDs(
+  tree_dt,
+  env_dt,
+  obs_dt,
+  createInitCohorts = TRUE,
+  time_axis = c("annual", "census")
+)
 }
 \arguments{
 \item{tree_dt}{data.table with tree-level data including siteName, patchName, year,
 species_name, dbh, status, living, and optional trees.}
 
-\item{env_dt}{data.table with environment data including siteName and year.}
+\item{env_dt}{data.table with environment data including siteName and year
+(calendar year; see Details for the years needed).}
 
 \item{obs_dt}{data.table with observations including siteName, patchName, year,
 species_name, and stand metrics (ba, dbh, trees, growth, mort, n_at_risk,
-n_died, reg), as returned by \code{makeObsData}.}
+n_died, reg, period_length), as returned by \code{makeObsData}.}
 
 \item{createInitCohorts}{logical. If TRUE, build FINN initial cohorts from
-trees with \code{living == TRUE} and \code{year == 1}. Default TRUE.}
+the living trees of the first inventory (\code{year == 0}) on either time
+axis. Default TRUE.}
+
+\item{time_axis}{\code{"annual"} (default) or \code{"census"}.
+\code{"census"} is the axis of FINN 0.1.0: \code{year} is the index of
+the inventory (0, 1, 2, ...), one simulation step is one census interval
+(\code{period_length = 1}), \code{env_dt} keeps the inventory years, and
+the observations of the first inventory stay in \code{obs_dt}. Use it
+with \code{makeObsData(rates = "interval")}. Unlike 0.1.0, which built
+the initial cohorts from the second inventory, the census axis now
+starts from the first one, so 0.1.0 results are not reproduced exactly.}
 }
 \value{
 A list with:
 \itemize{
-\item \code{siteID_dt}: site/patch/year index map.
+\item \code{siteID_dt}: site/patch/year index map (\code{OrigYear} is the
+calendar year).
 \item \code{tree_dt}: tree table with indices and standardized species.
-\item \code{env_dt}: environment table with indices.
-\item \code{obs_dt}: site-aggregated observations by species.
+\item \code{env_dt}: environment table with indices, the years of the
+simulation: \code{siteID}, \code{year} and the predictors, what
+\code{fit(env = )} takes (\code{siteID_dt} maps the ids back to the
+site names).
+\item \code{obs_dt}: site-aggregated observations by species, with
+\code{period_length}.
 \item \code{obs_dt_patches}: patch-level observations by species.
 \item \code{species_dt}: species lookup (\code{species}, \code{species_name}).
 \item \code{initCohorts} (optional): FINN \code{CohortMat} object.
 \item \code{initCohort_dt} (optional): trees used to build cohorts.
 }
+\code{initCohorts} holds torch tensors, which \code{saveRDS()} cannot store:
+after \code{readRDS()} they fail with "external pointer is not valid". The
+tables survive, so rebuild the cohorts after reading:
+\code{x$initCohorts <- makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt))}.
 }
 \description{
 Joins tree, environment, and observation tables; assigns integer indices
-for site, patch, period; standardizes species coding; and returns aligned
+for site, patch and year; standardizes species coding; and returns aligned
 data plus optional initial cohorts.
+}
+\details{
+With \code{time_axis = "annual"} (the default) one simulation step is one
+year: \code{year} becomes the number of years since the first inventory of
+the site's patch (0 at the first inventory, e.g. 10 and 20 at the next two),
+the first inventory is the initial state (the initial cohorts, not an
+observation), the observations carry \code{period_length} in years, and
+\code{env_dt} is returned with one row per site and year \code{1..Tmax},
+\code{Tmax} being the longest time from a first to a last inventory. The
+environment row of year \eqn{k} drives the simulated year that ends at
+year \eqn{k}, so an inventory \eqn{k} years after the first is compared
+with the stand after \eqn{k} simulated years. \code{env_dt} therefore needs
+one row per site and calendar year from the year after the site's first
+inventory to \code{Tmax} years after it; a climate that does not change is
+repeated for every year.
+}
+\examples{
+library(data.table)
+# eight Oregon FIA plots, three inventories each; see the data-preparation vignette
+tree_dt <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+env_dt  <- fread(system.file("extdata", "example_env_dt.csv",  package = "FINN"))
+obs <- makeObsData(tree_dt[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+                   fix_period_length = 10, NspeciesQuantile = 0.98)
+
+# Names become integer ids shared by every table, calendar years become years
+# since the first inventory: 0 (the initial state), 10 and 20. Pass the tree
+# list makeObsData() returned: it carries the same species lumping as obs_dt.
+# createInitCohorts = FALSE leaves out the starting cohorts, which need torch.
+inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt,
+                         createInitCohorts = FALSE)
+inputs$species_dt
+head(inputs$obs_dt)      # per site, year and species: what fit(data = ) takes
+range(inputs$env_dt$year) # one row per site and simulated year: what fit(env = ) takes
+head(inputs$siteID_dt)   # the map back to the inventory's own names
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# with torch, the same call also builds the starting cohorts (a CohortMat)
+inputs <- resolveSiteIDs(tree_dt = obs$tree_dt, obs_dt = obs$obs_dt, env_dt = env_dt)
+inputs$initCohorts$dims  # sites, patches, cohorts
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link{makeObsData}} for the step before,
+\code{\link{makeInitCohorts}} for the initial cohorts on their own,
+\code{\link{fit}} and \code{\link{finn_data}} for where the tables go
 }

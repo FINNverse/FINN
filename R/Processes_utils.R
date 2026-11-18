@@ -55,7 +55,13 @@
 #'   values.
 #' @param initEnv (`list`)\cr Optional custom initial values for the parameters of
 #'   the environmental-response network/regression. Default `NULL` draws random
-#'   initial values.
+#'   initial values. For the linear/logistic response (no `hidden`) this is a
+#'   matrix with one row per species and one column per term of `formula`
+#'   (the intercept first when the formula has one). Without it the mortality
+#'   response starts at about 2 % per time step (intercept `qlogis(0.02)`,
+#'   other weights 0; with `hidden` layers the output bias carries it) and the
+#'   other processes at torch's random start; e.g. `initEnv = matrix(c(-3, 0),
+#'   N_species, 2, byrow = TRUE)` for `~ 1 + temp` starts mortality at 5 %.
 #' @param hidden (`integer()`)\cr Hidden-layer sizes of the feed-forward neural
 #'   network that replaces the environmental-response function (Level 1 hybrid).
 #'   Default `NULL` keeps the environmental response mechanistic (linear/logistic).
@@ -64,19 +70,32 @@
 #' @param optimizeEnv (`logical(1)`)\cr Should the parameters of the
 #'   environmental-response function be estimated during [FINN::fit()]? Default
 #'   `TRUE`.
-#' @param inputNN (`integer(1)`)\cr Input dimension of the environmental-response
-#'   network. Default `NULL` infers it from `formula`/`env`.
-#' @param outputNN (`integer(1)`)\cr Output dimension of the environmental-response
-#'   network. Default `NULL` uses the number of species.
+#' @param inputNN,outputNN Not used in 0.2.0: the input dimension of the
+#'   environmental-response network always follows from `formula` and `env`,
+#'   and its output dimension is the number of species. Leave at `NULL`.
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
-#'   the negative binomial distribution used to sample recruits. Only used when
-#'   this process is the regeneration process.
+#'   the negative binomial distribution used to sample recruits (the size
+#'   `theta`), or its fixed value with `optimizeTheta = FALSE`. Only used when
+#'   this process is the regeneration process. See [recruitment].
 #' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion
 #'   `par_theta_recruits` be estimated during [FINN::fit()]? Default `TRUE`.
 #'   With `FALSE` it stays at `dispersion_parameter` for the whole fit (a buffer,
 #'   not a parameter), in the recruit draw and in the regeneration likelihood
 #'   alike; `theta_floor` still applies. Only used when this process is the
 #'   regeneration process.
+#'
+#'   Use `FALSE` for short fits, or when the recruitment level should not
+#'   depend on how long the fit runs: a trained `theta` falls on sparse
+#'   recruitment data, and with the floor (`theta_floor`) the level is right
+#'   only once the fit has converged, while a fixed `theta` gets there sooner.
+#'   `dispersion_parameter = 1` is FINN's start value; on the German national
+#'   forest inventory it matched the floored `theta` at convergence. A higher
+#'   value such as `50` brings the recruit draw close to a Poisson draw: the
+#'   variance `mu + mu^2/theta` approaches `mu` while the expected count per
+#'   patch `mu` stays small against `theta` (at `theta = 50` the excess is 2 %
+#'   of the mean at `mu = 1` and 20 % at `mu = 10`). Per-patch recruit counts
+#'   are usually small enough for that; larger counts need a larger value. See
+#'   [recruitment].
 #' @param cap,prior,prior_lambda The Beverton-Holt cap of
 #'   [FINN::regeneration_capped()]: `cap = "all"` (default, one cap shared by all
 #'   species) or `"species"`; `prior = "max_obs_recruits"` (default, the largest
@@ -86,16 +105,27 @@
 #'   when this process is the regeneration process and its `func` uses the cap.
 #' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the default
 #'   environmental-response network architecture.
-#' @param upper (`numeric()`)\cr Upper boundaries (natural scale) for the
-#'   species-specific process parameters.
-#' @param lower (`numeric()`)\cr Lower boundaries (natural scale) for the
-#'   species-specific process parameters.
+#' @param upper,lower (`numeric()`)\cr Boundaries (natural scale) for the
+#'   species-specific process parameters, one value per parameter of the process.
+#'   They are guard rails that keep the optimiser inside the range in which the
+#'   equations stay meaningful, not ranges taken from the data, and `fit()` does
+#'   not move them. The defaults, as `lower` / `upper`:
+#'   growth `c(0.01, 0.01)` / `c(0.99, 4.0)` (light requirement of the shade
+#'   response, size decay); mortality `c(-10, -10, -10)` / `c(10, 10, 10)` (the
+#'   shade, size and growth coefficients of the logit); regeneration `0.01` /
+#'   `0.99` (light requirement); competition `c(0.3, 0.0)` / `c(log(2.3), 2.0)`
+#'   (height parameter, competition strength), where the height parameter is
+#'   capped so that no species grows taller than 130 m (see [FINN::height()]).
+#'   A parameter that ends a fit at its bound is not identified by the data;
+#'   widening the bounds is a decision for 0.2.1.
 #' @param dropout (`numeric(1)`)\cr Dropout rate of the environmental-response
 #'   network. Ignored unless `hidden` is set.
 #' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
 #'   from the negative binomial regeneration distribution (`TRUE`), or only its
 #'   expectation used (`FALSE`)? Only used when this process is the regeneration
-#'   process.
+#'   process. With `FALSE` the expected number of recruits per patch is rounded,
+#'   so wherever it is below 0.5 no recruit enters at all: a silent zero for
+#'   sparse species on small patches. See [recruitment].
 #' @param n_quantiles (`integer(1)`)\cr Number of height classes used to discretize
 #'   cohorts when computing shading/light availability. Only used when this
 #'   process is the competition process and `continuous = FALSE`.
@@ -119,13 +149,19 @@
 #'   process.
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn
 #'   from the cohort's mortality probability. Only used when this process is the
-#'   mortality process. `"binomial"` (default since 0.2.0) is the exact binomial:
-#'   each tree in the cohort gets its own reparameterised Bernoulli trial, which is
-#'   integer-valued, matches the binomial in both moments -- measured 12.011 / 8.387
-#'   against an exact 12.000 / 8.400 at `n = 40`, `p = 0.3` -- and keeps a gradient
-#'   path to `p` through a straight-through sigmoid. It expands each cell to the
-#'   largest cohort in the batch, so its memory grows with the largest `trees` value
-#'   in the data.
+#'   mortality process. `"binomial"` (default since 0.2.0) is `torch`'s exact
+#'   binomial sampler: integer-valued, exact in both moments, at constant memory.
+#'   It has no gradient of its own, which costs nothing under
+#'   `fit(rb_gradient = TRUE)` (the default), where the gradient is taken through
+#'   the expected number of deaths. Under `fit(rb_gradient = FALSE)` there is no
+#'   such path, and `"binomial"` falls back to the `"gamma"` draw.
+#'   `"bernoulli"` gives each tree of the cohort its own reparameterised Bernoulli
+#'   trial ([FINN::binomial_from_bernoulli()]), which is integer-valued, matches
+#'   the binomial in both moments -- measured 12.011 / 8.387 against an exact
+#'   12.000 / 8.400 at `n = 40`, `p = 0.3` -- and keeps a gradient path to `p`
+#'   through a straight-through sigmoid. It expands each cell to the largest
+#'   cohort in the batch, so its memory grows with the largest `trees` value in
+#'   the data.
 #'   `"poisson"` draws a Bernoulli where
 #'   the cohort holds one tree or fewer and a Poisson capped at the cohort size
 #'   otherwise: integer-valued, exact in expectation for small `n*p`, and no
@@ -156,6 +192,16 @@
 #'   and running away after. The Beverton-Holt cap does not prevent this -- it
 #'   bounds the mean, and the variance around a capped mean is still
 #'   `K + K^2/theta`.
+#'
+#'   The floor keeps the fit stable, and in one converged pair of fits on the
+#'   German national forest inventory it calibrated the recruitment level as
+#'   well as a fixed `theta`: out of sample on a spatially blocked holdout, 1.06
+#'   times the observed level after 2000 epochs (about 126 000 optimizer steps)
+#'   against 1.04 for `optimizeTheta = FALSE`. A fit stopped early is
+#'   different: after 50 of those epochs (3 150 optimizer steps) the floored
+#'   `theta` still put the level about 12 times too high, a fixed `theta` 2 to 3
+#'   times. Read the level only once the parameters have settled,
+#'   or fix `theta` for short fits. See [recruitment].
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   per-cohort mortality probability is clamped to **per simulation step**,
 #'   before the death draw. Only used when this process is the mortality process;
@@ -173,6 +219,20 @@
 #'   heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
 #'   times the old default's at `1e-3` and about a hundred times at `1e-4` --
 #'   so `1e-3` is the lowest tested value and is the new default.
+#' @param reg_floor (`numeric`)\cr A small recruitment that every species gets
+#'   in every patch and time step, whatever the light and the environment, in
+#'   trees per ha and time step. Only used when this process is the
+#'   regeneration process ([FINN::regeneration()], [FINN::regeneration_capped()],
+#'   [FINN::regeneration_adult()] and [FINN::regeneration_adult_effect()] add it
+#'   to their expected recruitment:
+#'   `mean = regP * exp(env) + reg_floor`). Default `1e-3`, which keeps the
+#'   recruitment likelihood finite where the light response closes and adds
+#'   next to nothing. One value for all species or one per species. Before
+#'   0.2.0 the floor was hard-coded to `0.2`, which with many species adds a
+#'   large recruitment that does not depend on anything (65 species x 0.2 = 13
+#'   trees per ha and year); models saved before then keep that value when
+#'   reloaded. `finn(reg_floor = )`, the argument of earlier versions, is
+#'   still accepted with a warning and overrides this value.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
 #'   process and `func` declares that argument. `NULL` (the default) keeps the
@@ -185,7 +245,12 @@
 #'   negative binomial. Only used when this process is the regeneration process and
 #'   `sample_regeneration = TRUE`. `"refined"` (default since 0.2.0) samples
 #'   exactly below `lambda = 2` and drops both guards below, neither of which
-#'   applies to `torch_poisson`; see [FINN::rnbinom_torch_refined()].
+#'   applies to `torch_poisson`; see [FINN::rnbinom_torch_refined()]. Above
+#'   `lambda = 2` it is still the floored Gaussian draw, which delivers about
+#'   half a recruit per draw too few (measured over 1e6 draws: -0.43 at
+#'   `lambda = 2.5`, -0.50 from `lambda = 20`, against about 0 with rounding).
+#'   Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+#'   is not in this release.
 #'   `"gaussian"` (the behaviour of every
 #'   published FINN result) offsets the Gamma draw by `+0.001`, clamps the
 #'   probability at `1e-4` and pushes the result through
@@ -214,17 +279,56 @@
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
-#' @seealso [FINN::createHybrid()], [FINN::finn()]
+#' @seealso [FINN::createHybrid()], [FINN::finn()], [recruitment] for the
+#'   recruitment options and how to combine them
 #'
 #' @examples
-#' growth_process <- createProcess(formula = ~temperature + precipitation, func = growth)
+#' # A process is a recipe: createProcess() needs neither data nor torch, and the
+#' # predictors named in `formula` are looked up in `env` when the model is
+#' # fitted or simulated. Here: growth responding to temperature and precipitation
+#' growth_process <- createProcess(formula = ~ temp + prec, func = growth)
+#' class(growth_process)
+#' deparse(growth_process$formula)
+#'
+#' # the same equation with its species parameters estimated as well (by default
+#' # only the environmental response is), and a quadratic temperature response
+#' growth_process <- createProcess(~ temp + I(temp^2) + prec, func = growth,
+#'                                 optimizeSpecies = TRUE)
+#'
+#' # level-1 hybrid: the environmental response of mortality as a small neural
+#' # network with two hidden layers; the mortality equation stays mechanistic
+#' mortality_process <- createProcess(~ temp + prec, func = mortality,
+#'                                    hidden = c(16L, 16L), dropout = 0.1)
+#'
+#' # the regeneration process with a smaller recruitment floor, a cap per
+#' # species and a fixed recruit dispersion
+#' regeneration_process <- createProcess(~ temp, func = regeneration_capped,
+#'                                       reg_floor = 1e-4, cap = "species",
+#'                                       optimizeTheta = FALSE)
+#'
+#' # competition takes no environment; continuous = TRUE compares every pair of
+#' # cohorts instead of binning them into height classes
+#' competition_process <- createProcess(func = competition, continuous = TRUE)
+#'
+#' @examplesIf torch::torch_is_installed()
+#' # the processes become a model in finn(), here for the 11 species of the
+#' # bundled Oregon FIA data (?fia_obs_dt), whose env table has `temp` and `prec`
+#' m <- finn(N_species = 11, recruits_dbh = 12.9,
+#'           growth_process       = growth_process,
+#'           mortality_process    = mortality_process,
+#'           regeneration_process = regeneration_process,
+#'           competition_process  = competition_process)
+#' # the species parameters of growth: light requirement and size decay
+#' head(as.matrix(m$par_growth), 3)
 #'
 #' @export
 createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NULL, hidden = NULL, optimizeSpecies = FALSE, optimizeEnv = TRUE, inputNN = NULL, outputNN = NULL, dispersion_parameter = 1.0, NN = NULL, upper = NULL, lower = NULL, dropout = 0.0, sample_regeneration = TRUE, n_quantiles = 10L, continuous = FALSE, light_mask = TRUE, custom_parameters = NULL, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"), growth_scale = NULL,
                          cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
                          theta_floor = 0.5, optimizeTheta = TRUE,
-                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
+                         mortality_floor = 0.001, mortality_ceiling = 0.999,
+                         reg_floor = 1e-3) {
   out = list()
+  out$reg_floor = check_reg_floor(reg_floor)
   out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
   out$mortality_floor = check_mortality_limit(mortality_floor, "mortality_floor")
@@ -272,7 +376,7 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.frame())
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
@@ -364,18 +468,23 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param optimize (`logical(1)`)\cr Should the network's weights be estimated
 #'   during [FINN::fit()]? Default `TRUE`.
 #' @param dispersion_parameter (`numeric(1)`)\cr Initial dispersion parameter of
-#'   the negative binomial distribution used to sample recruits. Only used when
-#'   this object is the regeneration process.
+#'   the negative binomial distribution used to sample recruits, or its fixed
+#'   value with `optimizeTheta = FALSE`. Only used when this object is the
+#'   regeneration process. See [recruitment].
 #' @param optimizeTheta (`logical(1)`)\cr Should the recruit dispersion be
 #'   estimated during [FINN::fit()]? Default `TRUE`; `FALSE` keeps it at
-#'   `dispersion_parameter`; see [FINN::createProcess()]. Only used when this
-#'   object is the regeneration process.
-#' @param cap,prior,prior_lambda The Beverton-Holt cap on recruitment; see
-#'   [FINN::createProcess()] and [FINN::regeneration_capped()]. Only used when
-#'   this object is the regeneration process.
-#' @param NN (`nn_module`)\cr Optional custom `torch` module overriding the
-#'   default network architecture entirely.
-#' @param dropout (`numeric(1)`)\cr Dropout rate of the network.
+#'   `dispersion_parameter`, which is the choice when the recruitment level is
+#'   to be calibrated; see [FINN::createProcess()] and [recruitment]. Only used
+#'   when this object is the regeneration process.
+#' @param cap,prior,prior_lambda Accepted for symmetry with
+#'   [FINN::createProcess()], but not used in 0.2.0: the hybrid regeneration
+#'   network has no Beverton-Holt cap. See [FINN::regeneration_capped()] for the
+#'   cap of the mechanistic process.
+#' @param NN (`nn_module`)\cr Not supported in 0.2.0. A custom module was
+#'   accepted and then ignored, so a non-`NULL` value now raises an error; shape
+#'   the default network with `hidden`, `dropout` and `transformer` instead.
+#' @param dropout (`numeric(1)`)\cr Dropout rate of the network. Default `0.3`;
+#'   the Barro Colorado Island case study of Pichler & Käber (2026) used `0.1`.
 #' @param encoder_layers (`integer(1)`)\cr Number of transformer encoder layers.
 #'   Only used when `transformer = TRUE`.
 #' @param hidden (`integer()`)\cr Hidden-layer sizes of the feed-forward network.
@@ -383,10 +492,11 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param sample_regeneration (`logical(1)`)\cr Should recruits actually be sampled
 #'   from the negative binomial regeneration distribution (`TRUE`), or only its
 #'   expectation used (`FALSE`)? Only used when this object is the regeneration
-#'   process.
+#'   process. With `FALSE` the expected number of recruits per patch is rounded,
+#'   so wherever it is below 0.5 no recruit enters at all. See [recruitment].
 #' @param mortality_draw (`character(1)`)\cr How the number of dead trees is drawn,
-#'   `"binomial"` (default since 0.2.0), `"poisson"` or `"gamma"`; see
-#'   [FINN::createProcess()]. Only used
+#'   `"binomial"` (default since 0.2.0), `"bernoulli"`, `"poisson"` or `"gamma"`;
+#'   see [FINN::createProcess()]. Only used
 #'   when this object is the mortality process.
 #' @param mortality_floor,mortality_ceiling (`numeric(1)`)\cr The interval the
 #'   mortality probability is clamped to per simulation step before the death
@@ -398,7 +508,12 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' @param theta_floor (`numeric(1)`)\cr Lower bound on the recruit dispersion
 #'   `par_theta_recruits`, default `0.5` since 0.2.0, `0` or `NULL` to leave it
 #'   unbounded as in 0.1.0; see [FINN::createProcess()]. Only used when this
-#'   object is the regeneration process.
+#'   object is the regeneration process. The floor keeps the fit stable. In
+#'   one converged pair of fits on the German national forest inventory it
+#'   calibrated the recruitment level as well as a fixed `theta`, but only after
+#'   the parameters had settled; read the level once `$param_history` shows
+#'   them settled, or fix `theta` (`optimizeTheta = FALSE`) for short fits. See
+#'   [recruitment].
 #' @param transformer (`logical(1)`)\cr Use a transformer encoder architecture
 #'   (`TRUE`, default) or a feed-forward network (`FALSE`).
 #' @param emb_dim (`integer(1)`)\cr Embedding dimension for the species/cohort/
@@ -416,16 +531,49 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
 #' models using hybrid modelling. \emph{Methods in Ecology and Evolution}.
 #' \doi{10.1111/2041-210x.70347}
 #'
-#' @seealso [FINN::createProcess()], [FINN::finn()]
+#' @seealso [FINN::createProcess()], [FINN::finn()], [recruitment]
 #'
 #' @examples
-#' growth_process <- createHybrid(formula = ~temperature + precipitation)
+#' # A hybrid process is a recipe, like createProcess(): no data and no torch
+#' # are needed until the model is built. The default network is a small
+#' # transformer encoder
+#' growth_process <- createHybrid(formula = ~ temp + prec)
+#' class(growth_process)
+#'
+#' # a feed-forward network with two hidden layers instead, as in the Barro
+#' # Colorado Island case study of the paper
+#' mortality_process <- createHybrid(~ temp + prec, transformer = FALSE,
+#'                                   hidden = c(50L, 50L), dropout = 0.1)
+#'
+#' @examplesIf torch::torch_is_installed()
+#' library(data.table)
+#' # a model whose growth is a network while mortality, regeneration and
+#' # competition stay mechanistic, fitted for two epochs on three sites of the
+#' # bundled Oregon FIA data (?fia_obs_dt)
+#' sites <- 1:3
+#' Nsp   <- max(fia_obs_dt$species)
+#' init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+#' FINN.seed(1)
+#' m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+#'           growth_process       = createHybrid(~ temp + prec, transformer = FALSE,
+#'                                               hidden = c(16L, 16L), dropout = 0.1),
+#'           mortality_process    = createProcess(~ temp + prec, mortality),
+#'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+#' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+#'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
+#'     plot_progress = FALSE)
+#' # the network takes the place of the growth equation in the simulation
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init)
+#' head(sim$long$site[variable == "growth" & year == 10 & value > 0])
 #'
 #' @export
 createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 1.0, NN = NULL, dropout = 0.3, encoder_layers = 1L, hidden = c(50L, 50L), sample_regeneration = TRUE, transformer = TRUE, emb_dim = 20L, dim_feedforward = 256L, mortality_draw = c("binomial", "bernoulli", "poisson", "gamma"), regeneration_sampler = c("refined", "gaussian"),
                         cap = c("all", "species"), prior = "max_obs_recruits", prior_lambda = 0.1,
                         theta_floor = 0.5, optimizeTheta = TRUE,
                         mortality_floor = 0.001, mortality_ceiling = 0.999) {
+  # NN was never stored, so a custom module was accepted and silently dropped (#59)
+  if(!is.null(NN))
+    stop("`NN` is not supported in 0.2.0: a custom network is accepted and then ignored. Shape the default network with `hidden`, `dropout` and `transformer`.", call. = FALSE)
   out = list()
   out$optimizeTheta = validate_optimize_theta(optimizeTheta)
   out$mortality_draw = match.arg(mortality_draw)
@@ -437,7 +585,7 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
   if(!is.null(formula)){
     mf = match.call()
     m = match("formula", names(mf))
-    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.env(environment()))
+    if(inherits(mf[m]$formula, "name")) mf[m]$formula = eval(mf[m]$formula, envir = parent.frame())
     formula = stats::as.formula(mf[m]$formula)
     #X = stats::model.matrix(formula, data)
   } else {
@@ -515,7 +663,17 @@ extract_env = function(formula, env) {
 #'   \code{scale}; or \code{NULL} if there are no numeric predictors. This is the
 #'   object stored on a fitted model as \code{model$env_scaling} when it is fit
 #'   with \code{env_autoscale = TRUE}.
-#' @seealso \code{\link{apply_env_scaling}}
+#' @seealso \code{\link{apply_env_scaling}}, \code{\link{fit}} (\code{env_autoscale}),
+#'   \code{\link{finn_data}}
+#' @examples
+#' # the constants fit(env_autoscale = TRUE) stores on a model for this table
+#' compute_env_scaling(fia_env_dt)
+#' # keep one predictor on its own scale
+#' compute_env_scaling(fia_env_dt, spec = c(temp = "auto", prec = "identity"))
+#' # min-max scaling for every predictor, or a custom (robust) scaler for one
+#' head(compute_env_scaling(fia_env_dt, spec = "0to1"), 3)
+#' robust <- function(x) list(center = median(x), scale = IQR(x))
+#' head(compute_env_scaling(fia_env_dt, spec = list(temp = robust)), 3)
 #' @export
 compute_env_scaling = function(env, spec = TRUE) {
   cols = setdiff(colnames(env), c("siteID", "year"))
@@ -584,7 +742,13 @@ compute_env_scaling = function(env, spec = TRUE) {
 #' # reproduce the standardization a model fit with env_autoscale = TRUE used:
 #' env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
 #' scaling <- compute_env_scaling(env)
+#' scaling
 #' apply_env_scaling(env, scaling)
+#'
+#' # new sites are put on the scale of the first table, not on their own: a
+#' # site at 6 degrees and 850 mm is the average site of `env`, so it maps to 0
+#' new_env <- data.frame(siteID = 4:5, year = 1L, temp = c(6, 10), prec = c(850, 1150))
+#' apply_env_scaling(new_env, scaling)
 #' @export
 apply_env_scaling = function(env, scaling) {
   if (is.null(scaling)) return(env)
@@ -654,7 +818,9 @@ get_par_boundary = function(obj, type, upper = TRUE) {
                      mortality = { c(10.0, 10.0, 10.0) },
                      growth = {c(0.99, 4.0)},
                      regeneration = { 0.99 },
-                     competition = { c(0.7, 2.0)})
+                     # height parameter: height() approaches (exp(p) - 1) * 100 m as dbh grows, so
+                     # log(2.3) caps trees at 130 m, the physical limit of tree height (Koch et al. 2004)
+                     competition = { c(log(2.3), 2.0)})
     } else {
       upper = obj$upper
     }
@@ -676,6 +842,17 @@ get_par_boundary = function(obj, type, upper = TRUE) {
 
 # The recruitment cap's prior is specified identically on createProcess() and
 # createHybrid(); validating it in one place keeps the two from drifting apart.
+# The additive recruitment floor: non-negative, finite, one value or one per
+# species. Checked in createProcess() (length 1 or any, N_species unknown) and
+# again when the process is attached to a model.
+check_reg_floor = function(reg_floor, N_species = NULL) {
+  ok = is.numeric(reg_floor) && all(is.finite(reg_floor)) && all(reg_floor >= 0) &&
+    (if (is.null(N_species)) length(reg_floor) >= 1L else length(reg_floor) %in% c(1L, N_species))
+  if (!ok)
+    stop("`reg_floor` must be non-negative finite numbers, of length 1 or `N_species`.", call. = FALSE)
+  reg_floor
+}
+
 validate_cap_prior = function(prior) {
   if(identical(prior, "max_obs_recruits")) return(prior)
   if(is.numeric(prior) && length(prior) == 1L && is.finite(prior) && prior > 0) return(as.numeric(prior))

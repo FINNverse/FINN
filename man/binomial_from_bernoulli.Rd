@@ -7,13 +7,39 @@
 binomial_from_bernoulli(n, p)
 }
 \arguments{
-\item{n}{torch.Tensor Number of Bernoulli trials per element.}
+\item{n}{torch.Tensor Number of Bernoulli trials (trees at risk) per
+element, with at least two dimensions (FINN passes
+\verb{[sites, patches, cohorts]}) and a largest value of at least 1.}
 
-\item{p}{torch.Tensor Success probability per element.}
+\item{p}{torch.Tensor Success (death) probability per element, of the shape
+of \code{n}.}
 }
 \value{
-torch.Tensor The number of successes per element.
+A \code{torch} tensor of the shape of \code{n}: the number of successes per
+element, a whole number between 0 and \code{n}.
 }
 \description{
-Draw binomial counts from per-trial Bernoulli probabilities
+The mortality draw selected with \code{createProcess(mortality_draw = "bernoulli")}: every element of \code{n} gets \code{max(n)} reparameterised Bernoulli
+trials with probability \code{p}, of which the first \code{n} are kept and summed. The
+result is integer-valued and matches the binomial in mean and variance, and
+it keeps a gradient path to \code{p} (a straight-through sigmoid) and to \code{n} (a
+soft mask). The price is memory: the trials are laid out along an extra
+dimension of length \code{max(n)}, so the cost grows with the largest cohort.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+FINN.seed(1)
+# one site, 5000 patches, two cohorts of 5 and 40 trees, 30 \% mortality
+n <- torch::torch_tensor(array(rep(c(5, 40), each = 5000), dim = c(1, 5000, 2)))
+p <- torch::torch_full(c(1, 5000, 2), 0.3)
+deaths <- torch::as_array(binomial_from_bernoulli(n, p))
+dim(deaths)
+# binomial mean n * p = 1.5 and 12, variance n * p * (1 - p) = 1.05 and 8.4
+sapply(c("n = 5" = 1, "n = 40" = 2),
+       function(k) c(mean = mean(deaths[1, , k]), var = var(deaths[1, , k])))
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=binomial_from_gamma]{binomial_from_gamma()}}, \code{\link[=binomial_from_poisson]{binomial_from_poisson()}},
+\code{\link[=createProcess]{createProcess()}} (\code{mortality_draw})
 }

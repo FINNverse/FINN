@@ -37,12 +37,13 @@
 utils::globalVariables(c(
   ".", "..cols_env", "..out_cols_obs_dt", "..out_cols_obs_dt_aggr",
   "..out_cols_siteID_dt", "..spc", "NpatchesPerSite", "NyearsPerPatch",
-  "OrigYear", "ale", "ba", "cohortID", "common", "complete", "day", "dbh",
-  "dbh_before", "dbh_growth", "gPSize", "growth_n", "i.is_complete",
+  "OrigYear", "ale", "ba", "cohortID", "day", "dbh",
+  "dbh_before", "dbh_growth", "gPSize", "growth_n",
   "importance", "living", "living_before", "mort", "n_at_risk", "n_died",
   "parHeight", "patchID", "patchName", "period", "period_length", "process",
   "rate_sd", "reg", "rel_growth", "sameYearsAllPatches", "shade", "siteID",
   "siteName", "species", "species_before", "species_name", "status", "td",
   "treeName", "trees", "trees_ha", "value", "var", "variable", "year_before",
-  "years", "TransformerEncoderLayer"
+  "TransformerEncoderLayer", ".env_row", "first", "growth",
+  "period_length_in", "pl_rate", "step"
 ))

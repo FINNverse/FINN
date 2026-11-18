@@ -16,7 +16,7 @@ test_that("resolveSiteIDs() ids do not depend on the collation locale", {
     dt[, species_name := fifelse(species_name == "oak", spp[1], spp[2])]
     dt
   }))
-  env <- CJ(siteName = sites, year = c(2000, 2010))[, `:=`(temp = 8, prec = 900)]
+  env <- CJ(siteName = sites, year = 2000:2010)[, `:=`(temp = 8, prec = 900)]
 
   ids <- function(loc) {
     old <- Sys.getlocale("LC_COLLATE")

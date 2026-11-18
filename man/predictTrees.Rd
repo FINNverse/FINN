@@ -27,16 +27,19 @@ observed-tree tensors is the number of distinct \code{patchID}s in \code{tree_da
 (it used to be \code{patches}, and the extra patches were empty). Kept so
 existing calls run unchanged.}
 
-\item{patch_size}{(\code{numeric(1)})\cr Patch size. Defaults to the one the model
-was fitted with (\code{model$patch_size_ha}); pass a value only to override it.}
+\item{patch_size}{(\code{numeric(1)})\cr Area of one patch in ha. Defaults to the
+one the model was last fitted or simulated with (\code{model$patch_size_ha});
+pass a value only to override it. A model that was never fitted or
+simulated has none, so give it here. The value is stored on the model.}
 
 \item{device}{(\code{character(1)})\cr \code{"cpu"} or \code{"gpu"}; \code{"cuda"} is accepted as a
 synonym for \code{"gpu"}.}
 }
 \value{
 One row per row of \code{tree_data}, in the same order (\code{.row} records the
-original position), with \code{growth_pred} (mean annual relative growth over
-the interval) and \code{mort_pred} (probability of dying during the interval).
+original position), with \code{growth_pred} (the relative growth rate per year
+over the interval, compounded as described above) and \code{mort_pred}
+(probability of dying during the interval).
 Bind these onto \code{tree_data} directly rather than joining on
 siteID/year/patchID, which would be many-to-many.
 }
@@ -49,8 +52,10 @@ simulates a stand forward and reports site-level states, this evaluates the
 growth and mortality kernels on trees you observed: light is computed from
 the observed stand, the kernels run on those trees at their observed
 diameters, and the annual rates are accumulated over each site's
-remeasurement interval — growth as the mean of the annual rates, mortality as
-the complement of the product of annual survivals.
+remeasurement interval — growth as the per-year rate of the compounded
+annual rates (the geometric mean of \code{1 + g}, as \code{\link[=makeObsData]{makeObsData()}} derives the
+observed rate), mortality as the complement of the product of annual
+survivals.
 
 It is the same code path \code{fit(..., loss_aggregation = c(growth = "tree", mortality = "tree"))} scores, so a validation report cannot drift from the
 objective it is validating.
@@ -74,12 +79,25 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
     plot_progress = FALSE)
 
 # `fia_init_trees` is a pure initial state, so name the census the trees are
-# scored against and the interval, in timesteps, that reaches it
+# scored against and the interval, in timesteps (years), that reaches it
 trees <- fia_init_trees[siteID \%in\% sites,
-                        .(siteID, patchID, species, dbh, year = 1L,
-                          period_length = 1)]
+                        .(siteID, patchID, species, dbh, year = 10L,
+                          period_length = 10)]
 pred  <- predictTrees(m, tree_data = trees,
                       env = fia_env_dt[siteID \%in\% sites], patch_size = 0.06)
 head(pred)
+
+# the bundled tree table carries the observed fates, so prediction and
+# observation can be compared tree by tree: here the predicted probability
+# of dying within the interval for the trees that died and those that lived
+obs_trees <- fia_tree_dt[siteID \%in\% sites]
+p <- predictTrees(m, tree_data = obs_trees, env = fia_env_dt[siteID \%in\% sites],
+                  patch_size = 0.06)
+tapply(p$mort_pred, obs_trees$died, mean)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=predict.finn_class]{predict.finn_class()}} / \code{\link[=simulateForest]{simulateForest()}} for the
+simulated stand, \link{finn_loss} for the per-tree losses that share this code,
+\link{fia_tree_dt} for a table of observed trees with their fates
 }

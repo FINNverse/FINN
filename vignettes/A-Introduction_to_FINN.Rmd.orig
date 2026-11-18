@@ -53,7 +53,7 @@ response is combined in a joint likelihood that consists of a Gaussian
 for growth, a binomial for mortality, a negative binomial for
 regeneration.
 
-```{r concept-figure, echo = FALSE, out.width = "100%", fig.cap = "FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Käber & Pichler (2026)."}
+```{r concept-figure, echo = FALSE, out.width = "100%", fig.cap = "FINN's structure. Each timestep, the current cohorts (their size, species and number) pass through the four demographic processes (competition, growth, mortality and regeneration) to produce the next cohorts and the stand-level outputs (DBH, basal area, tree numbers, demographic rates). The environment feeds growth, mortality and regeneration; each of those processes can be a mechanistic function, a neural network, or both (gear / network icons), and each is fit with its own likelihood (Gaussian for growth, binomial for mortality, negative binomial for regeneration). Figure from Pichler & Käber (2026)."}
 knitr::include_graphics("FINN-overview.jpg")
 ```
 
@@ -110,7 +110,7 @@ response actually learned are the same — `ALE()`, `conditionalEffects()` and
 is what makes a level-1 or level-2 process arguable rather than merely accurate.
 
 This vignette stays at level 0 throughout. [Fitting FINN to forest inventory
-data](D-Fit_to_FIA.html) fits a level-1 growth process to real data, and [the
+data](D-Fit_to_FIA.html) fits a level-2 growth process to real data, and [the
 mortality vignette](E-Mortality.html) does the same for mortality.
 
 # Installation

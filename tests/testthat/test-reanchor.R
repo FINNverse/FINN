@@ -5,19 +5,14 @@ library(data.table)
 # Multiple shooting (reanchor = TRUE): at every timestep that has an anchor, the
 # simulated cohort state is discarded after that timestep's loss has been
 # backpropagated and rebuilt from the observed tree list, instead of being carried
-# forward. Tests run on the same 4-site FIA subset as test-fit.R: env covers 3
+# forward. Tests run on a 4-site FIA subset on the three-step axis of
+# fia_census_steps() (helper.R): env covers 3
 # timesteps and observations exist at timesteps 2 and 3, so year_sequence = c(2, 3)
 # and an anchor at timestep 2 is visible in the year-3 state.
 
-reanchor_data = function(n_sites = 4L) {
-  obs = data.table::copy(FINN::fia_obs_dt)
-  env = data.table::copy(FINN::fia_env_dt)
-  it  = data.table::copy(FINN::fia_init_trees)
-  sites = utils::head(sort(unique(obs$siteID)), n_sites)
-  obs = obs[siteID %in% sites]
-  list(obs = obs, env = env[siteID %in% sites], it = it[siteID %in% sites],
-       Nsp = max(obs$species))
-}
+# the bundled data on the three-step axis of fia_census_steps() (helper.R): the
+# anchors below name timesteps 2 and 3
+reanchor_data = function(n_sites = 4L) fia_census_steps(seq_len(n_sites))
 
 # a fresh, identically seeded model + init cohorts, so that two fits differ only
 # in the arguments under test

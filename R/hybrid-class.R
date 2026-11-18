@@ -88,7 +88,9 @@ hybrid_DNN = nn_module("hybrid_DNN",
                                nn_linear(num_env_vars+1, hidden[1])
                              }
                          counter = 2L
-                         for(i in 2:length(hidden)) {
+                         # seq_along, not 2:length: one hidden layer ran the loop
+                         # backwards and the first fit failed (#72, B13)
+                         for(i in seq_along(hidden)[-1]) {
                            layers[[counter]] = nn_selu()
                            counter = counter + 1
                            layers[[counter]] = nn_dropout(dropout)

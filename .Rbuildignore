@@ -1,5 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.git$
 ^LICENSE\.md$
 ^README\.Rmd$
 ^playground
@@ -26,3 +27,5 @@
 ^CLAUDE\.md$
 ^CONTRIBUTING\.md$
 ^README\.html$
+^vignettes/.*\.Rmd\.orig$
+^vignettes/build\.R$

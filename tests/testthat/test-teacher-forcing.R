@@ -9,15 +9,8 @@ library(data.table)
 # env covers 3 timesteps, observations at timesteps 2 and 3, so year_sequence = c(2, 3),
 # the last observation is timestep 3 and the only anchor teacher forcing needs is at 2.
 
-tf_data = function(n_sites = 4L) {
-  obs = data.table::copy(FINN::fia_obs_dt)
-  env = data.table::copy(FINN::fia_env_dt)
-  it  = data.table::copy(FINN::fia_init_trees)
-  sites = utils::head(sort(unique(obs$siteID)), n_sites)
-  obs = obs[siteID %in% sites]
-  list(obs = obs, env = env[siteID %in% sites], it = it[siteID %in% sites],
-       Nsp = max(obs$species))
-}
+# the bundled data on the three-step axis of fia_census_steps() (helper.R)
+tf_data = function(n_sites = 4L) fia_census_steps(seq_len(n_sites))
 
 tf_model = function(d) {
   FINN.seed(1)

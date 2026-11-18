@@ -6,11 +6,10 @@
 \alias{fia_env_test}
 \title{Oregon FIA calibration data: site climate}
 \format{
-A \code{data.table} with 600 rows and 8 columns: 200 sites x 3 years, one
-row per site x year (climate is a site property; up to FINN 0.2.0 the
-tables repeated every row once per patch of the source plot).
+A \code{data.table} with 4400 rows and 8 columns: 200 sites x 22 years,
+one row per site x year.
 \describe{
-\item{\code{siteID}, \code{year}}{site index and year (\code{0}, \code{1}, \code{2}).}
+\item{\code{siteID}, \code{year}}{site index and simulated year (\verb{1..22}).}
 \item{\code{temp}, \code{tempmax}, \code{tempmin}}{annual mean, warmest-month maximum
 and coldest-month minimum temperature, degrees C (bioclim 1, 5, 6).}
 \item{\code{prec}, \code{precwarmq}}{annual and warmest-quarter precipitation, mm
@@ -19,14 +18,13 @@ and coldest-month minimum temperature, degrees C (bioclim 1, 5, 6).}
 (bioclim 15).}
 }
 
-An object of class \code{data.table} (inherits from \code{data.frame}) with 600 rows and 8 columns.
+An object of class \code{data.table} (inherits from \code{data.frame}) with 4400 rows and 8 columns.
 }
 \source{
-Subsampled by \code{dev/make_extdata.R} (\code{set.seed(42)}) from the Oregon
-FIA plots prepared in the (private) \code{FINNverse/FINN-fia} analysis repo:
-tree records via the FIA
-database, climate from WorldClim bioclim variables attached per plot. The
-full provenance chain is in \code{data-raw/README.md}.
+A seeded subsample of Oregon plots of the US Forest Inventory and
+Analysis (FIA) database, with WorldClim bioclimatic variables attached per
+plot. The preparation script and the provenance of the source tables are
+in the package repository (\code{dev/make_extdata.R}, \code{data-raw/README.md}).
 }
 \usage{
 fia_env_dt
@@ -37,14 +35,28 @@ fia_env_test
 Climate per site and year for the \link{fia_obs_dt} training sites (\code{fia_env_dt})
 and the \link{fia_obs_test} holdout sites (\code{fia_env_test}), in \strong{natural units}
 (not standardised -- \code{\link[=fit]{fit()}} z-scales internally with \code{env_autoscale}).
-Year 0 is the initial state and years 1 and 2 the two censuses, so every
-site x year in the observation tables is covered.
+One row per simulated year \verb{1..22}: the row of year \code{k} drives the year
+that ends \code{k} years after the first inventory, so every site x year in the
+observation tables is covered, and the years after a site's last
+inventory are simulated but not scored. The climate is the plot's
+WorldClim normal, the same in every year.
+}
+\examples{
+library(data.table)
+head(fia_env_dt)
+# one row per site and simulated year; the climate of a site is its normal,
+# repeated for every year
+fia_env_dt[, .(sites = uniqueN(siteID), first_year = min(year), last_year = max(year))]
+# the range of the two predictors the package examples use, over the sites
+fia_env_dt[year == 1, .(temp_min = min(temp), temp_max = max(temp),
+                        prec_min = min(prec), prec_max = max(prec))]
 }
 \seealso{
 Other fia datasets: 
 \code{\link{fia_init_trees}},
 \code{\link{fia_obs_dt}},
-\code{\link{fia_species_dt}}
+\code{\link{fia_species_dt}},
+\code{\link{fia_tree_dt}}
 }
 \concept{fia datasets}
 \keyword{datasets}

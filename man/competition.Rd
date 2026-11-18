@@ -19,15 +19,19 @@ competition(
 )
 }
 \arguments{
-\item{dbh}{torch.Tensor Diameter at breast height for each cohort.}
+\item{dbh}{torch.Tensor Diameter at breast height for each cohort, in cm, \verb{[sites, patches, cohorts]}.}
 
-\item{species}{torch.Tensor species index for each cohort.}
+\item{species}{torch.Tensor (int64) species index for each cohort, \verb{[sites, patches, cohorts]}.}
 
-\item{trees}{torch.Tensor Number of trees in each cohort.}
+\item{trees}{torch.Tensor Number of trees in each cohort, \verb{[sites, patches, cohorts]}.}
 
-\item{parComp}{torch.Tensor Competition / height-allometry parameters per species.}
+\item{parComp}{torch.Tensor Competition parameters, one row per species and two columns: the
+height parameter of \code{\link[=height]{height()}} and the competition strength.}
 
-\item{h}{torch.Tensor (Optional) Height of each cohort. Defaults to NULL.}
+\item{h}{(Optional) Defaults to NULL: the light each cohort receives at its own height. Any
+non-\code{NULL} value returns the light at the forest floor instead, one value per patch
+(\verb{[sites, patches, 1]}), which is what the regeneration process is given; the value itself is
+not used.}
 
 \item{patch_size_ha}{numeric Patch size in hectares.}
 
@@ -47,8 +51,50 @@ happen to share its batch. \code{FALSE} reproduces earlier results. See
 \code{\link[=createProcess]{createProcess()}} for the measurement.}
 }
 \value{
-torch.Tensor Fraction of available light (light) for each cohort.
+torch.Tensor Fraction of available light (between 0 and 1) for each cohort,
+\verb{[sites, patches, cohorts]}; with \code{h} given, the light at the forest floor, \verb{[sites, patches, 1]}.
 }
 \description{
 This function calculates the fraction of available light for each cohort of trees based on their diameter at breast height (dbh), species, number of trees, and global parameters.
+}
+\details{
+The light of a cohort is one minus the weighted basal area of the cohorts of its patch that are
+taller than it (by more than 0.1 m), \code{light = max(0, 1 - sum(BA_taller * parComp[, 2] * 0.1))},
+where \code{BA} is the basal area in m^2/ha (\code{\link[=BA_stand]{BA_stand()}}) and the height comes from
+\code{\link[=height]{height()}} with the species' height parameter \code{parComp[, 1]}. With a competition
+strength of 0.2 (about the start value) a cohort under 50 m^2/ha of taller trees receives no light. In a model the function
+is the competition process, \code{createProcess(func = competition)}; it takes no environment.
+}
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+# the light of three cohorts on one 0.1 ha patch: two 50-cm trees, ten 20-cm
+# trees and forty 5-cm trees of one species (height parameter 0.5,
+# competition strength 0.2)
+shape   <- c(1, 1, 3)
+dbh     <- torch::torch_tensor(array(c(50, 20, 5), shape))
+trees   <- torch::torch_tensor(array(c(2, 10, 40), shape))
+species <- torch::torch_tensor(array(1L, shape), dtype = torch::torch_long())
+parComp <- torch::torch_tensor(matrix(c(0.5, 0.2), nrow = 1))
+# the tallest cohort is in full light, each smaller one is shaded by the
+# basal area above it
+competition(dbh, species, trees, parComp, patch_size_ha = 0.1, continuous = TRUE)
+# the light that reaches the forest floor, where the recruits start
+competition(dbh, species, trees, parComp, h = 0, patch_size_ha = 0.1)
+
+# the light model as the competition process of a model. It takes no
+# environment; `continuous = TRUE` compares every pair of cohorts instead of
+# binning them into height quantiles
+m <- finn(N_species = 2,
+          competition_process = createProcess(func = competition, continuous = TRUE))
+
+# a 30-year simulation from bare ground; an unfitted model uses `env` as
+# given (no scaling constants yet), so the predictor is passed standardised
+env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
+sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
+tail(sim$wide$site)
+\dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=height]{height()}}, \code{\link[=BA_stand]{BA_stand()}}, \code{\link[=createProcess]{createProcess()}} (\code{n_quantiles},
+\code{continuous}, \code{light_mask}), \code{\link[=finn]{finn()}}
 }
