@@ -54,12 +54,12 @@ axis it now builds the initial cohorts from the first inventory.
 * GitHub Actions: ubuntu-latest (R-devel, R-release, R-oldrel-1),
   macos-latest and windows-latest (R-release), without the backend: OK.
 
-* win-builder, R-devel (2026-11-17 r90926 ucrt) and R-release (4.6.2 ucrt).
-  The run before the final fixes gave one NOTE on both, "height/width
-  attributes should be in pixels" for the figure in `?finn`, now given in
-  pixels; and on R-devel a URL NOTE for https://www.gnu.org/licenses/gpl-3.0
-  (README.md), a connection timeout to www.gnu.org from the check machine; the
-  URL resolves.
+* win-builder on the submitted state: R-devel (2026-11-17 r90926 ucrt) Status
+  OK; R-release (4.6.2 ucrt) 1 NOTE, a URL check of
+  https://www.gnu.org/licenses/gpl-3.0 (README.md) that timed out connecting to
+  www.gnu.org from the check machine. The URL resolves, and the same URL passed
+  on the R-devel run. (An earlier run noted "height/width attributes should be
+  in pixels" for the figure in `?finn`; it is now given in pixels.)
 
 ## R CMD check results
 
