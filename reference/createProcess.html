@@ -23,7 +23,7 @@ equation with a neural network (&quot;Level 2&quot;), use createHybrid() instead
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -88,7 +88,20 @@ equation with a neural network ("Level 2"), use <code><a href="createHybrid.html
 <span>  dropout <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  sample_regeneration <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  n_quantiles <span class="op">=</span> <span class="fl">10L</span>,</span>
-<span>  continuous <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  continuous <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  light_mask <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  custom_parameters <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mortality_draw <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"binomial"</span>, <span class="st">"bernoulli"</span>, <span class="st">"poisson"</span>, <span class="st">"gamma"</span><span class="op">)</span>,</span>
+<span>  regeneration_sampler <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"refined"</span>, <span class="st">"gaussian"</span><span class="op">)</span>,</span>
+<span>  growth_scale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  cap <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"all"</span>, <span class="st">"species"</span><span class="op">)</span>,</span>
+<span>  prior <span class="op">=</span> <span class="st">"max_obs_recruits"</span>,</span>
+<span>  prior_lambda <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>  theta_floor <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span>  optimizeTheta <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  mortality_floor <span class="op">=</span> <span class="fl">0.001</span>,</span>
+<span>  mortality_ceiling <span class="op">=</span> <span class="fl">0.999</span>,</span>
+<span>  reg_floor <span class="op">=</span> <span class="fl">0.001</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -117,7 +130,12 @@ values.</p></dd>
 <dt id="arg-initenv">initEnv<a class="anchor" aria-label="anchor" href="#arg-initenv"></a></dt>
 <dd><p>(<code>list</code>)<br> Optional custom initial values for the parameters of
 the environmental-response network/regression. Default <code>NULL</code> draws random
-initial values.</p></dd>
+initial values. For the linear/logistic response (no <code>hidden</code>) this is a
+matrix with one row per species and one column per term of <code>formula</code>
+(the intercept first when the formula has one). Without it the mortality
+response starts at about 2 % per time step (intercept <code>qlogis(0.02)</code>,
+other weights 0; with <code>hidden</code> layers the output bias carries it) and the
+other processes at torch's random start; e.g. <code>initEnv = matrix(c(-3, 0), N_species, 2, byrow = TRUE)</code> for <code>~ 1 + temp</code> starts mortality at 5 %.</p></dd>
 
 
 <dt id="arg-hidden">hidden<a class="anchor" aria-label="anchor" href="#arg-hidden"></a></dt>
@@ -137,20 +155,17 @@ environmental-response function be estimated during <code><a href="fit.html">fit
 <code>TRUE</code>.</p></dd>
 
 
-<dt id="arg-inputnn">inputNN<a class="anchor" aria-label="anchor" href="#arg-inputnn"></a></dt>
-<dd><p>(<code>integer(1)</code>)<br> Input dimension of the environmental-response
-network. Default <code>NULL</code> infers it from <code>formula</code>/<code>env</code>.</p></dd>
-
-
-<dt id="arg-outputnn">outputNN<a class="anchor" aria-label="anchor" href="#arg-outputnn"></a></dt>
-<dd><p>(<code>integer(1)</code>)<br> Output dimension of the environmental-response
-network. Default <code>NULL</code> uses the number of species.</p></dd>
+<dt id="arg-inputnn-outputnn">inputNN, outputNN<a class="anchor" aria-label="anchor" href="#arg-inputnn-outputnn"></a></dt>
+<dd><p>Not used in 0.2.0: the input dimension of the
+environmental-response network always follows from <code>formula</code> and <code>env</code>,
+and its output dimension is the number of species. Leave at <code>NULL</code>.</p></dd>
 
 
 <dt id="arg-dispersion-parameter">dispersion_parameter<a class="anchor" aria-label="anchor" href="#arg-dispersion-parameter"></a></dt>
 <dd><p>(<code>numeric(1)</code>)<br> Initial dispersion parameter of
-the negative binomial distribution used to sample recruits. Only used when
-this process is the regeneration process.</p></dd>
+the negative binomial distribution used to sample recruits (the size
+<code>theta</code>), or its fixed value with <code>optimizeTheta = FALSE</code>. Only used when
+this process is the regeneration process. See <a href="recruitment.html">recruitment</a>.</p></dd>
 
 
 <dt id="arg-nn">NN<a class="anchor" aria-label="anchor" href="#arg-nn"></a></dt>
@@ -158,14 +173,20 @@ this process is the regeneration process.</p></dd>
 environmental-response network architecture.</p></dd>
 
 
-<dt id="arg-upper">upper<a class="anchor" aria-label="anchor" href="#arg-upper"></a></dt>
-<dd><p>(<code><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric()</a></code>)<br> Upper boundaries (natural scale) for the
-species-specific process parameters.</p></dd>
-
-
-<dt id="arg-lower">lower<a class="anchor" aria-label="anchor" href="#arg-lower"></a></dt>
-<dd><p>(<code><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric()</a></code>)<br> Lower boundaries (natural scale) for the
-species-specific process parameters.</p></dd>
+<dt id="arg-upper-lower">upper, lower<a class="anchor" aria-label="anchor" href="#arg-upper-lower"></a></dt>
+<dd><p>(<code><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric()</a></code>)<br> Boundaries (natural scale) for the
+species-specific process parameters, one value per parameter of the process.
+They are guard rails that keep the optimiser inside the range in which the
+equations stay meaningful, not ranges taken from the data, and <code><a href="fit.html">fit()</a></code> does
+not move them. The defaults, as <code>lower</code> / <code>upper</code>:
+growth <code>c(0.01, 0.01)</code> / <code>c(0.99, 4.0)</code> (light requirement of the shade
+response, size decay); mortality <code>c(-10, -10, -10)</code> / <code>c(10, 10, 10)</code> (the
+shade, size and growth coefficients of the logit); regeneration <code>0.01</code> /
+<code>0.99</code> (light requirement); competition <code>c(0.3, 0.0)</code> / <code>c(log(2.3), 2.0)</code>
+(height parameter, competition strength), where the height parameter is
+capped so that no species grows taller than 130 m (see <code><a href="height.html">height()</a></code>).
+A parameter that ends a fit at its bound is not identified by the data;
+widening the bounds is a decision for 0.2.1.</p></dd>
 
 
 <dt id="arg-dropout">dropout<a class="anchor" aria-label="anchor" href="#arg-dropout"></a></dt>
@@ -177,7 +198,9 @@ network. Ignored unless <code>hidden</code> is set.</p></dd>
 <dd><p>(<code>logical(1)</code>)<br> Should recruits actually be sampled
 from the negative binomial regeneration distribution (<code>TRUE</code>), or only its
 expectation used (<code>FALSE</code>)? Only used when this process is the regeneration
-process.</p></dd>
+process. With <code>FALSE</code> the expected number of recruits per patch is rounded,
+so wherever it is below 0.5 no recruit enters at all: a silent zero for
+sparse species on small patches. See <a href="recruitment.html">recruitment</a>.</p></dd>
 
 
 <dt id="arg-n-quantiles">n_quantiles<a class="anchor" aria-label="anchor" href="#arg-n-quantiles"></a></dt>
@@ -191,6 +214,193 @@ process is the competition process and <code>continuous = FALSE</code>.</p></dd>
 of cohorts (<code>TRUE</code>) instead of binning cohorts into <code>n_quantiles</code> height
 classes (<code>FALSE</code>, default). Only used when this process is the competition
 process.</p></dd>
+
+
+<dt id="arg-light-mask">light_mask<a class="anchor" aria-label="anchor" href="#arg-light-mask"></a></dt>
+<dd><p>(<code>logical(1)</code>)<br> Take the height quantiles of the binned
+competition over the LIVE cohorts only. The cohort dimension is padded to the
+widest site x patch in the batch and an empty slot has height 0.001, so with
+enough padding every live cohort is searchsorted into the top bin, where
+nothing shades anything: measured on a 251 m2/ha stand of ten live cohorts,
+100 padded slots put all ten at light 1.00. Only the quantile INPUT is masked,
+so every cohort keeps its real height as the bin query. <code>TRUE</code> is the default
+since 0.2.0, because the padded width is set by the widest site in the BATCH:
+the same stand of ten cohorts gets light 1.00 throughout beside a neighbour
+holding a hundred, and its correct gradient down to 0.159 beside a neighbour
+holding ten. Batch composition is not part of the model, so the unmasked
+quantile made the fitted objective depend on <code>batchsize</code>. <code>FALSE</code> reproduces
+results published before 0.2.0. Ignored when <code>continuous = TRUE</code>, which
+compares pairs and is correct at any padding.</p></dd>
+
+
+<dt id="arg-custom-parameters">custom_parameters<a class="anchor" aria-label="anchor" href="#arg-custom-parameters"></a></dt>
+<dd><p>(<code>named list</code> or <code>NULL</code>)<br> Extra parameters that a
+custom <code>func</code> needs, declared here so they are registered on the model by
+<code><a href="finn.html">finn()</a></code>, optimised jointly by <code><a href="fit.html">fit()</a></code> (when trainable), and
+round-tripped by <code>torch_save()</code>/<code>torch_load()</code>. Each element is either a
+numeric vector (a trainable parameter with that starting value) or a list with
+<code>init</code> (numeric, length 1 or <code>N_species</code>) and optional <code>trainable</code>
+(<code>logical</code>, default <code>TRUE</code>; <code>FALSE</code> makes it a fixed buffer). The custom
+function accesses each as <code>self[[name]]</code>. Parameterise in the <em>unconstrained</em>
+space and apply any link inside the function (e.g. store <code>log K</code> and use
+<code>exp(self$logK)</code>), mirroring FINN's own <code>par_*_unconstrained</code> convention.</p></dd>
+
+
+<dt id="arg-mortality-draw">mortality_draw<a class="anchor" aria-label="anchor" href="#arg-mortality-draw"></a></dt>
+<dd><p>(<code>character(1)</code>)<br> How the number of dead trees is drawn
+from the cohort's mortality probability. Only used when this process is the
+mortality process. <code>"binomial"</code> (default since 0.2.0) is <code>torch</code>'s exact
+binomial sampler: integer-valued, exact in both moments, at constant memory.
+It has no gradient of its own, which costs nothing under
+<code>fit(rb_gradient = TRUE)</code> (the default), where the gradient is taken through
+the expected number of deaths. Under <code>fit(rb_gradient = FALSE)</code> there is no
+such path, and <code>"binomial"</code> falls back to the <code>"gamma"</code> draw.
+<code>"bernoulli"</code> gives each tree of the cohort its own reparameterised Bernoulli
+trial (<code><a href="binomial_from_bernoulli.html">binomial_from_bernoulli()</a></code>), which is integer-valued, matches
+the binomial in both moments – measured 12.011 / 8.387 against an exact
+12.000 / 8.400 at <code>n = 40</code>, <code>p = 0.3</code> – and keeps a gradient path to <code>p</code>
+through a straight-through sigmoid. It expands each cell to the largest
+cohort in the batch, so its memory grows with the largest <code>trees</code> value in
+the data.
+<code>"poisson"</code> draws a Bernoulli where
+the cohort holds one tree or fewer and a Poisson capped at the cohort size
+otherwise: integer-valued, exact in expectation for small <code>n*p</code>, and no
+pathwise gradient – which costs nothing now that <code>fit(rb_gradient = TRUE)</code>
+takes the gradient through the expectation anyway. The Bernoulli branch
+matters because capping a Poisson at a one-tree cohort delivers only 88 % of
+the calibrated probability at the <code>p = 0.26</code> of a suppressed stem.
+<code>"gamma"</code> (the behaviour of every published FINN result) matches a Gamma to the binomial's first two moments and <code>rsample()</code>s
+it, which gives a pathwise gradient – the hazard a discrete draw does not
+cover – but the forward pass rounds that draw straight-through, so the
+gradient flows through a quantity the simulation discards and the rounded
+count delivers a measured 0.68-0.72 of the calibrated deaths for one-tree
+cohorts at annual probabilities of 0.01-0.10.
+See <code><a href="binomial_from_poisson.html">binomial_from_poisson()</a></code> for the measured effect on the simulated
+stand.</p></dd>
+
+
+<dt id="arg-regeneration-sampler">regeneration_sampler<a class="anchor" aria-label="anchor" href="#arg-regeneration-sampler"></a></dt>
+<dd><p>(<code>character(1)</code>)<br> How recruits are drawn from the
+negative binomial. Only used when this process is the regeneration process and
+<code>sample_regeneration = TRUE</code>. <code>"refined"</code> (default since 0.2.0) samples
+exactly below <code>lambda = 2</code> and drops both guards below, neither of which
+applies to <code>torch_poisson</code>; see <code><a href="rnbinom_torch_refined.html">rnbinom_torch_refined()</a></code>. Above
+<code>lambda = 2</code> it is still the floored Gaussian draw, which delivers about
+half a recruit per draw too few (measured over 1e6 draws: -0.43 at
+<code>lambda = 2.5</code>, -0.50 from <code>lambda = 20</code>, against about 0 with rounding).
+Rounding instead of flooring is planned for 0.2.1; it changes results, so it
+is not in this release.
+<code>"gaussian"</code> (the behaviour of every
+published FINN result) offsets the Gamma draw by <code>+0.001</code>, clamps the
+probability at <code>1e-4</code> and pushes the result through
+<code>lambda + eps*sqrt(lambda)</code>. The offset and the clamp guard the Gaussian
+branch against a negative draw and against a NaN gradient through <code>log(0)</code>;
+together they are a recruitment FLOOR of 0.0011 per cell-year, which at a FINN
+patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species – over a pool of
+a hundred-odd species, as large as a temperate inventory's whole ingrowth.</p></dd>
+
+
+<dt id="arg-growth-scale">growth_scale<a class="anchor" aria-label="anchor" href="#arg-growth-scale"></a></dt>
+<dd><p>(<code>numeric(1)</code> or <code>NULL</code>)<br> Overrides the <code>growth_scale</code>
+default of the process <code>func</code>. Only used when this process is the mortality
+process and <code>func</code> declares that argument. <code>NULL</code> (the default) keeps the
+function's own default, which for <code><a href="mortality.html">mortality()</a></code> is <code>0.01</code> – growth
+enters the logit in %/yr. <code>growth_scale = 1</code> feeds it the raw annual relative
+rate, the behaviour of 0.1.0. The value is set as the function's formal rather
+than passed down the forward pass, so a custom mortality <code>func</code> without the
+argument keeps working unchanged.</p></dd>
+
+
+<dt id="arg-cap-prior-prior-lambda">cap, prior, prior_lambda<a class="anchor" aria-label="anchor" href="#arg-cap-prior-prior-lambda"></a></dt>
+<dd><p>The Beverton-Holt cap of
+<code><a href="regeneration_capped.html">regeneration_capped()</a></code>: <code>cap = "all"</code> (default, one cap shared by all
+species) or <code>"species"</code>; <code>prior = "max_obs_recruits"</code> (default, the largest
+observed recruitment rate in the fitted data, recruits per ha and year) or a
+positive number; <code>prior_lambda</code> (default <code>0.1</code>) the strength of the pull of
+<code>log K</code> towards <code>log prior</code>. See <code><a href="regeneration_capped.html">regeneration_capped()</a></code>. Only used
+when this process is the regeneration process and its <code>func</code> uses the cap.</p></dd>
+
+
+<dt id="arg-theta-floor">theta_floor<a class="anchor" aria-label="anchor" href="#arg-theta-floor"></a></dt>
+<dd><p>(<code>numeric(1)</code>)<br> Lower bound on the negative-binomial
+recruit dispersion <code>par_theta_recruits</code>, applied wherever it is read: the
+recruit draw and the regeneration likelihood. Default <code>0.5</code> since 0.2.0;
+<code>0</code> or <code>NULL</code> leaves it unbounded, as in 0.1.0. Only used when this object
+is the regeneration process.</p>
+<p>theta is trained, and it collapses, because lowering it widens the
+regeneration likelihood and so cheapens that term without improving the
+predicted mean. The same parameter sets the variance of the <em>simulated</em>
+recruit draw, <code>mu + mu^2/theta</code>, which then turns bursty: on the German NFI
+it reached 0.035 by epoch 50 and the simulated stand overshot observed
+recruitment 133-fold, with basal-area and stem losses flat until epoch 25
+and running away after. The Beverton-Holt cap does not prevent this – it
+bounds the mean, and the variance around a capped mean is still
+<code>K + K^2/theta</code>.</p>
+<p>The floor keeps the fit stable, and in one converged pair of fits on the
+German national forest inventory it calibrated the recruitment level as
+well as a fixed <code>theta</code>: out of sample on a spatially blocked holdout, 1.06
+times the observed level after 2000 epochs (about 126 000 optimizer steps)
+against 1.04 for <code>optimizeTheta = FALSE</code>. A fit stopped early is
+different: after 50 of those epochs (3 150 optimizer steps) the floored
+<code>theta</code> still put the level about 12 times too high, a fixed <code>theta</code> 2 to 3
+times. Read the level only once the parameters have settled,
+or fix <code>theta</code> for short fits. See <a href="recruitment.html">recruitment</a>.</p></dd>
+
+
+<dt id="arg-optimizetheta">optimizeTheta<a class="anchor" aria-label="anchor" href="#arg-optimizetheta"></a></dt>
+<dd><p>(<code>logical(1)</code>)<br> Should the recruit dispersion
+<code>par_theta_recruits</code> be estimated during <code><a href="fit.html">fit()</a></code>? Default <code>TRUE</code>.
+With <code>FALSE</code> it stays at <code>dispersion_parameter</code> for the whole fit (a buffer,
+not a parameter), in the recruit draw and in the regeneration likelihood
+alike; <code>theta_floor</code> still applies. Only used when this process is the
+regeneration process.</p>
+<p>Use <code>FALSE</code> for short fits, or when the recruitment level should not
+depend on how long the fit runs: a trained <code>theta</code> falls on sparse
+recruitment data, and with the floor (<code>theta_floor</code>) the level is right
+only once the fit has converged, while a fixed <code>theta</code> gets there sooner.
+<code>dispersion_parameter = 1</code> is FINN's start value; on the German national
+forest inventory it matched the floored <code>theta</code> at convergence. A higher
+value such as <code>50</code> brings the recruit draw close to a Poisson draw: the
+variance <code>mu + mu^2/theta</code> approaches <code>mu</code> while the expected count per
+patch <code>mu</code> stays small against <code>theta</code> (at <code>theta = 50</code> the excess is 2 %
+of the mean at <code>mu = 1</code> and 20 % at <code>mu = 10</code>). Per-patch recruit counts
+are usually small enough for that; larger counts need a larger value. See
+<a href="recruitment.html">recruitment</a>.</p></dd>
+
+
+<dt id="arg-mortality-floor-mortality-ceiling">mortality_floor, mortality_ceiling<a class="anchor" aria-label="anchor" href="#arg-mortality-floor-mortality-ceiling"></a></dt>
+<dd><p>(<code>numeric(1)</code>)<br> The interval the
+per-cohort mortality probability is clamped to <strong>per simulation step</strong>,
+before the death draw. Only used when this process is the mortality process;
+the per-tree mortality loss is not bounded by either.</p>
+<p>The defaults are <code>0.001</code> and <code>0.999</code> (0.1 % and 99.9 % per step). Until
+0.2.0 the interval was hard-coded to <code>[0.01, 0.99]</code>, which is why a
+simulated low-mortality stand – a mature unthinned stand, a slow-growing
+species, an equilibrium run – lost stems the observations did not: at a
+1 % floor it loses 1 % of every cohort per step however low the fitted rate.</p>
+<p>The floor exists because <code><a href="binomial_from_gamma.html">binomial_from_gamma()</a></code>'s shape <code>n*p/(1-p)</code>
+degenerates as <code>p -&gt; 0</code>. Measured with that draw, it stays finite with an
+unbiased mean gradient down to <code>1e-4</code>, but single-draw gradients grow
+heavy-tailed as <code>n*p</code> shrinks – the largest per-tree gradient is about ten
+times the old default's at <code>1e-3</code> and about a hundred times at <code>1e-4</code> –
+so <code>1e-3</code> is the lowest tested value and is the new default.</p></dd>
+
+
+<dt id="arg-reg-floor">reg_floor<a class="anchor" aria-label="anchor" href="#arg-reg-floor"></a></dt>
+<dd><p>(<code>numeric</code>)<br> A small recruitment that every species gets
+in every patch and time step, whatever the light and the environment, in
+trees per ha and time step. Only used when this process is the
+regeneration process (<code><a href="regeneration.html">regeneration()</a></code>, <code><a href="regeneration_capped.html">regeneration_capped()</a></code>,
+<code><a href="regeneration_adult.html">regeneration_adult()</a></code> and <code><a href="regeneration_adult_effect.html">regeneration_adult_effect()</a></code> add it
+to their expected recruitment:
+<code>mean = regP * exp(env) + reg_floor</code>). Default <code>1e-3</code>, which keeps the
+recruitment likelihood finite where the light response closes and adds
+next to nothing. One value for all species or one per species. Before
+0.2.0 the floor was hard-coded to <code>0.2</code>, which with many species adds a
+large recruitment that does not depend on anything (65 species x 0.2 = 13
+trees per ha and year); models saved before then keep that value when
+reloaded. <code>finn(reg_floor = )</code>, the argument of earlier versions, is
+still accepted with a warning and overrides this value.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -238,13 +448,55 @@ models using hybrid modelling. <em>Methods in Ecology and Evolution</em>.
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="createHybrid.html">createHybrid()</a></code>, <code><a href="finn.html">finn()</a></code></p></div>
+    <div class="dont-index"><p><code><a href="createHybrid.html">createHybrid()</a></code>, <code><a href="finn.html">finn()</a></code>, <a href="recruitment.html">recruitment</a> for the
+recruitment options and how to combine them</p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">growth_process</span> <span class="op">&lt;-</span> <span class="fu">createProcess</span><span class="op">(</span>formula <span class="op">=</span> <span class="op">~</span><span class="va">temperature</span> <span class="op">+</span> <span class="va">precipitation</span>, func <span class="op">=</span> <span class="va">growth</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A process is a recipe: createProcess() needs neither data nor torch, and the</span></span></span>
+<span class="r-in"><span><span class="co"># predictors named in `formula` are looked up in `env` when the model is</span></span></span>
+<span class="r-in"><span><span class="co"># fitted or simulated. Here: growth responding to temperature and precipitation</span></span></span>
+<span class="r-in"><span><span class="va">growth_process</span> <span class="op">&lt;-</span> <span class="fu">createProcess</span><span class="op">(</span>formula <span class="op">=</span> <span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, func <span class="op">=</span> <span class="va">growth</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/class.html" class="external-link">class</a></span><span class="op">(</span><span class="va">growth_process</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "process"</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/deparse.html" class="external-link">deparse</a></span><span class="op">(</span><span class="va">growth_process</span><span class="op">$</span><span class="va">formula</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "~temp + prec"</span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the same equation with its species parameters estimated as well (by default</span></span></span>
+<span class="r-in"><span><span class="co"># only the environmental response is), and a quadratic temperature response</span></span></span>
+<span class="r-in"><span><span class="va">growth_process</span> <span class="op">&lt;-</span> <span class="fu">createProcess</span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I</a></span><span class="op">(</span><span class="va">temp</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span> <span class="op">+</span> <span class="va">prec</span>, func <span class="op">=</span> <span class="va">growth</span>,</span></span>
+<span class="r-in"><span>                                optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># level-1 hybrid: the environmental response of mortality as a small neural</span></span></span>
+<span class="r-in"><span><span class="co"># network with two hidden layers; the mortality equation stays mechanistic</span></span></span>
+<span class="r-in"><span><span class="va">mortality_process</span> <span class="op">&lt;-</span> <span class="fu">createProcess</span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, func <span class="op">=</span> <span class="va">mortality</span>,</span></span>
+<span class="r-in"><span>                                   hidden <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">16L</span>, <span class="fl">16L</span><span class="op">)</span>, dropout <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Neural Network detected...</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the regeneration process with a smaller recruitment floor, a cap per</span></span></span>
+<span class="r-in"><span><span class="co"># species and a fixed recruit dispersion</span></span></span>
+<span class="r-in"><span><span class="va">regeneration_process</span> <span class="op">&lt;-</span> <span class="fu">createProcess</span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span>, func <span class="op">=</span> <span class="va">regeneration_capped</span>,</span></span>
+<span class="r-in"><span>                                      reg_floor <span class="op">=</span> <span class="fl">1e-4</span>, cap <span class="op">=</span> <span class="st">"species"</span>,</span></span>
+<span class="r-in"><span>                                      optimizeTheta <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># competition takes no environment; continuous = TRUE compares every pair of</span></span></span>
+<span class="r-in"><span><span class="co"># cohorts instead of binning them into height classes</span></span></span>
+<span class="r-in"><span><span class="va">competition_process</span> <span class="op">&lt;-</span> <span class="fu">createProcess</span><span class="op">(</span>func <span class="op">=</span> <span class="va">competition</span>, continuous <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the processes become a model in finn(), here for the 11 species of the</span></span></span>
+<span class="r-in"><span><span class="co"># bundled Oregon FIA data (?fia_obs_dt), whose env table has `temp` and `prec`</span></span></span>
+<span class="r-in"><span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="finn.html">finn</a></span><span class="op">(</span>N_species <span class="op">=</span> <span class="fl">11</span>, recruits_dbh <span class="op">=</span> <span class="fl">12.9</span>,</span></span>
+<span class="r-in"><span>          growth_process       <span class="op">=</span> <span class="va">growth_process</span>,</span></span>
+<span class="r-in"><span>          mortality_process    <span class="op">=</span> <span class="va">mortality_process</span>,</span></span>
+<span class="r-in"><span>          regeneration_process <span class="op">=</span> <span class="va">regeneration_process</span>,</span></span>
+<span class="r-in"><span>          competition_process  <span class="op">=</span> <span class="va">competition_process</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># the species parameters of growth: light requirement and size decay</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">m</span><span class="op">$</span><span class="va">par_growth</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           [,1]       [,2]</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,] 0.4952571 0.05029631</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [2,] 0.4675127 0.04575275</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [3,] 0.5246698 0.04777756</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -252,7 +504,7 @@ models using hybrid modelling. <em>Methods in Ecology and Evolution</em>.
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

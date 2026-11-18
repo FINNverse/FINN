@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -92,16 +92,23 @@
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data frame containing the cohort data with columns for site ID, patch ID, cohort ID, species, number of trees, and DBH.</p>
+    <p>A data frame with one row per non-empty diameter class and the columns <code>siteID</code>, <code>patchID</code>, <code>cohortID</code> (numbered over the whole table), <code>species</code>, <code>dbh</code> (cm) and <code>trees</code>, the format of <code>CohortMat(obs_df = )</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes, and the cohort data is generated accordingly.</p>
+    <p>The function generates cohort data by drawing samples from the Weibull distribution for each cohort based on the specified shape and scale parameters. The resulting DBH values are binned into classes of width <code>dbh_class_range</code>, and each non-empty class becomes one cohort.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><a href="CohortMat.html">CohortMat</a> to turn the table into an initial state</p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">obs_df</span> <span class="op">&lt;-</span> <span class="fu">rweibull_cohorts</span><span class="op">(</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># a stand of two species on one patch: 300 saplings of species 3 around</span></span></span>
+<span class="r-in"><span><span class="co"># 1 cm and 10 large trees of species 4 around 50 cm, in 0.1 cm classes</span></span></span>
+<span class="r-in"><span><span class="va">obs_df</span> <span class="op">&lt;-</span> <span class="fu">rweibull_cohorts</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  trees <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">300</span>, <span class="fl">10</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  dbh_shape <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">3</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  dbh_scale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">50</span><span class="op">)</span>,</span></span>
@@ -112,12 +119,17 @@
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">obs_df</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   siteID patchID cohortID species dbh trees</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1      1       1        1       3 0.4     5</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2      1       1        2       3 0.5    10</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3      1       1        3       3 0.6    14</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4      1       1        4       3 0.7    21</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5      1       1        5       3 0.8    30</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6      1       1        6       3 0.9    36</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1      1       1        1       3 0.3     1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2      1       1        2       3 0.4     5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3      1       1        3       3 0.5     8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4      1       1        4       3 0.6    17</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5      1       1        5       3 0.7    18</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6      1       1        6       3 0.8    33</span>
+<span class="r-in"><span><span class="co"># trees and cohorts per species</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">trees</span>, cohorts <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">~</span> <span class="va">species</span>, data <span class="op">=</span> <span class="va">obs_df</span>, FUN <span class="op">=</span> <span class="va">sum</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   species trees cohorts</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       3   300      16</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2       4    10      10</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -125,7 +137,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

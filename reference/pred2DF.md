@@ -48,11 +48,20 @@ frames are returned in either a wide format (one row per
 site/patch/cohort per year with multiple columns for different metrics)
 or a long format (one row per site/patch/cohort per year per metric).
 
+## See also
+
+[`predict.finn_class()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+/
+[`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md),
+which call this function and return its result as `$wide` and `$long`
+
 ## Examples
 
 ``` r
-# a minimal prediction object of the shape pred2DF() expects
-# (normally produced by predict()/simulateForest()):
+# a minimal prediction object of the shape pred2DF() expects: one array
+# [site, year, species] per variable. predict()/simulateForest() build it
+# from the simulation and return the tables, so pred2DF() is rarely called
+# directly.
 metrics <- c("dbh", "ba", "trees", "growth", "mort", "reg", "r_mean_ha")
 arr <- array(1, dim = c(1, 2, 3), dimnames = list(1, 1:2, 1:3))  # [site, year, species]
 pred <- list(Predictions = list(Site = stats::setNames(
@@ -67,4 +76,12 @@ head(result$site)
 #> 4:      1     2       2      dbh     1
 #> 5:      1     1       3      dbh     1
 #> 6:      1     2       3      dbh     1
+# one column per variable instead of one row
+head(pred2DF(pred, format = "wide")$site, 3)
+#> Key: <siteID, species, year>
+#>    siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha
+#>     <int>   <int> <int> <num> <num> <num>  <num> <num> <num>     <num>
+#> 1:      1       1     1     1     1     1      1     1     1         1
+#> 2:      1       1     2     1     1     1      1     1     1         1
+#> 3:      1       2     1     1     1     1      1     1     1         1
 ```

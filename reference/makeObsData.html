@@ -9,7 +9,7 @@ filters sites, harmonizes years, optionally aggregates by site."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,8 @@ filters sites, harmonizes years, optionally aggregates by site.</p>
 <span>  dbh_growth_thresh <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">10</span>, <span class="fl">50</span><span class="op">)</span>,</span>
 <span>  Npatches <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  Nspecies <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  NspeciesQuantile <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  NspeciesQuantile <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  rates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"annual"</span>, <span class="st">"interval"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -107,14 +108,32 @@ interval differs. Default NULL.</p></dd>
 
 <dt id="arg-nspeciesquantile">NspeciesQuantile<a class="anchor" aria-label="anchor" href="#arg-nspeciesquantile"></a></dt>
 <dd><p>numeric in (0,1] or NULL. Choose the smallest N covering
-this fraction of individuals; overrides <code>Nspecies</code> if supplied.</p></dd>
+this fraction of individuals. Used only when <code>Nspecies</code> is <code>NULL</code>:
+if both are given, <code>Nspecies</code> takes precedence.</p></dd>
+
+
+<dt id="arg-rates">rates<a class="anchor" aria-label="anchor" href="#arg-rates"></a></dt>
+<dd><p><code>"annual"</code> (default) or <code>"interval"</code>: the unit of
+<code>growth</code> and <code>mort</code>. <code>"annual"</code> returns them per year, for a
+model simulated in yearly steps: a tree's growth over an interval of
+\(p\) years is \((dbh/dbh_{before})^{1/p} - 1\), and the mortality of a
+cohort is \(1 - (1 - n_{died}/n_{at\,risk})^{1/p}\), the constant yearly
+rates that compound to what was observed over the interval.
+<code>"interval"</code> returns them over the whole interval
+(<code>dbh/dbh_before - 1</code> and <code>n_died / n_at_risk</code>), the output of
+FINN 0.1.0, for a model in which one simulation step is one census
+interval. \(p\) is <code>year - year_before</code> in the units of
+<code>year</code>, so <code>year</code> must be the calendar year of the inventory.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with:</p><ul><li><p><code>obs_dt</code>: observations at site or patch level. <code>growth</code> is
-the mean relative diameter increment (<code>dbh/dbh_before - 1</code>), and
-<code>growth_n</code> is how many trees that mean rests on. Both matter: means
+    <p>A list with:</p><ul><li><p><code>obs_dt</code>: observations at site or patch level, one row per site
+(and patch), inventory <code>year</code> and species. <code>period_length</code> is
+the number of years since the site's previous inventory (<code>NA</code> at
+its first). <code>growth</code> is the mean relative diameter growth rate of
+the surviving trees (per year, or over the interval, see <code>rates</code>),
+and <code>growth_n</code> is how many trees that mean rests on. Both matter: means
 are aggregated across patches TREE-WEIGHTED (by <code>growth_n</code>), because
 that is the quantity the model predicts - it simulates
 <code>sum(g*trees)/sum(trees)</code> over the whole site, so an unweighted mean
@@ -124,18 +143,158 @@ patch-level growth observations rest on a single tree while others average
 30+, and the variance of a mean is \(\sigma^2/n\). Mortality comes
 back as a closed-cohort pair of counts, <code>n_at_risk</code> (trees alive at
 the start of the interval) and <code>n_died</code> (how many of them were dead
-at the end), plus the derived rate <code>mort = n_died / n_at_risk</code>
-(<code>NA</code> where no cohort was at risk). The counts are the binomial
-response; pass them to <code>fit</code> with <code>mortality = "binomial"</code>.</p></li>
-<li><p><code>tree_dt</code>: input trees with added growth fields and species recode.</p></li>
+at the end), plus the derived rate <code>mort</code> (<code>NA</code> where no
+cohort was at risk): the yearly rate
+<code>1 - (1 - n_died / n_at_risk)^(1 / period_length)</code>, or
+<code>n_died / n_at_risk</code> with <code>rates = "interval"</code>. <code><a href="fit.html">fit()</a></code>
+scores <code>mort</code> with the binomial loss weighted by <code>n_at_risk</code>.
+<code>reg</code> is the number of recruits per hectare over the interval.</p></li>
+<li><p><code>tree_dt</code>: input trees with added growth fields and species
+recode: <code>year_before</code>, <code>dbh_before</code>, <code>period_length</code>
+(years since the tree's previous record), <code>rel_growth</code> (the
+increment over the interval, <code>dbh/dbh_before - 1</code>) and
+<code>growth</code> (the tree's growth rate in the unit of <code>rates</code>, the
+quantity behind <code>obs_dt$growth</code> and the <code>growth</code> column of
+<code>fit(tree_data = )</code>); an input column <code>growth</code> is replaced.</p></li>
 </ul></div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>FINN simulates the forest in steps of one year. With <code>rates = "annual"</code>
+the observation table is in the units that <code><a href="fit.html">fit()</a></code> compares with such a
+simulation: <code><a href="fit.html">fit()</a></code> compounds the simulated yearly growth and mortality
+of the <code>period_length</code> years before each census into one rate per year
+with the same functional (the geometric mean of \(1 + g\) minus one, one
+minus the geometric mean survival), and sums the simulated recruits over
+them (see <code><a href="finn_data.html">finn_data</a></code>). <code>rates = "interval"</code> belongs with
+<code>resolveSiteIDs(time_axis = "census")</code>, where one simulation step is
+one census interval and nothing is compounded. The counts
+(<code>n_at_risk</code>, <code>n_died</code>, <code>growth_n</code>) and <code>reg</code> stay
+quantities of the whole interval in both modes: the counts weight the
+likelihood by the number of trees behind an observation, and <code>reg</code> is
+compared with the recruits summed over the interval. To use the table,
+express <code>year</code> as years since the first inventory, give <code>env</code> one
+row per site and year from 1 to the last census, and build the initial
+cohorts from the first inventory; <code><a href="resolveSiteIDs.html">resolveSiteIDs</a></code> does all
+three.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="resolveSiteIDs.html">resolveSiteIDs</a></code> for the next step (integer ids, the
+annual time axis, the initial cohorts), <code><a href="finn_data.html">finn_data</a></code> for the
+tables <code><a href="fit.html">fit</a></code> takes, <code><a href="fia_obs_dt.html">fia_obs_dt</a></code> for a finished
+example, and <code><a href="../articles/C-Data_preparation.html">vignette("C-Data_preparation", package = "FINN")</a></code></p></div>
+    </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># A tree list of eight Oregon FIA plots with four patches and three inventories</span></span></span>
+<span class="r-in"><span><span class="co"># each, one row per tree and inventory: siteName, patchName, treeName, year,</span></span></span>
+<span class="r-in"><span><span class="co"># species_name, dbh (cm), status ("new", "alive", "dead") and living.</span></span></span>
+<span class="r-in"><span><span class="va">tree_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"example_tree_dt.csv"</span>, package <span class="op">=</span> <span class="st">"FINN"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">tree_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteName</span>, <span class="va">patchName</span>, <span class="va">treeName</span>, <span class="va">year</span>, <span class="va">species_name</span>, <span class="va">dbh</span>, <span class="va">status</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteName  patchName       treeName  year          species_name    dbh status</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      &lt;char&gt;     &lt;char&gt;         &lt;char&gt; &lt;int&gt;                &lt;char&gt;  &lt;num&gt; &lt;char&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 11_66410 11_66410_1 11_66410_1_100  2001 Pseudotsuga menziesii 47.244    new</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 11_66410 11_66410_1 11_66410_1_100  2011 Pseudotsuga menziesii 57.404  alive</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 11_66410 11_66410_1 11_66410_1_100  2021 Pseudotsuga menziesii 65.024  alive</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 11_66410 11_66410_2 11_66410_2_103  2001 Pseudotsuga menziesii 26.924    new</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 11_66410 11_66410_2 11_66410_2_103  2011 Pseudotsuga menziesii 30.734  alive</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 11_66410 11_66410_2 11_66410_2_103  2021 Pseudotsuga menziesii 34.036  alive</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">obs</span> <span class="op">&lt;-</span> <span class="fu">makeObsData</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="va">tree_dt</span><span class="op">[</span><span class="va">complete</span> <span class="op">==</span> <span class="cn">TRUE</span><span class="op">]</span>,    <span class="co"># fully remeasured plots only</span></span></span>
+<span class="r-in"><span>  plotsize          <span class="op">=</span> <span class="fl">0.06</span>,     <span class="co"># ha per patch; recruits are scaled to per hectare</span></span></span>
+<span class="r-in"><span>  aggregate_by_site <span class="op">=</span> <span class="cn">FALSE</span>,    <span class="co"># keep the patches: resolveSiteIDs() needs them</span></span></span>
+<span class="r-in"><span>  fix_period_length <span class="op">=</span> <span class="fl">10</span>,       <span class="co"># drop plots whose remeasurement interval is not 10 years</span></span></span>
+<span class="r-in"><span>  NspeciesQuantile  <span class="op">=</span> <span class="fl">0.98</span><span class="op">)</span>     <span class="co"># species covering 98 % of the stems; the rest is "other"</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> excluded 0 sites due to period length not beeing 10</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> excluded 0 sites due to dbh_growth being not within the range of -10 and 50</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Nspecies set to 11 to cover 98% of individuals</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Selected species: Pseudotsuga menziesii, Pinus ponderosa, Tsuga mertensiana, Pinus contorta, Abies grandis, Pinus monticola, Abies concolor, Abies shastensis, other, Juniperus occidentalis, Larix occidentalis</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Combined 4 unselected species into 'other'</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> actuall number of species including 'others' is 12</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Filtered to sites with at least 2 years and all patches having the same number of years:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Sites with 3 Inventories: 1056</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Sites have between 4 and 4 patches</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Kept obs_dt unaggregated by siteName. For aggregated data, set aggregate_by_site = TRUE</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">obs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteName  patchName  year   species_name    ba   dbh trees growth growth_n</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      &lt;char&gt;     &lt;char&gt; &lt;int&gt;         &lt;char&gt; &lt;num&gt; &lt;num&gt; &lt;int&gt;  &lt;num&gt;    &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 11_66410 11_66410_1  2001 Abies concolor     0    NA     0     NA        0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 11_66410 11_66410_1  2011 Abies concolor     0    NA     0     NA        0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 11_66410 11_66410_1  2021 Abies concolor     0    NA     0     NA        0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 11_66410 11_66410_1  2001  Abies grandis     0    NA     0     NA        0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 11_66410 11_66410_1  2011  Abies grandis     0    NA     0     NA        0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 11_66410 11_66410_1  2021  Abies grandis     0    NA     0     NA        0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     mort n_at_risk n_died   reg period_length</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;         &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:    NA         0      0     0            NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:    NA         0      0     0            10</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:    NA         0      0     0            10</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:    NA         0      0     0            NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5:    NA         0      0     0            10</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6:    NA         0      0     0            10</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># mortality is a closed cohort: the trees alive at the start of the interval</span></span></span>
+<span class="r-in"><span><span class="co"># and how many of them had died by its end; `mort` is the yearly rate over the</span></span></span>
+<span class="r-in"><span><span class="co"># period_length years of the interval</span></span></span>
+<span class="r-in"><span><span class="va">obs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">[</span><span class="va">n_at_risk</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteName</span>, <span class="va">patchName</span>, <span class="va">year</span>, <span class="va">period_length</span>, <span class="va">species_name</span>,</span></span>
+<span class="r-in"><span>                            <span class="va">n_at_risk</span>, <span class="va">n_died</span>, <span class="va">mort</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteName  patchName  year period_length          species_name n_at_risk</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      &lt;char&gt;     &lt;char&gt; &lt;int&gt;         &lt;int&gt;                &lt;char&gt;     &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 11_66410 11_66410_1  2011            10 Pseudotsuga menziesii         1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 11_66410 11_66410_1  2021            10 Pseudotsuga menziesii         1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 11_66410 11_66410_2  2011            10 Pseudotsuga menziesii         8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 11_66410 11_66410_2  2021            10 Pseudotsuga menziesii         8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 11_66410 11_66410_3  2011            10 Pseudotsuga menziesii         4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    n_died       mort</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt;      &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      0 0.00000000</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      0 0.00000000</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      0 0.00000000</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:      1 0.01326438</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5:      0 0.00000000</span>
+<span class="r-in"><span><span class="co"># growth is a yearly rate too, and travels with the number of trees behind it</span></span></span>
+<span class="r-in"><span><span class="va">obs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">[</span><span class="va">growth_n</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteName</span>, <span class="va">year</span>, <span class="va">species_name</span>, <span class="va">growth</span>, <span class="va">growth_n</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteName  year          species_name      growth growth_n</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      &lt;char&gt; &lt;int&gt;                &lt;char&gt;       &lt;num&gt;    &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 11_66410  2011 Pseudotsuga menziesii 0.019669783        1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 11_66410  2021 Pseudotsuga menziesii 0.012542247        1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 11_66410  2011 Pseudotsuga menziesii 0.011816466        8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 11_66410  2021 Pseudotsuga menziesii 0.007917063        7</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 11_66410  2011 Pseudotsuga menziesii 0.018626114        4</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the same table with the rates over the whole ten-year interval (FINN 0.1.0)</span></span></span>
+<span class="r-in"><span><span class="va">obs10</span> <span class="op">&lt;-</span> <span class="fu">makeObsData</span><span class="op">(</span><span class="va">tree_dt</span><span class="op">[</span><span class="va">complete</span> <span class="op">==</span> <span class="cn">TRUE</span><span class="op">]</span>, plotsize <span class="op">=</span> <span class="fl">0.06</span>, aggregate_by_site <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
+<span class="r-in"><span>                     fix_period_length <span class="op">=</span> <span class="fl">10</span>, NspeciesQuantile <span class="op">=</span> <span class="fl">0.98</span>, rates <span class="op">=</span> <span class="st">"interval"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> excluded 0 sites due to period length not beeing 10</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> excluded 0 sites due to dbh_growth being not within the range of -10 and 50</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Nspecies set to 11 to cover 98% of individuals</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Selected species: Pseudotsuga menziesii, Pinus ponderosa, Tsuga mertensiana, Pinus contorta, Abies grandis, Pinus monticola, Abies concolor, Abies shastensis, other, Juniperus occidentalis, Larix occidentalis</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Combined 4 unselected species into 'other'</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> actuall number of species including 'others' is 12</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Filtered to sites with at least 2 years and all patches having the same number of years:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Sites with 3 Inventories: 1056</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Sites have between 4 and 4 patches</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Kept obs_dt unaggregated by siteName. For aggregated data, set aggregate_by_site = TRUE</span>
+<span class="r-in"><span><span class="va">obs10</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">[</span><span class="va">growth_n</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteName</span>, <span class="va">year</span>, <span class="va">species_name</span>, <span class="va">growth</span>, <span class="va">growth_n</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteName  year          species_name     growth growth_n</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      &lt;char&gt; &lt;int&gt;                &lt;char&gt;      &lt;num&gt;    &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 11_66410  2011 Pseudotsuga menziesii 0.21505376        1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 11_66410  2021 Pseudotsuga menziesii 0.13274336        1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 11_66410  2011 Pseudotsuga menziesii 0.12644955        8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 11_66410  2021 Pseudotsuga menziesii 0.08319808        7</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 11_66410  2011 Pseudotsuga menziesii 0.20321636        4</span>
+<span class="r-in"><span></span></span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

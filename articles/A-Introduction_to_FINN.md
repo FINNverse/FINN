@@ -37,7 +37,7 @@ demographic rates). The environment feeds growth, mortality and
 regeneration; each of those processes can be a mechanistic function, a
 neural network, or both (gear / network icons), and each is fit with its
 own likelihood (Gaussian for growth, binomial for mortality, negative
-binomial for regeneration). Figure from Käber & Pichler
+binomial for regeneration). Figure from Pichler & Käber
 (2026).](FINN-overview.jpg)
 
 FINN’s structure. Each timestep, the current cohorts (their size,
@@ -48,7 +48,7 @@ demographic rates). The environment feeds growth, mortality and
 regeneration; each of those processes can be a mechanistic function, a
 neural network, or both (gear / network icons), and each is fit with its
 own likelihood (Gaussian for growth, binomial for mortality, negative
-binomial for regeneration). Figure from Käber & Pichler (2026).
+binomial for regeneration). Figure from Pichler & Käber (2026).
 
 This vignette builds a **fully mechanistic** model from known parameters
 and simulates it to showcase a key functionality of FINN: fitting a full
@@ -63,6 +63,61 @@ does the same for mortality. If you want to learn how a hybrid Dynamic
 Vegetation Model looks like and how you can build your own for inference
 and prediction FINN is the right tool and these vignettes will show you
 how to do it.
+
+### Three levels of hybridisation
+
+“Mechanistic, a neural network, or a mixture of the two” is a choice you
+make **per process**, and it has three settings. All three are written
+the same way, all three are calibrated end-to-end by the same
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) call, and
+nothing else in the model changes when you move between them.
+
+``` r
+
+# Level 0 - fully mechanistic. The process equation is FINN::growth, and the
+# environmental response is one coefficient per species and per covariate: a
+# classic niche model, interpretable coefficient by coefficient.
+createProcess(~ temp + prec, FINN::growth,
+              optimizeSpecies = TRUE, optimizeEnv = TRUE)
+
+# Level 1 - a network for the environmental response only. The process equation
+# and the species-specific process parameters stay mechanistic; only the map from
+# environment to a per-species effect becomes a small feed-forward network. Use
+# this when you believe the demography but not the shape of the niche.
+createProcess(~ temp + prec, FINN::growth, hidden = c(25L))
+
+# Level 2 - a network in place of the process equation itself. The network sees
+# the cohort, its species and the site's environment, and returns the rate
+# directly; the inverse link that keeps it a valid rate is applied for you.
+createHybrid(~ temp + prec, transformer = FALSE, hidden = c(50L, 50L))
+```
+
+The levels are named after Pichler & Käber (2026), and the trade-off
+between them is the usual one. Level 0 gives you coefficients you can
+read and defend, and it extrapolates the way its equations say it
+should. Level 2 gives the data the most freedom and the least structure
+to lean on, so it needs the most data and tells you the least about
+*why*. Level 1 is the middle: the demography is still yours, the niche
+is the model’s.
+
+Two practical notes. The species parameters at level 1 remain per
+species, so a rare species still gets its own demography even where the
+network has little to learn from; that is often the reason to prefer
+level 1 over level 2 on inventory data. And whatever level you choose,
+the tools that say what the environmental response actually learned are
+the same — [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md),
+[`conditionalEffects()`](https://finnverse.github.io/FINN/reference/conditionalEffects.md)
+and
+[`feature_importance()`](https://finnverse.github.io/FINN/reference/feature_importance.md)
+work on a network exactly as they do on a coefficient, which is what
+makes a level-1 or level-2 process arguable rather than merely accurate.
+
+This vignette stays at level 0 throughout. [Fitting FINN to forest
+inventory
+data](https://finnverse.github.io/FINN/articles/D-Fit_to_FIA.md) fits a
+level-2 growth process to real data, and [the mortality
+vignette](https://finnverse.github.io/FINN/articles/E-Mortality.md) does
+the same for mortality.
 
 ## Installation
 
@@ -383,7 +438,7 @@ sessionInfo()
 #> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 #> 
 #> locale:
-#> [1] C
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 #> 
 #> time zone: Europe/Berlin
 #> tzcode source: internal
@@ -392,7 +447,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
+#> [1] ggplot2_3.5.2       data.table_1.18.6.1 FINN_0.2.0         
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
@@ -400,7 +455,7 @@ sessionInfo()
 #>  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         
 #> [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         abind_1.4-8       
 #> [17] evaluate_1.0.5     tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0    
-#> [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3   
+#> [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.2         pkgconfig_2.0.3   
 #> [25] farver_2.1.2       R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
 #> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
 #> [33] bit64_4.6.0-1      gtable_0.3.6

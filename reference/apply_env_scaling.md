@@ -42,10 +42,23 @@ apply_env_scaling(env, scaling)
 # reproduce the standardization a model fit with env_autoscale = TRUE used:
 env <- data.frame(siteID = 1:3, year = 1L, temp = c(4, 6, 8), prec = c(700, 850, 1000))
 scaling <- compute_env_scaling(env)
+scaling
+#>   variable center scale
+#> 1     temp      6     2
+#> 2     prec    850   150
 apply_env_scaling(env, scaling)
 #>    siteID  year  temp  prec
 #>     <int> <int> <num> <num>
 #> 1:      1     1    -1    -1
 #> 2:      2     1     0     0
 #> 3:      3     1     1     1
+
+# new sites are put on the scale of the first table, not on their own: a
+# site at 6 degrees and 850 mm is the average site of `env`, so it maps to 0
+new_env <- data.frame(siteID = 4:5, year = 1L, temp = c(6, 10), prec = c(850, 1150))
+apply_env_scaling(new_env, scaling)
+#>    siteID  year  temp  prec
+#>     <int> <int> <num> <num>
+#> 1:      4     1     0     0
+#> 2:      5     1     2     2
 ```

@@ -28,11 +28,17 @@ returns mortality as a **pair of counts** rather than a bare rate:
 - **`n_at_risk`**: trees alive at the *start* of an inventory interval,
 - **`n_died`**: how many of those were dead at the *end*,
 
-with `mort = n_died / n_at_risk` derived for convenience. This is
-exactly the `cbind(died, survived)` response of a binomial GLM, and it
-is deliberate. A bare proportion throws away the sample size: it cannot
-tell a site where 1 of 1 trees died from one where 60 of 60 did, even
-though the second carries sixty times the information.
+with the yearly rate
+`mort = 1 - (1 - n_died / n_at_risk)^(1 / period_length)` derived from
+them: FINN simulates yearly steps, and an inventory interval of
+`period_length` years is that many simulated years, whose yearly
+mortalities [`fit()`](https://finnverse.github.io/FINN/reference/fit.md)
+compounds into the same per-year rate before it meets the observation.
+The counts are exactly the `cbind(died, survived)` response of a
+binomial GLM, and it is deliberate. A bare proportion throws away the
+sample size: it cannot tell a site where 1 of 1 trees died from one
+where 60 of 60 did, even though the second carries sixty times the
+information.
 
 The pair is a **closed cohort**; both columns are pinned to the tree’s
 state at the start of the interval. That matters more than it sounds.
@@ -48,26 +54,29 @@ for the open-cohort alternative.)
 
 ``` r
 
-ext <- function(f) system.file("extdata", f, package = "FINN")
+# The tables ship with FINN as datasets (?fia_obs_dt), already in FINN's input
+# format, so there is nothing to read or prepare.
 
-obs_dt     <- fread(ext("fia_obs_dt.csv"))
-env_dt     <- fread(ext("fia_env_dt.csv"))
-init_trees <- fread(ext("fia_init_trees.csv"))
-species_dt <- fread(ext("fia_species_dt.csv"))
+# --- training sites --------------------------------------------------------
+obs_dt     <- fia_obs_dt        # observations, wide (one column per variable)
+env_dt     <- fia_env_dt        # RAW, untransformed climate
+init_trees <- fia_init_trees
+species_dt <- fia_species_dt
 
-obs_test   <- fread(ext("fia_obs_test.csv"))
-env_test   <- fread(ext("fia_env_test.csv"))
-init_test  <- fread(ext("fia_init_test.csv"))
+# --- holdout sites: never seen during fitting ------------------------------
+obs_test   <- fia_obs_test
+env_test   <- fia_env_test
+init_test  <- fia_init_test
 
-obs_dt[, .(siteID, year, species_name, n_at_risk, n_died, mort)][n_at_risk > 0][1:6]
-#>    siteID  year          species_name n_at_risk n_died      mort
-#>     <int> <int>                <char>     <int>  <int>     <num>
-#> 1:      1     1 Pseudotsuga menziesii         2      0 0.0000000
-#> 2:      1     1         Abies grandis         6      0 0.0000000
-#> 3:      1     1                 other         3      1 0.3333333
-#> 4:      1     2 Pseudotsuga menziesii         2      0 0.0000000
-#> 5:      1     2         Abies grandis        10      0 0.0000000
-#> 6:      1     2                 other         2      0 0.0000000
+obs_dt[, .(siteID, year, period_length, species_name, n_at_risk, n_died, mort)][n_at_risk > 0][1:6]
+#>    siteID  year period_length          species_name n_at_risk n_died      mort
+#>     <int> <int>         <int>                <char>     <int>  <int>     <num>
+#> 1:      1    10            10 Pseudotsuga menziesii         2      0 0.0000000
+#> 2:      1    10            10         Abies grandis         6      0 0.0000000
+#> 3:      1    10            10                 other         3      1 0.0397355
+#> 4:      1    20            10 Pseudotsuga menziesii         2      0 0.0000000
+#> 5:      1    20            10         Abies grandis        10      0 0.0000000
+#> 6:      1    20            10                 other         2      0 0.0000000
 ```
 
 How much mortality signal is actually in this sample? Less than the
@@ -85,9 +94,10 @@ cat(sprintf("trees at risk (train)              : %d\n", obs_dt[, sum(n_at_risk)
 #> trees at risk (train)              : 9907
 cat(sprintf("deaths (train)                     : %d\n", obs_dt[, sum(n_died)]))
 #> deaths (train)                     : 656
-cat(sprintf("pooled mortality rate              : %.3f per inventory interval\n",
-            obs_dt[, sum(n_died) / sum(n_at_risk)]))
-#> pooled mortality rate              : 0.066 per inventory interval
+cat(sprintf("pooled mortality                   : %.3f over the ten-year interval, %.4f per year\n",
+            obs_dt[, sum(n_died) / sum(n_at_risk)],
+            obs_dt[, 1 - (1 - sum(n_died) / sum(n_at_risk))^(1 / 10)]))
+#> pooled mortality                   : 0.066 over the ten-year interval, 0.0068 per year
 ```
 
 A few hundred deaths, and roughly two-thirds of the observations at
@@ -96,9 +106,10 @@ there, but the wrong one can waste what is.
 
 ## Why `binomial` and not `mse`
 
-FINN scores mortality with `loss = c(..., mortality = "binomial", ...)`
-by default. Squared error assumes an unbounded response with constant
-variance; mortality is neither. A proportion lives on
+FINN scores mortality with
+`loss_family = c(..., mortality = "binomial", ...)` by default. Squared
+error assumes an unbounded response with constant variance; mortality is
+neither. A proportion lives on
 ``` math
 0, 1
 ```
@@ -136,7 +147,7 @@ m <- finn(
   recruits_dbh         = 12.9,   # DBH (cm) assigned to a new recruit; ~ FIA's 12.7 cm (5 in) minimum
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_capped, optimizeSpecies = TRUE, optimizeEnv = TRUE),
   mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
 )
 ```
@@ -165,7 +176,7 @@ m_mort <- finn(
   recruits_dbh         = 12.9,
   competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
   growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
-  regeneration_process = createProcess(~ temp + prec, FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_capped, optimizeSpecies = TRUE, optimizeEnv = TRUE),
   mortality_process    = createHybrid(~ temp + prec, hidden = c(20L, 20L), transformer = FALSE)
 )
 ```
@@ -181,17 +192,33 @@ fit(m_mort,
 
 ## Scoring mortality: why not Spearman
 
+The model simulates yearly steps, so its mortality is compared with an
+observation as
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) compares
+it: the simulated yearly mortalities of the `period_length` years before
+the census compounded into one rate per year,
+`1 - exp(mean(log1p(-m)))`, the functional behind the observed
+`1 - (1 - n_died / n_at_risk)^(1 / period_length)`.
+
 ``` r
 
+# the simulated yearly mortality, compounded over each observation's interval
+at_census <- function(site, obs_l) {
+  win <- unique(obs_l[, .(siteID, census = year, period_length)])
+  win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
+  merge(site[variable == "mort", .(siteID, year, species, value)], win, by = c("siteID", "year"))[
+    , .(variable = "mort", value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species)]
+}
 pred_of <- function(model, label, env, init, obs_l, split) {
   model$eval()
   sim <- predict(model, env = env, init_cohort = init,
                  patches = 4, patch_size = 0.06, device = "cpu")
-  merge(obs_l, sim$long$site, by = c("siteID", "year", "species", "variable"
+  merge(obs_l, at_census(sim$long$site, obs_l), by = c("siteID", "year", "species", "variable"
   ))[, `:=`(model = label, split = split)][]
 }
-to_long <- function(d) melt(d, id.vars = c("siteID", "year", "species", "species_name"),
-                            measure.vars = "mort", variable.name = "variable", value.name = "obs")
+to_long <- function(d) melt(d, id.vars = c("siteID", "year", "period_length", "species", "species_name"),
+                            measure.vars = "mort", variable.name = "variable", value.name = "obs",
+                            variable.factor = FALSE)
 
 FINN.seed(1)
 obs_pred <- rbind(
@@ -214,10 +241,10 @@ obs_pred[is.finite(obs) & is.finite(value),
          by = .(model, split)][order(split, model)]
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
-#> 1: Hybrid (mortality = NN) holdout     0.12   994
+#> 1: Hybrid (mortality = NN) holdout     0.07   994
 #> 2:   Process (mechanistic) holdout     0.03   994
-#> 3: Hybrid (mortality = NN)   train     0.19  1003
-#> 4:   Process (mechanistic)   train     0.17  1003
+#> 3: Hybrid (mortality = NN)   train     0.21  1003
+#> 4:   Process (mechanistic)   train     0.20  1003
 ```
 
 **AUC** asks the question the binomial actually poses: does the model
@@ -250,10 +277,10 @@ auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
 auc_tab[order(split, -AUC)]
 #>                      model   split   AUC deaths at_risk
 #>                     <char>  <char> <num>  <int>   <int>
-#> 1: Hybrid (mortality = NN) holdout 0.573    727   10013
-#> 2:   Process (mechanistic) holdout 0.517    727   10013
-#> 3: Hybrid (mortality = NN)   train 0.648    656    9907
-#> 4:   Process (mechanistic)   train 0.609    656    9907
+#> 1: Hybrid (mortality = NN) holdout 0.537    727   10013
+#> 2:   Process (mechanistic) holdout 0.524    727   10013
+#> 3: Hybrid (mortality = NN)   train 0.643    656    9907
+#> 4:   Process (mechanistic)   train 0.639    656    9907
 ```
 
 0.5 is coin-flipping, 1.0 is perfect ranking.
@@ -265,12 +292,12 @@ model finds it. On the held-out sites that skill collapses to ~0.5. The
 model is not failing to fit mortality; it is fitting it and **not
 generalising**.
 
-That is what a few hundred deaths buys. With ~66% of observations at
+That is what a few hundred deaths buys. With ~69% of observations at
 exactly zero and mortality concentrated in whichever species happened to
 die on whichever plot, there is enough signal to memorise and not enough
-to transfer. The network variant sits *lower* still on the holdout,
-which is what you would expect from a model with more capacity to
-memorise with.
+to transfer. The network variant and the mechanistic process rank alike
+on the holdout, both close to coin-flipping and far below their training
+skill, so neither transfers.
 
 So mortality here is honestly reported as **not identified
 out-of-sample**. The binomial likelihood is the right loss for a
@@ -279,12 +306,133 @@ manufactures information the two inventories do not contain. Treat
 differences between the two models as noise; the signal worth reading is
 train-vs-holdout, not model-vs-model.
 
+## Scoring each tree instead of each cell
+
+Everything above scores mortality per *cell*: the model’s mean death
+probability over the cohorts of a site, census and species against the
+pooled proportion. That mean has a compositional confound. Mortality
+falls several-fold from the smallest to the largest trees, so the cell
+mean moves when the simulated size distribution moves, whether or not
+the hazard function is right, and a mortality parameter can end up
+correcting a growth or recruitment error. With a tree list in hand,
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) can instead
+score the fate of every observed tree:
+`loss_aggregation = c(mortality = "tree")` runs the mortality kernel on
+each tree at its measured diameter, with light from the observed stand,
+and compares the death probability over the interval with the tree’s 0/1
+fate. It measures the mortality function alone, teacher-forced onto the
+observed stands, and combines with the simulated `dbh`, `ba`, `trees`
+and regeneration terms (see
+[`?fit`](https://finnverse.github.io/FINN/reference/fit.md), section
+*Scoring individual trees*, for the other per-tree route and when each
+applies).
+
+Prefer it when the trees are available and mortality is the response of
+interest: it uses every tree as a trial rather than a few hundred cells,
+it is unaffected by how well the stand is simulated, and
+[`predictTrees()`](https://finnverse.github.io/FINN/reference/predictTrees.md)
+evaluates the same code path, so a validation cannot drift from the
+objective it checks. Its cost is that the scored mortality is no longer
+a property of the simulated trajectory.
+
+The bundled sample carries the tree fates as `fia_tree_dt` and
+`fia_tree_test`, and the **Fitting FINN to forest inventory data**
+vignette fits the 200 sites with this route and reports the holdout AUC
+and the mortality by size class. Here the mechanism is shown on a tree
+list built from raw data, the eight Oregon FIA plots of the **Preparing
+your data for FINN** vignette, four patches each, three inventories.
+[`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
+already derives each tree’s start-of-interval state, so `tree_data` is a
+selection of its columns. The `year` of a row is the census that
+*closes* the interval, `dbh` the diameter at its start, `died` the fate
+over it; trees that recruited during the interval were not at risk and
+stay out.
+
+``` r
+
+tree_raw <- fread(system.file("extdata", "example_tree_dt.csv", package = "FINN"))
+prep <- makeObsData(tree_raw[complete == TRUE], plotsize = 0.06, aggregate_by_site = FALSE,
+                    fix_period_length = 10, NspeciesQuantile = 0.98)
+inputs <- resolveSiteIDs(tree_dt = prep$tree_dt, obs_dt = prep$obs_dt,
+                         env_dt = fread(system.file("extdata", "example_env_dt.csv", package = "FINN")))
+tree_data <- inputs$tree_dt[year > 0 & living_before == TRUE,
+  .(siteID, year, patchID, species, dbh = dbh_before, growth,
+    died = as.numeric(status == "dead"), period_length)]
+tree_data[, .(trees = .N, died = sum(died)), by = .(year, period_length)]
+#>     year period_length trees  died
+#>    <int>         <int> <int> <num>
+#> 1:    10            10   130     9
+#> 2:    20            10   127    12
+```
+
+Two details of the set-up. `growth` is the tree’s yearly growth rate
+that
+[`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
+computed, and `period_length` the ten years of its interval: the tree
+route runs the mortality kernel over every simulated year of the
+interval and compares the compounded death probability `1 - prod(1 - m)`
+with the tree’s fate. The per-tree term is accumulated over each site’s
+observation window, which
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) reads from
+the `period_length` column of `data`, which
+[`resolveSiteIDs()`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
+returns. And the model is the mechanistic one from above, with the
+mortality term alone switched to the tree route:
+
+``` r
+
+obs_8 <- inputs$obs_dt
+Nsp_8 <- nrow(inputs$species_dt)
+
+FINN.seed(42)
+m_tree <- finn(
+  N_species            = Nsp_8, recruits_dbh = 12.9,
+  competition_process  = createProcess(~0, FINN::competition,  optimizeSpecies = TRUE),
+  growth_process       = createProcess(~ temp + prec, FINN::growth,       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration_capped, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,    optimizeSpecies = TRUE, optimizeEnv = TRUE)
+)
+fit(m_tree,
+  env = inputs$env_dt, data = obs_8, init_cohort = inputs$initCohorts, device = "cpu",
+  epochs = EPOCHS, patches = 4, patch_size = 0.06, lr = 0.01, plot_progress = FALSE,
+  loss_aggregation = c(mortality = "tree"),   # growth and the state terms stay per cell
+  tree_data        = tree_data
+)
+```
+
+[`predictTrees()`](https://finnverse.github.io/FINN/reference/predictTrees.md)
+returns one row per row of `tree_data`, in the same order, so the
+predictions are bound on rather than joined. Each tree is one Bernoulli
+trial, so the AUC needs no weighting here; it is the same `auc_binom()`
+with one trial per row:
+
+``` r
+
+m_tree$eval()
+tree_pred <- cbind(tree_data,
+                   predictTrees(m_tree, tree_data = tree_data, env = inputs$env_dt)[, .(mort_pred)])
+tree_pred[, .(trees = .N, deaths = sum(died),
+              AUC = round(auc_binom(mort_pred, died, 1 - died), 3)), by = year]
+#>     year trees deaths   AUC
+#>    <int> <int>  <num> <num>
+#> 1:    10   130      9 0.941
+#> 2:    20   127     12 0.936
+```
+
+Eight plots and two dozen deaths are a demonstration of the mechanism,
+not a mortality model, and the trees scored are the trees fitted; the
+200-site fit with its holdout is in the **Fitting FINN to forest
+inventory data** vignette. What the route buys shows in a drought or
+disturbance study, where the question is how the hazard of a tree of a
+given size and species responds to the environment, and the cell mean
+would let the simulated size distribution answer instead.
+
 ## What the network learned: ALE
 
 [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) returns one
 table per process, so the same tool reads a mechanistic mortality
 function and a neural network standing in its place. The effect is on
-the mortality **probability** per inventory interval.
+the yearly mortality **probability**.
 
 ``` r
 
@@ -342,7 +490,7 @@ sessionInfo()
 #> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 #> 
 #> locale:
-#> [1] C
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 #> 
 #> time zone: Europe/Berlin
 #> tzcode source: internal
@@ -351,11 +499,12 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       
+#> [1] ggplot2_3.5.2       data.table_1.18.6.1 torch_0.15.1       
+#> [4] FINN_0.2.0         
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       
-#>  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.0         callr_3.7.6       
+#>  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.2         callr_3.7.6       
 #>  [9] splines_4.5.0      scales_1.4.0       lattice_0.22-6     R6_2.6.1          
 #> [13] labeling_0.4.3     generics_0.1.4     knitr_1.50         tibble_3.3.0      
 #> [17] pillar_1.11.0      RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57         

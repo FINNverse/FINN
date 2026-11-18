@@ -25,7 +25,7 @@ replacement by a DNN.'></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,7 +85,16 @@ replacement by a DNN.</p>
 <span>  sample_regeneration <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  transformer <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  emb_dim <span class="op">=</span> <span class="fl">20L</span>,</span>
-<span>  dim_feedforward <span class="op">=</span> <span class="fl">256L</span></span>
+<span>  dim_feedforward <span class="op">=</span> <span class="fl">256L</span>,</span>
+<span>  mortality_draw <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"binomial"</span>, <span class="st">"bernoulli"</span>, <span class="st">"poisson"</span>, <span class="st">"gamma"</span><span class="op">)</span>,</span>
+<span>  regeneration_sampler <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"refined"</span>, <span class="st">"gaussian"</span><span class="op">)</span>,</span>
+<span>  cap <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"all"</span>, <span class="st">"species"</span><span class="op">)</span>,</span>
+<span>  prior <span class="op">=</span> <span class="st">"max_obs_recruits"</span>,</span>
+<span>  prior_lambda <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>  theta_floor <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span>  optimizeTheta <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  mortality_floor <span class="op">=</span> <span class="fl">0.001</span>,</span>
+<span>  mortality_ceiling <span class="op">=</span> <span class="fl">0.999</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -106,17 +115,20 @@ during <code><a href="fit.html">fit()</a></code>? Default <code>TRUE</code>.</p>
 
 <dt id="arg-dispersion-parameter">dispersion_parameter<a class="anchor" aria-label="anchor" href="#arg-dispersion-parameter"></a></dt>
 <dd><p>(<code>numeric(1)</code>)<br> Initial dispersion parameter of
-the negative binomial distribution used to sample recruits. Only used when
-this object is the regeneration process.</p></dd>
+the negative binomial distribution used to sample recruits, or its fixed
+value with <code>optimizeTheta = FALSE</code>. Only used when this object is the
+regeneration process. See <a href="recruitment.html">recruitment</a>.</p></dd>
 
 
 <dt id="arg-nn">NN<a class="anchor" aria-label="anchor" href="#arg-nn"></a></dt>
-<dd><p>(<code>nn_module</code>)<br> Optional custom <code>torch</code> module overriding the
-default network architecture entirely.</p></dd>
+<dd><p>(<code>nn_module</code>)<br> Not supported in 0.2.0. A custom module was
+accepted and then ignored, so a non-<code>NULL</code> value now raises an error; shape
+the default network with <code>hidden</code>, <code>dropout</code> and <code>transformer</code> instead.</p></dd>
 
 
 <dt id="arg-dropout">dropout<a class="anchor" aria-label="anchor" href="#arg-dropout"></a></dt>
-<dd><p>(<code>numeric(1)</code>)<br> Dropout rate of the network.</p></dd>
+<dd><p>(<code>numeric(1)</code>)<br> Dropout rate of the network. Default <code>0.3</code>;
+the Barro Colorado Island case study of Pichler &amp; Käber (2026) used <code>0.1</code>.</p></dd>
 
 
 <dt id="arg-encoder-layers">encoder_layers<a class="anchor" aria-label="anchor" href="#arg-encoder-layers"></a></dt>
@@ -133,7 +145,8 @@ Only used when <code>transformer = FALSE</code>.</p></dd>
 <dd><p>(<code>logical(1)</code>)<br> Should recruits actually be sampled
 from the negative binomial regeneration distribution (<code>TRUE</code>), or only its
 expectation used (<code>FALSE</code>)? Only used when this object is the regeneration
-process.</p></dd>
+process. With <code>FALSE</code> the expected number of recruits per patch is rounded,
+so wherever it is below 0.5 no recruit enters at all. See <a href="recruitment.html">recruitment</a>.</p></dd>
 
 
 <dt id="arg-transformer">transformer<a class="anchor" aria-label="anchor" href="#arg-transformer"></a></dt>
@@ -150,6 +163,53 @@ environment features.</p></dd>
 <dd><p>(<code>integer(1)</code>)<br> Dimension of the feed-forward
 sublayer within each transformer encoder layer. Only used when
 <code>transformer = TRUE</code>.</p></dd>
+
+
+<dt id="arg-mortality-draw">mortality_draw<a class="anchor" aria-label="anchor" href="#arg-mortality-draw"></a></dt>
+<dd><p>(<code>character(1)</code>)<br> How the number of dead trees is drawn,
+<code>"binomial"</code> (default since 0.2.0), <code>"bernoulli"</code>, <code>"poisson"</code> or <code>"gamma"</code>;
+see <code><a href="createProcess.html">createProcess()</a></code>. Only used
+when this object is the mortality process.</p></dd>
+
+
+<dt id="arg-regeneration-sampler">regeneration_sampler<a class="anchor" aria-label="anchor" href="#arg-regeneration-sampler"></a></dt>
+<dd><p>(<code>character(1)</code>)<br> How recruits are drawn,
+<code>"refined"</code> (default since 0.2.0) or <code>"gaussian"</code>; see <code><a href="createProcess.html">createProcess()</a></code>. Only used
+when this object is the regeneration process.</p></dd>
+
+
+<dt id="arg-cap-prior-prior-lambda">cap, prior, prior_lambda<a class="anchor" aria-label="anchor" href="#arg-cap-prior-prior-lambda"></a></dt>
+<dd><p>Accepted for symmetry with
+<code><a href="createProcess.html">createProcess()</a></code>, but not used in 0.2.0: the hybrid regeneration
+network has no Beverton-Holt cap. See <code><a href="regeneration_capped.html">regeneration_capped()</a></code> for the
+cap of the mechanistic process.</p></dd>
+
+
+<dt id="arg-theta-floor">theta_floor<a class="anchor" aria-label="anchor" href="#arg-theta-floor"></a></dt>
+<dd><p>(<code>numeric(1)</code>)<br> Lower bound on the recruit dispersion
+<code>par_theta_recruits</code>, default <code>0.5</code> since 0.2.0, <code>0</code> or <code>NULL</code> to leave it
+unbounded as in 0.1.0; see <code><a href="createProcess.html">createProcess()</a></code>. Only used when this
+object is the regeneration process. The floor keeps the fit stable. In
+one converged pair of fits on the German national forest inventory it
+calibrated the recruitment level as well as a fixed <code>theta</code>, but only after
+the parameters had settled; read the level once <code>$param_history</code> shows
+them settled, or fix <code>theta</code> (<code>optimizeTheta = FALSE</code>) for short fits. See
+<a href="recruitment.html">recruitment</a>.</p></dd>
+
+
+<dt id="arg-optimizetheta">optimizeTheta<a class="anchor" aria-label="anchor" href="#arg-optimizetheta"></a></dt>
+<dd><p>(<code>logical(1)</code>)<br> Should the recruit dispersion be
+estimated during <code><a href="fit.html">fit()</a></code>? Default <code>TRUE</code>; <code>FALSE</code> keeps it at
+<code>dispersion_parameter</code>, which is the choice when the recruitment level is
+to be calibrated; see <code><a href="createProcess.html">createProcess()</a></code> and <a href="recruitment.html">recruitment</a>. Only used
+when this object is the regeneration process.</p></dd>
+
+
+<dt id="arg-mortality-floor-mortality-ceiling">mortality_floor, mortality_ceiling<a class="anchor" aria-label="anchor" href="#arg-mortality-floor-mortality-ceiling"></a></dt>
+<dd><p>(<code>numeric(1)</code>)<br> The interval the
+mortality probability is clamped to per simulation step before the death
+draw, defaults <code>0.001</code> and <code>0.999</code>; see <code><a href="createProcess.html">createProcess()</a></code>. Only used
+when this object is the mortality process.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -198,13 +258,52 @@ models using hybrid modelling. <em>Methods in Ecology and Evolution</em>.
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="createProcess.html">createProcess()</a></code>, <code><a href="finn.html">finn()</a></code></p></div>
+    <div class="dont-index"><p><code><a href="createProcess.html">createProcess()</a></code>, <code><a href="finn.html">finn()</a></code>, <a href="recruitment.html">recruitment</a></p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">growth_process</span> <span class="op">&lt;-</span> <span class="fu">createHybrid</span><span class="op">(</span>formula <span class="op">=</span> <span class="op">~</span><span class="va">temperature</span> <span class="op">+</span> <span class="va">precipitation</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A hybrid process is a recipe, like createProcess(): no data and no torch</span></span></span>
+<span class="r-in"><span><span class="co"># are needed until the model is built. The default network is a small</span></span></span>
+<span class="r-in"><span><span class="co"># transformer encoder</span></span></span>
+<span class="r-in"><span><span class="va">growth_process</span> <span class="op">&lt;-</span> <span class="fu">createHybrid</span><span class="op">(</span>formula <span class="op">=</span> <span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/class.html" class="external-link">class</a></span><span class="op">(</span><span class="va">growth_process</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "hybrid"</span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># a feed-forward network with two hidden layers instead, as in the Barro</span></span></span>
+<span class="r-in"><span><span class="co"># Colorado Island case study of the paper</span></span></span>
+<span class="r-in"><span><span class="va">mortality_process</span> <span class="op">&lt;-</span> <span class="fu">createHybrid</span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, transformer <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
+<span class="r-in"><span>                                  hidden <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">50L</span>, <span class="fl">50L</span><span class="op">)</span>, dropout <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># a model whose growth is a network while mortality, regeneration and</span></span></span>
+<span class="r-in"><span><span class="co"># competition stay mechanistic, fitted for two epochs on three sites of the</span></span></span>
+<span class="r-in"><span><span class="co"># bundled Oregon FIA data (?fia_obs_dt)</span></span></span>
+<span class="r-in"><span><span class="va">sites</span> <span class="op">&lt;-</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span></span></span>
+<span class="r-in"><span><span class="va">Nsp</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">fia_obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">init</span>  <span class="op">&lt;-</span> <span class="fu"><a href="makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">fia_init_trees</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, Nspecies <span class="op">=</span> <span class="va">Nsp</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="finn.html">finn</a></span><span class="op">(</span>N_species <span class="op">=</span> <span class="va">Nsp</span>, recruits_dbh <span class="op">=</span> <span class="fl">12.9</span>,</span></span>
+<span class="r-in"><span>          growth_process       <span class="op">=</span> <span class="fu">createHybrid</span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, transformer <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
+<span class="r-in"><span>                                              hidden <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">16L</span>, <span class="fl">16L</span><span class="op">)</span>, dropout <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>          mortality_process    <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">mortality</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>          regeneration_process <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">regeneration_capped</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="fit.html">fit</a></span><span class="op">(</span><span class="va">m</span>, data <span class="op">=</span> <span class="va">fia_obs_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, env <span class="op">=</span> <span class="va">fia_env_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>,</span></span>
+<span class="r-in"><span>    init_cohort <span class="op">=</span> <span class="va">init</span>, epochs <span class="op">=</span> <span class="fl">2L</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>,</span></span>
+<span class="r-in"><span>    plot_progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> weights: intercept-only baseline x your vector (dbh=0.00243, ba=12, trees=0.968, growth=1.84e+04, mortality=38.5, regeneration=0.768)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> share of the objective at the intercept-only baseline (scaled): dbh=17%, ba=17%, trees=17%, growth=17%, mortality=17%, regeneration=17%</span>
+<span class="r-in"><span><span class="co"># the network takes the place of the growth equation in the simulation</span></span></span>
+<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m</span>, env <span class="op">=</span> <span class="va">fia_env_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, init_cohort <span class="op">=</span> <span class="va">init</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">[</span><span class="va">variable</span> <span class="op">==</span> <span class="st">"growth"</span> <span class="op">&amp;</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">10</span> <span class="op">&amp;</span> <span class="va">value</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">]</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteID  year species variable      value</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt; &lt;int&gt;   &lt;int&gt;   &lt;fctr&gt;      &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      1    10       1   growth 0.03613109</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      1    10       3   growth 0.04689414</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      1    10       4   growth 0.04193100</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:      1    10       5   growth 0.03449138</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5:      1    10       6   growth 0.05649123</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6:      1    10      11   growth 0.03411257</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -212,7 +311,7 @@ models using hybrid modelling. <em>Methods in Ecology and Evolution</em>.
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

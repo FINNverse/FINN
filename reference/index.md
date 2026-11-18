@@ -4,25 +4,38 @@
 
 Define a FINN model and how each demographic process is represented.
 
-- [`finn()`](https://finnverse.github.io/FINN/reference/finn.md) :
-  Forest Informed Neural Network
+- [`finn()`](https://finnverse.github.io/FINN/reference/finn.md) : Build
+  a FINN forest model
 - [`createProcess()`](https://finnverse.github.io/FINN/reference/createProcess.md)
   : Define a demographic process for FINN
 - [`createHybrid()`](https://finnverse.github.io/FINN/reference/createHybrid.md)
   : Define a hybrid (deep-neural-network) demographic process for FINN
 - [`CohortMat()`](https://finnverse.github.io/FINN/reference/CohortMat.md)
   : Cohort Matrix Class
+- [`recruitment`](https://finnverse.github.io/FINN/reference/recruitment.md)
+  [`FINN-recruitment`](https://finnverse.github.io/FINN/reference/recruitment.md)
+  : Recruitment in FINN: the options and how to choose them
 
 ## Fitting and prediction
 
 Calibrate every component jointly, end-to-end, then simulate.
 
-- [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) : Fit
-  FINN
+- [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) :
+  Estimate the parameters of a FINN model
+- [`finn_data`](https://finnverse.github.io/FINN/reference/finn_data.md)
+  [`finn-data`](https://finnverse.github.io/FINN/reference/finn_data.md)
+  : The input tables of FINN: observations, environment, initial trees
+- [`finn_loss`](https://finnverse.github.io/FINN/reference/finn_loss.md)
+  [`finn-loss`](https://finnverse.github.io/FINN/reference/finn_loss.md)
+  : How fit() compares the simulation with the observations: the loss
+- [`finnControl()`](https://finnverse.github.io/FINN/reference/finnControl.md)
+  [`print(`*`<finnControl>`*`)`](https://finnverse.github.io/FINN/reference/finnControl.md)
+  : Settings of the optimizer used by fit()
 - [`predict(`*`<finn_class>`*`)`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
-  : Predict from a FINN model
-- [`simulateForest()`](https://finnverse.github.io/FINN/reference/simulateForest.md)
-  : Simulate
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+  : Simulate a forest with a FINN model
+- [`predictTrees()`](https://finnverse.github.io/FINN/reference/predictTrees.md)
+  : Predict growth and mortality for individual observed trees
 - [`FINN.seed()`](https://finnverse.github.io/FINN/reference/FINN.seed.md)
   : Set Seed for Reproducibility in R and Torch
 
@@ -31,12 +44,18 @@ Calibrate every component jointly, end-to-end, then simulate.
 The built-in mechanistic demographic functions and allometries.
 
 - [`growth()`](https://finnverse.github.io/FINN/reference/growth.md) :
-  Calculate growth
+  Growth
 - [`mortality()`](https://finnverse.github.io/FINN/reference/mortality.md)
   : Mortality
 - [`regeneration()`](https://finnverse.github.io/FINN/reference/regeneration.md)
-  : Calculate the regeneration of forest patches based on the input
-  parameters
+  : Regeneration without a recruitment cap
+- [`regeneration_capped()`](https://finnverse.github.io/FINN/reference/regeneration_capped.md)
+  [`regeneration_saturation()`](https://finnverse.github.io/FINN/reference/regeneration_capped.md)
+  : Regeneration with a Beverton-Holt recruitment cap
+- [`regeneration_adult()`](https://finnverse.github.io/FINN/reference/regeneration_adult.md)
+  : Regeneration limited by conspecific adult density
+- [`regeneration_adult_effect()`](https://finnverse.github.io/FINN/reference/regeneration_adult_effect.md)
+  : Regeneration with an effect of conspecific adult density
 - [`competition()`](https://finnverse.github.io/FINN/reference/competition.md)
   : Compute the fraction of available light (light) for each cohort
   based on the given parameters
@@ -64,11 +83,30 @@ Turn a raw tree list and environment table into FINN’s inputs.
 - [`climateDF2array()`](https://finnverse.github.io/FINN/reference/climateDF2array.md)
   : Convert a climate data frame to a FINN environment array
 - [`obsDF2arrays()`](https://finnverse.github.io/FINN/reference/obsDF2arrays.md)
-  : Convert observation data frame to arrays
+  : Convert a cohort table to arrays
 - [`array2obsDF()`](https://finnverse.github.io/FINN/reference/array2obsDF.md)
   : Transform Arrays to Observation Data Table
 - [`pred2DF()`](https://finnverse.github.io/FINN/reference/pred2DF.md) :
   Convert Prediction Arrays to Data Frames
+
+## Data
+
+The bundled Oregon FIA calibration data, in FINN’s input format.
+
+- [`fia_obs_dt`](https://finnverse.github.io/FINN/reference/fia_obs_dt.md)
+  [`fia_obs_test`](https://finnverse.github.io/FINN/reference/fia_obs_dt.md)
+  : Oregon FIA calibration data: training sites
+- [`fia_env_dt`](https://finnverse.github.io/FINN/reference/fia_env_dt.md)
+  [`fia_env_test`](https://finnverse.github.io/FINN/reference/fia_env_dt.md)
+  : Oregon FIA calibration data: site climate
+- [`fia_init_trees`](https://finnverse.github.io/FINN/reference/fia_init_trees.md)
+  [`fia_init_test`](https://finnverse.github.io/FINN/reference/fia_init_trees.md)
+  : Oregon FIA calibration data: initial tree list
+- [`fia_tree_dt`](https://finnverse.github.io/FINN/reference/fia_tree_dt.md)
+  [`fia_tree_test`](https://finnverse.github.io/FINN/reference/fia_tree_dt.md)
+  : Oregon FIA calibration data: the trees behind the mortality counts
+- [`fia_species_dt`](https://finnverse.github.io/FINN/reference/fia_species_dt.md)
+  : Oregon FIA calibration data: species coding
 
 ## Environmental scaling
 
@@ -78,7 +116,7 @@ FINN standardises environmental predictors internally
 - [`apply_env_scaling()`](https://finnverse.github.io/FINN/reference/apply_env_scaling.md)
   : Apply stored z-standardization to environmental predictors
 - [`compute_env_scaling()`](https://finnverse.github.io/FINN/reference/compute_env_scaling.md)
-  : Learn z-standardization for environmental predictors
+  : Compute per-predictor environmental scaling
 
 ## Interpretation (xAI)
 
@@ -101,19 +139,13 @@ Read back what a fitted - or hybrid - model actually learned.
 
 Building blocks used internally and exported for advanced use.
 
-- [`aggregate_results_old()`](https://finnverse.github.io/FINN/reference/aggregate_results_old.md)
-  : Aggregate function
 - [`binomial_from_bernoulli()`](https://finnverse.github.io/FINN/reference/binomial_from_bernoulli.md)
   : Draw binomial counts from per-trial Bernoulli probabilities
 - [`binomial_from_gamma()`](https://finnverse.github.io/FINN/reference/binomial_from_gamma.md)
-  : Sample from binomial with gradient
-- [`groupby_mean()`](https://finnverse.github.io/FINN/reference/groupby_mean.md)
-  : group by mean
-- [`index_species()`](https://finnverse.github.io/FINN/reference/index_species.md)
-  : Index species
-- [`np_runif()`](https://finnverse.github.io/FINN/reference/np_runif.md)
-  : Generate random numbers from a uniform distribution
+  : Draw deaths from a Gamma matched to the binomial
+- [`binomial_from_poisson()`](https://finnverse.github.io/FINN/reference/binomial_from_poisson.md)
+  : Draw deaths as a Bernoulli/Poisson count
+- [`rnbinom_torch_refined()`](https://finnverse.github.io/FINN/reference/rnbinom_torch_refined.md)
+  : Negative-binomial recruit draw without the recruitment floor
 - [`rweibull_cohorts()`](https://finnverse.github.io/FINN/reference/rweibull_cohorts.md)
   : Generate Cohorts Using Weibull Distribution
-- [`sample_poisson_relaxed()`](https://finnverse.github.io/FINN/reference/sample_poisson_relaxed.md)
-  : Sample poisson relaxed

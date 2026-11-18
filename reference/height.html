@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,7 @@
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A numeric value representing the calculated height of the tree.</p>
+    <p>A numeric vector (or torch.Tensor, for tensor input) with the height of the tree in m.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -72,20 +72,57 @@
 <p>The height is calculated using the formula:
 $$height = \left( \exp \left( \frac{(\text{dbh} \times \text{parHeight})}{(\text{dbh} + 100)} \right) - 1 \right) \times 100 + 0.001$$
 where dbh is the diameter at breast height of the tree in cm and parHeight is an allometric species specific parameter.</p>
-<p>All parameters of parHeight from 0 to 1 result in physiologicaly plausible heights.
-The range from 0.3 to 0.9 results in realistic tree heights.
-Values of parHeight close to 1 are physiologically almost impossible, below 0.3 is suitable for small tree species and shrubs.</p>
+<p>As the diameter grows, the height approaches \((\exp(\text{parHeight}) - 1) \times 100\)
+m: 35 m for parHeight = 0.3, 65 m for 0.5, 101 m for 0.7. When the height
+parameter is fitted (the first column of the competition parameters), FINN keeps
+it between 0.3 and \(\log(2.3) \approx 0.83\), so no species
+can grow taller than 130 m, the physical limit of tree height (Koch et al. 2004).
+Values below 0.3 suit small trees and shrubs; set <code>createProcess(lower = )</code> for
+them.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
+    <p>Koch, G. W., Sillett, S. C., Jennings, G. M. &amp; Davis, S. D. (2004).
+The limits to tree height. Nature 428, 851-854.</p>
 <p><img src="figures/height_plot1.png" alt="Parameter range"></p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="competition.html">competition()</a></code>, which ranks the cohorts of a patch by this height</p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">height</span><span class="op">(</span><span class="fl">30</span>, <span class="fl">0.5</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># a 30-cm tree of a species with parHeight = 0.5 is about 12 m tall</span></span></span>
+<span class="r-in"><span><span class="fu">height</span><span class="op">(</span><span class="fl">30</span>, <span class="fl">0.5</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 12.2315</span>
+<span class="r-in"><span><span class="co"># the same diameter for a tall-growing and a short-growing species</span></span></span>
 <span class="r-in"><span><span class="fu">height</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>,<span class="fl">0.3</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 12.231501  7.169349</span>
+<span class="r-in"><span><span class="co"># two diameters of one species</span></span></span>
 <span class="r-in"><span><span class="fu">height</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">30</span>,<span class="fl">20</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 12.231501  8.691405</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the height curve of three species; the asymptote is (exp(parHeight) - 1) * 100 m</span></span></span>
+<span class="r-in"><span><span class="va">dbh</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">150</span>, by <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>low <span class="op">=</span> <span class="fl">0.3</span>, mid <span class="op">=</span> <span class="fl">0.5</span>, tall <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu">height</span><span class="op">(</span><span class="va">dbh</span>, <span class="va">p</span><span class="op">)</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>        low  mid tall</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [1,]  0.0  0.0  0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [2,]  2.8  4.7  6.6</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [3,]  5.1  8.7 12.4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [4,]  7.2 12.2 17.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [5,]  9.0 15.4 22.1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [6,] 10.5 18.1 26.3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [7,] 11.9 20.6 30.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [8,] 13.1 22.9 33.4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [9,] 14.3 24.9 36.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [10,] 15.3 26.7 39.3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [11,] 16.2 28.4 41.9</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [12,] 17.0 29.9 44.3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [13,] 17.8 31.4 46.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [14,] 18.5 32.7 48.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [15,] 19.1 33.9 50.4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [16,] 19.7 35.0 52.2</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
@@ -94,7 +131,7 @@ Values of parHeight close to 1 are physiologically almost impossible, below 0.3 
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

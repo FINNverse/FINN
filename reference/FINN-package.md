@@ -17,7 +17,7 @@ torch).
   [`createHybrid()`](https://finnverse.github.io/FINN/reference/createHybrid.md)
   (neural network).
 
-- [`simulateForest()`](https://finnverse.github.io/FINN/reference/simulateForest.md)
+- [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
   runs a model forward from known parameters.
 
 - [`fit()`](https://finnverse.github.io/FINN/reference/fit.md)
@@ -52,7 +52,7 @@ Useful links:
 
 ## Author
 
-**Maintainer**: Yannek K\<c3\>\<a4\>ber <y.kaeber@posteo.de>
+**Maintainer**: Yannek Käber <y.kaeber@posteo.de>
 ([ORCID](https://orcid.org/0000-0002-7041-9849))
 
 Authors:

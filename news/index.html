@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,6 +41,436 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.0" id="finn-020">FINN 0.2.0<a class="anchor" aria-label="anchor" href="#finn-020"></a></h2>
+<div class="section level3">
+<h3 id="changes-that-alter-results-0-2-0">Changes that alter results<a class="anchor" aria-label="anchor" href="#changes-that-alter-results-0-2-0"></a></h3>
+<p>These change the numbers a fit or a simulation produces. Everything else in this release is new behaviour behind a new argument, a rename that keeps the old name, or documentation. Each row names the setting that restores the 0.1.0 result.</p>
+<table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th>change</th>
+<th>new default</th>
+<th>restore 0.1.0</th>
+</tr></thead><tbody><tr><td>Offset of the <code>trees</code> likelihood at a simulated zero count</td>
+<td><code>fit(trees_offset = 0.01)</code></td>
+<td><code>trees_offset = NULL</code></td>
+</tr><tr><td>Count gradients taken through the expected deaths and recruits, not through the draw</td>
+<td><code>fit(rb_gradient = TRUE)</code></td>
+<td><code>rb_gradient = FALSE</code></td>
+</tr><tr><td>Exact binomial death draw instead of the moment-matched Gamma</td>
+<td><code>createProcess(mortality_draw = "binomial")</code></td>
+<td><code>mortality_draw = "gamma"</code></td>
+</tr><tr><td>Exact recruit draw below <code>lambda = 2</code> instead of the Gaussian approximation</td>
+<td><code>createProcess(regeneration_sampler = "refined")</code></td>
+<td><code>regeneration_sampler = "gaussian"</code></td>
+</tr><tr><td>Limits of the mortality probability, per simulation step</td>
+<td><code>createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)</code></td>
+<td>
+<code>0.01</code> / <code>0.99</code>
+</td>
+</tr><tr><td>Recruitment capped by a Beverton-Holt term, with a prior on the cap</td>
+<td>
+<code><a href="../reference/finn.html">finn()</a></code>’s default regeneration process is <code>regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)</code>
+</td>
+<td><code><a href="../reference/regeneration.html">FINN::regeneration</a></code></td>
+</tr><tr><td>Lower bound on the recruit dispersion, in the draw and the likelihood alike</td>
+<td><code>createProcess(theta_floor = 0.5)</code></td>
+<td>
+<code>theta_floor = 0</code> or <code>NULL</code>
+</td>
+</tr><tr><td>Growth enters <code><a href="../reference/mortality.html">mortality()</a></code> in %/yr instead of as the raw rate</td>
+<td><code>createProcess(growth_scale = 0.01)</code></td>
+<td><code>growth_scale = 1</code></td>
+</tr><tr><td>Binned competition takes its height quantiles over the live cohorts only</td>
+<td><code>createProcess(light_mask = TRUE)</code></td>
+<td><code>light_mask = FALSE</code></td>
+</tr><tr><td>Additive recruitment floor</td>
+<td><code>createProcess(reg_floor = 1e-3)</code></td>
+<td><code>reg_floor = 0.2</code></td>
+</tr><tr><td>A numeric <code>loss_weights</code> vector multiplies the baseline-scaled objective instead of replacing it</td>
+<td><code>fit(weight_scale = "auto")</code></td>
+<td><code>weight_scale = FALSE</code></td>
+</tr><tr><td>
+<code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> and <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> leave <code>requires_grad</code> as they found it instead of switching every parameter on (<a href="https://github.com/FINNverse/FINN/issues/55" class="external-link">#55</a>)</td>
+<td>always</td>
+<td>-</td>
+</tr><tr><td>
+<code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> numbers sites, patches and species by radix order instead of the collation locale’s</td>
+<td>always</td>
+<td>reproduces 0.1.0 where <code>LC_COLLATE</code> was already <code>C</code>
+</td>
+</tr><tr><td>A hybrid growth process reads the growth predictors and a hybrid mortality process the mortality predictors (<a href="https://github.com/FINNverse/FINN/issues/72" class="external-link">#72</a>, B2)</td>
+<td>always</td>
+<td>- (0.1.0 and 0.2.0-rc fed each the other’s; identical where the two formulas are the same)</td>
+</tr></tbody></table><p>The sections <em>The stem-count gradient</em>, <em>The death draw</em>, <em>The recruit draw</em>, <em>The mortality limits</em> and <em>The recruitment cap</em> under <strong>The release in detail</strong> carry the measurements behind the first six rows.</p>
+</div>
+<div class="section level3">
+<h3 id="the-interface-of-finn-and-fit-0-2-0">The interface of <code>finn()</code> and <code>fit()</code>
+<a class="anchor" aria-label="anchor" href="#the-interface-of-finn-and-fit-0-2-0"></a></h3>
+<p>Agreed for the release so that the two central functions read for an ecologist who does not know modelling terms. Every renamed or moved argument is still accepted under its old name, with a warning that names the new form, and gives the same result.</p>
+<ul><li><p><code><a href="../reference/finn.html">finn()</a></code> writes its default processes in the signature instead of <code>NULL</code>: <code>createProcess(func = mortality)</code>, <code>createProcess(func = growth)</code>, <code>createProcess(func = regeneration_capped)</code> and <code>createProcess(func = competition)</code>. They are exactly what <code>NULL</code> used to build, and <code>NULL</code> is still accepted. <code><a href="../reference/finn.html">?finn</a></code> carries the model overview figure, says which equation each default is, that competition cannot depend on the environment, and has a complete build-estimate-simulate example.</p></li>
+<li><p><code>finn(growth_rate = c("annual", "period"))</code> replaces <code>finn(growth_period_scale = )</code>: it says what the <code>growth</code> column of the data is – the mean annual relative growth rate (default; <code>TRUE</code> was <code>"period"</code>, the relative increment over the whole interval).</p></li>
+<li><p>The recruitment floor moves to the regeneration process: <code>createProcess(reg_floor = 1e-3)</code>. <code>finn(reg_floor = )</code> is accepted with a warning and overrides the process’ value.</p></li>
+<li><p><code>finn(recruit_obs_weight = )</code> is the last argument; it matters only for sampling designs that do not count recruits per hectare, and its explanation lives in <code><a href="../reference/recruitment.html">?recruitment</a></code>.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> is titled <em>Estimate the parameters of a FINN model</em> and says that all processes are calibrated jointly. Its loss arguments stand together, each with one line and a link to the new help page <code><a href="../reference/finn_loss.html">?finn_loss</a></code> (likelihoods, aggregation, resolution, weights, the per-tree routes, <code>loss_recruit</code>); the input tables have the new help page <code><a href="../reference/finn_data.html">?finn_data</a></code> (mandatory columns, missing values, incomplete series, what FINN fills in, <code>env</code>, <code>disturbance</code>, <code>init_cohort</code>, <code>tree_data</code>, the helpers).</p></li>
+<li><p><code>fit(loss_weights = )</code> replaces <code>fit(weights = )</code>, so the name says these are the weights of the loss terms. <code>fit(weight_scale = )</code> also takes <code>TRUE</code> (= <code>"auto"</code>, the default) and <code>FALSE</code> (= <code>"raw"</code>).</p></li>
+<li><p><code>fit(loss_recruit = )</code> replaces <code>fit(recruits = )</code>; <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> and <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> keep <code>recruits =</code>, where it is not a loss setting.</p></li>
+<li><p><code>fit(control = finnControl())</code> collects the optimizer settings: <code>optimizer</code>, <code>lr_scheduler</code>, <code>lr_scheduler_params</code>, <code>clip_norm</code> and extra optimizer arguments such as <code>weight_decay</code>. <code>lr</code>, <code>epochs</code> and <code>batchsize</code> stay arguments of <code><a href="../reference/fit.html">fit()</a></code>. The four are still accepted as arguments of <code><a href="../reference/fit.html">fit()</a></code> with a warning.</p></li>
+<li><p><code>fit(loss = )</code> is deprecated in favour of <code>loss_family</code>; it is kept as the last formal argument so that it does not partially match the <code>loss_*</code> arguments. <code>loss_family</code> also takes a partial named vector (<code>c(trees = "nbinom")</code> keeps the other five defaults).</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> checks its input before anything runs and says what is wrong: a missing key or response column of <code>data</code> (a response with <code>loss_family = "none"</code> may be absent), species codes outside <code>1..N_species</code>, duplicated rows, a plain <code>data.frame</code> is accepted; <code>env</code> without a predictor column (<a href="https://github.com/FINNverse/FINN/issues/64" class="external-link">#64</a>), with a missing value, with sites that do not share the same years, or without a year that <code>data</code> observes; <code>disturbance</code> without <code>intensity</code>, with values outside <code>[0, 1]</code>, or over other sites and years than <code>env</code>. <code><a href="../reference/fit.html">fit()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> warn when <code>patches</code> is given with <code>init_cohort</code> and differs (it is ignored, <a href="https://github.com/FINNverse/FINN/issues/66" class="external-link">#66</a>), and when <code>patch_size</code> differs from the one the model was last fitted or simulated with; <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code>/<code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> default <code>patch_size</code> to the fitted one. <code>fit(start_time = )</code> warns that it has no effect in 0.2.0.</p></li>
+<li><p>The progress plot of <code>fit(plot_progress = TRUE)</code> shows every loss term over the whole range: it is redrawn each epoch with the y-axis fitted to the data, so a term that rises above its starting value is no longer cut off, and a term that is switched off is left out.</p></li>
+<li><p><code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code>/<code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> share one help page with a description; their examples fit two epochs first, so they run on the bundled data (an unfitted model has no environment scaling yet).</p></li>
+<li><p>Removed from the exported interface, as nothing in the package, the tests or the vignettes used them: <code>aggregate_results_old()</code>, <code>np_runif()</code>, <code>sample_poisson_relaxed()</code>, the undocumented <code><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot()</a></code> method of a model (use <code><a href="../reference/ALE.html">ALE()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary()</a></code>), and the internal helpers <code>groupby_mean()</code> and <code>index_species()</code> are no longer exported.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-and-data-preparation-0-2-0">Documentation and data preparation<a class="anchor" aria-label="anchor" href="#documentation-and-data-preparation-0-2-0"></a></h3>
+<ul><li><p>The process functions <code><a href="../reference/growth.html">growth()</a></code>, <code><a href="../reference/mortality.html">mortality()</a></code>, <code><a href="../reference/regeneration.html">regeneration()</a></code>, <code><a href="../reference/competition.html">competition()</a></code> and <code><a href="../reference/regeneration_capped.html">regeneration_capped()</a></code>, <code><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary()</a></code> of a model, <code><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot()</a></code> of an <code><a href="../reference/ALE.html">ALE()</a></code> object, <code><a href="../reference/compute_env_scaling.html">compute_env_scaling()</a></code> and <code><a href="../reference/dbh2ba.html">dbh2ba()</a></code> have runnable examples in the context of the fitting workflow; the <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> method of <code><a href="../reference/finnControl.html">finnControl()</a></code> is documented with it. <code><a href="../reference/fit.html">?fit</a></code> says in a few lines what makes a fit faster instead of reporting the benchmark behind it, the <code>env_autoscale</code> item is short and points to <code><a href="../reference/finn_data.html">?finn_data</a></code>, and the help pages no longer cite issue numbers.</p></li>
+<li><p>Examples for the fitting workflow (<code><a href="../reference/finn.html">finn()</a></code>, <code><a href="../reference/fit.html">fit()</a></code>, <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code>, <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code>, <code><a href="../reference/predictTrees.html">predictTrees()</a></code>, <code><a href="../reference/regeneration_capped.html">regeneration_capped()</a></code>, <code><a href="../reference/regeneration_adult.html">regeneration_adult()</a></code>, gated on an installed torch backend) and for the data helpers (<code><a href="../reference/makeObsData.html">makeObsData()</a></code>, <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code>, <code><a href="../reference/makeInitCohorts.html">makeInitCohorts()</a></code>, <code><a href="../reference/climateDF2array.html">climateDF2array()</a></code>); the fitting vignettes gain sections on loss balancing, convergence checks, persistence and blocked holdouts, staged calibration, the recruitment cap and per-tree mortality scoring.</p></li>
+<li><p>New datasets <code>fia_tree_dt</code> and <code>fia_tree_test</code>: the individual trees behind the mortality counts of <code>fia_obs_dt</code> and <code>fia_obs_test</code> (dbh, growth, fate and interval length per tree, all macroplot trees). The FIA vignette uses them to score mortality per tree (<code>loss_aggregation = c(mortality = "tree")</code>) and compares the size-mortality curve of that fit with the site-level fit.</p></li>
+<li><p><code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> returns <code>env_dt</code> with one row per site and year; it used to repeat each row once per patch, which <code><a href="../reference/climateDF2array.html">climateDF2array()</a></code> now rejects, so <code><a href="../reference/fit.html">fit()</a></code> failed on the output of the documented data-preparation pipeline.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> stops when the per-site path (<code>loss_aggregation = "tree"</code> or <code>model$period_mode = "per_site"</code>) meets a <code>data</code> without a finite <code>period_length</code>. Every site’s window was then empty and all six loss terms were zero, so the fit ran to the end without scoring anything (<a href="https://github.com/FINNverse/FINN/issues/46" class="external-link">#46</a>). The <code>data</code> documentation no longer claims that <code>period_length</code> must be the same for every site.</p></li>
+<li>
+<p><code><a href="../reference/fit.html">fit()</a></code> gains <code>threads</code>, torch’s intra-op thread count during the fit. The default <code>NULL</code> leaves torch’s setting alone, so <code>OMP_NUM_THREADS</code> or <code><a href="https://torch.mlverse.org/docs/reference/threads.html" class="external-link">torch_set_num_threads()</a></code> keep working. FINN’s forward pass is a chain of small tensor operations, and extra threads rarely pay (<a href="https://github.com/FINNverse/FINN/issues/48" class="external-link">#48</a>):</p>
+<ul><li>on macOS one thread was up to 30 % faster at the size of a BWI calibration batch (512 sites x 25 patches);</li>
+<li>on a 64-core Linux node the thread count changed little, and only a single 2000-site batch gained from 4 threads.</li>
+</ul><p><code>threads = 1</code> is the considerate choice when several fits share a machine. Where torch uses OpenMP the previous count is restored afterwards. torch’s native backend (macOS) allows one change per session, so there the session keeps the count, and <code><a href="../reference/fit.html">fit()</a></code> says so when an earlier setting prevents the change.</p>
+</li>
+</ul></div>
+<div class="section level3">
+<h3 id="the-release-in-detail-0-2-0">The release in detail<a class="anchor" aria-label="anchor" href="#the-release-in-detail-0-2-0"></a></h3>
+<p>This release adds the model features developed for the <strong>FIA</strong> (US Forest Inventory and Analysis) and <strong>BWI</strong> (German Bundeswaldinventur) calibration projects. Every new argument defaults to the previous behaviour, with three exceptions that do not reproduce 0.1.0 and are marked in the table below: <code>mortality(growth_scale = 0.01)</code>, <code>createProcess(light_mask = TRUE)</code> and <code>createProcess(reg_floor = 1e-3)</code>. Two further exceptions repair the stem-count gradient and are on by default: <code>fit(trees_offset = 0.01)</code> and <code>fit(rb_gradient = TRUE)</code>, both described under <em>The stem-count gradient</em> below. One further change reproduces 0.1.0 only on a machine whose <code>LC_COLLATE</code> was already <code>C</code>: <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> now numbers sites, patches and species by radix order instead of the collation locale’s.</p>
+<p>The two tables are the overview; the sections below them carry the detail.</p>
+<div class="section level4">
+<h4 id="the-stem-count-gradient-0-2-0">The stem-count gradient<a class="anchor" aria-label="anchor" href="#the-stem-count-gradient-0-2-0"></a></h4>
+<p>Two defects in how the <code>trees</code> term reached the parameters, both repaired here and both on by default (FINNverse/FINN#53).</p>
+<p>The count likelihood added a constant to the predicted stem count so that <code>log_prob</code> stays finite where a species’ simulated count is exactly zero and the observed one is not. That constant was <code>1e-5</code> for <code>"poisson"</code> and <code>0.001</code> for <code>"nbinom"</code>, which leaves the value finite and the gradient at <code>y/offset</code> – four orders of magnitude above every other term in the objective. Where the gradients are clipped per group, one such cell then rescales the whole mechanistic block. <code>fit(trees_offset = )</code> exposes the constant and defaults to <code>0.01</code>, on the scale of the predicted count. <code>NULL</code> restores the two historical values.</p>
+<p>The simulator draws deaths and recruits and rounds them, and the gradient ran through both the reparameterised draw and the rounding’s straight-through surrogate, so the sampler’s noise reached the parameters. On the German inventory 97 % of the mortality gradient was draw noise (signal-to-noise 0.52 against 43 without it), which made a fit diverge or not depending on the host’s float kernels. <code>fit(rb_gradient = TRUE)</code> keeps the drawn, rounded count in the forward pass – a simulation is unchanged – and takes the derivative through <code>n_at_risk * m</code> and the expected recruitment instead. Against a 200-draw reference gradient the repaired direction agrees to a cosine of 1.000 in every parameter block at <code>update_step = 1</code>, where the unrepaired objective’s cosine is negative. <code>FALSE</code> restores the previous path.</p>
+<p>Only fits that score <code>trees</code> are affected; a model scoring growth and mortality alone has no such term.</p>
+</div>
+<div class="section level4">
+<h4 id="the-death-draw-0-2-0">The death draw<a class="anchor" aria-label="anchor" href="#the-death-draw-0-2-0"></a></h4>
+<p><code>mortality_draw</code> gains <code>"binomial"</code>, which is the new default, and <code>"bernoulli"</code>.</p>
+<p><code>"binomial"</code> is the exact binomial, and it resolves by whether the draw has to carry a gradient. With <code>rb_gradient = TRUE</code> (also the new default) the drawn count is detached and the derivative comes from the expectation, so the draw is torch’s own binomial: exact in both moments at constant memory, and non-differentiable, which no longer matters. With <code>rb_gradient = FALSE</code> the gradient reaches the mortality parameters <em>through the state</em> – deaths enter <code>trees</code>, <code>trees</code> enters <code>ba</code> – so the draw must be differentiable, and it resolves to the moment-matched Gamma instead. Measured on that state path, the Gamma gives -39.36 against the expectation’s -39.32, while a straight-through Bernoulli gives -22.59 and the capped Poisson gives exactly 0.</p>
+<p>Consequence worth knowing: under <code>"binomial"</code>, switching <code>rb_gradient</code> changes the sampler as well as the gradient, so the two no longer simulate the same stand. Hold <code>mortality_draw</code> fixed to compare them.</p>
+<p><code>"poisson"</code> (a Bernoulli for one-tree cohorts, otherwise a capped Poisson) stays available. It is integer-valued and exact in expectation for small <code>n*p</code>, but its variance is <code>n*p</code> rather than <code>n*p*(1-p)</code> – measured 12.044 against 8.400 at <code>n = 40</code>, <code>p = 0.3</code> – and it has no pathwise gradient. Combining it with <code>rb_gradient = FALSE</code> leaves the mortality parameters with exactly zero gradient, so that combination is now refused rather than silently fitted.</p>
+<p><code>"bernoulli"</code> is <code><a href="../reference/binomial_from_bernoulli.html">binomial_from_bernoulli()</a></code>, repaired in this release (FINNverse/FINN#62): it returned exactly zero for every input, through an inverted trial mask and a reparameterised draw that was passed to a second <code><a href="https://torch.mlverse.org/docs/reference/torch_bernoulli.html" class="external-link">torch_bernoulli()</a></code>. It is exact in both moments and keeps a gradient path, but expands each cell to the largest cohort in the batch, so its memory grows with the largest <code>trees</code> value in the data.</p>
+</div>
+<div class="section level4">
+<h4 id="the-recruit-draw-0-2-0">The recruit draw<a class="anchor" aria-label="anchor" href="#the-recruit-draw-0-2-0"></a></h4>
+<p><code>createProcess(regeneration_sampler = "refined")</code> becomes the default. It samples exactly below <code>lambda = 2</code> and drops the <code>+0.001</code> offset and the <code>1e-4</code> clamp, which together imposed a recruitment floor of 0.0011 per cell-year – at a 0.0168 ha patch, 0.066 recruits per hectare and year <strong>per species</strong>. <code>regeneration_sampler = "gaussian"</code> restores the previous draw.</p>
+</div>
+<div class="section level4">
+<h4 id="the-mortality-limits-0-2-0">The mortality limits<a class="anchor" aria-label="anchor" href="#the-mortality-limits-0-2-0"></a></h4>
+<p>The simulation clamps the per-cohort mortality probability before the death draw. That interval was hard-coded to <code>[0.01, 0.99]</code>; it is now <code>createProcess(mortality_floor =, mortality_ceiling =)</code> and defaults to <code>[0.001, 0.999]</code>.</p>
+<p>The bound is per <strong>simulation step</strong>, not per year, and the old floor is why a simulated low-mortality stand – a mature unthinned stand, a slow-growing species, an equilibrium run – lost stems the observations did not: at a 1 % floor every cohort is at risk at 1 % per step however low the fitted rate says it should be. The per-tree mortality loss was never bounded by it, so a fit could be correct while the trajectory it simulated was not.</p>
+<p>The floor cannot simply be dropped: <code><a href="../reference/binomial_from_gamma.html">binomial_from_gamma()</a></code>’s shape <code>n*p/(1-p)</code> degenerates as <code>p -&gt; 0</code>. Measured with that draw it stays finite with an unbiased mean gradient down to <code>1e-4</code>, but single-draw gradients grow heavy-tailed as <code>n*p</code> shrinks – the largest per-tree gradient is about ten times the old default’s at <code>1e-3</code> and about a hundred times at <code>1e-4</code> – so <code>1e-3</code> is the lowest tested value and is the new default.</p>
+</div>
+<div class="section level4">
+<h4 id="the-recruitment-cap-0-2-0">The recruitment cap<a class="anchor" aria-label="anchor" href="#the-recruitment-cap-0-2-0"></a></h4>
+<p><code><a href="../reference/regeneration_capped.html">regeneration_capped()</a></code> replaces <code><a href="../reference/regeneration_capped.html">regeneration_saturation()</a></code> (kept as a deprecated alias for one release) and becomes the default regeneration process. <code><a href="../reference/regeneration.html">FINN::regeneration</a></code>, unbounded as before, stays available and is now the opt-in.</p>
+<p>Two things change beyond the name. The cap parameter <code>reg_logK</code> is <strong>created by FINN</strong>, so nothing has to be declared through <code>custom_parameters</code> any more; <code>createProcess(cap = )</code> sets its resolution, <code>"all"</code> for one cap shared by every species and <code>"species"</code> for one per species.</p>
+<p>And the cap carries a prior, because nothing else in the objective constrains it: a cap fitted freely runs to whatever the calibration window supports, which on a national inventory is far above anything observed. The penalty is <code>prior_lambda * (log K - log prior)^2</code> per cap, the same form as the L2 pull of a staged calibration. <code>prior = "max_obs_recruits"</code> (the default) resolves it at the start of the first <code><a href="../reference/fit.html">fit()</a></code> from the largest observed recruitment rate per timestep, <code>max(reg / period_length)</code> – <code>reg</code> is the sum over an observation’s interval while the cap bounds one timestep’s mean – which is also the cap’s starting value; a later <code><a href="../reference/fit.html">fit()</a></code> continues from the trained cap rather than resetting it; a number sets the prior directly, on the same per-timestep scale; <code>prior_lambda = 0</code> switches it off. With <code>cap = "species"</code> the prior is hierarchical – each species’ log cap is pulled towards the differentiable mean of all of them, so it penalises how far the species spread apart and leaves the overall level to the data.</p>
+<p>The penalty is added <strong>after</strong> the <code>loss_weights = "auto"</code> baseline scaling, so <code>prior_lambda</code> means the same thing on every dataset.</p>
+</div>
+<div class="section level4">
+<h4 id="what-is-new-since-0-2-0">What is new since 0.1.0<a class="anchor" aria-label="anchor" href="#what-is-new-since-0-2-0"></a></h4>
+<table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th>what</th>
+<th>where</th>
+<th>default</th>
+</tr></thead><tbody><tr><td>Offset of the <code>trees</code> count likelihood where a simulated count is exactly zero</td>
+<td><code>fit(trees_offset = )</code></td>
+<td>
+<code>0.01</code>; <strong>not</strong> 0.1.0 behaviour, <code>NULL</code> restores it</td>
+</tr><tr><td>Exact binomial death draw instead of the moment-matched Gamma</td>
+<td>
+<code>createProcess(mortality_draw = )</code>, <code><a href="../reference/createHybrid.html">createHybrid()</a></code>
+</td>
+<td>
+<code>"binomial"</code>; <strong>not</strong> 0.1.0 behaviour, <code>"gamma"</code> restores it</td>
+</tr><tr><td>Exact recruit draw below <code>lambda = 2</code> instead of the Gaussian approximation</td>
+<td>
+<code>createProcess(regeneration_sampler = )</code>, <code><a href="../reference/createHybrid.html">createHybrid()</a></code>
+</td>
+<td>
+<code>"refined"</code>; <strong>not</strong> 0.1.0 behaviour, <code>"gaussian"</code> restores it</td>
+</tr><tr><td>Lower and upper limit of the mortality probability, per simulation step</td>
+<td>
+<code>createProcess(mortality_floor =, mortality_ceiling =)</code>, <code><a href="../reference/createHybrid.html">createHybrid()</a></code>
+</td>
+<td>
+<code>0.001</code> / <code>0.999</code>; <strong>not</strong> 0.1.0 behaviour, <code>0.01</code> / <code>0.99</code> restores it</td>
+</tr><tr><td>Lower bound on the negative-binomial recruit dispersion, applied to the draw and the likelihood alike</td>
+<td>
+<code>createProcess(theta_floor = )</code>, <code><a href="../reference/createHybrid.html">createHybrid()</a></code>
+</td>
+<td>
+<code>0.5</code>; <strong>not</strong> 0.1.0 behaviour, <code>0</code> or <code>NULL</code> restores it</td>
+</tr><tr><td>Recruit dispersion kept fixed at <code>dispersion_parameter</code> instead of estimated</td>
+<td>
+<code>createProcess(optimizeTheta = )</code>, <code><a href="../reference/createHybrid.html">createHybrid()</a></code>
+</td>
+<td>
+<code>TRUE</code> (estimated, as in 0.1.0)</td>
+</tr><tr><td>Recruitment capped by a Beverton-Holt term, with a prior on the cap</td>
+<td>
+<code><a href="../reference/finn.html">finn()</a></code>’s default regeneration process, <code>createProcess(cap =, prior =, prior_lambda =)</code>
+</td>
+<td>
+<code>regeneration_capped(cap = "all", prior = "max_obs_recruits", prior_lambda = 0.1)</code>; <strong>not</strong> 0.1.0 behaviour, <code><a href="../reference/regeneration.html">FINN::regeneration</a></code> restores it</td>
+</tr><tr><td>Count gradients taken through the expected deaths and recruits instead of through the draw</td>
+<td><code>fit(rb_gradient = )</code></td>
+<td>
+<code>TRUE</code>; <strong>not</strong> 0.1.0 behaviour, <code>FALSE</code> restores it</td>
+</tr><tr><td>Oregon FIA calibration sample as lazy-loaded datasets</td>
+<td>
+<code>fia_obs_dt</code>, <code>fia_env_dt</code>, <code>fia_init_trees</code>, <code>fia_obs_test</code>, <code>fia_env_test</code>, <code>fia_init_test</code>, <code>fia_species_dt</code>
+</td>
+<td>—</td>
+</tr><tr><td>Per-response likelihood, renamed</td>
+<td><code>fit(loss_family = )</code></td>
+<td>as <code>loss</code> had it; <code>loss</code> still accepted, deprecated</td>
+</tr><tr><td>How a response is reduced before it is scored: <code>"mean"</code>, <code>"sum"</code>, <code>"size_classes"</code>, <code>"quantiles"</code>, <code>"tree"</code>
+</td>
+<td><code>fit(loss_aggregation = )</code></td>
+<td>
+<code>NULL</code> (per-cell means)</td>
+</tr><tr><td>Tree table feeding both per-tree routes</td>
+<td><code>fit(tree_data = )</code></td>
+<td><code>NULL</code></td>
+</tr><tr><td>Score growth and mortality on each simulated cohort that started as an observed tree</td>
+<td><code>fit(loss_resolution = )</code></td>
+<td><code>"site"</code></td>
+</tr><tr><td>Evaluate the observed-tree route on a fitted model</td>
+<td><code><a href="../reference/predictTrees.html">predictTrees()</a></code></td>
+<td>new export</td>
+</tr><tr><td>Per census and epoch: <code>frac_killed</code>, <code>mean_kill_year</code>, <code>frac_ghost</code>; and the per-tree predictions</td>
+<td>
+<code>$tree_deaths</code>, <code>$tree_pred</code>
+</td>
+<td>under <code>loss_resolution = "tree"</code>
+</td>
+</tr><tr><td>Multiple shooting: rebuild the stand from the observed tree list at every anchor</td>
+<td><code>fit(reanchor = , anchor_cohorts = , anchor_mode = , anchor_min_dbh = )</code></td>
+<td>
+<code>FALSE</code>, <code>NULL</code>, <code>"replace"</code>, <code>NULL</code>
+</td>
+</tr><tr><td>Reset the stand to the observation every year</td>
+<td><code>fit(teacher_forcing = )</code></td>
+<td><code>FALSE</code></td>
+</tr><tr><td>Drive the stand with the observed recruitment (<code>reg / period_length</code> per ha and year in every year of its interval, drawn by the recruit sampler) instead of the regeneration process, which is frozen and unscored for that call: stage 2 of a staged calibration</td>
+<td>
+<code>fit(loss_recruit = )</code>; <code>simulateForest(recruits =, obs_recruits =)</code>, <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code>
+</td>
+<td>
+<code>"simulated"</code>, as in 0.1.0</td>
+</tr><tr><td>Per-site aggregation windows for mixed remeasurement intervals</td>
+<td>automatic from <code>period_length</code>; override with <code>model$period_mode</code>
+</td>
+<td><code>"auto"</code></td>
+</tr><tr><td>A non-finite loss term drops that term, or the whole timestep; occurrences counted</td>
+<td>
+<code>fit(nonfinite = )</code>, <code>$nonfinite_counts</code>
+</td>
+<td><code>"drop_term"</code></td>
+</tr><tr><td>Set-up only, no training</td>
+<td><code>fit(epochs = 0)</code></td>
+<td>—</td>
+</tr><tr><td>Per-predictor scaling: <code>"auto"</code>, <code>"identity"</code>, <code>"0to1"</code> or a function</td>
+<td><code>fit(env_autoscale = )</code></td>
+<td>
+<code>TRUE</code>, which z-scores as before; the new strings are opt-in</td>
+</tr><tr><td>Recruitment limited by conspecific adults</td>
+<td><code><a href="../reference/regeneration_adult.html">regeneration_adult()</a></code></td>
+<td>new export</td>
+</tr><tr><td>Conspecific adult density as an effect on recruitment, with a share <code>f0</code> recruited without adults</td>
+<td><code><a href="../reference/regeneration_adult_effect.html">regeneration_adult_effect()</a></code></td>
+<td>new export</td>
+</tr><tr><td>A process function declares and calibrates its own named parameters</td>
+<td><code>createProcess(custom_parameters = )</code></td>
+<td><code>NULL</code></td>
+</tr><tr><td>
+<strong>Additive recruitment floor, was hard-coded at 0.2.</strong> A default that does <strong>not</strong> reproduce 0.1.0 — see below</td>
+<td>
+<code>createProcess(reg_floor = )</code> on the regeneration process</td>
+<td>
+<strong><code>1e-3</code></strong> (was 0.2)</td>
+</tr><tr><td>Observation operator mapping predicted and observed recruitment per ha into the tallied-count space of the sampling design (applied under the <code>"nbinom"</code> regeneration likelihood only, <a href="https://github.com/FINNverse/FINN/issues/65" class="external-link">#65</a>)</td>
+<td><code>finn(recruit_obs_weight = )</code></td>
+<td><code>1.0</code></td>
+</tr><tr><td>Score growth over the whole remeasurement interval</td>
+<td><code>finn(growth_rate = )</code></td>
+<td><code>"annual"</code></td>
+</tr><tr><td>
+<strong>Binned competition takes its height quantiles over the live cohorts only.</strong> A default that does <strong>not</strong> reproduce 0.1.0 — see below</td>
+<td><code>createProcess(light_mask = )</code></td>
+<td>
+<strong><code>TRUE</code></strong> (was unmasked)</td>
+</tr><tr><td>A cohort id identifies the initial cohort it came from, so a simulated cohort traces back to its tree</td>
+<td>
+<code>simulateForest(return_cohorts = TRUE)</code>, <code>$pred</code>
+</td>
+<td>—</td>
+</tr><tr><td>
+<strong>A numeric <code>weights</code> vector multiplies the baseline-scaled objective instead of replacing it.</strong> A default that does <strong>not</strong> reproduce 0.1.0</td>
+<td>
+<code>fit(loss_weights = )</code>, <code>fit(weight_scale = )</code>
+</td>
+<td>
+<strong><code>"auto"</code></strong>; <code>weight_scale = FALSE</code> restores the old meaning</td>
+</tr><tr><td>
+<strong>Growth enters <code><a href="../reference/mortality.html">mortality()</a></code> in %/yr.</strong> A default that does <strong>not</strong> reproduce 0.1.0 — existing code changes its answer</td>
+<td>
+<code>mortality(growth_scale = )</code>, overridable per model with <code>createProcess(growth_scale = )</code>
+</td>
+<td>
+<strong><code>0.01</code></strong> (was the raw rate); <code>growth_scale = 1</code> restores 0.1.0</td>
+</tr></tbody></table></div>
+<div class="section level4">
+<h4 id="what-was-broken-0-2-0">What was broken<a class="anchor" aria-label="anchor" href="#what-was-broken-0-2-0"></a></h4>
+<p>Most of these were silent. The last column says whether a result changes for someone who was affected.</p>
+<table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><thead><tr><th>defect</th>
+<th>results change?</th>
+</tr></thead><tbody><tr><td>
+<code>fit(epochs = 0)</code> ran two epochs (<code>1:0</code>)</td>
+<td>yes — it trained when asked not to</td>
+</tr><tr><td>
+<code>createProcess(upper = , lower = )</code> were overwritten with <code>NULL</code>, so every fit ran on the process defaults</td>
+<td>yes — a fit asking for tighter bounds ran unconstrained</td>
+</tr><tr><td>
+<code>createProcess(NN = )</code> was dropped inside <code>create_nn()</code>
+</td>
+<td>yes — the supplied network was not used</td>
+</tr><tr><td>
+<code>createProcess(growth_scale = )</code> was unvalidated: a bare <code>NA</code> divides by 1 and silently restores the 0.1.0 objective, <code>0</code> saturates mortality</td>
+<td>yes, and with nothing to signal it; now an error</td>
+</tr><tr><td>A <code><a href="https://torch.mlverse.org/docs/reference/torch_load.html" class="external-link">torch_load()</a></code>ed model’s optimizer was reused although it no longer owned the model’s tensors</td>
+<td>yes — a crash (<code>optim_ignite_*</code>) or no training at all (<code>optim_adam</code>)</td>
+</tr><tr><td>Observed-tree, size-class and quantile tensors of an earlier <code><a href="../reference/fit.html">fit()</a></code> were still evaluated in <code>forward()</code>
+</td>
+<td>yes — a stale term entered the loss</td>
+</tr><tr><td>
+<code><a href="../reference/fit.html">fit()</a></code> set-up looked site and year up by linear scan, O(rows x sites)</td>
+<td>no — arrays bit-identical; ~20 min of set-up per fit at 32,686 sites</td>
+</tr><tr><td>Observed-tree tensors were sized by <code>patches</code>, not by the patches the trees occupy</td>
+<td>no — light is per patch; <code>predictTrees(patches = )</code> is now ignored</td>
+</tr><tr><td>Per-tree growth and mortality were evaluated at the interval’s last year only, against interval observations</td>
+<td>yes, for the per-tree routes (new in 0.2.0)</td>
+</tr><tr><td>
+<code><a href="../reference/predictTrees.html">predictTrees()</a></code> returned rows in its own order, and failed on a model that had never been run</td>
+<td>yes — misaligned predictions</td>
+</tr><tr><td>A tracked cohort the simulation killed left the scored set mid-window, so the scored sample was a function of the parameters</td>
+<td>yes, for <code>loss_resolution = "tree"</code> (new in 0.2.0)</td>
+</tr><tr><td>A retained dead cohort, and any empty padding slot, moved the height quantiles of the binned competition and so the light of the living</td>
+<td>yes — masking is now the default; <code>light_mask = FALSE</code> keeps the old behaviour</td>
+</tr><tr><td>
+<code>torch_nanquantile</code> over a patch with no live cohort returned <code>NaN</code> into the likelihood</td>
+<td>yes — the fit aborted; the quantiles are now 0</td>
+</tr><tr><td>A per-tree term was scored under a weight taken from the per-tree null while the cell term ran</td>
+<td>yes, on data with a constant census period</td>
+</tr><tr><td>With sites observed in different years, each response’s loss summed one mean per observation year, so a year with ten trees weighed as much as one with thousands</td>
+<td>yes, for <code>period_mode = "per_site"</code> — the loss is now one pooled mean per batch</td>
+</tr><tr><td>
+<code>period_mode = "constant"</code> with a per-tree term was silently overridden, with a false reason</td>
+<td>yes — now an error naming both halves</td>
+</tr><tr><td>Cohort ids were enumerated flat over the whole array, losing the tree each cohort came from</td>
+<td>no — the link was recoverable, just not without a positional formula</td>
+</tr><tr><td>
+<code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> numbered sites, patches and species through <code>LC_COLLATE</code>, so the same tables gave different integer ids on a German and on a <code>C</code> machine</td>
+<td>yes, off a <code>C</code> locale — the species number indexes <code>par_growth</code> / <code>par_mortality</code>, so a parameter row belonged to another species</td>
+</tr><tr><td>
+<code>$tree_deaths</code> counted an earlier window’s ghosts among this window’s kills, and recorded liveness before the death draw</td>
+<td>diagnostic only — <code>frac_killed</code> was identically 0 on a one-year window</td>
+</tr><tr><td>
+<code>$tree_pred</code> was not reset by <code><a href="../reference/fit.html">fit()</a></code>, and <code>$tree_deaths</code> reported <code>NaN</code> for a census with no fate target</td>
+<td>diagnostic only</td>
+</tr><tr><td>A U+039B and a U+00D7 in <code><a href="../reference/fit.html">?fit</a></code>, a stray <code>\cr</code>, two dangling <code>\link</code> targets, a <code>@param</code> on the wrong function</td>
+<td>no — the LaTeX manual and two <code>R CMD check</code> WARNINGs</td>
+</tr></tbody></table></div>
+</div>
+<div class="section level3">
+<h3 id="new-features-0-2-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-2-0"></a></h3>
+<ul><li><p><strong><code><a href="../reference/regeneration_adult_effect.html">regeneration_adult_effect()</a></code>: conspecific adults as an effect, not a gate.</strong> <code><a href="../reference/regeneration_adult.html">regeneration_adult()</a></code> multiplies the whole potential recruitment by <code>A / (A + A_half)</code>, so a species without adults on a site recruits only at <code>reg_floor</code> and bare ground cannot be colonised. The new process uses <code>f(A) = f0 + (1 - f0) A / (A + A_half)</code> with <code>f0 = plogis(reg_adult_logitf0)</code>, a new custom parameter (shared or per species) for the share of the potential recruitment without conspecific adults (seed rain from outside, advance regeneration). <code>f0 -&gt; 1</code> is <code><a href="../reference/regeneration_capped.html">regeneration_capped()</a></code>, <code>f0 -&gt; 0</code> is <code><a href="../reference/regeneration_adult.html">regeneration_adult()</a></code>, which is unchanged. See <code><a href="../reference/regeneration_adult_effect.html">?regeneration_adult_effect</a></code> and <code><a href="../reference/recruitment.html">?recruitment</a></code>.</p></li>
+<li><p><strong>Bundled Oregon FIA data as package datasets.</strong> The calibration sample that the <code>D-Fit_to_FIA</code> and <code>E-Mortality</code> vignettes fit on now ships as lazy-loaded datasets in FINN’s input format: <code>fia_obs_dt</code>, <code>fia_env_dt</code>, <code>fia_init_trees</code> (200 training sites), <code>fia_obs_test</code>, <code>fia_env_test</code>, <code>fia_init_test</code> (200 disjoint holdout sites) and <code>fia_species_dt</code> (the shared species coding). They are ready for <code><a href="../reference/fit.html">fit()</a></code> / <code><a href="../reference/makeInitCohorts.html">makeInitCohorts()</a></code> without any file reading; see <code><a href="../reference/fia_obs_dt.html">?fia_obs_dt</a></code>. The <code>fia_*.csv</code> files previously under <code>inst/extdata</code> are gone (the xz-compressed datasets are ~120 KB versus ~2.2 MB of CSV); the <code>example_*.csv</code> raw inputs for the data-preparation vignette stay.</p></li>
+<li><p><strong>Scoring individual trees, two ways.</strong> <code><a href="../reference/fit.html">fit()</a></code> can score <code>growth</code> and <code>mortality</code> per observed tree instead of per site, species and census. Both options take the same tree table in <code>tree_data</code> (one row per tree and census: <code>siteID</code>, <code>year</code>, <code>patchID</code>, <code>species</code>, <code>growth</code>, <code>died</code>, …) and are chosen explicitly: <code>loss_aggregation = c(growth = "tree", mortality = "tree")</code> predicts each OBSERVED tree (its measured <code>dbh</code>, light from the observed stand; the responses can be chosen separately and the initial cohorts may be binned), while <code>loss_resolution = "tree"</code> predicts each SIMULATED cohort that started as an observed tree along the model’s own trajectory (needs a <code>cohortID</code> column and one initial cohort per tree; combines with <code>reanchor</code> and <code>teacher_forcing</code>). <code>loss_resolution = "tree"</code> no longer takes a list of per-timestep target arrays — fit() builds those from the table and refuses any row it cannot place on an initial cohort. See <code><a href="../reference/fit.html">?fit</a></code>, section <em>Scoring individual trees</em>, for the comparison. The two cannot be combined on one response. <code><a href="../reference/predictTrees.html">predictTrees()</a></code> evaluates the first option on a fitted model. <code>loss_resolution = "tree"</code> reports <code>$tree_deaths</code> per census and epoch: the share of inventory-alive trees the simulation killed inside the window (<code>frac_killed</code>), the mean year it killed them (<code>mean_kill_year</code>), and the share that entered the window already dead from an earlier one (<code>frac_ghost</code>). Liveness is recorded after the death draw as well as before it: on the entering count alone a cohort killed in the window’s LAST year is indistinguishable from a survivor, so both numbers were undercounts and <code>frac_killed</code> was identically 0 on a one-year window. On the three-site, 24-tree fixture of <code>tests/testthat/test-tree-loss.R</code> the correction moves <code>frac_killed</code> from 0 to 0.167 and 0.208 on two one-year windows, from 0.250 and 0.042 to 0.292 and 0.125 on two three-year windows, and from 0.458 to 0.625 on a single four-year window, with <code>mean_kill_year</code> rising 1.82 to 2.40 there. <code>frac_ghost</code> is unchanged.</p></li>
+<li><p><strong>Training regimes: <code>reanchor</code> and <code>teacher_forcing</code>.</strong> Multiple shooting (<code>reanchor = TRUE</code> with <code>anchor_cohorts</code>, optionally <code>anchor_mode = "merge"</code> below <code>anchor_min_dbh</code>) rebuilds the simulated stand from the observed tree list at every census; <code>teacher_forcing = TRUE</code> resets it every year. The development branch’s <code>fit(shooting = "multiple")</code>, which re-anchored to the tree table itself, was dropped before release in favour of these.</p></li>
+<li><p><strong>Two repairs to the stochastic draws (<code>createProcess(mortality_draw = , regeneration_sampler = )</code>).</strong> Both are on by default in 0.2.0: <code>mortality_draw = "binomial"</code> and <code>regeneration_sampler = "refined"</code>. <code>mortality_draw = "gamma"</code> and <code>regeneration_sampler = "gaussian"</code> restore the draws of 0.1.0, which are bit-identical to it (<code>tests/testthat/test-identity.R</code>, config <code>sample_reg</code>). The integer-valued alternative <code>mortality_draw = "poisson"</code> replaces the Gamma matched to the binomial’s first two moments by a Bernoulli draw where the cohort holds one tree or fewer and a Poisson capped at the cohort size otherwise: the default draw is rounded straight-through by the forward pass and then delivers 0.68-0.72 of the calibrated deaths for one-tree cohorts at annual probabilities of 0.01-0.10, and its pathwise gradient runs through a quantity the simulation discards. <code>regeneration_sampler = "refined"</code> drops the <code>+0.001</code> Gamma offset and the <code>1e-4</code> probability clamp (both guard the Gaussian branch against a negative draw and a NaN gradient through <code>log(0)</code>; neither hazard applies to <code>torch_poisson</code>) and samples exactly below <code>lambda = 2</code>. The offset and the clamp are a recruitment floor of 0.0011 per cell-year, which at a patch of 0.0168 ha is 0.066 recruits ha^-1 yr^-1 per species – over a hundred-odd species, as large as a temperate inventory’s whole ingrowth. Both repairs move the simulated stand at equilibrium by a factor of several in basal area and stem number while barely moving the fitted loss: the holdout cannot separate them, the simulated stand can.</p></li>
+<li><p><strong><code>fit(nonfinite = )</code>.</strong> When one of the six loss terms is not finite at a timestep, <code>"drop_term"</code> (the default) leaves only that term out, still backpropagates the other responses there and counts the occurrences in <code>model$nonfinite_counts</code>; <code>"skip_step"</code> discards the whole timestep, which is what earlier versions did.</p></li>
+<li><p><strong>Per-predictor environmental scaling (<code>env_autoscale</code>).</strong> Previously every environmental predictor was standardised the same way. <code>env_autoscale</code> now takes a per-predictor specification — <code>"auto"</code> (z-score, the default), <code>"identity"</code> (leave as supplied), <code>"0to1"</code> (min-max), or a user-supplied <code>function(x)</code> returning <code>list(center=, scale=)</code> — given either as a single value applied to all predictors or as a named vector/list per predictor. Every mode is affine, so ALE interpretation stays invertible. The fitted constants remain accessible via <code><a href="../reference/compute_env_scaling.html">compute_env_scaling()</a></code> / <code><a href="../reference/apply_env_scaling.html">apply_env_scaling()</a></code>. Dispatch is fully backward compatible: the previous <code>TRUE</code> / <code>FALSE</code> / <code>NULL</code> forms behave exactly as before.</p></li>
+<li><p><strong>Recruitment observation weight (<code>finn(recruit_obs_weight = )</code>).</strong> An observation operator, not a weight of the loss term: it multiplies predicted and observed recruitment per ha alike before the regeneration likelihood, so that the likelihood scores the counts a sampling design actually tallies. In 0.2.0 it is applied under <code>loss_family["regeneration"] = "nbinom"</code> only (<a href="https://github.com/FINNverse/FINN/issues/65" class="external-link">#65</a>).</p></li>
+<li><p><strong>Period-scale growth scoring (<code>finn(growth_rate = "period")</code>).</strong> Scores growth over a multi-year remeasurement interval rather than a single step, for inventories whose growth is only observed between remeasurements.</p></li>
+<li><p><strong>Custom process parameters (<code>createProcess(custom_parameters = )</code>).</strong> Lets a user-supplied process function declare and calibrate its own named parameters, beyond FINN’s built-in per-species and per-environment coefficients.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="behaviour-changes-0-2-0">Behaviour changes<a class="anchor" aria-label="anchor" href="#behaviour-changes-0-2-0"></a></h3>
+<ul><li>
+<p><strong>Calibration runs on annual simulation steps: data preparation, bundled data and vignettes.</strong> One simulation step per ten-year remeasurement interval distorts the dynamics: recruitment, competition and growth act once per decade, and the per-step mortality floor and ceiling become limits per decade. On FIA Oregon a model calibrated that way grew to a bare-ground equilibrium of 100-170 m2/ha that was still rising; calibrated on annual steps it levels off at 45-60 m2/ha. So everything the package ships now uses one step per year:</p>
+<ul><li>
+<code>makeObsData(rates = c("annual", "interval"))</code>: <code>growth</code> and <code>mort</code> are yearly rates by default, <code>(dbh / dbh_before)^(1 / p) - 1</code> per tree and <code>1 - (1 - n_died / n_at_risk)^(1 / p)</code> per cohort over an interval of <code>p</code> years, and the table carries <code>period_length</code> (years since the previous inventory). <code>n_at_risk</code>, <code>n_died</code>, <code>growth_n</code> and <code>reg</code> stay quantities of the interval, as <code><a href="../reference/fit.html">fit()</a></code> uses them: it averages the simulated yearly growth and mortality over the <code>period_length</code> years before a census, scores <code>mort</code> with the binomial weighted by <code>n_at_risk</code>, and sums the simulated recruits. The returned tree list gains <code>growth</code>, the tree’s rate in the same unit (<code>rel_growth</code> stays the interval increment). <code>rates = "interval"</code> returns the rates over the whole interval, as before.</li>
+<li>
+<code>resolveSiteIDs(time_axis = c("annual", "census"))</code>: <code>year</code> is the number of years since the first inventory (0, 10, 20 rather than 0, 1, 2), the first inventory is the initial state (initial cohorts, no observation row), and <code>env_dt</code> comes back with one row per site and year <code>1..Tmax</code>, so it needs one row per calendar year (a static climate is repeated). <code>env_dt</code> now holds only <code>siteID</code>, <code>year</code> and the predictors, which is what <code>fit(env = )</code> accepts (it carried the character <code>siteName</code>, which <code><a href="../reference/fit.html">fit()</a></code> refuses). <code>time_axis = "census"</code> keeps the inventory index of 0.1.0, but builds the initial cohorts from the first inventory, as the annual axis does; 0.1.0 took the second inventory (<code>year == 1</code>) for them, so 0.1.0 results are not reproduced exactly on the census axis either.</li>
+<li>The bundled FIA datasets (<code>fia_obs_dt</code>, <code>fia_env_dt</code>, <code>fia_obs_test</code>, <code>fia_env_test</code>) are rebuilt on the annual axis from the same plots and sample: observations at years 10 and 20 (21 and 22 for two sites whose third inventory came late) with <code>period_length</code>, yearly growth and mortality, and <code>env</code> over years 1..22. Growth is now also tree-weighted across patches as <code><a href="../reference/makeObsData.html">makeObsData()</a></code> defines it; the old table carried the unweighted mean of the patch means. <code>ba</code>, <code>dbh</code>, <code>trees</code>, <code>reg</code> and the counts are unchanged; <code>example_env_dt.csv</code> has one row per calendar year.</li>
+<li>The vignettes, examples and tests that use these data simulate the 20 years between the inventories. The vignettes score a fitted model the way <code><a href="../reference/fit.html">fit()</a></code> does: the stand at the census year, growth and mortality averaged over the <code>period_length</code> years before it, and the expected recruits per hectare (<code>r_mean_ha</code>) summed over them. Results computed on the bundled data or with <code><a href="../reference/makeObsData.html">makeObsData()</a></code> / <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> defaults change.</li>
+</ul></li>
+<li><p><strong>The simulated rates of an interval are compounded as the observed rates are.</strong> <code>makeObsData(rates = "annual")</code> derives a yearly growth rate as <code>(dbh / dbh_before)^(1 / p) - 1</code> and a yearly mortality as <code>1 - (1 - d / n)^(1 / p)</code> over an interval of <code>p</code> years, but <code><a href="../reference/fit.html">fit()</a></code> compared them with the arithmetic mean of the simulated yearly rates over the <code>period_length</code> window. With one disturbance year in a window the two differ a lot: a mortality of 0.5 in one year and 0.01 in nine is observed as 0.0754, and the mean is 0.059. <code><a href="../reference/fit.html">fit()</a></code> now compounds the window the same way, growth as <code>exp(mean(log1p(g))) - 1</code> and mortality as <code>1 - exp(mean(log1p(-m)))</code>, with the same masks as before: a year outside a site’s window or without trees counts as growth 0 and survival 1, and the denominator is the full <code>period_length</code>, since the observed rate is derived from the counts over the whole interval. Mortality is clamped below <code>1 - 1e-4</code> before the log (sigmoid saturates to exactly 1 in float32 above a logit of 17.3), growth is not clamped (the package’s growth is non-negative). The per-tree route follows for growth (<code>loss_aggregation = "tree"</code>, <code>loss_resolution = "tree"</code>, <code><a href="../reference/predictTrees.html">predictTrees()</a></code>); its mortality was already the compounded interval probability against the tree’s 0/1 fate. The constant increment of <code>finn(growth_rate = "period")</code> is unchanged, as is the census axis, where one step is one interval. Vignettes D and E score the fitted models with the same functional. Fits on data with <code>period_length &gt; 1</code> change; the identity snapshots of the test suite were regenerated.</p></li>
+<li><p><strong>Mortality starts at about 2 % per year.</strong> The environmental response of <code><a href="../reference/mortality.html">mortality()</a></code> started at torch’s random weights, i.e. at <code>sigmoid(0) = 0.5</code> per step at the average environment, so on yearly steps an unfitted stand lost most of its basal area within ten years and the first epochs of a fit began from a dying stand. Without <code>createProcess(initEnv = )</code> the response now starts with an intercept of <code>qlogis(0.02)</code> and every other weight 0 (with <code>hidden</code> layers the output bias carries the intercept); the species terms for light, size and growth move the start by at most about one logit unit. A formula without an intercept (<code>~ 0 + temp</code>) keeps torch’s start. <code><a href="../reference/finn.html">?finn</a></code>, <code><a href="../reference/createProcess.html">?createProcess</a></code> and <code><a href="../reference/mortality.html">?mortality</a></code> say so. Fits and simulations that did not set <code>initEnv</code> for mortality start from another point and so change.</p></li>
+<li><p><strong>Bare ground is bare: <code>init_cohort = NULL</code> starts with no stems.</strong> <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> / <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> and <code><a href="../reference/fit.html">fit()</a></code> without an <code>init_cohort</code> used to start every patch with one 1-cm stem of every species, although the help said “empty patches”. That planted species the regeneration process would not recruit, so a bare-ground (equilibrium) run did not test the regeneration process: on FIA conterminous US a species of moist eastern sites grew to 62-73 % of 112-168 m2/ha at dry western sites where it barely recruits; from an empty start the same model ends at 30-61 m2/ha. Now every tree of such a run comes from the regeneration process. Results of runs without an <code>init_cohort</code> change; runs with one are unaffected.</p></li>
+<li><p><strong>Trees can grow up to 130 m, not 101 m.</strong> The upper bound of the fitted height parameter (first column of the competition parameters) is <code>log(2.3)</code> instead of 0.7. <code><a href="../reference/height.html">height()</a></code> approaches <code>(exp(parHeight) - 1) * 100</code> m as the diameter grows, so 0.7 capped every species at 101 m, below the 122-130 m physical limit of tree height (Koch et al. 2004), and a species given exactly 0.7 (as in the introduction vignette) was clamped with a warning. Fits that train the competition parameters change slightly, because the bound sets the scale on which the parameter is optimised. <code>createProcess(upper = c(0.7, 2.0))</code> on the competition process restores 0.1.0.</p></li>
+<li><p><strong>The recruitment floor is <code>1e-3</code>, not 0.2.</strong> <code>createProcess(reg_floor = )</code> replaces a hard-coded additive floor of 0.2 on the expected recruitment of every species in every cell-year. At 0.2 the floor alone delivered about 13 stems per hectare per year over a 65-species FIA pool, against roughly 0.7 observed – the floor was the recruitment. It exists to keep the negative-binomial likelihood away from a zero mean, which <code>1e-3</code> does. <code>createProcess(reg_floor = 0.2)</code> on the regeneration process restores 0.1.0.</p></li>
+<li><p><strong>The binned competition masks padding out of its height quantiles.</strong> <code>createProcess(light_mask = )</code> now defaults to <code>TRUE</code>. The cohort dimension is padded to the widest site x patch <strong>of the batch</strong> and an empty slot has height ~0, so unmasked the bin edges are set by how many empty slots happen to sit beside a stand. Measured on ten live cohorts of 55 to 8 cm: beside a batch neighbour holding ten cohorts their light runs 1.00, 0.76, 0.58, 0.44, 0.34, 0.27, 0.22, 0.19, 0.17, 0.16; beside a neighbour holding a hundred it is 1.00 for all ten – competition disappears, with the stand itself unchanged. Batch composition is not part of the model, so the unmasked quantile made the fitted objective a function of <code>batchsize</code>. This is a defect rather than a modelling choice, which is why it changes a default instead of arriving as an option. <code>createProcess(light_mask = FALSE)</code> reproduces results published before 0.2.0. <code>continuous = TRUE</code> compares pairs and was never affected.</p></li>
+<li><p><strong>A numeric <code>weights</code> vector multiplies the scaled objective, it no longer replaces it.</strong> <code>fit(weights = )</code> used to bypass the <code>"auto"</code> baseline scaling entirely, so the six numbers acted on losses whose raw magnitudes differ by three orders of magnitude. Measured on BCI with the weight vector of the published configuration, <code>c(0.1, 10, 1, 1, 1, 1)</code>: the raw baseline MSEs stand at dbh : ba : growth = 1246 : 26 : 1, so growth held 0.26 % of the objective at the start and 4.5 % at convergence, and <code>ba</code>’s nominal factor of ten was a factor of ten on a scale already 26x growth’s. Weights now multiply the baseline-scaled losses, where a weight reads directly as that response’s share. <code>fit(weight_scale = FALSE)</code> restores the old behaviour exactly and is what reproduces an analysis fitted before 0.2.0. Every fit now prints each response’s share of the objective at the intercept-only baseline, in both modes – the silence was the actual defect.</p></li>
+<li><p><strong>Site, patch and species ids are radix-ordered, not locale-ordered.</strong> <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> assigned them through <code><a href="https://rspatial.github.io/terra/reference/is.bool.html" class="external-link">as.factor()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/sort.html" class="external-link">sort()</a></code>, both of which order by <code>LC_COLLATE</code>: <code>c("Acer", "abies_x")</code> is that order under <code>C</code> and the reverse under <code>de_DE.UTF-8</code>. The species number indexes the fitted parameter matrices, so the same input file gave <code>par_growth[1, ]</code> to one species on one machine and to another species on the next, with nothing in the output to show it. Ordering is now <code>sort(..., method = "radix")</code>, which ignores the locale. Results are unchanged for anyone who ran under <code>C</code>; everyone else gets a different, and now reproducible, numbering, so ids in artefacts built before this release do not necessarily line up with ids built after it.</p></li>
+<li><p><strong>Growth enters <code><a href="../reference/mortality.html">mortality()</a></code> in %/yr.</strong> The default mortality process now uses <code>growth / growth_scale</code> with <code>growth_scale = 0.01</code>, so the growth coefficient <code>parMort[, 3]</code> acts per 1 %/yr of annual relative growth. On the raw rate the term spanned only a few tenths on the logit between slow and fast trees even at the coefficient bound of -10 (in the BWI calibration 13 of 15 species sat at that bound). This is the one default that does not reproduce 0.1.0: <code>createProcess(func = FINN::mortality, growth_scale = 1)</code> recovers the old behaviour. Saved models keep the process function they were fitted with.</p></li>
+<li><p><strong>Per-site path: one mean per batch, not one per observation year.</strong> With sites observed in different years (<code>period_mode = "per_site"</code>), each response’s loss was the MEAN over the units of each observation year, and the years’ means were SUMMED. A year with ten trees then weighed as much as one with thousands (in the BWI split-census set-up the pre-drought half of 10 % of the trees carried 75 % of the mortality objective, the drought half 3 %). The loss is now one mean over all units scored in the batch (each year’s mean weighted by its share of trees / <code>n_at_risk</code> / <code>growth_n</code> / cells), which is also what the <code>loss_weights = "auto"</code> baselines measure; the reported history is that pooled mean. A batch that scores one observation year is bit-identical to before; the constant-period path is unchanged.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="performance-0-2-0">Performance<a class="anchor" aria-label="anchor" href="#performance-0-2-0"></a></h3>
+<ul><li><p><strong><code><a href="../reference/fit.html">fit()</a></code> set-up no longer scales with sites x rows.</strong> <code><a href="../reference/climateDF2array.html">climateDF2array()</a></code> (behind every response and environment array <code><a href="../reference/fit.html">fit()</a></code> builds, ~140 calls per fit with 15 species) looked each row’s site and year up by a linear scan, so a call cost O(rows x sites): ~90 s at 32,686 BWI sites, ~20 min of set-up per fit. The lookup is now a hash map, O(rows); the arrays are bit-identical.</p></li>
+<li><p><strong>Observed-tree tensors have the trees’ own patches.</strong> For <code>loss_aggregation = "tree"</code> and <code><a href="../reference/predictTrees.html">predictTrees()</a></code>, the tree tensors were sized by <code>patches</code> (e.g. 25) although the trees occupy fewer patches (all BWI trees have <code>patchID</code> 1), and competition, growth and mortality ran on the empty ones in every batch. They are now sized by the number of distinct <code>patchID</code>s in <code>tree_data</code>. Light is computed per patch, so no prediction changes; <code>predictTrees(patches = )</code> is now ignored.</p></li>
+<li><p><strong>Fewer torch calls per time step in <code>forward()</code>.</strong> On the tensors of one batch (~30k elements) a torch op costs ~25 us of fixed overhead and the time loop made ~2000 of them per step, so the op count, not the arithmetic, sets the speed. The per-species aggregation of the rates, the recruits and the stand (growth, mortality, dbh, basal area, trees, regeneration) now scatters all its samples in one call (<code>aggregate_species()</code>, internal) and writes the masked tree-weighted means with <code><a href="https://torch.mlverse.org/docs/reference/torch_where.html" class="external-link">torch_where()</a></code> instead of two masked index assignments; <code>trees$sum() &gt; 0</code> is read with <code>$item()</code>; whether the gradients are yearly (no <code>period_length</code> anywhere) is decided once per call instead of by a reduction over <code>y</code> at every step. The results are bit-identical (checked on two BWI stage-2 calls: parameters, loss history, baselines, <code>param_history</code>, <code><a href="../reference/predictTrees.html">predictTrees()</a></code>).</p></li>
+<li><p><strong>The per-tree scoring evaluates the window in one pass.</strong> <code>loss_aggregation = "tree"</code> and <code><a href="../reference/predictTrees.html">predictTrees()</a></code> applied growth and mortality to the observed trees once per year of the remeasurement window (10 calls of each process per batch on the BWI data); the years are now a dimension of the tensors and the processes run once (mechanistic processes; hybrid ones keep the year loop). Same formula, but the sums over the years and over the trees are taken in another order, so the result is equal only to floating point precision: on two BWI stage-2 calls the fitted parameters after 3 epochs differ by at most 2e-6 (absolute, float32), the loss history by 6e-8 and <code><a href="../reference/predictTrees.html">predictTrees()</a></code> by 3e-6 (FINN-bwi fits/2026-11-06-finn-speed-review).</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-2-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-2-0"></a></h3>
+<ul><li><p><code><a href="../reference/fit.html">fit()</a></code> no longer creates or overwrites an object <code>counter</code> in the global environment. The batch counter was advanced with <code>&lt;&lt;-</code>, which also left the local counter at 1: with several batches per epoch (<code>batchsize</code> smaller than the number of sites) <code>$history</code>, the progress plot and the plateau scheduler saw the last batch’s loss instead of the mean over the epoch’s batches. With one batch per epoch, the default, nothing changes.</p></li>
+<li><p>A hybrid growth process is given the growth design matrix and a hybrid mortality process the mortality one. The environment list is ordered mortality, growth, regeneration, and the two were read by position, so <code><a href="../reference/createHybrid.html">createHybrid()</a></code> growth was fitted and simulated on the mortality formula and vice versa. Regeneration and <code><a href="../reference/predictTrees.html">predictTrees()</a></code> always read theirs by name, so the two routes disagreed for the same model. Nothing changes where the growth and mortality formulas are the same, which is every example in the package; formulas of different width stopped with “mat1 and mat2 shapes cannot be multiplied”.</p></li>
+<li><p><code>createHybrid(hidden = )</code> accepts a single hidden layer. <code>hidden = 16L</code> used to build the layer stack with <code>2:length(hidden)</code>, which counts backwards from 2 to 1, and the first <code><a href="../reference/fit.html">fit()</a></code> stopped with “Expecting a single value: [extent=0]”. The default <code>hidden = c(50L, 50L)</code> is unaffected.</p></li>
+<li><p><code><a href="../reference/predictTrees.html">predictTrees()</a></code> checks that <code>tree_data</code> and <code>env</code> hold the same sites, that every observed year is in <code>env</code> and that the species ids are those of the model. The tree tensors follow the sites of <code>tree_data</code> and the environment array those of <code>env</code>, and torch’s gather accepts the shorter index, so a tree could be scored against another site’s climate without any message.</p></li>
+<li><p><code><a href="../reference/predictTrees.html">predictTrees()</a></code> on a model that has never been fitted or simulated asks for <code>patch_size</code> instead of ending the R session. <code><a href="../reference/BA_stand.html">BA_stand()</a></code> divided by a <code>NULL</code> patch size, which segfaults <code><a href="https://torch.mlverse.org/docs/reference/torch_div.html" class="external-link">torch_div()</a></code>.</p></li>
+<li><p><code><a href="../reference/conditionalEffects.html">conditionalEffects()</a></code>, <code><a href="../reference/ALE.html">ALE()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary()</a></code> pair each stand state with its own site’s and year’s predictors when <code>env</code> is not sorted by <code>siteID</code> and <code>year</code>. The recorded states follow the simulation’s sorted order and the predictors were taken in order of appearance.</p></li>
+<li><p><code><a href="../reference/conditionalEffects.html">conditionalEffects()</a></code> and <code><a href="../reference/ALE.html">ALE()</a></code> recompute when <code>env</code> or <code>init_cohort</code> is passed explicitly. The cache key is a fingerprint (row and column count, column names, column sums), so two different inputs could share it and the first call’s result was returned for the second.</p></li>
+<li><p><code><a href="../reference/createProcess.html">createProcess()</a></code> and <code><a href="../reference/createHybrid.html">createHybrid()</a></code> find a formula that is held in a variable of the calling function (<code>f &lt;- ~ temp; createProcess(f, growth)</code> inside a function used to stop with “object ‘f’ not found”).</p></li>
+<li><p><code><a href="../reference/predictTrees.html">predictTrees()</a></code> puts the model in evaluation mode and on the scoring device before it predicts, as <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> does. Straight after <code><a href="../reference/fit.html">fit()</a></code> the model was still in training mode, so a process with <code>dropout</code> returned different predictions on every call.</p></li>
+<li><p><code>makeInitCohorts(dbh_binsize = )</code> adds up <code>trees</code> with <code>na.rm = TRUE</code>. A record without a stem count (<code>trees = NA</code>, e.g. a dead tree) used to turn its whole bin into <code>NA</code>, which lost the living trees of that bin (349 of the 5350 stems of <code>fia_init_trees</code> with <code>dbh_binsize = 5</code>).</p></li>
+<li><p><code>mortality(debug = TRUE)</code> returns the list of its components (<code>light</code>, <code>environment</code>, <code>predM</code>) instead of stopping with “object ‘shade’ not found”.</p></li>
+<li><p><code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> and <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> left <code>requires_grad = TRUE</code> on every parameter of the model they had just simulated, so a model frozen for a staged calibration silently unfroze as soon as it was simulated (<a href="https://github.com/FINNverse/FINN/issues/55" class="external-link">#55</a>). Both now restore the state they found.</p></li>
+<li><p><code>createHybrid(NN = )</code> was documented as replacing the network architecture but was never stored, so a custom module was accepted and then ignored (<a href="https://github.com/FINNverse/FINN/issues/59" class="external-link">#59</a>). A non-<code>NULL</code> <code>NN</code> now raises an error; shape the default network with <code>hidden</code>, <code>dropout</code> and <code>transformer</code>.</p></li>
+<li><p><strong>A stand that dies out before a census is now scored.</strong> When every cohort of a batch had died, the padding pass left no cohort slot and the census step was not scored at all (the scoring required at least one slot), so a die-off before a census went unpenalised. An empty stand now predicts zero basal area, zero trees and the recruits of the window against the observations; <code>dbh</code>, <code>growth</code> and <code>mortality</code> have no prediction without a tree and stay unscored at such a step. The zero predictions carry no gradient (nothing is left to move), but the loss is reported, so a fit that kills its stands shows it in <code>$history</code> instead of a flat zero.</p></li>
+<li><p>A model that never went through <code><a href="../reference/fit.html">fit()</a></code> simulated with the 0.1.0 Gamma death draw instead of the <code>mortality_draw = "binomial"</code> default, because the flag that selects the exact binomial (<code>rb_gradient</code>) was set only inside <code><a href="../reference/fit.html">fit()</a></code>. <code><a href="../reference/finn.html">finn()</a></code> now sets it to <code><a href="../reference/fit.html">fit()</a></code>’s default, so <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> on a freshly built model, and a model rebuilt from saved parameters, draw deaths as a fitted model does (<a href="https://github.com/FINNverse/FINN/issues/70" class="external-link">#70</a>).</p></li>
+<li><p><code>fit(epochs = 0)</code> ran two epochs (<code>1:0</code>); it now runs the set-up only (data tensors, <code>loss_baseline</code> / <code>loss_weights</code>) and trains nothing.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> resets the observed-tree, size-class and quantile tensors of an earlier call (or a <code><a href="https://torch.mlverse.org/docs/reference/torch_load.html" class="external-link">torch_load()</a></code>ed model) before building those of the current one; stale tensors were otherwise still evaluated in <code>forward()</code>.</p></li>
+<li><p><code>createProcess(NN = ...)</code> is no longer silently dropped inside <code>create_nn()</code>.</p></li>
+<li><p><code>createProcess(growth_scale = )</code> is validated. The value is used as a bare divisor inside <code><a href="../reference/mortality.html">mortality()</a></code>, so every wrong value was silent: a bare <code>NA</code> is logical and coerces to <code>TRUE</code>, so <code>growth / NA</code> divides by 1 and reproduces the 0.1.0 objective exactly, with no warning and no <code>NaN</code>; <code>NA_integer_</code> divides by <code>-2^31</code>; <code>growth_scale = 0</code> saturates mortality to 0 or 1 across the whole stand. Anything but a single positive finite number, or <code>NULL</code>, is now an error at <code><a href="../reference/createProcess.html">createProcess()</a></code> time. Saved models are unaffected.</p></li>
+<li><p><code>loss_weights = "auto"</code> no longer explodes on a response that is constant over the scored cells. The intercept-only baseline is then a few float ulps rather than zero, so <code>1/baseline</code> passed the <code>&lt;= 0</code> guard and produced weights of order 1e17 on a package fixture. Such a response is now left unscaled, with a warning naming it.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> resets <code>$nonfinite_counts</code>, so the end-of-fit warning reports this fit’s dropped terms rather than the total since the model was built.</p></li>
+<li><p>Arguments that gate on <code><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE()</a></code> are validated as logicals: <code>fit(reanchor = )</code>, <code>fit(teacher_forcing = )</code> and <code>createProcess(light_mask = )</code> accepted <code>1</code> and then silently behaved as <code>FALSE</code>. <code>createProcess(reg_floor = )</code> is validated the way <code>growth_scale</code> is. <code>fit(loss_aggregation = )</code> rejects a response named twice instead of keeping the first entry, and <code>fit(env_autoscale = )</code> rejects a named entry that matches no predictor instead of silently scaling that predictor with the default.</p></li>
+<li><p>**<code><a href="../reference/mortality.html">mortality()</a></code>‘s growth coefficient is initialised on the scale growth enters on.** <code>parMort[, 3]</code> was drawn from <code>U(-0.2, 0.2)</code> regardless of <code>growth_scale</code>, so at the 0.01 default the same draw acted a hundred times more strongly. Measured on the four-site FIA fixture: an anchored stand of 1667 stems/ha at 25 cm drops to 1.0-7.5 stems/ha in a single year (mortality 0.93 to 1.00), against 28-75 stems/ha at <code>growth_scale = 1</code>. The range now scales with <code>growth_scale</code>; a custom mortality kernel without that formal keeps the old range. Random initialisations therefore differ from earlier versions’.</p></li>
+<li><p>The identity fixtures gained a configuration with unequal scored units per observation year (<code>per_site_unbal</code>). Every existing per-site configuration carried the same number of cells in every year – 6 against 6 – and with equal counts the per-unit pooling of the per-site loss and the former sum of per-year means agree exactly, so no snapshot could see a change to that weighting. The new configuration is one species-census short in the first scored year, 5 against 6.</p></li>
+<li><p><code>fit(folder = , checkpoints = )</code> writes each checkpoint to a temporary name and renames it. A kill or a full disk during the save used to leave a truncated <code>.pt</code> that <code><a href="https://torch.mlverse.org/docs/reference/torch_load.html" class="external-link">torch_load()</a></code> could not read.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> warns when the regeneration process is being calibrated while <code>loss_family["regeneration"]</code> is <code>"none"</code>. No other response can train it: recruits reach <code>dbh</code> through a sigmoid of scale <code>1e-3</code>, whose derivative is zero almost everywhere, and <code>trees</code> through a rounding whose forward value is 0 below 0.5 recruits per patch and species.</p></li>
+<li><p><code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> orders site, patch and species names with <code>sort(..., method = "radix")</code> instead of the collation locale; see <em>Behaviour changes</em>. Covered by <code>tests/testthat/test-locale-stable-ids.R</code>, which runs the function under <code>C</code> and <code>de_DE.UTF-8</code> on names the two locales order differently.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> resets <code>$tree_pred</code> along with <code>$tree_obs</code> and <code>$tree_deaths</code>. It is written only by the per-tree branch of <code>forward()</code>, so a plain fit after a per-tree one left the earlier call’s predictions in place.</p></li>
+<li><p><code>$tree_deaths</code> skips a census that carries no fate target at all (<code>died</code> is <code>NA</code> for every row of it) instead of reporting <code>NaN</code> for <code>frac_killed</code>, <code>window</code> and <code>frac_ghost</code>, which are <code>0/0</code> there.</p></li>
+<li><p><code><a href="../reference/pred2DF.html">pred2DF()</a></code> selects its index columns with <code>with = FALSE</code> instead of the <code>..dim_names</code> prefix, which <code>R CMD check</code> reported as an undefined global.</p></li>
+<li><p><code><a href="../reference/fit.html">fit()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> check that <code>data</code>, <code>env</code> and <code>init_cohort</code> hold the same sites and stop with the offending ids and the table they are missing from (<a href="https://github.com/FINNverse/FINN/issues/33" class="external-link">#33</a>). Before, a mismatch ended in a torch index error that named nothing, or silently paired a site with another site’s environment. The ids need not be <code>1:N</code>: every array is indexed by a site’s position among the sorted ids. <code>siteID</code> must be integer-valued in <code>data</code> and <code>env</code> (the error points to <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code>). Covered by <code>tests/testthat/test-site-sets.R</code>.</p></li>
+<li><p>Site ids that are not <code>1:N</code> keep their identity end to end (<a href="https://github.com/FINNverse/FINN/issues/34" class="external-link">#34</a>). <code><a href="../reference/obsDF2arrays.html">obsDF2arrays()</a></code> numbers sites in radix order (independent of the locale, as <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code>), says so in a message instead of the former warning when the ids are not <code>1:N</code>, and records the user ids as attribute <code>"site_ids"</code>, which <code>CohortMat</code> keeps as <code>$site_ids</code>; a fitted model keeps the lookup from array position to <code>siteID</code> as <code>$site_lookup</code>; and <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> / <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> return the caller’s own <code>siteID</code>s instead of positions. For ids that are <code>1:N</code> nothing changes. Patch and cohort ids are renumbered in radix order as well. Covered by <code>tests/testthat/test-site-sets.R</code>.</p></li>
+<li><p><code><a href="../reference/climateDF2array.html">climateDF2array()</a></code> stops on any (<code>siteID</code>, <code>year</code>[, <code>month</code>, <code>day</code>]) combination that appears more than once, identical or not, naming it (<a href="https://github.com/FINNverse/FINN/issues/35" class="external-link">#35</a>); the last row used to win silently. A missing combination is still <code>NA</code>. Covered by <code>tests/testthat/test-climateDF2array.R</code>.</p></li>
+<li><p>The bundled <code>fia_env_dt</code> and <code>fia_env_test</code> hold one row per site x year (600 rows each). They repeated every row four times, once per patch of the source plot, all identical, so every environment array built from them is unchanged (<code>dev/make_extdata.R</code> now deduplicates; the two <code>.rda</code> files were deduplicated in place). The <code>env_autoscale</code> constants do move: the standard deviation (n - 1 denominator) over 600 instead of 2400 rows is 0.063 % larger, and a seeded fit on the z-scaled climate amplifies that, so the re-knitted vignettes D and E report slightly different fits.</p></li>
+<li><p><code><a href="../reference/feature_importance.html">feature_importance()</a></code> permutes over distinct <code>env</code> rows. On an <code>env</code> with repeated site-year rows the copies received different permuted values, of which the environment array kept one at random, so importance values computed on such data change.</p></li>
+<li><p><code>createProcess(custom_parameters = )</code> checks names against a fixed list of fields FINN sets itself (<a href="https://github.com/FINNverse/FINN/issues/42" class="external-link">#42</a>). A name that a later process sets, such as <code>light_mask</code>, used to pass, became a trainable nobody read, and turned the later assignment into a silent no-op. Covered by <code>tests/testthat/test-processes.R</code>.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-2-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-2-0"></a></h3>
+<ul><li>New help topic <code><a href="../reference/recruitment.html">?recruitment</a></code>: the recruitment processes, the recruit draw, the dispersion <code>theta</code> and its floor, the regeneration likelihood and <code>recruit_obs_weight</code>, feeding observed recruitment, and a guide to which options to combine; the recruitment arguments of <code><a href="../reference/createProcess.html">createProcess()</a></code>, <code><a href="../reference/createHybrid.html">createHybrid()</a></code>, <code><a href="../reference/finn.html">finn()</a></code>, <code><a href="../reference/fit.html">fit()</a></code> and <code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> point to it.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="finn-010">FINN 0.1.0<a class="anchor" aria-label="anchor" href="#finn-010"></a></h2><p class="text-muted">CRAN release: 2026-08-09</p>
 <p>First public release.</p>
 <p>FINN is a differentiable forest gap model: a cohort-based dynamic vegetation model whose demographic processes (competition, growth, mortality, regeneration) can each be a mechanistic function, a neural network, or a mixture of the two, all calibrated end-to-end by gradient descent.</p>
@@ -48,19 +478,20 @@
 <ul><li>
 <code><a href="../reference/finn.html">finn()</a></code> assembles a model from one process per demographic component, each built with <code><a href="../reference/createProcess.html">createProcess()</a></code> (mechanistic) or <code><a href="../reference/createHybrid.html">createHybrid()</a></code> (neural network).</li>
 <li>
-<code><a href="../reference/simulateForest.html">simulateForest()</a></code> runs a model forward; <code><a href="../reference/fit.html">fit()</a></code> calibrates one to data and <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> scores it, returning patch- and site-level results.</li>
+<code><a href="../reference/predict.finn_class.html">simulateForest()</a></code> runs a model forward; <code><a href="../reference/fit.html">fit()</a></code> calibrates one to data and <code><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict()</a></code> scores it, returning patch- and site-level results.</li>
 <li>Per-response likelihoods: Gaussian (<code>"mse"</code>/<code>"gaussian"</code>), Poisson, negative binomial, and a <code>"binomial"</code> likelihood for mortality that takes a closed-cohort count pair (<code>n_at_risk</code>, <code>n_died</code>).</li>
 <li>
-<code>weights = "auto"</code> (the default in <code><a href="../reference/fit.html">fit()</a></code>) scales each loss by its intercept-only baseline, so the six responses are commensurable and every term reads as a fraction of its own null deviance.</li>
+<code>loss_weights = "auto"</code> (the default in <code><a href="../reference/fit.html">fit()</a></code>) scales each loss by its intercept-only baseline, so the six responses are commensurable and every term reads as a fraction of its own null deviance.</li>
 <li>Data helpers <code><a href="../reference/makeObsData.html">makeObsData()</a></code>, <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> and <code><a href="../reference/makeInitCohorts.html">makeInitCohorts()</a></code> turn a raw tree list into FINN’s input tables.</li>
 <li>Model interpretation with <code><a href="../reference/ALE.html">ALE()</a></code>, <code><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary()</a></code>, <code><a href="../reference/feature_importance.html">feature_importance()</a></code> and <code><a href="../reference/conditionalEffects.html">conditionalEffects()</a></code>.</li>
 </ul><p>See the vignettes for a guided tour: <em>Introduction to FINN</em>, <em>Plausible succession from a handful of species</em>, <em>Preparing your data for FINN</em>, <em>Fitting FINN to forest inventory data</em>, and <em>Mortality</em>.</p>
 </div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,12 +98,16 @@ counts</strong> rather than a bare rate:</p>
 <strong><code>n_died</code></strong>: how many of those were dead at
 the <em>end</em>,</li>
 </ul>
-<p>with <code>mort = n_died / n_at_risk</code> derived for convenience.
-This is exactly the <code>cbind(died, survived)</code> response of a
-binomial GLM, and it is deliberate. A bare proportion throws away the
-sample size: it cannot tell a site where 1 of 1 trees died from one
-where 60 of 60 did, even though the second carries sixty times the
-information.</p>
+<p>with the yearly rate
+<code>mort = 1 - (1 - n_died / n_at_risk)^(1 / period_length)</code>
+derived from them: FINN simulates yearly steps, and an inventory
+interval of <code>period_length</code> years is that many simulated
+years, whose yearly mortalities <code><a href="../reference/fit.html">fit()</a></code> compounds into the
+same per-year rate before it meets the observation. The counts are
+exactly the <code>cbind(died, survived)</code> response of a binomial
+GLM, and it is deliberate. A bare proportion throws away the sample
+size: it cannot tell a site where 1 of 1 trees died from one where 60 of
+60 did, even though the second carries sixty times the information.</p>
 <p>The pair is a <strong>closed cohort</strong>; both columns are pinned
 to the tree’s state at the start of the interval. That matters more than
 it sounds. FIA re-identifies a tree’s species between visits, so a rate
@@ -115,26 +119,29 @@ there were trees. Pinning both columns to the interval start makes
 <em>recruit</em> during the interval are in neither column; see
 <code><a href="../reference/makeObsData.html">?makeObsData</a></code> for the open-cohort alternative.)</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">ext</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="va">f</span>, package <span class="op">=</span> <span class="st">"FINN"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># The tables ship with FINN as datasets (?fia_obs_dt), already in FINN's input</span></span>
+<span><span class="co"># format, so there is nothing to read or prepare.</span></span>
 <span></span>
-<span><span class="va">obs_dt</span>     <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_obs_dt.csv"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">env_dt</span>     <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_env_dt.csv"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">init_trees</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_init_trees.csv"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">species_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_species_dt.csv"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co"># --- training sites --------------------------------------------------------</span></span>
+<span><span class="va">obs_dt</span>     <span class="op">&lt;-</span> <span class="va">fia_obs_dt</span>        <span class="co"># observations, wide (one column per variable)</span></span>
+<span><span class="va">env_dt</span>     <span class="op">&lt;-</span> <span class="va">fia_env_dt</span>        <span class="co"># RAW, untransformed climate</span></span>
+<span><span class="va">init_trees</span> <span class="op">&lt;-</span> <span class="va">fia_init_trees</span></span>
+<span><span class="va">species_dt</span> <span class="op">&lt;-</span> <span class="va">fia_species_dt</span></span>
 <span></span>
-<span><span class="va">obs_test</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_obs_test.csv"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">env_test</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_env_test.csv"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">init_test</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="st">"fia_init_test.csv"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co"># --- holdout sites: never seen during fitting ------------------------------</span></span>
+<span><span class="va">obs_test</span>   <span class="op">&lt;-</span> <span class="va">fia_obs_test</span></span>
+<span><span class="va">env_test</span>   <span class="op">&lt;-</span> <span class="va">fia_env_test</span></span>
+<span><span class="va">init_test</span>  <span class="op">&lt;-</span> <span class="va">fia_init_test</span></span>
 <span></span>
-<span><span class="va">obs_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">year</span>, <span class="va">species_name</span>, <span class="va">n_at_risk</span>, <span class="va">n_died</span>, <span class="va">mort</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="va">n_at_risk</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span></span>
-<span><span class="co">#&gt;    siteID  year          species_name n_at_risk n_died      mort</span></span>
-<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt;                &lt;char&gt;     &lt;int&gt;  &lt;int&gt;     &lt;num&gt;</span></span>
-<span><span class="co">#&gt; 1:      1     1 Pseudotsuga menziesii         2      0 0.0000000</span></span>
-<span><span class="co">#&gt; 2:      1     1         Abies grandis         6      0 0.0000000</span></span>
-<span><span class="co">#&gt; 3:      1     1                 other         3      1 0.3333333</span></span>
-<span><span class="co">#&gt; 4:      1     2 Pseudotsuga menziesii         2      0 0.0000000</span></span>
-<span><span class="co">#&gt; 5:      1     2         Abies grandis        10      0 0.0000000</span></span>
-<span><span class="co">#&gt; 6:      1     2                 other         2      0 0.0000000</span></span></code></pre></div>
+<span><span class="va">obs_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">year</span>, <span class="va">period_length</span>, <span class="va">species_name</span>, <span class="va">n_at_risk</span>, <span class="va">n_died</span>, <span class="va">mort</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="va">n_at_risk</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span></span>
+<span><span class="co">#&gt;    siteID  year period_length          species_name n_at_risk n_died      mort</span></span>
+<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt;         &lt;int&gt;                &lt;char&gt;     &lt;int&gt;  &lt;int&gt;     &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:      1    10            10 Pseudotsuga menziesii         2      0 0.0000000</span></span>
+<span><span class="co">#&gt; 2:      1    10            10         Abies grandis         6      0 0.0000000</span></span>
+<span><span class="co">#&gt; 3:      1    10            10                 other         3      1 0.0397355</span></span>
+<span><span class="co">#&gt; 4:      1    20            10 Pseudotsuga menziesii         2      0 0.0000000</span></span>
+<span><span class="co">#&gt; 5:      1    20            10         Abies grandis        10      0 0.0000000</span></span>
+<span><span class="co">#&gt; 6:      1    20            10                 other         2      0 0.0000000</span></span></code></pre></div>
 <p>How much mortality signal is actually in this sample? Less than the
 number of rows suggests:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
@@ -148,9 +155,10 @@ number of rows suggests:</p>
 <span><span class="co">#&gt; trees at risk (train)              : 9907</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"deaths (train)                     : %d\n"</span>, <span class="va">obs_dt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_died</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; deaths (train)                     : 656</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"pooled mortality rate              : %.3f per inventory interval\n"</span>,</span>
-<span>            <span class="va">obs_dt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_died</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_at_risk</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; pooled mortality rate              : 0.066 per inventory interval</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"pooled mortality                   : %.3f over the ten-year interval, %.4f per year\n"</span>,</span>
+<span>            <span class="va">obs_dt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_died</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_at_risk</span><span class="op">)</span><span class="op">]</span>,</span>
+<span>            <span class="va">obs_dt</span><span class="op">[</span>, <span class="fl">1</span> <span class="op">-</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_died</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">n_at_risk</span><span class="op">)</span><span class="op">)</span><span class="op">^</span><span class="op">(</span><span class="fl">1</span> <span class="op">/</span> <span class="fl">10</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; pooled mortality                   : 0.066 over the ten-year interval, 0.0068 per year</span></span></code></pre></div>
 <p>A few hundred deaths, and roughly two-thirds of the observations at
 exactly zero. No likelihood can manufacture information that is not
 there, but the wrong one can waste what is.</p>
@@ -159,9 +167,9 @@ there, but the wrong one can waste what is.</p>
 <h2 id="why-binomial-and-not-mse">Why <code>binomial</code> and not <code>mse</code><a class="anchor" aria-label="anchor" href="#why-binomial-and-not-mse"></a>
 </h2>
 <p>FINN scores mortality with
-<code>loss = c(..., mortality = "binomial", ...)</code> by default.
-Squared error assumes an unbounded response with constant variance;
-mortality is neither. A proportion lives on
+<code>loss_family = c(..., mortality = "binomial", ...)</code> by
+default. Squared error assumes an unbounded response with constant
+variance; mortality is neither. A proportion lives on
 <math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mo>,</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">0, 1</annotation></semantics></math>
 and its variance <em>shrinks</em> as the rate approaches either end, so
 on a response that is ~69% zeros, MSE puts almost no gradient where the
@@ -190,7 +198,7 @@ form:</p>
 <span>  recruits_dbh         <span class="op">=</span> <span class="fl">12.9</span>,   <span class="co"># DBH (cm) assigned to a new recruit; ~ FIA's 12.7 cm (5 in) minimum</span></span>
 <span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span>,  optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration_capped.html">regeneration_capped</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
@@ -209,7 +217,7 @@ call, unchanged. <code><a href="../reference/createHybrid.html">createHybrid()</
 <span>  recruits_dbh         <span class="op">=</span> <span class="fl">12.9</span>,</span>
 <span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span>,  optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration.html">regeneration</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration_capped.html">regeneration_capped</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createHybrid.html">createHybrid</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, hidden <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">20L</span>, <span class="fl">20L</span><span class="op">)</span>, transformer <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
@@ -222,16 +230,31 @@ call, unchanged. <code><a href="../reference/createHybrid.html">createHybrid()</
 <div class="section level2">
 <h2 id="scoring-mortality-why-not-spearman">Scoring mortality: why not Spearman<a class="anchor" aria-label="anchor" href="#scoring-mortality-why-not-spearman"></a>
 </h2>
+<p>The model simulates yearly steps, so its mortality is compared with
+an observation as <code><a href="../reference/fit.html">fit()</a></code> compares it: the simulated yearly
+mortalities of the <code>period_length</code> years before the census
+compounded into one rate per year,
+<code>1 - exp(mean(log1p(-m)))</code>, the functional behind the
+observed
+<code>1 - (1 - n_died / n_at_risk)^(1 / period_length)</code>.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pred_of</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">model</span>, <span class="va">label</span>, <span class="va">env</span>, <span class="va">init</span>, <span class="va">obs_l</span>, <span class="va">split</span><span class="op">)</span> <span class="op">{</span></span>
+<code class="sourceCode R"><span><span class="co"># the simulated yearly mortality, compounded over each observation's interval</span></span>
+<span><span class="va">at_census</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">site</span>, <span class="va">obs_l</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">win</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">obs_l</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, census <span class="op">=</span> <span class="va">year</span>, <span class="va">period_length</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="va">win</span> <span class="op">&lt;-</span> <span class="va">win</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>year <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="va">census</span> <span class="op">-</span> <span class="va">period_length</span> <span class="op">+</span> <span class="fl">1L</span>, <span class="va">census</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">census</span><span class="op">)</span><span class="op">]</span></span>
+<span>  <span class="fu"><a href="https://rspatial.github.io/terra/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">site</span><span class="op">[</span><span class="va">variable</span> <span class="op">==</span> <span class="st">"mort"</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">year</span>, <span class="va">species</span>, <span class="va">value</span><span class="op">)</span><span class="op">]</span>, <span class="va">win</span>, by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"siteID"</span>, <span class="st">"year"</span><span class="op">)</span><span class="op">)</span><span class="op">[</span></span>
+<span>    , <span class="fu">.</span><span class="op">(</span>variable <span class="op">=</span> <span class="st">"mort"</span>, value <span class="op">=</span> <span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/summarize-generics.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log1p</a></span><span class="op">(</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">pmin</a></span><span class="op">(</span><span class="va">value</span>, <span class="fl">1</span> <span class="op">-</span> <span class="fl">1e-4</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, year <span class="op">=</span> <span class="va">census</span>, <span class="va">species</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">pred_of</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">model</span>, <span class="va">label</span>, <span class="va">env</span>, <span class="va">init</span>, <span class="va">obs_l</span>, <span class="va">split</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">model</span><span class="op">$</span><span class="fu">eval</span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">model</span>, env <span class="op">=</span> <span class="va">env</span>, init_cohort <span class="op">=</span> <span class="va">init</span>,</span>
 <span>                 patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>, device <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rspatial.github.io/terra/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">obs_l</span>, <span class="va">sim</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span>, by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"siteID"</span>, <span class="st">"year"</span>, <span class="st">"species"</span>, <span class="st">"variable"</span></span>
+<span>  <span class="fu"><a href="https://rspatial.github.io/terra/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">obs_l</span>, <span class="fu">at_census</span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span>, <span class="va">obs_l</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"siteID"</span>, <span class="st">"year"</span>, <span class="st">"species"</span>, <span class="st">"variable"</span></span>
 <span>  <span class="op">)</span><span class="op">)</span><span class="op">[</span>, <span class="fu">`:=`</span><span class="op">(</span>model <span class="op">=</span> <span class="va">label</span>, split <span class="op">=</span> <span class="va">split</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="op">]</span></span>
 <span><span class="op">}</span></span>
-<span><span class="va">to_long</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/melt.data.table.html" class="external-link">melt</a></span><span class="op">(</span><span class="va">d</span>, id.vars <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"siteID"</span>, <span class="st">"year"</span>, <span class="st">"species"</span>, <span class="st">"species_name"</span><span class="op">)</span>,</span>
-<span>                            measure.vars <span class="op">=</span> <span class="st">"mort"</span>, variable.name <span class="op">=</span> <span class="st">"variable"</span>, value.name <span class="op">=</span> <span class="st">"obs"</span><span class="op">)</span></span>
+<span><span class="va">to_long</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/melt.data.table.html" class="external-link">melt</a></span><span class="op">(</span><span class="va">d</span>, id.vars <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"siteID"</span>, <span class="st">"year"</span>, <span class="st">"period_length"</span>, <span class="st">"species"</span>, <span class="st">"species_name"</span><span class="op">)</span>,</span>
+<span>                            measure.vars <span class="op">=</span> <span class="st">"mort"</span>, variable.name <span class="op">=</span> <span class="st">"variable"</span>, value.name <span class="op">=</span> <span class="st">"obs"</span>,</span>
+<span>                            variable.factor <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">obs_pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
@@ -250,10 +273,10 @@ cannot see what it learned”.</p>
 <span>         by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">model</span>, <span class="va">split</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">split</span>, <span class="va">model</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;                      model   split spearman     n</span></span>
 <span><span class="co">#&gt;                     &lt;char&gt;  &lt;char&gt;    &lt;num&gt; &lt;int&gt;</span></span>
-<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout     0.12   994</span></span>
+<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout     0.07   994</span></span>
 <span><span class="co">#&gt; 2:   Process (mechanistic) holdout     0.03   994</span></span>
-<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train     0.19  1003</span></span>
-<span><span class="co">#&gt; 4:   Process (mechanistic)   train     0.17  1003</span></span></code></pre></div>
+<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train     0.21  1003</span></span>
+<span><span class="co">#&gt; 4:   Process (mechanistic)   train     0.20  1003</span></span></code></pre></div>
 <p><strong>AUC</strong> asks the question the binomial actually poses:
 does the model give a higher death probability to a tree that died than
 to one that survived? Each observation stands for <code>n_at_risk</code>
@@ -283,10 +306,10 @@ standard Mann-Whitney treatment).</p>
 <span><span class="va">auc_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">split</span>, <span class="op">-</span><span class="va">AUC</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;                      model   split   AUC deaths at_risk</span></span>
 <span><span class="co">#&gt;                     &lt;char&gt;  &lt;char&gt; &lt;num&gt;  &lt;int&gt;   &lt;int&gt;</span></span>
-<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout 0.573    727   10013</span></span>
-<span><span class="co">#&gt; 2:   Process (mechanistic) holdout 0.517    727   10013</span></span>
-<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train 0.648    656    9907</span></span>
-<span><span class="co">#&gt; 4:   Process (mechanistic)   train 0.609    656    9907</span></span></code></pre></div>
+<span><span class="co">#&gt; 1: Hybrid (mortality = NN) holdout 0.537    727   10013</span></span>
+<span><span class="co">#&gt; 2:   Process (mechanistic) holdout 0.524    727   10013</span></span>
+<span><span class="co">#&gt; 3: Hybrid (mortality = NN)   train 0.643    656    9907</span></span>
+<span><span class="co">#&gt; 4:   Process (mechanistic)   train 0.639    656    9907</span></span></code></pre></div>
 <p>0.5 is coin-flipping, 1.0 is perfect ranking.</p>
 <p>Read the two splits <strong>together</strong>, because the gap
 between them is the result. On the training sites the model ranks deaths
@@ -294,12 +317,12 @@ above survivors better than chance, so there <em>is</em> a learnable
 mortality signal, and the model finds it. On the held-out sites that
 skill collapses to ~0.5. The model is not failing to fit mortality; it
 is fitting it and <strong>not generalising</strong>.</p>
-<p>That is what a few hundred deaths buys. With ~66% of observations at
+<p>That is what a few hundred deaths buys. With ~69% of observations at
 exactly zero and mortality concentrated in whichever species happened to
 die on whichever plot, there is enough signal to memorise and not enough
-to transfer. The network variant sits <em>lower</em> still on the
-holdout, which is what you would expect from a model with more capacity
-to memorise with.</p>
+to transfer. The network variant and the mechanistic process rank alike
+on the holdout, both close to coin-flipping and far below their training
+skill, so neither transfers.</p>
 <p>So mortality here is honestly reported as <strong>not identified
 out-of-sample</strong>. The binomial likelihood is the right loss for a
 proportion and the closed cohort is the right response, but neither
@@ -308,13 +331,117 @@ differences between the two models as noise; the signal worth reading is
 train-vs-holdout, not model-vs-model.</p>
 </div>
 <div class="section level2">
+<h2 id="scoring-each-tree-instead-of-each-cell">Scoring each tree instead of each cell<a class="anchor" aria-label="anchor" href="#scoring-each-tree-instead-of-each-cell"></a>
+</h2>
+<p>Everything above scores mortality per <em>cell</em>: the model’s mean
+death probability over the cohorts of a site, census and species against
+the pooled proportion. That mean has a compositional confound. Mortality
+falls several-fold from the smallest to the largest trees, so the cell
+mean moves when the simulated size distribution moves, whether or not
+the hazard function is right, and a mortality parameter can end up
+correcting a growth or recruitment error. With a tree list in hand,
+<code><a href="../reference/fit.html">fit()</a></code> can instead score the fate of every observed tree:
+<code>loss_aggregation = c(mortality = "tree")</code> runs the mortality
+kernel on each tree at its measured diameter, with light from the
+observed stand, and compares the death probability over the interval
+with the tree’s 0/1 fate. It measures the mortality function alone,
+teacher-forced onto the observed stands, and combines with the simulated
+<code>dbh</code>, <code>ba</code>, <code>trees</code> and regeneration
+terms (see <code><a href="../reference/fit.html">?fit</a></code>, section <em>Scoring individual trees</em>,
+for the other per-tree route and when each applies).</p>
+<p>Prefer it when the trees are available and mortality is the response
+of interest: it uses every tree as a trial rather than a few hundred
+cells, it is unaffected by how well the stand is simulated, and
+<code><a href="../reference/predictTrees.html">predictTrees()</a></code> evaluates the same code path, so a
+validation cannot drift from the objective it checks. Its cost is that
+the scored mortality is no longer a property of the simulated
+trajectory.</p>
+<p>The bundled sample carries the tree fates as <code>fia_tree_dt</code>
+and <code>fia_tree_test</code>, and the <strong>Fitting FINN to forest
+inventory data</strong> vignette fits the 200 sites with this route and
+reports the holdout AUC and the mortality by size class. Here the
+mechanism is shown on a tree list built from raw data, the eight Oregon
+FIA plots of the <strong>Preparing your data for FINN</strong> vignette,
+four patches each, three inventories. <code><a href="../reference/makeObsData.html">makeObsData()</a></code> already
+derives each tree’s start-of-interval state, so <code>tree_data</code>
+is a selection of its columns. The <code>year</code> of a row is the
+census that <em>closes</em> the interval, <code>dbh</code> the diameter
+at its start, <code>died</code> the fate over it; trees that recruited
+during the interval were not at risk and stay out.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">tree_raw</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"example_tree_dt.csv"</span>, package <span class="op">=</span> <span class="st">"FINN"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">prep</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/makeObsData.html">makeObsData</a></span><span class="op">(</span><span class="va">tree_raw</span><span class="op">[</span><span class="va">complete</span> <span class="op">==</span> <span class="cn">TRUE</span><span class="op">]</span>, plotsize <span class="op">=</span> <span class="fl">0.06</span>, aggregate_by_site <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>                    fix_period_length <span class="op">=</span> <span class="fl">10</span>, NspeciesQuantile <span class="op">=</span> <span class="fl">0.98</span><span class="op">)</span></span>
+<span><span class="va">inputs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/resolveSiteIDs.html">resolveSiteIDs</a></span><span class="op">(</span>tree_dt <span class="op">=</span> <span class="va">prep</span><span class="op">$</span><span class="va">tree_dt</span>, obs_dt <span class="op">=</span> <span class="va">prep</span><span class="op">$</span><span class="va">obs_dt</span>,</span>
+<span>                         env_dt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"example_env_dt.csv"</span>, package <span class="op">=</span> <span class="st">"FINN"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">tree_data</span> <span class="op">&lt;-</span> <span class="va">inputs</span><span class="op">$</span><span class="va">tree_dt</span><span class="op">[</span><span class="va">year</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;</span> <span class="va">living_before</span> <span class="op">==</span> <span class="cn">TRUE</span>,</span>
+<span>  <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">year</span>, <span class="va">patchID</span>, <span class="va">species</span>, dbh <span class="op">=</span> <span class="va">dbh_before</span>, <span class="va">growth</span>,</span>
+<span>    died <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"dead"</span><span class="op">)</span>, <span class="va">period_length</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">tree_data</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>trees <span class="op">=</span> <span class="va">.N</span>, died <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">died</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">year</span>, <span class="va">period_length</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;     year period_length trees  died</span></span>
+<span><span class="co">#&gt;    &lt;int&gt;         &lt;int&gt; &lt;int&gt; &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:    10            10   130     9</span></span>
+<span><span class="co">#&gt; 2:    20            10   127    12</span></span></code></pre></div>
+<p>Two details of the set-up. <code>growth</code> is the tree’s yearly
+growth rate that <code><a href="../reference/makeObsData.html">makeObsData()</a></code> computed, and
+<code>period_length</code> the ten years of its interval: the tree route
+runs the mortality kernel over every simulated year of the interval and
+compares the compounded death probability <code>1 - prod(1 - m)</code>
+with the tree’s fate. The per-tree term is accumulated over each site’s
+observation window, which <code><a href="../reference/fit.html">fit()</a></code> reads from the
+<code>period_length</code> column of <code>data</code>, which
+<code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> returns. And the model is the mechanistic
+one from above, with the mortality term alone switched to the tree
+route:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">obs_8</span> <span class="op">&lt;-</span> <span class="va">inputs</span><span class="op">$</span><span class="va">obs_dt</span></span>
+<span><span class="va">Nsp_8</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/dimensions.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">inputs</span><span class="op">$</span><span class="va">species_dt</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
+<span><span class="va">m_tree</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/finn.html">finn</a></span><span class="op">(</span></span>
+<span>  N_species            <span class="op">=</span> <span class="va">Nsp_8</span>, recruits_dbh <span class="op">=</span> <span class="fl">12.9</span>,</span>
+<span>  competition_process  <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">0</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/competition.html">competition</a></span>,  optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  growth_process       <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/growth.html">growth</a></span>,       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/regeneration_capped.html">regeneration_capped</a></span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">m_tree</span>,</span>
+<span>  env <span class="op">=</span> <span class="va">inputs</span><span class="op">$</span><span class="va">env_dt</span>, data <span class="op">=</span> <span class="va">obs_8</span>, init_cohort <span class="op">=</span> <span class="va">inputs</span><span class="op">$</span><span class="va">initCohorts</span>, device <span class="op">=</span> <span class="st">"cpu"</span>,</span>
+<span>  epochs <span class="op">=</span> <span class="va">EPOCHS</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>, lr <span class="op">=</span> <span class="fl">0.01</span>, plot_progress <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  loss_aggregation <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>mortality <span class="op">=</span> <span class="st">"tree"</span><span class="op">)</span>,   <span class="co"># growth and the state terms stay per cell</span></span>
+<span>  tree_data        <span class="op">=</span> <span class="va">tree_data</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/predictTrees.html">predictTrees()</a></code> returns one row per row of
+<code>tree_data</code>, in the same order, so the predictions are bound
+on rather than joined. Each tree is one Bernoulli trial, so the AUC
+needs no weighting here; it is the same <code>auc_binom()</code> with
+one trial per row:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">m_tree</span><span class="op">$</span><span class="fu">eval</span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="va">tree_pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">tree_data</span>,</span>
+<span>                   <span class="fu"><a href="../reference/predictTrees.html">predictTrees</a></span><span class="op">(</span><span class="va">m_tree</span>, tree_data <span class="op">=</span> <span class="va">tree_data</span>, env <span class="op">=</span> <span class="va">inputs</span><span class="op">$</span><span class="va">env_dt</span><span class="op">)</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">mort_pred</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">tree_pred</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>trees <span class="op">=</span> <span class="va">.N</span>, deaths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">died</span><span class="op">)</span>,</span>
+<span>              AUC <span class="op">=</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/math-generics.html" class="external-link">round</a></span><span class="op">(</span><span class="fu">auc_binom</span><span class="op">(</span><span class="va">mort_pred</span>, <span class="va">died</span>, <span class="fl">1</span> <span class="op">-</span> <span class="va">died</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="va">year</span><span class="op">]</span></span>
+<span><span class="co">#&gt;     year trees deaths   AUC</span></span>
+<span><span class="co">#&gt;    &lt;int&gt; &lt;int&gt;  &lt;num&gt; &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:    10   130      9 0.941</span></span>
+<span><span class="co">#&gt; 2:    20   127     12 0.936</span></span></code></pre></div>
+<p>Eight plots and two dozen deaths are a demonstration of the
+mechanism, not a mortality model, and the trees scored are the trees
+fitted; the 200-site fit with its holdout is in the <strong>Fitting FINN
+to forest inventory data</strong> vignette. What the route buys shows in
+a drought or disturbance study, where the question is how the hazard of
+a tree of a given size and species responds to the environment, and the
+cell mean would let the simulated size distribution answer instead.</p>
+</div>
+<div class="section level2">
 <h2 id="what-the-network-learned-ale">What the network learned: ALE<a class="anchor" aria-label="anchor" href="#what-the-network-learned-ale"></a>
 </h2>
 <p><code><a href="../reference/ALE.html">ALE()</a></code> returns one table per process, so the same tool
 reads a mechanistic mortality function and a neural network standing in
-its place. The effect is on the mortality <strong>probability</strong>
-per inventory interval.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+its place. The effect is on the yearly mortality
+<strong>probability</strong>.</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">ale_proc</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ALE.html">ALE</a></span><span class="op">(</span><span class="va">m</span>,      <span class="va">env_dt</span>, <span class="va">init_cohorts</span>, plot <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">ale_hyb</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ALE.html">ALE</a></span><span class="op">(</span><span class="va">m_mort</span>, <span class="va">env_dt</span>, <span class="va">init_cohorts</span>, plot <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
@@ -327,7 +454,7 @@ per inventory interval.</p>
 <span>  <span class="fu">to_natural</span><span class="op">(</span><span class="va">ale_proc</span><span class="op">$</span><span class="va">mortality</span>, <span class="va">m</span><span class="op">)</span><span class="op">[</span>,      <span class="va">model</span> <span class="op">:=</span> <span class="st">"Process (mechanistic)"</span><span class="op">]</span>,</span>
 <span>  <span class="fu">to_natural</span><span class="op">(</span><span class="va">ale_hyb</span><span class="op">$</span><span class="va">mortality</span>,  <span class="va">m_mort</span><span class="op">)</span><span class="op">[</span>, <span class="va">model</span> <span class="op">:=</span> <span class="st">"Hybrid (mortality = NN)"</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="va">mortality</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">mortality</span>, <span class="va">species_dt</span>, by <span class="op">=</span> <span class="st">"species"</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="va">mortality</span><span class="op">[</span><span class="va">var</span> <span class="op"><a href="https://rspatial.github.io/terra/reference/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dbh"</span>, <span class="st">"light"</span>, <span class="st">"temp"</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">species</span> <span class="op"><a href="https://rspatial.github.io/terra/reference/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">4</span>, <span class="fl">5</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="va">d</span><span class="op">[</span>, <span class="va">var</span> <span class="op">:=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">var</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dbh"</span>, <span class="st">"light"</span>, <span class="st">"temp"</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">d</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">ale</span>, colour <span class="op">=</span> <span class="va">model</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
@@ -350,7 +477,7 @@ tool. They are not a settled mortality response. With a few hundred
 deaths the network is free to flatten wherever the data do not constrain
 it, and a flat ALE here is as likely to mean “no signal” as “no
 effect”.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.0 (2025-04-11)</span></span>
 <span><span class="co">#&gt; Platform: aarch64-apple-darwin20</span></span>
@@ -361,7 +488,7 @@ effect”.</p>
 <span><span class="co">#&gt; LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; locale:</span></span>
-<span><span class="co">#&gt; [1] C</span></span>
+<span><span class="co">#&gt; [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; time zone: Europe/Berlin</span></span>
 <span><span class="co">#&gt; tzcode source: internal</span></span>
@@ -370,11 +497,12 @@ effect”.</p>
 <span><span class="co">#&gt; [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; other attached packages:</span></span>
-<span><span class="co">#&gt; [1] ggplot2_3.5.2     data.table_1.17.8 torch_0.15.1      FINN_0.1.0       </span></span>
+<span><span class="co">#&gt; [1] ggplot2_3.5.2       data.table_1.18.6.1 torch_0.15.1       </span></span>
+<span><span class="co">#&gt; [4] FINN_0.2.0         </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
 <span><span class="co">#&gt;  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       </span></span>
-<span><span class="co">#&gt;  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.0         callr_3.7.6       </span></span>
+<span><span class="co">#&gt;  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.2         callr_3.7.6       </span></span>
 <span><span class="co">#&gt;  [9] splines_4.5.0      scales_1.4.0       lattice_0.22-6     R6_2.6.1          </span></span>
 <span><span class="co">#&gt; [13] labeling_0.4.3     generics_0.1.4     knitr_1.50         tibble_3.3.0      </span></span>
 <span><span class="co">#&gt; [17] pillar_1.11.0      RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57         </span></span>
@@ -391,7 +519,7 @@ effect”.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

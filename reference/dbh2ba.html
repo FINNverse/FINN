@@ -9,7 +9,7 @@ $$BA = \pi \left(\frac{\mathrm{DBH}}{200}\right)^2$$"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,13 +65,29 @@ $$BA = \pi \left(\frac{\mathrm{DBH}}{200}\right)^2$$</p>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>numeric vector of basal areas (m^2).</p>
     </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="BA_stem.html">BA_stem()</a></code> and <code><a href="BA_stand.html">BA_stand()</a></code>, the versions for <code>torch</code>
+tensors</p></div>
+    </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">dbh2ba</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">10</span>, <span class="fl">30</span>, <span class="fl">50</span><span class="op">)</span><span class="op">)</span>   <span class="co"># basal area of one stem of 10, 30 and 50 cm</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.007853982 0.070685835 0.196349541</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># basal area per hectare of a 0.06 ha plot from its tree list</span></span></span>
+<span class="r-in"><span><span class="va">dbh</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">12.9</span>, <span class="fl">25.4</span>, <span class="fl">31.0</span>, <span class="fl">48.3</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="fu">dbh2ba</span><span class="op">(</span><span class="va">dbh</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="fl">0.06</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 5.374035</span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

@@ -13,7 +13,7 @@ their curves are overlaid in the same panel as one coloured line each."></head><
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,13 +87,43 @@ y-axis is then used); if <code>FALSE</code> (default) the raw ALE is shown with 
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>invisibly, the <code>ggplot</code> object.</p>
     </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="ALE.html">ALE()</a></code></p></div>
+    </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># a small model fitted on two Oregon FIA sites (see ?fit), then its ALE curves</span></span></span>
+<span class="r-in"><span><span class="va">sites</span> <span class="op">&lt;-</span> <span class="fl">1</span><span class="op">:</span><span class="fl">2</span></span></span>
+<span class="r-in"><span><span class="va">Nsp</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">fia_obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">init</span>  <span class="op">&lt;-</span> <span class="fu"><a href="makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">fia_init_trees</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, Nspecies <span class="op">=</span> <span class="va">Nsp</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="finn.html">finn</a></span><span class="op">(</span>N_species <span class="op">=</span> <span class="va">Nsp</span>, recruits_dbh <span class="op">=</span> <span class="fl">12.9</span>,</span></span>
+<span class="r-in"><span>          growth_process       <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">growth</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>          mortality_process    <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">mortality</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>          regeneration_process <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">regeneration_capped</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="fit.html">fit</a></span><span class="op">(</span><span class="va">m</span>, data <span class="op">=</span> <span class="va">fia_obs_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, env <span class="op">=</span> <span class="va">fia_env_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>,</span></span>
+<span class="r-in"><span>    init_cohort <span class="op">=</span> <span class="va">init</span>, epochs <span class="op">=</span> <span class="fl">1L</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>,</span></span>
+<span class="r-in"><span>    plot_progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> weights: intercept-only baseline x your vector (dbh=0.00301, ba=8.77, trees=0.852, growth=1.58e+04, mortality=32.4, regeneration=0.677)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> share of the objective at the intercept-only baseline (scaled): dbh=17%, ba=17%, trees=17%, growth=17%, mortality=17%, regeneration=17%</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">ale</span> <span class="op">&lt;-</span> <span class="fu"><a href="ALE.html">ALE</a></span><span class="op">(</span><span class="va">m</span>, plot <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">ale</span>, process <span class="op">=</span> <span class="st">"growth"</span><span class="op">)</span></span></span>
+<span class="r-plt img"><img src="plot.FINNale-1.png" alt="" width="700" height="433"></span>
+<span class="r-in"><span><span class="co"># all three processes on a common, dimensionless scale</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">ale</span>, scale <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-plt img"><img src="plot.FINNale-2.png" alt="" width="700" height="433"></span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

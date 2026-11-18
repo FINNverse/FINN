@@ -11,7 +11,7 @@ format. The function processes site-level, patch-level, and cohort-level predict
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,11 +93,18 @@ wide format (one row per site/patch/cohort per year with multiple columns for
 different metrics) or a long format (one row per site/patch/cohort per year
 per metric).</p>
     </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="predict.finn_class.html">predict.finn_class()</a></code> / <code><a href="predict.finn_class.html">simulateForest()</a></code>, which
+call this function and return its result as <code>$wide</code> and <code>$long</code></p></div>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># a minimal prediction object of the shape pred2DF() expects</span></span></span>
-<span class="r-in"><span><span class="co"># (normally produced by predict()/simulateForest()):</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># a minimal prediction object of the shape pred2DF() expects: one array</span></span></span>
+<span class="r-in"><span><span class="co"># [site, year, species] per variable. predict()/simulateForest() build it</span></span></span>
+<span class="r-in"><span><span class="co"># from the simulation and return the tables, so pred2DF() is rarely called</span></span></span>
+<span class="r-in"><span><span class="co"># directly.</span></span></span>
 <span class="r-in"><span><span class="va">metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dbh"</span>, <span class="st">"ba"</span>, <span class="st">"trees"</span>, <span class="st">"growth"</span>, <span class="st">"mort"</span>, <span class="st">"reg"</span>, <span class="st">"r_mean_ha"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">arr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/array.html" class="external-link">array</a></span><span class="op">(</span><span class="fl">1</span>, dim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">3</span><span class="op">)</span>, dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span><span class="op">)</span>  <span class="co"># [site, year, species]</span></span></span>
 <span class="r-in"><span><span class="va">pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>Predictions <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>Site <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/setNames.html" class="external-link">setNames</a></span><span class="op">(</span></span></span>
@@ -112,6 +119,14 @@ per metric).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 4:      1     2       2      dbh     1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5:      1     1       3      dbh     1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 6:      1     2       3      dbh     1</span>
+<span class="r-in"><span><span class="co"># one column per variable instead of one row</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu">pred2DF</span><span class="op">(</span><span class="va">pred</span>, format <span class="op">=</span> <span class="st">"wide"</span><span class="op">)</span><span class="op">$</span><span class="va">site</span>, <span class="fl">3</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Key: &lt;siteID, species, year&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt;   &lt;int&gt; &lt;int&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt;  &lt;num&gt; &lt;num&gt; &lt;num&gt;     &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      1       1     1     1     1     1      1     1     1         1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      1       1     2     1     1     1      1     1     1         1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      1       2     1     1     1     1      1     1     1         1</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
@@ -120,7 +135,7 @@ per metric).</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

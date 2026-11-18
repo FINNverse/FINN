@@ -96,3 +96,47 @@ with different formulas get different variable sets. Common random
 numbers (`sim_seed`, applied to the torch simulation RNG) make the
 stochastic mortality/regeneration draws shared across the reference and
 permuted runs, so a driver with no effect returns ~0.
+
+## See also
+
+[`summary.finn_class()`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
+(`importance = "permutation"`),
+[`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md)
+
+## Examples
+
+``` r
+library(data.table)
+# a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN
+# variant is the same call with `hidden = c(10, 10)` on the process
+sites <- 1:3
+Nsp   <- max(fia_obs_dt$species)
+init  <- makeInitCohorts(fia_init_trees[siteID %in% sites], Nspecies = Nsp)
+FINN.seed(1)
+m <- finn(
+  N_species            = Nsp, recruits_dbh = 12.9,
+  growth_process       = createProcess(~ temp + prec, FINN::growth,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  mortality_process    = createProcess(~ temp + prec, FINN::mortality,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE),
+  regeneration_process = createProcess(~ temp + prec, FINN::regeneration,
+                                       optimizeSpecies = TRUE, optimizeEnv = TRUE))
+fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
+    init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06, plot_progress = FALSE)
+#> ℹ weights: intercept-only baseline x your vector (dbh=0.00243, ba=12, trees=0.968, growth=1.84e+04, mortality=38.5, regeneration=0.768)
+#> ℹ share of the objective at the intercept-only baseline (scaled): dbh=17%, ba=17%, trees=17%, growth=17%, mortality=17%, regeneration=17%
+
+# permutation importance: how much the simulated rate of a process shifts
+# when a driver is shuffled between sites and years. `nperm` is small here
+# to keep the example quick; use more for a real reading.
+fi <- feature_importance(m, nperm = 2L, seed = 1L)
+head(fi$growth)
+#>    species variable importance
+#> 1        1     temp  1.2552243
+#> 12       1     prec  1.0058492
+#> 13       2     prec  1.2301807
+#> 2        2     temp  0.4590797
+#> 3        3     temp  1.2019306
+#> 14       3     prec  1.0795486
+# `method = "sobol"` gives the dimensionless Sobol-style score instead
+```

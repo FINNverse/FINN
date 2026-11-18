@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +54,7 @@
           <code><a href="finn.html">finn()</a></code>
 
         </dt>
-        <dd>Forest Informed Neural Network</dd>
+        <dd>Build a FINN forest model</dd>
 
         <dt>
 
@@ -76,6 +76,13 @@
 
         </dt>
         <dd>Cohort Matrix Class</dd>
+
+        <dt>
+
+          <code><a href="recruitment.html">recruitment</a></code> <code><a href="recruitment.html">FINN-recruitment</a></code>
+
+        </dt>
+        <dd>Recruitment in FINN: the options and how to choose them</dd>
       </dl></div><div class="section level2">
       <h2 id="fitting-and-prediction">Fitting and prediction<a class="anchor" aria-label="anchor" href="#fitting-and-prediction"></a></h2>
 
@@ -91,21 +98,42 @@
           <code><a href="fit.html">fit()</a></code>
 
         </dt>
-        <dd>Fit FINN</dd>
+        <dd>Estimate the parameters of a FINN model</dd>
 
         <dt>
 
-          <code><a href="predict.finn_class.html">predict(<i>&lt;finn_class&gt;</i>)</a></code>
+          <code><a href="finn_data.html">finn_data</a></code> <code><a href="finn_data.html">finn-data</a></code>
 
         </dt>
-        <dd>Predict from a FINN model</dd>
+        <dd>The input tables of FINN: observations, environment, initial trees</dd>
 
         <dt>
 
-          <code><a href="simulateForest.html">simulateForest()</a></code>
+          <code><a href="finn_loss.html">finn_loss</a></code> <code><a href="finn_loss.html">finn-loss</a></code>
 
         </dt>
-        <dd>Simulate</dd>
+        <dd>How fit() compares the simulation with the observations: the loss</dd>
+
+        <dt>
+
+          <code><a href="finnControl.html">finnControl()</a></code> <code><a href="finnControl.html">print(<i>&lt;finnControl&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Settings of the optimizer used by fit()</dd>
+
+        <dt>
+
+          <code><a href="predict.finn_class.html">predict(<i>&lt;finn_class&gt;</i>)</a></code> <code><a href="predict.finn_class.html">simulateForest()</a></code>
+
+        </dt>
+        <dd>Simulate a forest with a FINN model</dd>
+
+        <dt>
+
+          <code><a href="predictTrees.html">predictTrees()</a></code>
+
+        </dt>
+        <dd>Predict growth and mortality for individual observed trees</dd>
 
         <dt>
 
@@ -128,7 +156,7 @@
           <code><a href="growth.html">growth()</a></code>
 
         </dt>
-        <dd>Calculate growth</dd>
+        <dd>Growth</dd>
 
         <dt>
 
@@ -142,7 +170,28 @@
           <code><a href="regeneration.html">regeneration()</a></code>
 
         </dt>
-        <dd>Calculate the regeneration of forest patches based on the input parameters</dd>
+        <dd>Regeneration without a recruitment cap</dd>
+
+        <dt>
+
+          <code><a href="regeneration_capped.html">regeneration_capped()</a></code> <code><a href="regeneration_capped.html">regeneration_saturation()</a></code>
+
+        </dt>
+        <dd>Regeneration with a Beverton-Holt recruitment cap</dd>
+
+        <dt>
+
+          <code><a href="regeneration_adult.html">regeneration_adult()</a></code>
+
+        </dt>
+        <dd>Regeneration limited by conspecific adult density</dd>
+
+        <dt>
+
+          <code><a href="regeneration_adult_effect.html">regeneration_adult_effect()</a></code>
+
+        </dt>
+        <dd>Regeneration with an effect of conspecific adult density</dd>
 
         <dt>
 
@@ -221,7 +270,7 @@
           <code><a href="obsDF2arrays.html">obsDF2arrays()</a></code>
 
         </dt>
-        <dd>Convert observation data frame to arrays</dd>
+        <dd>Convert a cohort table to arrays</dd>
 
         <dt>
 
@@ -236,6 +285,50 @@
 
         </dt>
         <dd>Convert Prediction Arrays to Data Frames</dd>
+      </dl></div><div class="section level2">
+      <h2 id="data">Data<a class="anchor" aria-label="anchor" href="#data"></a></h2>
+
+      <div class="section-desc"><p>The bundled Oregon FIA calibration data, in FINN’s input format.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="fia_obs_dt.html">fia_obs_dt</a></code> <code><a href="fia_obs_dt.html">fia_obs_test</a></code>
+
+        </dt>
+        <dd>Oregon FIA calibration data: training sites</dd>
+
+        <dt>
+
+          <code><a href="fia_env_dt.html">fia_env_dt</a></code> <code><a href="fia_env_dt.html">fia_env_test</a></code>
+
+        </dt>
+        <dd>Oregon FIA calibration data: site climate</dd>
+
+        <dt>
+
+          <code><a href="fia_init_trees.html">fia_init_trees</a></code> <code><a href="fia_init_trees.html">fia_init_test</a></code>
+
+        </dt>
+        <dd>Oregon FIA calibration data: initial tree list</dd>
+
+        <dt>
+
+          <code><a href="fia_tree_dt.html">fia_tree_dt</a></code> <code><a href="fia_tree_dt.html">fia_tree_test</a></code>
+
+        </dt>
+        <dd>Oregon FIA calibration data: the trees behind the mortality counts</dd>
+
+        <dt>
+
+          <code><a href="fia_species_dt.html">fia_species_dt</a></code>
+
+        </dt>
+        <dd>Oregon FIA calibration data: species coding</dd>
       </dl></div><div class="section level2">
       <h2 id="environmental-scaling">Environmental scaling<a class="anchor" aria-label="anchor" href="#environmental-scaling"></a></h2>
 
@@ -258,7 +351,7 @@
           <code><a href="compute_env_scaling.html">compute_env_scaling()</a></code>
 
         </dt>
-        <dd>Learn z-standardization for environmental predictors</dd>
+        <dd>Compute per-predictor environmental scaling</dd>
       </dl></div><div class="section level2">
       <h2 id="interpretation-xai-">Interpretation (xAI)<a class="anchor" aria-label="anchor" href="#interpretation-xai-"></a></h2>
 
@@ -322,13 +415,6 @@
 
       <dl><dt>
 
-          <code><a href="aggregate_results_old.html">aggregate_results_old()</a></code>
-
-        </dt>
-        <dd>Aggregate function</dd>
-
-        <dt>
-
           <code><a href="binomial_from_bernoulli.html">binomial_from_bernoulli()</a></code>
 
         </dt>
@@ -339,28 +425,21 @@
           <code><a href="binomial_from_gamma.html">binomial_from_gamma()</a></code>
 
         </dt>
-        <dd>Sample from binomial with gradient</dd>
+        <dd>Draw deaths from a Gamma matched to the binomial</dd>
 
         <dt>
 
-          <code><a href="groupby_mean.html">groupby_mean()</a></code>
+          <code><a href="binomial_from_poisson.html">binomial_from_poisson()</a></code>
 
         </dt>
-        <dd>group by mean</dd>
+        <dd>Draw deaths as a Bernoulli/Poisson count</dd>
 
         <dt>
 
-          <code><a href="index_species.html">index_species()</a></code>
+          <code><a href="rnbinom_torch_refined.html">rnbinom_torch_refined()</a></code>
 
         </dt>
-        <dd>Index species</dd>
-
-        <dt>
-
-          <code><a href="np_runif.html">np_runif()</a></code>
-
-        </dt>
-        <dd>Generate random numbers from a uniform distribution</dd>
+        <dd>Negative-binomial recruit draw without the recruitment floor</dd>
 
         <dt>
 
@@ -368,20 +447,13 @@
 
         </dt>
         <dd>Generate Cohorts Using Weibull Distribution</dd>
-
-        <dt>
-
-          <code><a href="sample_poisson_relaxed.html">sample_poisson_relaxed()</a></code>
-
-        </dt>
-        <dd>Sample poisson relaxed</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

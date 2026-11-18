@@ -61,19 +61,28 @@ rweibull_cohorts(
 
 ## Value
 
-A data frame containing the cohort data with columns for site ID, patch
-ID, cohort ID, species, number of trees, and DBH.
+A data frame with one row per non-empty diameter class and the columns
+`siteID`, `patchID`, `cohortID` (numbered over the whole table),
+`species`, `dbh` (cm) and `trees`, the format of `CohortMat(obs_df = )`.
 
 ## Details
 
 The function generates cohort data by drawing samples from the Weibull
 distribution for each cohort based on the specified shape and scale
-parameters. The resulting DBH values are binned into classes, and the
-cohort data is generated accordingly.
+parameters. The resulting DBH values are binned into classes of width
+`dbh_class_range`, and each non-empty class becomes one cohort.
+
+## See also
+
+[CohortMat](https://finnverse.github.io/FINN/reference/CohortMat.md) to
+turn the table into an initial state
 
 ## Examples
 
 ``` r
+set.seed(1)
+# a stand of two species on one patch: 300 saplings of species 3 around
+# 1 cm and 10 large trees of species 4 around 50 cm, in 0.1 cm classes
 obs_df <- rweibull_cohorts(
   trees = c(300, 10),
   dbh_shape = c(3, 3),
@@ -85,10 +94,15 @@ obs_df <- rweibull_cohorts(
 )
 head(obs_df)
 #>   siteID patchID cohortID species dbh trees
-#> 1      1       1        1       3 0.4     5
-#> 2      1       1        2       3 0.5    10
-#> 3      1       1        3       3 0.6    14
-#> 4      1       1        4       3 0.7    21
-#> 5      1       1        5       3 0.8    30
-#> 6      1       1        6       3 0.9    36
+#> 1      1       1        1       3 0.3     1
+#> 2      1       1        2       3 0.4     5
+#> 3      1       1        3       3 0.5     8
+#> 4      1       1        4       3 0.6    17
+#> 5      1       1        5       3 0.7    18
+#> 6      1       1        6       3 0.8    33
+# trees and cohorts per species
+aggregate(cbind(trees, cohorts = 1) ~ species, data = obs_df, FUN = sum)
+#>   species trees cohorts
+#> 1       3   300      16
+#> 2       4    10      10
 ```

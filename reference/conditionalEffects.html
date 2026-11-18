@@ -15,7 +15,7 @@ variable importance in summary.finn_class()."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -94,15 +94,55 @@ variable importance in <code><a href="summary.finn_class.html">summary.finn_clas
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>an object of class <code>FINNconditionalEffects</code> (also cached on <code>model$conditional_effects</code>).</p>
+    <p>an object of class <code>FINNconditionalEffects</code> (also cached on <code>model$conditional_effects</code>):
+a list with one element per process (<code>growth</code>, <code>mortality</code>, <code>regeneration</code>), each a list with
+one element per species holding the inputs the process was evaluated at (<code>X</code>), the local
+derivatives with respect to them (<code>grads</code>) and the predicted rate (<code>pred</code>).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="averageConditionalEffects.html">averageConditionalEffects()</a></code> for one number per driver, <code><a href="ALE.html">ALE()</a></code> for the curves</p></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># a small model fitted on three Oregon FIA sites (?fia_obs_dt, ?fit); the NN</span></span></span>
+<span class="r-in"><span><span class="co"># variant is the same call with `hidden = c(10, 10)` on the process</span></span></span>
+<span class="r-in"><span><span class="va">sites</span> <span class="op">&lt;-</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span></span></span>
+<span class="r-in"><span><span class="va">Nsp</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">fia_obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">init</span>  <span class="op">&lt;-</span> <span class="fu"><a href="makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">fia_init_trees</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, Nspecies <span class="op">=</span> <span class="va">Nsp</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="finn.html">finn</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  N_species            <span class="op">=</span> <span class="va">Nsp</span>, recruits_dbh <span class="op">=</span> <span class="fl">12.9</span>,</span></span>
+<span class="r-in"><span>  growth_process       <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="growth.html">growth</a></span>,</span></span>
+<span class="r-in"><span>                                       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="mortality.html">mortality</a></span>,</span></span>
+<span class="r-in"><span>                                       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  regeneration_process <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="regeneration.html">regeneration</a></span>,</span></span>
+<span class="r-in"><span>                                       optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span>, optimizeEnv <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="fit.html">fit</a></span><span class="op">(</span><span class="va">m</span>, data <span class="op">=</span> <span class="va">fia_obs_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>, env <span class="op">=</span> <span class="va">fia_env_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">sites</span><span class="op">]</span>,</span></span>
+<span class="r-in"><span>    init_cohort <span class="op">=</span> <span class="va">init</span>, epochs <span class="op">=</span> <span class="fl">2L</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>, plot_progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> weights: intercept-only baseline x your vector (dbh=0.00243, ba=12, trees=0.968, growth=1.84e+04, mortality=38.5, regeneration=0.768)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> share of the objective at the intercept-only baseline (scaled): dbh=17%, ba=17%, trees=17%, growth=17%, mortality=17%, regeneration=17%</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the local slope of each process with respect to each of its inputs, at the</span></span></span>
+<span class="r-in"><span><span class="co"># states the fitted model passes through: a list per process and species</span></span></span>
+<span class="r-in"><span><span class="va">ce</span> <span class="op">&lt;-</span> <span class="fu">conditionalEffects</span><span class="op">(</span><span class="va">m</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">ce</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "processes"     "env"           "env_autoscale" "sim_seed"     </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [5] "key"          </span>
+<span class="r-in"><span><span class="co"># species 1, growth: the inputs, the slopes and the predicted rate</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">ce</span><span class="op">$</span><span class="va">growth</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  NULL</span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

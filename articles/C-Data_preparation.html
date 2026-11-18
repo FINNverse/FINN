@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,26 +85,32 @@ columns names and units, and the helper functions for data preparation
 <li>
 <strong><code>obs_dt</code></strong>: demographic responses per site
 × year × species:
-<code>siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species, species_name</code>.
-Year starts at 1; the initial state (year 0) is <em>not</em> included.
+<code>siteID, year, ba, dbh, trees, growth, mort, n_at_risk, n_died, reg, species, species_name, period_length</code>.
+FINN simulates the forest in <strong>yearly steps</strong>, so
+<code>year</code> counts years since the first inventory, which is the
+initial state (year 0) and <em>not</em> included; with inventories ten
+years apart the observations sit at years 10 and 20, each with
+<code>period_length = 10</code>, the years since the previous inventory.
 NAs are allowed in any response. Units: <code>ba</code> m²,
 <code>dbh</code> cm, <code>trees</code> count, <code>growth</code>
-relative growth rate, <code>reg</code> trees ha⁻¹. Mortality comes back
-as a <strong>pair of counts</strong>, <code>n_at_risk</code> (trees
-alive at the start of the interval) and <code>n_died</code> (how many of
-them were dead at the end), with the rate
-<code>mort = n_died / n_at_risk</code> derived for convenience. That
-pair is the <code>cbind(died, survived)</code> response of a binomial
-GLM, and it is what the default <code>mortality = "binomial"</code> loss
-consumes: the counts carry the sample size, so a 60-tree observation
+relative growth rate per year, <code>reg</code> trees ha⁻¹ over the
+interval. Mortality comes back as a <strong>pair of counts</strong>,
+<code>n_at_risk</code> (trees alive at the start of the interval) and
+<code>n_died</code> (how many of them were dead at the end), with the
+yearly rate
+<code>mort = 1 - (1 - n_died / n_at_risk)^(1 / period_length)</code>
+derived from them. The pair is the <code>cbind(died, survived)</code>
+response of a binomial GLM: the default
+<code>loss_family = c(..., mortality = "binomial", ...)</code> weights
+each observation by <code>n_at_risk</code>, so a 60-tree observation
 outweighs a 1-tree one.</li>
 <li>
 <strong><code>env_dt</code></strong>:
 <code>siteID, year, &lt;env vars…&gt;</code> in <strong>natural
-units</strong>; must cover every site × year in <code>obs_dt</code>. No
-manual scaling is needed: FINN z-standardizes the predictors internally
-when fitting (<code>env_autoscale = TRUE</code>, the default) and reuses
-the same constants at prediction time.</li>
+units</strong>, one row per site and simulated year, from year 1 to the
+last inventory. No manual scaling is needed: FINN z-standardizes the
+predictors internally when fitting (<code>env_autoscale = TRUE</code>,
+the default) and reuses the same constants at prediction time.</li>
 <li>
 <strong><code>init_trees</code></strong>: the initial state used to
 build the starting cohorts:
@@ -220,48 +226,105 @@ filter:</p>
 <span><span class="co">#&gt; 4: 11_66410 11_66410_1  2001  Abies grandis     0    NA     0     NA        0</span></span>
 <span><span class="co">#&gt; 5: 11_66410 11_66410_1  2011  Abies grandis     0    NA     0     NA        0</span></span>
 <span><span class="co">#&gt; 6: 11_66410 11_66410_1  2021  Abies grandis     0    NA     0     NA        0</span></span>
-<span><span class="co">#&gt;     mort n_at_risk n_died   reg</span></span>
-<span><span class="co">#&gt;    &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;</span></span>
-<span><span class="co">#&gt; 1:    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 2:    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 3:    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 4:    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 5:    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 6:    NA         0      0     0</span></span></code></pre></div>
+<span><span class="co">#&gt;     mort n_at_risk n_died   reg period_length</span></span>
+<span><span class="co">#&gt;    &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;         &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1:    NA         0      0     0            NA</span></span>
+<span><span class="co">#&gt; 2:    NA         0      0     0            10</span></span>
+<span><span class="co">#&gt; 3:    NA         0      0     0            10</span></span>
+<span><span class="co">#&gt; 4:    NA         0      0     0            NA</span></span>
+<span><span class="co">#&gt; 5:    NA         0      0     0            10</span></span>
+<span><span class="co">#&gt; 6:    NA         0      0     0            10</span></span></code></pre></div>
 <p>Use <code>Nspecies</code> (a hard cap) or
 <code>NspeciesQuantile</code> (smallest set covering a stem fraction) to
 control how many species you model; everything else becomes
 <code>"other"</code>, which FINN still tracks as a competitor.</p>
+<p>The rates come back <strong>per year</strong>, because FINN simulates
+the forest in yearly steps. A tree that grew from 20 to 24 cm over the
+ten years of an interval has the yearly growth rate
+<code>(24 / 20)^(1 / 10) - 1 = 0.0184</code>, the constant rate that
+compounds to the observed increment, and a cohort of which 1 in 2 trees
+died over the interval has the yearly mortality rate
+<code>1 - 0.5^(1 / 10) = 0.067</code>. <code>period_length</code> is the
+length of the interval in years. When fitting, FINN averages the
+simulated yearly growth and mortality over these ten years and sums the
+simulated recruits, so <code>reg</code> stays the recruitment of the
+whole interval, and the counts <code>n_at_risk</code>,
+<code>n_died</code> and <code>growth_n</code> are the trees behind each
+observation. The growth and mortality of every observation, per year and
+as compounded back over its interval:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">obs_dt</span><span class="op">[</span><span class="va">n_at_risk</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteName</span>, <span class="va">year</span>, <span class="va">species_name</span>, <span class="va">period_length</span>, <span class="va">growth</span>, <span class="va">mort</span>,</span>
+<span>                        growth_interval <span class="op">=</span> <span class="op">(</span><span class="fl">1</span> <span class="op">+</span> <span class="va">growth</span><span class="op">)</span><span class="op">^</span><span class="va">period_length</span> <span class="op">-</span> <span class="fl">1</span>,</span>
+<span>                        mort_interval   <span class="op">=</span> <span class="va">n_died</span> <span class="op">/</span> <span class="va">n_at_risk</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span></span>
+<span><span class="co">#&gt;    siteName  year          species_name period_length      growth       mort</span></span>
+<span><span class="co">#&gt;      &lt;char&gt; &lt;int&gt;                &lt;char&gt;         &lt;int&gt;       &lt;num&gt;      &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1: 11_66410  2011 Pseudotsuga menziesii            10 0.019669783 0.00000000</span></span>
+<span><span class="co">#&gt; 2: 11_66410  2021 Pseudotsuga menziesii            10 0.012542247 0.00000000</span></span>
+<span><span class="co">#&gt; 3: 11_66410  2011 Pseudotsuga menziesii            10 0.011816466 0.00000000</span></span>
+<span><span class="co">#&gt; 4: 11_66410  2021 Pseudotsuga menziesii            10 0.007917063 0.01326438</span></span>
+<span><span class="co">#&gt; 5: 11_66410  2011 Pseudotsuga menziesii            10 0.018626114 0.00000000</span></span>
+<span><span class="co">#&gt; 6: 11_66410  2021 Pseudotsuga menziesii            10 0.010948501 0.00000000</span></span>
+<span><span class="co">#&gt;    growth_interval mort_interval</span></span>
+<span><span class="co">#&gt;              &lt;num&gt;         &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:       0.2150538         0.000</span></span>
+<span><span class="co">#&gt; 2:       0.1327434         0.000</span></span>
+<span><span class="co">#&gt; 3:       0.1246501         0.000</span></span>
+<span><span class="co">#&gt; 4:       0.0820516         0.125</span></span>
+<span><span class="co">#&gt; 5:       0.2026744         0.000</span></span>
+<span><span class="co">#&gt; 6:       0.1150397         0.000</span></span></code></pre></div>
+<p><code>makeObsData(rates = "interval")</code> returns the rates over
+the whole interval instead, for a model in which one simulation step is
+one census interval (the set-up of FINN 0.1.0). One step per interval
+distorts the dynamics, though: recruitment, competition and growth then
+act once per interval, and the mortality limits of a step become limits
+per decade. Keep the default.</p>
 </div>
 <div class="section level2">
 <h2 id="environmental-data">Environmental data<a class="anchor" aria-label="anchor" href="#environmental-data"></a>
 </h2>
 <p>Acquisition from rasters (e.g. WorldClim) needs external files, so it
 is shown but not run. The result is a table of environmental predictors
-in <strong>natural units</strong>, one row per site × year:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+in <strong>natural units</strong>, one row per site and <strong>calendar
+year</strong>, because every simulated year needs its environment:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rspatial.org/" class="external-link">terra</a></span><span class="op">)</span></span>
 <span><span class="va">pts</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/vect.html" class="external-link">vect</a></span><span class="op">(</span><span class="va">site_dt</span>, geom <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"x"</span>, <span class="st">"y"</span><span class="op">)</span>, crs <span class="op">=</span> <span class="st">"EPSG:4326"</span><span class="op">)</span></span>
 <span><span class="va">bio1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="st">"wc2.1_30s_bio_1.tif"</span><span class="op">)</span></span>
 <span><span class="va">env_dt</span><span class="op">[</span>, <span class="va">temp</span> <span class="op">:=</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/extract.html" class="external-link">extract</a></span><span class="op">(</span><span class="va">bio1</span>, <span class="fu"><a href="https://rspatial.github.io/terra/reference/project.html" class="external-link">project</a></span><span class="op">(</span><span class="va">pts</span>, <span class="fu"><a href="https://rspatial.github.io/terra/reference/crs.html" class="external-link">crs</a></span><span class="op">(</span><span class="va">bio1</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">]</span></span></code></pre></div>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">env_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"example_env_dt.csv"</span>, package <span class="op">=</span> <span class="st">"FINN"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/headtail.html" class="external-link">head</a></span><span class="op">(</span><span class="va">env_dt</span><span class="op">)</span></span>
 <span><span class="co">#&gt;    siteName  year     temp tempmax tempmin  prec precseas precwarmq</span></span>
 <span><span class="co">#&gt;      &lt;char&gt; &lt;int&gt;    &lt;num&gt;   &lt;num&gt;   &lt;num&gt; &lt;int&gt;    &lt;num&gt;     &lt;int&gt;</span></span>
 <span><span class="co">#&gt; 1: 11_66410  2001 10.69167    22.8     2.7  1880 70.15234       103</span></span>
-<span><span class="co">#&gt; 2: 11_66410  2011 10.69167    22.8     2.7  1880 70.15234       103</span></span>
-<span><span class="co">#&gt; 3: 11_66410  2021 10.69167    22.8     2.7  1880 70.15234       103</span></span>
-<span><span class="co">#&gt; 4: 17_65658  2002  6.48750    26.1    -6.6   417 55.10012        56</span></span>
-<span><span class="co">#&gt; 5: 17_65658  2012  6.48750    26.1    -6.6   417 55.10012        56</span></span>
-<span><span class="co">#&gt; 6: 17_65658  2022  6.48750    26.1    -6.6   417 55.10012        56</span></span></code></pre></div>
+<span><span class="co">#&gt; 2: 11_66410  2002 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="co">#&gt; 3: 11_66410  2003 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="co">#&gt; 4: 11_66410  2004 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="co">#&gt; 5: 11_66410  2005 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="co">#&gt; 6: 11_66410  2006 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="va">env_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>first <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">year</span><span class="op">)</span>, last <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">year</span><span class="op">)</span>, years <span class="op">=</span> <span class="va">.N</span><span class="op">)</span>, by <span class="op">=</span> <span class="va">siteName</span><span class="op">]</span></span>
+<span><span class="co">#&gt;    siteName first  last years</span></span>
+<span><span class="co">#&gt;      &lt;char&gt; &lt;int&gt; &lt;int&gt; &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1: 11_66410  2001  2021    21</span></span>
+<span><span class="co">#&gt; 2: 17_65658  2002  2022    21</span></span>
+<span><span class="co">#&gt; 3:  1_50638  2001  2021    21</span></span>
+<span><span class="co">#&gt; 4: 23_98340  2002  2022    21</span></span>
+<span><span class="co">#&gt; 5: 25_81184  2002  2022    21</span></span>
+<span><span class="co">#&gt; 6: 33_95570  2001  2021    21</span></span>
+<span><span class="co">#&gt; 7: 35_70911  2001  2021    21</span></span>
+<span><span class="co">#&gt; 8: 35_90216  2001  2021    21</span></span></code></pre></div>
+<p>The climate here is the long-term WorldClim normal of each plot, the
+same in every year, so it is simply repeated; a yearly climate series
+would give every year its own values. <code>env_dt</code> must cover
+every calendar year from the first inventory of a site to its last
+(precisely: to the longest first-to-last span of any site after the
+site’s first inventory, since all sites share one time axis).</p>
 <p>There is <strong>no manual standardization step</strong>. FINN
 z-scales the predictors internally when you fit
 (<code>env_autoscale = TRUE</code>, the default), stores the
 per-variable mean/sd on the model, and re-applies them at prediction
 time. So you supply (and keep) <code>env_dt</code> in natural units
-throughout. <code>env_dt</code> must cover every
-<code>siteName × year</code> present in <code>obs_dt</code>.</p>
+throughout.</p>
 </div>
 <div class="section level2">
 <h2 id="resolve-ids-across-tables">Resolve IDs across tables<a class="anchor" aria-label="anchor" href="#resolve-ids-across-tables"></a>
@@ -273,7 +336,7 @@ can build the initial cohorts in one pass. Pass the
 <strong>processed</strong> tree list <code>obs_list$tree_dt</code> (not
 the raw one): <code><a href="../reference/makeObsData.html">makeObsData()</a></code> returns it with the same
 species lumping as <code>obs_dt</code>, so the two stay consistent.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">inputs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/resolveSiteIDs.html">resolveSiteIDs</a></span><span class="op">(</span></span>
 <span>  tree_dt <span class="op">=</span> <span class="va">obs_list</span><span class="op">$</span><span class="va">tree_dt</span>,   <span class="co"># processed tree list (species lumped like obs_dt)</span></span>
 <span>  obs_dt  <span class="op">=</span> <span class="va">obs_dt</span>,</span>
@@ -283,21 +346,21 @@ species lumping as <code>obs_dt</code>, so the two stay consistent.</p>
 <span><span class="co"># obs_dt / env_dt now carry integer siteID/patchID/species, aligned across tables</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/headtail.html" class="external-link">head</a></span><span class="op">(</span><span class="va">inputs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">)</span></span>
 <span><span class="co">#&gt;    siteID  year    ba   dbh trees growth growth_n  mort n_at_risk n_died   reg</span></span>
-<span><span class="co">#&gt;     &lt;int&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt;  &lt;num&gt;    &lt;int&gt; &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;</span></span>
-<span><span class="co">#&gt; 1:      1     0     0   NaN     0    NaN        0    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 2:      1     1     0   NaN     0    NaN        0    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 3:      1     2     0   NaN     0    NaN        0    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 4:      2     0     0   NaN     0    NaN        0    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 5:      2     1     0   NaN     0    NaN        0    NA         0      0     0</span></span>
-<span><span class="co">#&gt; 6:      2     2     0   NaN     0    NaN        0    NA         0      0     0</span></span>
-<span><span class="co">#&gt;    species   species_name</span></span>
-<span><span class="co">#&gt;      &lt;int&gt;         &lt;char&gt;</span></span>
-<span><span class="co">#&gt; 1:       1 Abies concolor</span></span>
-<span><span class="co">#&gt; 2:       1 Abies concolor</span></span>
-<span><span class="co">#&gt; 3:       1 Abies concolor</span></span>
-<span><span class="co">#&gt; 4:       1 Abies concolor</span></span>
-<span><span class="co">#&gt; 5:       1 Abies concolor</span></span>
-<span><span class="co">#&gt; 6:       1 Abies concolor</span></span>
+<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt;  &lt;num&gt;    &lt;int&gt; &lt;num&gt;     &lt;int&gt;  &lt;int&gt; &lt;num&gt;</span></span>
+<span><span class="co">#&gt; 1:      1    10     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 2:      1    20     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 3:      2    10     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 4:      2    20     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 5:      3    10     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt; 6:      3    20     0   NaN     0    NaN        0    NA         0      0     0</span></span>
+<span><span class="co">#&gt;    species   species_name period_length</span></span>
+<span><span class="co">#&gt;      &lt;int&gt;         &lt;char&gt;         &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1:       1 Abies concolor            10</span></span>
+<span><span class="co">#&gt; 2:       1 Abies concolor            10</span></span>
+<span><span class="co">#&gt; 3:       1 Abies concolor            10</span></span>
+<span><span class="co">#&gt; 4:       1 Abies concolor            10</span></span>
+<span><span class="co">#&gt; 5:       1 Abies concolor            10</span></span>
+<span><span class="co">#&gt; 6:       1 Abies concolor            10</span></span>
 <span><span class="va">inputs</span><span class="op">$</span><span class="va">species_dt</span></span>
 <span><span class="co">#&gt;     species           species_name</span></span>
 <span><span class="co">#&gt;       &lt;int&gt;                 &lt;char&gt;</span></span>
@@ -312,29 +375,55 @@ species lumping as <code>obs_dt</code>, so the two stay consistent.</p>
 <span><span class="co">#&gt;  9:       1         Abies concolor</span></span>
 <span><span class="co">#&gt; 10:      10      Tsuga mertensiana</span></span>
 <span><span class="co">#&gt; 11:       3       Abies shastensis</span></span></code></pre></div>
+<p><code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> also sets the time axis. A calendar
+year becomes the number of years since the site’s first inventory: the
+first inventory is year 0, the initial state, and leaves
+<code>obs_dt</code>; the next two are observations at years 10 and 20.
+<code>env_dt</code> comes back with one row per site and year 1 to 20:
+the row of year <em>k</em> drives the simulated year that ends
+<em>k</em> years after the first inventory, so the inventory at year 10
+is compared with the stand after ten simulated years.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rspatial.github.io/terra/reference/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">inputs</span><span class="op">$</span><span class="va">siteID_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">year</span>, <span class="va">OrigYear</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">[</span><span class="va">siteID</span> <span class="op">==</span> <span class="fl">1</span><span class="op">]</span></span>
+<span><span class="co">#&gt;    siteID  year OrigYear</span></span>
+<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt;    &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1:      1     0     2001</span></span>
+<span><span class="co">#&gt; 2:      1    10     2011</span></span>
+<span><span class="co">#&gt; 3:      1    20     2021</span></span>
+<span><span class="va">inputs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>rows <span class="op">=</span> <span class="va">.N</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">year</span>, <span class="va">period_length</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;     year period_length  rows</span></span>
+<span><span class="co">#&gt;    &lt;int&gt;         &lt;int&gt; &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1:    10            10    88</span></span>
+<span><span class="co">#&gt; 2:    20            10    88</span></span>
+<span><span class="va">inputs</span><span class="op">$</span><span class="va">env_dt</span><span class="op">[</span><span class="va">siteID</span> <span class="op">==</span> <span class="fl">1</span><span class="op">]</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, <span class="va">.N</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;    siteID  year     temp tempmax tempmin  prec precseas precwarmq</span></span>
+<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt;    &lt;num&gt;   &lt;num&gt;   &lt;num&gt; &lt;int&gt;    &lt;num&gt;     &lt;int&gt;</span></span>
+<span><span class="co">#&gt; 1:      1     1 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="co">#&gt; 2:      1     2 10.69167    22.8     2.7  1880 70.15234       103</span></span>
+<span><span class="co">#&gt; 3:      1    20 10.69167    22.8     2.7  1880 70.15234       103</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="initial-cohorts">Initial cohorts<a class="anchor" aria-label="anchor" href="#initial-cohorts"></a>
 </h2>
 <p>With <code>createInitCohorts = TRUE</code>,
 <code><a href="../reference/resolveSiteIDs.html">resolveSiteIDs()</a></code> returns a ready <code>CohortMat</code>
-describing the starting state; its <code>dims</code> are
-<code>c(sites, patches, cohorts)</code>:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+describing the starting state, the living trees of the first inventory;
+its <code>dims</code> are <code>c(sites, patches, cohorts)</code>:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">init_cohorts</span> <span class="op">&lt;-</span> <span class="va">inputs</span><span class="op">$</span><span class="va">initCohorts</span></span>
 <span><span class="va">init_cohorts</span></span>
 <span><span class="co">#&gt; An `nn_module` containing 0 parameters.</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; -- Buffers ---------------------------------------------------------------------</span></span>
-<span><span class="co">#&gt; * dbh: Float [1:8, 1:4, 1:14]</span></span>
-<span><span class="co">#&gt; * trees: Float [1:8, 1:4, 1:14]</span></span>
-<span><span class="co">#&gt; * species: Long [1:8, 1:4, 1:14]</span></span></code></pre></div>
+<span><span class="co">#&gt; ── Buffers ─────────────────────────────────────────────────────────────────────</span></span>
+<span><span class="co">#&gt; • dbh: Float [1:8, 1:4, 1:15]</span></span>
+<span><span class="co">#&gt; • trees: Float [1:8, 1:4, 1:15]</span></span>
+<span><span class="co">#&gt; • species: Long [1:8, 1:4, 1:15]</span></span></code></pre></div>
 <p>To build cohorts yourself from a year-0 tree slice, call
 <code><a href="../reference/makeInitCohorts.html">makeInitCohorts()</a></code> directly; it expects
 <code>siteID, patchID, species, dbh, treeName</code> (+ optional
 <code>trees</code>):</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">init_trees</span> <span class="op">&lt;-</span> <span class="va">inputs</span><span class="op">$</span><span class="va">tree_dt</span><span class="op">[</span><span class="va">living</span> <span class="op">==</span> <span class="cn">TRUE</span> <span class="op">&amp;</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">1</span><span class="op">]</span></span>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">init_trees</span> <span class="op">&lt;-</span> <span class="va">inputs</span><span class="op">$</span><span class="va">tree_dt</span><span class="op">[</span><span class="va">living</span> <span class="op">==</span> <span class="cn">TRUE</span> <span class="op">&amp;</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">0</span><span class="op">]</span></span>
 <span><span class="fu"><a href="../reference/makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">init_trees</span>, Nspecies <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/duplicated.html" class="external-link">uniqueN</a></span><span class="op">(</span><span class="va">inputs</span><span class="op">$</span><span class="va">obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -342,17 +431,21 @@ describing the starting state; its <code>dims</code> are
 </h2>
 <ul>
 <li>
-<strong>Period length</strong> is consistent across inventories
-(<code>fix_period_length</code>); FINN assumes a fixed remeasure
-interval.</li>
+<strong>One step is one year</strong>: <code>year</code> counts
+years since the first inventory, <code>growth</code> and
+<code>mort</code> are yearly rates, and <code>period_length</code> gives
+each observation’s interval in years. The intervals may differ between
+sites (FINN then scores every site over its own interval);
+<code>fix_period_length</code> keeps only sites with one interval length
+if you prefer a uniform design.</li>
 <li>
 <strong>The initial state</strong> (the first inventory) is used for
 <code>init_trees</code>, and the responses in <code>obs_dt</code> start
 <em>after</em> it.</li>
 <li>
-<strong><code>env_dt</code> covers every
-<code>siteID × year</code></strong> in <code>obs_dt</code>; missing rows
-break the fit.</li>
+<strong><code>env_dt</code> covers every simulated year</strong>
+from 1 to the last inventory, for every site; missing rows break the
+fit.</li>
 <li>
 <strong>Units</strong>: <code>dbh</code> in cm, <code>ba</code> in
 m², <code>reg</code> in trees ha⁻¹; env predictors in natural units
@@ -365,7 +458,7 @@ m², <code>reg</code> in trees ha⁻¹; env predictors in natural units
 <p>You now have <code>obs_dt</code>, <code>env_dt</code>, and
 <code>init_cohorts</code>, the inputs the <strong>Fitting FINN to forest
 inventory data</strong> vignette consumes.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.0 (2025-04-11)</span></span>
 <span><span class="co">#&gt; Platform: aarch64-apple-darwin20</span></span>
@@ -376,7 +469,7 @@ inventory data</strong> vignette consumes.</p>
 <span><span class="co">#&gt; LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; locale:</span></span>
-<span><span class="co">#&gt; [1] C</span></span>
+<span><span class="co">#&gt; [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; time zone: Europe/Berlin</span></span>
 <span><span class="co">#&gt; tzcode source: internal</span></span>
@@ -385,18 +478,19 @@ inventory data</strong> vignette consumes.</p>
 <span><span class="co">#&gt; [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; other attached packages:</span></span>
-<span><span class="co">#&gt; [1] data.table_1.17.8 FINN_0.1.0       </span></span>
+<span><span class="co">#&gt; [1] patchwork_1.3.0     ggplot2_3.5.2       data.table_1.18.6.1</span></span>
+<span><span class="co">#&gt; [4] FINN_0.2.0         </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
 <span><span class="co">#&gt;  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       </span></span>
 <span><span class="co">#&gt;  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     torch_0.15.1      </span></span>
-<span><span class="co">#&gt;  [9] coro_1.1.0         glue_1.8.0         bit_4.6.0          ps_1.9.1          </span></span>
-<span><span class="co">#&gt; [13] scales_1.4.0       grid_4.5.0         abind_1.4-8        evaluate_1.0.5    </span></span>
-<span><span class="co">#&gt; [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       </span></span>
-<span><span class="co">#&gt; [21] RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3    farver_2.1.2      </span></span>
-<span><span class="co">#&gt; [25] R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0      callr_3.7.6       </span></span>
-<span><span class="co">#&gt; [29] magrittr_2.0.3     tools_4.5.0        bit64_4.6.0-1      gtable_0.3.6      </span></span>
-<span><span class="co">#&gt; [33] ggplot2_3.5.2</span></span></code></pre></div>
+<span><span class="co">#&gt;  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         </span></span>
+<span><span class="co">#&gt; [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         abind_1.4-8       </span></span>
+<span><span class="co">#&gt; [17] evaluate_1.0.5     tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0    </span></span>
+<span><span class="co">#&gt; [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.2         pkgconfig_2.0.3   </span></span>
+<span><span class="co">#&gt; [25] farver_2.1.2       R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     </span></span>
+<span><span class="co">#&gt; [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       </span></span>
+<span><span class="co">#&gt; [33] bit64_4.6.0-1      gtable_0.3.6</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
@@ -405,7 +499,7 @@ inventory data</strong> vignette consumes.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

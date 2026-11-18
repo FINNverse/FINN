@@ -32,9 +32,22 @@ to set the seed for Torch's random number generator. This is useful for
 ensuring reproducibility in scripts that rely on both R and Torch for
 random operations.
 
+## See also
+
+[`base::set.seed()`](https://rdrr.io/r/base/Random.html),
+[`torch::torch_manual_seed()`](https://torch.mlverse.org/docs/reference/torch_manual_seed.html)
+
 ## Examples
 
 ``` r
+# the same seed gives the same draws, in R and in torch
 FINN.seed(123)
-# Now both R and Torch are seeded with 123, ensuring reproducible results
+a <- c(runif(1), as.numeric(torch::torch_rand(1)))
+FINN.seed(123)
+b <- c(runif(1), as.numeric(torch::torch_rand(1)))
+identical(a, b)
+#> [1] TRUE
+
+# seed before finn() and fit() to make a fit reproducible: the starting
+# values of the parameters and the simulated deaths and recruits are random
 ```

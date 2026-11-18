@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,8 +74,11 @@
 <p>Install the released version of FINN from CRAN:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"FINN"</span><span class="op">)</span></span></code></pre></div>
-<p>Or the development version from <a href="https://github.com/FINNverse/FINN" class="external-link">GitHub</a>:</p>
+<p>FINN runs on <code>torch</code>, and the <code>torch</code> backend (libtorch) is downloaded on first use rather than with the package, so install it once before the first fit:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/install_torch.html" class="external-link">install_torch</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>Or the development version from <a href="https://github.com/FINNverse/FINN" class="external-link">GitHub</a>:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("devtools")</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/install-deprecated.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FINNverse/FINN"</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -121,6 +124,25 @@
      .qmd to precompiled .Rmd), and GitHub shows the un-executed source anyway -
      no figures, no results. The site URLs survive renames. -->
 </div>
+<div class="section level2">
+<h2 id="how-to-cite-finn">How to cite FINN<a class="anchor" aria-label="anchor" href="#how-to-cite-finn"></a>
+</h2>
+<p>Please cite the paper describing the approach, not the software:</p>
+<blockquote>
+<p>Pichler, M. &amp; Käber, Y. (2026) Inferring processes within dynamic forest models using hybrid modelling. <em>Methods in Ecology and Evolution</em>, <strong>17</strong>, 2477–2493. <a href="https://doi.org/10.1111/2041-210X.70347" class="external-link uri">https://doi.org/10.1111/2041-210X.70347</a></p>
+</blockquote>
+<p><code>citation("FINN")</code> prints this entry and its BibTeX form:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="va">@Article</span>{,</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="dt">title</span>   = {Inferring processes within dynamic forest models using hybrid modelling},</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="dt">author</span>  = {Maximilian Pichler and Yannek Käber},</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="dt">journal</span> = {Methods in Ecology and Evolution},</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="dt">year</span>    = {2026},</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="dt">volume</span>  = {17},</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="dt">number</span>  = {8},</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="dt">pages</span>   = {2477--2493},</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  <span class="dt">doi</span>     = {10.1111/2041-210X.70347},</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>}</span></code></pre></div>
+</div>
 </div>
 
   </main><aside class="col-md-3"><div class="links">
@@ -140,6 +162,12 @@
 </ul>
 </div>
 
+<div class="community">
+<h2 data-toc-skip>Community</h2>
+<ul class="list-unstyled">
+<li><a href="CONTRIBUTING.html">Contributing guide</a></li>
+</ul>
+</div>
 
 <div class="citation">
 <h2 data-toc-skip>Citation</h2>
@@ -152,9 +180,9 @@
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
 <li>
-<a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a> <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-7041-9849" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
-<li>
 <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a> <br><small class="roles"> Author </small> <a href="https://orcid.org/0000-0003-2252-8327" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
+<li>
+<a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a> <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-7041-9849" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 </ul>
 </div>
 
@@ -171,7 +199,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

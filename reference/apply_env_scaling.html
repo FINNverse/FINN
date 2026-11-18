@@ -13,7 +13,7 @@ from env, so calibration and prediction use an identical transformation
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,12 +87,25 @@ fit with <code>env_autoscale = TRUE</code> this is <code>model$env_scaling</code
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># reproduce the standardization a model fit with env_autoscale = TRUE used:</span></span></span>
 <span class="r-in"><span><span class="va">env</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, year <span class="op">=</span> <span class="fl">1L</span>, temp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">6</span>, <span class="fl">8</span><span class="op">)</span>, prec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">700</span>, <span class="fl">850</span>, <span class="fl">1000</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">scaling</span> <span class="op">&lt;-</span> <span class="fu"><a href="compute_env_scaling.html">compute_env_scaling</a></span><span class="op">(</span><span class="va">env</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">scaling</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   variable center scale</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1     temp      6     2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2     prec    850   150</span>
 <span class="r-in"><span><span class="fu">apply_env_scaling</span><span class="op">(</span><span class="va">env</span>, <span class="va">scaling</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    siteID  year  temp  prec</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt; &lt;int&gt; &lt;num&gt; &lt;num&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1:      1     1    -1    -1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2:      2     1     0     0</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 3:      3     1     1     1</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># new sites are put on the scale of the first table, not on their own: a</span></span></span>
+<span class="r-in"><span><span class="co"># site at 6 degrees and 850 mm is the average site of `env`, so it maps to 0</span></span></span>
+<span class="r-in"><span><span class="va">new_env</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">4</span><span class="op">:</span><span class="fl">5</span>, year <span class="op">=</span> <span class="fl">1L</span>, temp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">10</span><span class="op">)</span>, prec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">850</span>, <span class="fl">1150</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">apply_env_scaling</span><span class="op">(</span><span class="va">new_env</span>, <span class="va">scaling</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteID  year  temp  prec</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt; &lt;int&gt; &lt;num&gt; &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      4     1     0     0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      5     1     2     2</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -100,7 +113,7 @@ fit with <code>env_autoscale = TRUE</code> this is <code>model$env_scaling</code
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

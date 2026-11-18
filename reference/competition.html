@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">FINN</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,8 @@
 <span>  ba <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cohortHeights <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  n_quantiles <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  continuous <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  continuous <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  light_mask <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -66,23 +67,27 @@
 
 
 <dl><dt id="arg-dbh">dbh<a class="anchor" aria-label="anchor" href="#arg-dbh"></a></dt>
-<dd><p>torch.Tensor Diameter at breast height for each cohort.</p></dd>
+<dd><p>torch.Tensor Diameter at breast height for each cohort, in cm, <code>[sites, patches, cohorts]</code>.</p></dd>
 
 
 <dt id="arg-species">species<a class="anchor" aria-label="anchor" href="#arg-species"></a></dt>
-<dd><p>torch.Tensor species index for each cohort.</p></dd>
+<dd><p>torch.Tensor (int64) species index for each cohort, <code>[sites, patches, cohorts]</code>.</p></dd>
 
 
 <dt id="arg-trees">trees<a class="anchor" aria-label="anchor" href="#arg-trees"></a></dt>
-<dd><p>torch.Tensor Number of trees in each cohort.</p></dd>
+<dd><p>torch.Tensor Number of trees in each cohort, <code>[sites, patches, cohorts]</code>.</p></dd>
 
 
 <dt id="arg-parcomp">parComp<a class="anchor" aria-label="anchor" href="#arg-parcomp"></a></dt>
-<dd><p>torch.Tensor Competition / height-allometry parameters per species.</p></dd>
+<dd><p>torch.Tensor Competition parameters, one row per species and two columns: the
+height parameter of <code><a href="height.html">height()</a></code> and the competition strength.</p></dd>
 
 
 <dt id="arg-h">h<a class="anchor" aria-label="anchor" href="#arg-h"></a></dt>
-<dd><p>torch.Tensor (Optional) Height of each cohort. Defaults to NULL.</p></dd>
+<dd><p>(Optional) Defaults to NULL: the light each cohort receives at its own height. Any
+non-<code>NULL</code> value returns the light at the forest floor instead, one value per patch
+(<code>[sites, patches, 1]</code>), which is what the regeneration process is given; the value itself is
+not used.</p></dd>
 
 
 <dt id="arg-patch-size-ha">patch_size_ha<a class="anchor" aria-label="anchor" href="#arg-patch-size-ha"></a></dt>
@@ -104,18 +109,95 @@
 <dt id="arg-continuous">continuous<a class="anchor" aria-label="anchor" href="#arg-continuous"></a></dt>
 <dd><p>logical Use the continuous competition formulation. Defaults to FALSE.</p></dd>
 
+
+<dt id="arg-light-mask">light_mask<a class="anchor" aria-label="anchor" href="#arg-light-mask"></a></dt>
+<dd><p>logical Take the height quantiles over the live cohorts only
+(<code>trees &gt; 0.5</code>), leaving every cohort's real height as the bin query. Defaults
+to TRUE since 0.2.0: unmasked, the padded cohort width is set by the widest
+site in the batch, so the same stand's light depends on which other sites
+happen to share its batch. <code>FALSE</code> reproduces earlier results. See
+<code><a href="createProcess.html">createProcess()</a></code> for the measurement.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>torch.Tensor Fraction of available light (light) for each cohort.</p>
+    <p>torch.Tensor Fraction of available light (between 0 and 1) for each cohort,
+<code>[sites, patches, cohorts]</code>; with <code>h</code> given, the light at the forest floor, <code>[sites, patches, 1]</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>The light of a cohort is one minus the weighted basal area of the cohorts of its patch that are
+taller than it (by more than 0.1 m), <code>light = max(0, 1 - sum(BA_taller * parComp[, 2] * 0.1))</code>,
+where <code>BA</code> is the basal area in m^2/ha (<code><a href="BA_stand.html">BA_stand()</a></code>) and the height comes from
+<code><a href="height.html">height()</a></code> with the species' height parameter <code>parComp[, 1]</code>. With a competition
+strength of 0.2 (about the start value) a cohort under 50 m^2/ha of taller trees receives no light. In a model the function
+is the competition process, <code>createProcess(func = competition)</code>; it takes no environment.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="height.html">height()</a></code>, <code><a href="BA_stand.html">BA_stand()</a></code>, <code><a href="createProcess.html">createProcess()</a></code> (<code>n_quantiles</code>,
+<code>continuous</code>, <code>light_mask</code>), <code><a href="finn.html">finn()</a></code></p></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># the light of three cohorts on one 0.1 ha patch: two 50-cm trees, ten 20-cm</span></span></span>
+<span class="r-in"><span><span class="co"># trees and forty 5-cm trees of one species (height parameter 0.5,</span></span></span>
+<span class="r-in"><span><span class="co"># competition strength 0.2)</span></span></span>
+<span class="r-in"><span><span class="va">shape</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">3</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">dbh</span>     <span class="op">&lt;-</span> <span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/torch_tensor.html" class="external-link">torch_tensor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/array.html" class="external-link">array</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">50</span>, <span class="fl">20</span>, <span class="fl">5</span><span class="op">)</span>, <span class="va">shape</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">trees</span>   <span class="op">&lt;-</span> <span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/torch_tensor.html" class="external-link">torch_tensor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/array.html" class="external-link">array</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">10</span>, <span class="fl">40</span><span class="op">)</span>, <span class="va">shape</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">species</span> <span class="op">&lt;-</span> <span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/torch_tensor.html" class="external-link">torch_tensor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/array.html" class="external-link">array</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="va">shape</span><span class="op">)</span>, dtype <span class="op">=</span> <span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/torch_dtype.html" class="external-link">torch_long</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">parComp</span> <span class="op">&lt;-</span> <span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/torch_tensor.html" class="external-link">torch_tensor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.2</span><span class="op">)</span>, nrow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># the tallest cohort is in full light, each smaller one is shaded by the</span></span></span>
+<span class="r-in"><span><span class="co"># basal area above it</span></span></span>
+<span class="r-in"><span><span class="fu">competition</span><span class="op">(</span><span class="va">dbh</span>, <span class="va">species</span>, <span class="va">trees</span>, <span class="va">parComp</span>, patch_size_ha <span class="op">=</span> <span class="fl">0.1</span>, continuous <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> torch_tensor</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (1,.,.) = </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   1.0000  0.9215  0.8586</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [ CPUFloatType{1,1,3} ]</span>
+<span class="r-in"><span><span class="co"># the light that reaches the forest floor, where the recruits start</span></span></span>
+<span class="r-in"><span><span class="fu">competition</span><span class="op">(</span><span class="va">dbh</span>, <span class="va">species</span>, <span class="va">trees</span>, <span class="va">parComp</span>, h <span class="op">=</span> <span class="fl">0</span>, patch_size_ha <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> torch_tensor</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (1,.,.) = </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   0.8429</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [ CPUFloatType{1,1,1} ]</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the light model as the competition process of a model. It takes no</span></span></span>
+<span class="r-in"><span><span class="co"># environment; `continuous = TRUE` compares every pair of cohorts instead of</span></span></span>
+<span class="r-in"><span><span class="co"># binning them into height quantiles</span></span></span>
+<span class="r-in"><span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="finn.html">finn</a></span><span class="op">(</span>N_species <span class="op">=</span> <span class="fl">2</span>,</span></span>
+<span class="r-in"><span>          competition_process <span class="op">=</span> <span class="fu"><a href="createProcess.html">createProcess</a></span><span class="op">(</span>func <span class="op">=</span> <span class="va">competition</span>, continuous <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># a 30-year simulation from bare ground; an unfitted model uses `env` as</span></span></span>
+<span class="r-in"><span><span class="co"># given (no scaling constants yet), so the predictor is passed standardised</span></span></span>
+<span class="r-in"><span><span class="va">env</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1L</span>, year <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">30</span>, temp <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m</span>, env <span class="op">=</span> <span class="va">env</span>, patches <span class="op">=</span> <span class="fl">5</span>, patch_size <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">tail</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">wide</span><span class="op">$</span><span class="va">site</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteID species  year      dbh        ba trees    growth       mort   reg</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt;   &lt;int&gt; &lt;int&gt;    &lt;num&gt;     &lt;num&gt; &lt;num&gt;     &lt;num&gt;      &lt;num&gt; &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      1       2    25 41.34618 0.3323392   1.6 0.2630191 0.01891340   0.2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      1       2    26 39.42628 0.3603613   1.8 0.3062723 0.01889439   0.2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      1       2    27 42.14650 0.3896927   1.8 0.3313038 0.01886775   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:      1       2    28 40.76972 0.3218157   1.6 0.2931730 0.01885694   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5:      1       2    29 44.11386 0.3501407   1.6 0.2866735 0.01888959   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6:      1       2    30 37.63353 0.3489603   1.8 0.2344551 0.01888839   0.4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    r_mean_ha</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>        &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 0.7281690</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 0.7196229</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 0.7095281</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 0.7148335</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 0.7074409</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 0.7030461</span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>, <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>.</p>
+  <p>Developed by <a href="https://orcid.org/0000-0003-2252-8327" class="external-link">Maximilian Pichler</a>, <a href="https://orcid.org/0000-0002-7041-9849" class="external-link">Yannek Käber</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">

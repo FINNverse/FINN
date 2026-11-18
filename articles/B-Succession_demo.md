@@ -94,10 +94,13 @@ parGrowthEnv <- matrix(c(
 #               maximum size. Steep for the short-lived pioneer (senesces small
 #               and young), gentle for the long-lived climax.
 #   col3 (growth): negative -> suppressed, slow-growing trees die more (vigour).
+#               mortality() takes growth in %/yr (growth_scale = 0.01), so this
+#               column acts on 100 x the annual relative rate: -0.003 here is the
+#               -0.3 per unit rate the other columns are scaled against.
 parMort <- matrix(c(
   c(-1.0, -0.8, -0.5, -0.3),   # col1 light: pioneer strongly shade-intolerant
   c(0.60, 0.35, 0.30, 0.15),   # col2 dbh: senescence, steep pioneer -> gentle climax
-  c(-0.3, -0.3, -0.3, -0.3)    # col3 growth: vigour lowers mortality
+  c(-0.003, -0.003, -0.003, -0.003)  # col3 growth: vigour lowers mortality
 ), Nsp, 3)
 # baseline mortality ~ inverse longevity: high for the short-lived pioneer,
 # low for the long-lived climax.
@@ -466,7 +469,7 @@ sessionInfo()
 #> LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 #> 
 #> locale:
-#> [1] C
+#> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 #> 
 #> time zone: Europe/Berlin
 #> tzcode source: internal
@@ -475,7 +478,8 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] patchwork_1.3.0   ggplot2_3.5.2     data.table_1.17.8 FINN_0.1.0       
+#> [1] patchwork_1.3.0     ggplot2_3.5.2       data.table_1.18.6.1
+#> [4] FINN_0.2.0         
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
@@ -483,7 +487,7 @@ sessionInfo()
 #>  [9] coro_1.1.0         labeling_0.4.3     glue_1.8.0         bit_4.6.0         
 #> [13] ps_1.9.1           scales_1.4.0       grid_4.5.0         abind_1.4-8       
 #> [17] evaluate_1.0.5     tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0    
-#> [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.0         pkgconfig_2.0.3   
+#> [21] dplyr_1.1.4        RColorBrewer_1.1-3 Rcpp_1.1.2         pkgconfig_2.0.3   
 #> [25] farver_2.1.2       R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     
 #> [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       
 #> [33] bit64_4.6.0-1      gtable_0.3.6
