@@ -3,8 +3,6 @@
 ^\.git$
 ^LICENSE\.md$
 ^README\.Rmd$
-^playground
-^gfoe2024
 ^\.github$
 ^_pkgdown\.yml$
 ^docs$
@@ -15,7 +13,6 @@
 ^\.claude$
 ^data-raw$
 ^Rplots\.pdf$
-^documentation$
 ^vignettes/E-mortality-predictions\.csv$
 ^vignettes/D-fit-predictions\.csv$
 ^vignettes/\.quarto$

@@ -88,6 +88,12 @@ the `.Rmd.orig`.
 | `init_trees.csv` | year-0 tree slice (initial cohorts) |
 | `species_dt.csv` | species code ↔ name lookup |
 
+**From the raw FIA download:** `fia_raw_dataprep.R` shows how a raw tree list is
+built from the FIA tables (rFIA download for Oregon, `dbh` from `DIA`, status
+from `STATUSCD` / `PREV_STATUS_CD`, `mort_cause` from `AGENTCD`). It is kept as a
+worked example of that step (vignette C refers to it) and is not run by the
+pipeline above; it predates the 0.2.0 data builders.
+
 **Not used (kept for reference only):**
 
 | file | why unused |

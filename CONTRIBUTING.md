@@ -1,13 +1,33 @@
 # Contributing to FINN
 
-**Workflow rules** (branch/PR, `git add` discipline, roxygenise-before-commit,
-`dev/` layout, commit style) live in [CLAUDE.md](CLAUDE.md) — the single source of
-truth. This file records **who contributed what**, and is maintained
-automatically (see below), not by hand.
+## Workflow
 
-<!-- AUTO-MAINTAINED: the `project-progress` skill refreshes the table below from
-     git history. Do not hand-edit; if something looks wrong, fix it in a session
-     and it will be kept current. Last refreshed: 2026-11-08. -->
+1. **Stage specific paths** (`git add R/foo.R man/foo.Rd tests/...`), never
+   `git add -A`, `git add --all` or `git add .`.
+2. **Regenerate the docs before committing R changes:**
+   `Rscript -e 'roxygen2::roxygenise()'`, and commit the resulting `man/*.Rd` and
+   `NAMESPACE` with the code. Never edit `man/*.Rd` or `NAMESPACE` by hand.
+3. **Bundle commits.** Few commits that each make one meaningful change, no
+   fix-up commits; the body explains the why.
+4. **CI must be green** (`R CMD check` on GitHub Actions) before a change lands
+   on `main`. Pushing and CRAN submissions are the maintainer's call.
+5. **Vignettes are precompiled:** edit `vignettes/*.Rmd.orig`, re-knit with
+   `Rscript vignettes/build.R` (needs a torch backend) and commit the generated
+   `.Rmd` and figures with it.
+6. **Only package material in the repository.** Scratch scripts, experiments and
+   personal configuration stay outside it (or untracked).
+
+```bash
+Rscript -e 'devtools::test()'                       # tests (torch-gated ones skip without a backend)
+R CMD build . && R CMD check --as-cran FINN_*.tar.gz # full CRAN check
+```
+
+`dev/` holds the scripts that rebuild shipped material: `make_extdata.R` (the
+bundled FIA datasets from `data-raw/`), `make_identity_snapshots.R` (the
+reference values of `tests/testthat/test-identity.R`) and
+`check_install_fresh.R`.
+
+<!-- The table below is refreshed from git history; last refreshed 2026-11-08. -->
 
 ## Contributors
 
@@ -16,7 +36,7 @@ automatically (see below), not by hand.
 
 ## Contributions by theme
 
-Best-effort attribution from git history; refined over time by the skill.
+Best-effort attribution from git history.
 
 | theme / aspect | primarily | notes |
 |---|---|---|
@@ -34,4 +54,3 @@ Best-effort attribution from git history; refined over time by the skill.
 | 0.2.0 release readiness: `R CMD check --as-cran` clean-up, the argument-validation batch, `.Rbuildignore`, and the two test repairs | Maximilian | PR #32 review round |
 | Data interface (`makeObsData`/`resolveSiteIDs`/`makeInitCohorts`, extdata) and the bundled `fia_*` datasets | both (datasets: Yannek) | FIA sample as lazy-loaded data |
 | Vignettes & docs | both | precompiled vignettes, pkgdown, README |
-| Collaboration / Claude Code setup | Yannek | shared CLAUDE.md, skills, hooks, claude-config |

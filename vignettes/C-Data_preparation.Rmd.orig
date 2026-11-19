@@ -92,7 +92,7 @@ so it is shown but not run. For the US FIA program:
 library(rFIA)
 fia <- readFIA(dir = "data/FIA", common = TRUE, states = "OR")
 # build tree_dt: dbh = DIA * 2.54 (inch -> cm); status from STATUSCD / PREV_STATUS_CD;
-# mort_cause from AGENTCD. See playground/calibration/FIA/FIA_dataprep_vignette.R
+# mort_cause from AGENTCD. See data-raw/fia_raw_dataprep.R in the GitHub repository
 ```
 
 ## Define status flags

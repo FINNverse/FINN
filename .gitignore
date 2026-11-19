@@ -58,7 +58,7 @@ README.html
 tests/testthat/_problems/
 tests/testthat/testthat-problems.rds
 
-# Personal Claude Code overrides (shared config is committed: CLAUDE.md,
-# .claude/settings.json, .claude/hooks/). These stay local to each collaborator.
+# Personal editor and assistant configuration stays local to each collaborator
+CLAUDE.md
 CLAUDE.local.md
-.claude/settings.local.json
+.claude/

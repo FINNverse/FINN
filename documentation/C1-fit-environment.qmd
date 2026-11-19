@@ -1,5 +1,0 @@
-# Basic assumptions {#sec-fit}
-
-## Header 1
-
-
