@@ -317,9 +317,10 @@ noisy realisation. Averaging over many patches creates a smooth
 stand-level aggregation of the forest state.
 
 Aggregation of patches is done internally. simulateForest() returns
-patch-averaged, stand-level results in $long$site. The mean() in the
-plotting code below only collapses the site dimension, which matters when you
-simulate more than one site.
+patch-averaged, stand-level results in $long$site: one row per site, year,
+species and variable. Basal area (`ba`, m²) and tree numbers (`trees`) are per
+patch, here 0.1 ha, so multiply by 10 for values per hectare; `r_mean_ha`, the
+expected recruitment, is already per hectare.
 
 If you need more than the stand-level averages, set return_cohorts to keep the
 raw per-cohort state for the timesteps you choose. This records each cohort's
@@ -328,39 +329,53 @@ TRUE for every step, "last" for the final one, or a vector of timesteps such
 as c(1, 250, 500). Those come back in $long$cohort and $wide$cohort. It is
 FALSE by default because storing every cohort at every timestep is expensive.
 
+`plot()` draws a simulation: one panel per variable and one line per species,
+averaged over the sites, and the stand total of `ba` and `trees` as a dashed
+line. By default it shows `ba`, `dbh` and `trees`; `response` chooses others.
+The run with a single patch:
+
 
 ``` r
-for(i in c("patches_1", "patches_100")){
-  # $long$site is already averaged over patches; this mean() collapses sites
-  p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year, species, variable)]
-  p_dat[, variable2 := factor(
-    variable,
-    levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha"),
-    labels =  c("avg. DBH [cm]", "Basal Area [m2/ha]", "Trees [N/ha]",
-                "Available Light [%]", "Growth [cm/yr]", "Mortality [%]",
-                "Reg. Count [N/ha]", "Reg. Mean [N/ha]")
-    ),]
-  p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
-  p <- ggplot(p_dat[year <= 100], aes(x = year, y = value, color = factor(species))) +
-  geom_line() +
-  theme_minimal() +
-  labs(x = "Year", y = "Value") +
-  coord_cartesian(ylim = c(0, NA)) +
-  facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +
-  theme(
-    axis.title.y = element_blank(),
-    strip.placement = "outside",
-    strip.text.y.left = element_text(angle = 90)
-  ) +
-  guides(color = guide_legend(title = "Species", override.aes = list(linewidth = 5), ncol = 2, title.position = "top")) +
-  scale_color_discrete(name = "Species") +
-  ggtitle(paste0("patches = ",gsub("patches_", "", i)))
-
-  print(p)
-}
+vars <- c("ba", "dbh", "trees", "growth", "mort", "r_mean_ha")
+plot(predictions$patches_1, response = vars)
 ```
 
-<img src="A/A-plot-patches-1.png" style="display: block; margin: auto;" /><img src="A/A-plot-patches-2.png" style="display: block; margin: auto;" />
+<img src="A/A-plot-patches-1-1.png" style="display: block; margin: auto;" />
+
+and the run with 100 patches, the same model under the same disturbances:
+
+
+``` r
+plot(predictions$patches_100, response = vars)
+```
+
+<img src="A/A-plot-patches-100-1.png" style="display: block; margin: auto;" />
+
+The single patch jumps with every recruitment pulse, death and disturbance; the
+mean over 100 patches shows the stand. Each disturbance clears most of it, the
+total basal area (dashed) drops towards zero, and the most light-demanding
+species 5 recruits in a burst before the stand closes again. Without
+disturbance the stand would develop as in the run from bare ground below.
+
+### From bare ground
+
+A run from an empty stand needs no environment table of its own:
+`simulateForest(bare_ground = TRUE)` holds the climate constant at its mean,
+over the sites of `env` or, for a fitted model, of the environment it was fitted
+on, and runs for `years` years without disturbance. `plot()` draws such a run as
+a succession, one panel per site, labelled with its climate:
+
+
+``` r
+succession <- simulateForest(simulationModel, env = env_dt, bare_ground = TRUE,
+                             years = 500, patches = 100)
+plot(succession)
+```
+
+<img src="A/A-bare-ground-1.png" style="display: block; margin: auto;" />
+
+The light-demanding species 4 and 5 come first, species 3 and 2 follow, and the
+shade-tolerant species 1 dominates the mature stand.
 
 
 ``` r

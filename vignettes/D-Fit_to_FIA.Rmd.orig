@@ -69,15 +69,6 @@ obs_test   <- fia_obs_test
 env_test   <- fia_env_test
 init_test  <- fia_init_test
 
-# long form of the observations, so later we can match FINN's long predictions
-# (sim$long$site) with a single merge()
-resp  <- c("dbh", "ba", "trees", "growth", "mort", "reg")
-to_long <- function(d) melt(d, id.vars = c("siteID", "year", "period_length", "species", "species_name"),
-                            measure.vars = resp, variable.name = "variable", value.name = "obs",
-                            variable.factor = FALSE)
-obs_long  <- to_long(obs_dt)
-test_long <- to_long(obs_test)
-
 cat(sprintf("train: %d sites | holdout: %d sites | %d species | inventory years %s | env years %d-%d\n",
             uniqueN(obs_dt$siteID), uniqueN(obs_test$siteID), uniqueN(obs_dt$species),
             paste(sort(unique(obs_dt$year)), collapse = " & "), min(env_dt$year), max(env_dt$year)))
@@ -284,9 +275,10 @@ fit(m_hybrid,
 ```
 
 With both variants fitted, the rest of the vignette inspects and compares them:
-training convergence, a `summary()` of the learned structure,
-predicted-vs-observed fit, the learned niches, and the accumulated local effects
-that reveal what the network learned.
+training convergence, the skill on the training and the held-out sites
+(`evaluate()`), a `summary()` of the fit, the fitted parameters (`plot()`), a
+run from bare ground, and the accumulated local effects that reveal what the
+network learned.
 
 ## Training convergence
 
@@ -316,53 +308,22 @@ is the honest picture and the reason for the caveat further down.
 
 A flat loss is necessary for convergence, not sufficient: the objective can be
 flat along a direction in which the parameters are still moving, which is what a
-poorly identified parameter looks like. `checkpoints = 50` recorded every
-parameter block every 50 epochs in `m$param_history` (with `folder = "<dir>"`
-the whole model is also written there at each checkpoint, as
+poorly identified parameter looks like. `fit()` keeps the parameters of the last
+51 epochs, and `summary()` (below) reports how far each one moved over the last
+50. `checkpoints = 50` in addition recorded every parameter block every 50
+epochs in `m$param_history`, to compare points of the fit further apart (with
+`folder = "<dir>"` the whole model is also written there at each checkpoint, as
 `epoch_<k>model.pt`, to resume from with `torch::torch_load()` and a further
-`fit()`, or to compare). The largest step any parameter of a block took between
-two consecutive checkpoints, on the unconstrained scale the optimiser works on:
+`fit()`, or to compare).
 
-```{r param-history}
-ph <- m$param_history
-steps <- rbindlist(lapply(seq_along(ph)[-1], function(i)
-  data.table(epoch = i * 50L, block = names(ph[[i]]),
-             max_step = sapply(names(ph[[i]]), function(nm)
-               max(abs(ph[[i]][[nm]] - ph[[i - 1]][[nm]]))))))
-dcast(steps[, max_step := round(max_step, 3)], block ~ epoch, value.var = "max_step")
-```
-
-At a constant learning rate no block comes to rest: every parameter group but the
-recruitment cap still steps by one to a few tenths between checkpoints while the losses have been flat for
-hundreds of epochs. Part of that is the jitter of mini-batch Adam, which a
-learning-rate schedule (`control = finnControl(lr_scheduler = "step")` or `"cosine"`) damps at the
-end of a fit; the rest is drift along directions the objective does not care
-about, and the regeneration blocks, which step most over the first 200 epochs,
-are the first suspects. Two seeds, or two checkpoints, compared on the holdout
-tell whether the drift reaches the predictions.
-
-## What the model learned: `summary()`
-
-`summary()` gives a compact overview of the *learned structure*: for each process
-and species it reports how important each environmental predictor is (ALE-variance
-importance, rate-normalised) and its average conditional effect. It reuses the
-cached conditional effects, so once `ALE()` (below) or a previous `summary()` has
-run it needs no further simulation.
-
-```{r model-summary, comment = "", class.output = "summary-out"}
-summary(m)
-```
-
-The niche and ALE sections below unpack this overview into per-driver response
-*curves*.
-
-## Assess the fit: in-sample and on held-out sites
+## Assess the fit: `evaluate()`
 
 The fit was calibrated on the 200 training sites, so scoring it there only tells
-us how well it *reproduces* them. The honest question is whether it transfers, so
-we simulate each model twice, once on the training sites, once on the 200
-held-out sites, and score both with **Spearman correlation** (rank agreement)
-and **RMSE** (in each response's own units), matched on site × year × species.
+us how well it *reproduces* them. The honest question is whether it transfers.
+`evaluate()` answers both: it simulates the model on the training sites it keeps
+from `fit()` and, with `holdout`, on the 200 held-out sites, each started from
+its own first inventory and driven by its own environment, and pairs every
+simulated value with its observation on site × year × species.
 
 The simulation runs in yearly steps, so a prediction is put together the way
 `fit()` compares it with an inventory: the stand (`dbh`, `ba`, `trees`) at the
@@ -372,50 +333,80 @@ geometric mean of `1 + g` minus one, and one minus the geometric mean survival,
 the functional `makeObsData()` derives the observed rates with -- and the
 expected recruits per hectare (`r_mean_ha`) summed over those years.
 
-```{r assess-code}
-# the simulated counterpart of every observation, as fit() scores it
-at_census <- function(site, obs_l) {
-  win <- unique(obs_l[, .(siteID, census = year, period_length)])
-  win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
-  s <- merge(site[, .(siteID, year, species, variable = as.character(variable), value)],
-             win, by = c("siteID", "year"))
-  rbindlist(list(
-    s[variable %in% c("dbh", "ba", "trees") & year == census,
-      .(siteID, year = census, species, variable, value)],
-    s[variable == "growth",
-      .(value = exp(mean(log1p(value))) - 1), by = .(siteID, year = census, species, variable)],
-    s[variable == "mort",
-      .(value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species, variable)],
-    s[variable == "r_mean_ha",
-      .(variable = "reg", value = sum(value)), by = .(siteID, year = census, species)]
-  ), use.names = TRUE)
-}
+Two optional parts are added here. `tree_data`, the trees of the holdout
+inventories (`fia_tree_test`), adds the largest diameter per site, census and
+species (`dbh_max`), a size measure that a few large or many small trees do not
+shift as much as the mean diameter. `bare_ground = TRUE` runs the model from an
+empty stand for `years` years, under the climate of each of `sites` held
+constant: we take the coldest, a middle and the warmest training site.
+`fit(..., holdout = )` would run the same evaluation right after the fit.
 
-# One prediction pass per model x sample. The holdout is driven only by its own
-# environment and starting cohorts; nothing about it entered the fit.
-pred_of <- function(model, label, env, init, obs_l, split) {
-  model$eval()                                   # deterministic: dropout off
-  sim <- predict(model, env = env, init_cohort = init,
-                 patches = 4, patch_size = 0.06, device = "cpu")
-  merge(obs_l, at_census(sim$long$site, obs_l), by = c("siteID", "year", "species", "variable"
-  ))[, `:=`(model = label, split = split)][]
-}
+```{r evaluate}
+site_temp  <- env_dt[, .(temp = mean(temp)), by = siteID][order(temp)]
+bare_sites <- site_temp[c(1, .N %/% 2, .N), siteID]   # coldest, middle, warmest
+
 FINN.seed(1)
-obs_pred <- rbind(
-  pred_of(m,        "Process (mechanistic)", env_dt,   init_cohorts,      obs_long,  "train"),
-  pred_of(m,        "Process (mechanistic)", env_test, init_cohorts_test, test_long, "holdout"),
-  pred_of(m_hybrid, "Hybrid (growth = NN)",  env_dt,   init_cohorts,      obs_long,  "train"),
-  pred_of(m_hybrid, "Hybrid (growth = NN)",  env_test, init_cohorts_test, test_long, "holdout"))
+ev <- evaluate(m,
+  holdout     = list(data = obs_test, env = env_test, init_cohort = init_cohorts_test,
+                     tree_data = fia_tree_test),
+  bare_ground = TRUE, years = 500, sites = bare_sites, patches = 50)
+ev
+```
 
-metrics <- obs_pred[is.finite(obs) & is.finite(value),
-                    .(spearman = round(cor(obs, value, method = "spearman"), 2),
-                      rmse     = round(sqrt(mean((obs - value)^2)), 2),
-                      n        = .N), by = .(model, split, variable)]
+The skill measures are R² (`1 - SSE/SST`, the share of the observed variation
+the simulation reproduces; it is negative when the observed mean predicts
+better), the Pearson correlation, the RMSE in each response's own units, the
+bias (mean of simulated minus observed) and `pred/obs`, the ratio of the mean
+simulation to the mean observation. For mortality the AUC replaces R² as the
+measure of skill (see *Scoring mortality per tree* below and the mortality
+vignette).
 
-comparison <- dcast(metrics, variable + model ~ split, value.var = c("spearman", "rmse"))
-setcolorder(comparison, c("variable", "model", "spearman_train", "spearman_holdout",
+`plot()` draws the comparison on the holdout (`set = "train"` for the training
+sites): observed against simulated for the states and growth, with R² in each
+panel; the ROC curve of mortality, every tree at risk one case; and the ratio of
+simulated to observed recruitment per species, summed over all sites, because
+recruitment per site is too noisy for a correlation.
+
+```{r evaluate-plot, fig.width = 9, fig.height = 7}
+plot(ev)
+```
+
+The same skill per species, `type = "heatmap"`: R² (AUC for mortality) on the
+left, and the ratio of simulated to observed on the right, white where the two
+agree, red where the model under- and blue where it overestimates:
+
+```{r evaluate-heatmap, fig.width = 10, fig.height = 4.5}
+plot(ev, type = "heatmap")
+```
+
+### Process against hybrid
+
+The hybrid is evaluated the same way. Side by side, R² and RMSE of both models
+on the training and the held-out sites:
+
+```{r evaluate-hybrid}
+m_hybrid$eval()                                  # deterministic: dropout off
+FINN.seed(1)
+ev_hybrid <- evaluate(m_hybrid,
+  holdout = list(data = obs_test, env = env_test, init_cohort = init_cohorts_test))
+
+skill_of <- function(ev, label)
+  rbind(ev$train$skill[,   .(variable, model = label, split = "train",   r2, rmse)],
+        ev$holdout$skill[, .(variable, model = label, split = "holdout", r2, rmse)])
+comparison <- dcast(rbind(skill_of(ev, "Process (mechanistic)"),
+                          skill_of(ev_hybrid, "Hybrid (growth = NN)"))[variable != "dbh_max"],
+                    variable + model ~ split, value.var = c("r2", "rmse"))
+setcolorder(comparison, c("variable", "model", "r2_train", "r2_holdout",
                           "rmse_train", "rmse_holdout"))
-comparison[order(variable, model)]
+cols <- c("r2_train", "r2_holdout", "rmse_train", "rmse_holdout")
+comparison[, (cols) := lapply(.SD, signif, 2), .SDcols = cols][]
+
+# the paired tables of both models, for the sections below
+pairs_of <- function(ev, label) rbindlist(list(
+  copy(ev$train$matched)[,   `:=`(model = label, split = "train")],
+  copy(ev$holdout$matched)[, `:=`(model = label, split = "holdout")]), fill = TRUE)
+obs_pred <- rbind(pairs_of(ev, "Process (mechanistic)"),
+                  pairs_of(ev_hybrid, "Hybrid (growth = NN)"), fill = TRUE)
 ```
 
 ```{r save-preds, include = FALSE}
@@ -425,8 +416,9 @@ comparison[order(variable, model)]
 fwrite(obs_pred, "D-fit-predictions.csv")
 ```
 
-The structural variables (basal area, tree numbers and diameter) are
-reconstructed well, **and hold up on sites the model never saw**: that gap
+Basal area and tree numbers are reconstructed well **and hold up on sites the
+model never saw**; the mean diameter is reproduced less well on the held-out
+sites than on the training sites. The gap
 between the train and holdout columns is the part that matters, because it is
 the only evidence that the fitted processes generalise rather than memorise.
 The noisier per-tree rates (growth, mortality, regeneration) are harder to
@@ -436,38 +428,19 @@ variables, with **no growth equation specified**, which is what makes hybrids
 useful when a process's form is uncertain; the surrounding mechanistic processes
 still anchor the model ecologically.
 
-```{r assess-plot, fig.width = 7.5, fig.height = 5.5}
-# facet_wrap, NOT facet_grid: the three responses live on completely different
-# scales (dbh ~150 cm, ba ~8 m2, trees ~20). facet_grid(scales = "free") frees x
-# per column but y per ROW, so ba and trees would be drawn on dbh's y-axis -
-# squashing them onto y = 0 and flattening the 1:1 line until a good fit looks
-# like a broken one. facet_wrap frees both axes per panel.
-ggplot(obs_pred[variable %in% c("dbh", "ba", "trees") & is.finite(obs)],
-       aes(obs, value, colour = model)) +
-  geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
-  geom_point(alpha = 0.25, size = 0.5) +
-  facet_wrap(~ split + variable, scales = "free", ncol = 3,
-             labeller = labeller(.multi_line = FALSE)) +
-  scale_colour_manual(values = model_cols) +
-  labs(x = "observed", y = "predicted", colour = NULL) +
-  theme_minimal() + theme(legend.position = "top")
-```
-
-Each panel is on its **own** axes, and the grey line is 1:1, so the diagonal is
-the target in every panel regardless of the units on it.
-
 > **A caveat on the rate variables.** `growth`, `mort` and `reg` are per-tree
-> rates and are only weakly constrained by two inventories, so their Spearman is
+> rates and are only weakly constrained by two inventories, so their R² is
 > a **noisy estimate**; refitting with a different random seed moves it by a few
 > hundredths. Differences of that size between the models should not be
 > over-read; the structural variables, estimated from far more information, are
 > what carry the comparison. `mort` is the extreme case and gets a vignette of
 > its own (**Mortality: a binomial response and a neural-network process**)
-> because rank correlation is the wrong tool for a response that is mostly zeros.
+> because R² and rank correlation are the wrong tools for a response that is
+> mostly zeros; its AUC is the measure to read.
 
 ### Score what the loss scores
 
-The merge above is on site × year × species, which is the cell the loss is
+`evaluate()` pairs on site × year × species, which is the cell the loss is
 computed on: `fit()` compares the patch-mean of each site, year and species with
 the observation, and so does the table. Aggregating the predictions differently
 before scoring (summing species to a stand total, averaging the two censuses,
@@ -480,24 +453,30 @@ the likelihood is.
 
 ### A model-free reference: persistence
 
-A Spearman of 0.8 on basal area sounds good until it is compared with the
+An R² of `r round(ev$holdout$skill[variable == "ba", r2], 2)` on basal area sounds good until it is compared with the
 simplest forecast available: the previous census of the same site and species,
 unchanged. On a ten-year interval that *persistence* forecast is strong for the
 state variables, and a model has to beat it before it can claim to have learned
-dynamics rather than inertia. The second census of the holdout sites predicted
-by the first, next to the two models scored on the same cells:
+dynamics rather than inertia. The persistence forecast is no simulation, so it
+is scored by hand, with the measures `evaluate()` uses: the second census of
+the holdout sites predicted by the first, next to the two models scored on the
+same cells.
 
 ```{r persistence}
+r2   <- function(obs, pred) 1 - sum((pred - obs)^2) / sum((obs - mean(obs))^2)
+rmse <- function(obs, pred) sqrt(mean((pred - obs)^2))
+
+hold <- obs_pred[split == "holdout" & variable %in% c("dbh", "ba", "trees")]
 # the first remeasurement (year 10) stands in as the prediction for the second
-# (year 20, or 21/22 where it came late)
-persist <- merge(test_long[year > 10],
-                 test_long[year == 10, .(siteID, species, variable, value = obs)],
-                 by = c("siteID", "species", "variable"))
-ref <- rbind(persist[, .(siteID, species, variable, obs, value, model = "Persistence (year 10 as is)")],
-             obs_pred[split == "holdout" & year > 10, .(siteID, species, variable, obs, value, model)])
-ref[variable %in% c("dbh", "ba", "trees") & is.finite(obs) & is.finite(value),
-    .(spearman = round(cor(obs, value, method = "spearman"), 2),
-      rmse     = round(sqrt(mean((obs - value)^2)), 2)),
+# (year 20, or 21/22 where it came late); the observations are the same in the
+# tables of both models
+obs_hold <- hold[model == "Process (mechanistic)"]
+persist  <- merge(obs_hold[year > 10, .(siteID, species, variable, obs)],
+                  obs_hold[year == 10, .(siteID, species, variable, pred = obs)],
+                  by = c("siteID", "species", "variable"))
+ref <- rbind(persist[, .(variable, obs, pred, model = "Persistence (year 10 as is)")],
+             hold[year > 10, .(variable, obs, pred, model)])
+ref[, .(r2 = round(r2(obs, pred), 2), rmse = signif(rmse(obs, pred), 2)),
     by = .(variable, model)][order(variable, model)]
 ```
 
@@ -507,10 +486,10 @@ present at the second census was already there at the first, and the models
 are at a disadvantage here, they start from the year-0 tree list and never see
 the year-10 census, so their year-20 prediction carries twenty simulated years
 of compounded error. The lesson is not that the models are poor but
-that a holdout Spearman on `dbh`, `ba` or `trees` is mostly a statement about
+that a holdout R² on `dbh`, `ba` or `trees` is mostly a statement about
 the initial cohorts. The processes are tested by the rates, and by what the
-model does over horizons where persistence has nothing to say, the
-**Simulating succession** vignette. Persistence has no prediction for the first
+model does over horizons where persistence has nothing to say, such as the
+runs from bare ground below. Persistence has no prediction for the first
 remeasurement, which is why the table scores the second only.
 
 ### Calibration: predicted against observed by decile
@@ -523,11 +502,10 @@ absent from both the observation and the prediction are left out: they are most
 of the table and would pile the lower deciles onto zero.
 
 ```{r calibration, fig.width = 7.5, fig.height = 3.2}
-calib <- obs_pred[split == "holdout" & variable %in% c("ba", "trees") & is.finite(obs) &
-                  (obs > 0 | value > 0)]
-calib[, bin := cut(value, unique(quantile(value, 0:10 / 10)), include.lowest = TRUE),
+calib <- obs_pred[split == "holdout" & variable %in% c("ba", "trees") & (obs > 0 | pred > 0)]
+calib[, bin := cut(pred, unique(quantile(pred, 0:10 / 10)), include.lowest = TRUE),
       by = .(model, variable)]
-calib_dt <- calib[, .(pred = mean(value), obs = mean(obs), n = .N), by = .(model, variable, bin)]
+calib_dt <- calib[, .(pred = mean(pred), obs = mean(obs), n = .N), by = .(model, variable, bin)]
 ggplot(calib_dt, aes(pred, obs, colour = model)) +
   geom_abline(slope = 1, intercept = 0, colour = "grey40", linewidth = 0.3) +
   geom_line(alpha = 0.6) + geom_point(size = 1.6) +
@@ -539,7 +517,8 @@ ggplot(calib_dt, aes(pred, obs, colour = model)) +
 
 Points on the diagonal are calibrated; a slope below one means the model
 under-predicts the dense stands and over-predicts the sparse ones, a slope above
-one the reverse. A rank correlation is blind to either.
+one the reverse. A correlation is blind to either; R² is not, but it does not
+say which way the error goes.
 
 ### A blocked holdout
 
@@ -576,30 +555,145 @@ fit(m_block,
 )
 ```
 
+Each holdout is one call of `evaluate()`:
+
 ```{r blocked-score}
 FINN.seed(1)
+ev_random  <- evaluate(m_block, holdout = list(
+  data = obs_test, env = env_test, init_cohort = init_cohorts_test))
+ev_blocked <- evaluate(m_block, holdout = list(
+  data = obs_dt[siteID %in% warm], env = env_dt[siteID %in% warm],
+  init_cohort = makeInitCohorts(init_trees[siteID %in% warm], Nspecies = Nsp)))
 blocked <- rbind(
-  pred_of(m_block, "random holdout (200 sites)", env_test, init_cohorts_test, test_long, "holdout"),
-  pred_of(m_block, "blocked holdout (40 warmest sites)", env_dt[siteID %in% warm],
-          makeInitCohorts(init_trees[siteID %in% warm], Nspecies = Nsp),
-          obs_long[siteID %in% warm], "holdout"))
-blocked[variable %in% c("dbh", "ba", "trees", "growth") & is.finite(obs) & is.finite(value),
-        .(spearman = round(cor(obs, value, method = "spearman"), 2),
-          rmse     = round(sqrt(mean((obs - value)^2)), 2), n = .N),
-        by = .(variable, holdout = model)][order(variable, holdout)]
+  ev_random$holdout$skill[,  .(variable, holdout = "random", r2, r, rmse, bias, n)],
+  ev_blocked$holdout$skill[, .(variable, holdout = "blocked (40 warmest sites)", r2, r, rmse, bias, n)])[
+  variable %in% c("dbh", "ba", "trees", "growth")][
+  , `:=`(r2 = round(r2, 2), r = round(r, 2), rmse = signif(rmse, 2), bias = signif(bias, 2))][
+  order(variable, holdout)]
+blocked
+```
+
+```{r blocked-numbers, include = FALSE}
+bl <- function(v, h, what) blocked[variable == v & holdout == h][[what]]
+B  <- "blocked (40 warmest sites)"
 ```
 
 The blocked rows are the transfer skill, and they are the ones to report when
-the model is meant to be applied beyond the sampled conditions. Here the rank
-correlations of the state variables hold up on the warm block (growth's drops
-from 0.52 to 0.42) while the errors do not: the basal-area RMSE more than doubles and the
-stem error rises by more than a third (the growth RMSE, a yearly rate, does not
-move at two decimals). The model orders the warm sites but misplaces their
-level, which is what
-an environmental response that is extrapolating looks like, and a random
-holdout cannot show it. It is also the reason to keep the climate formula
+the model is meant to be applied beyond the sampled conditions. On the warm
+block the R² of basal area is `r bl("ba", B, "r2")` against `r bl("ba", "random", "r2")`
+on the random holdout, with an RMSE of `r bl("ba", B, "rmse")` against
+`r bl("ba", "random", "rmse")`; for tree numbers the R² is `r bl("trees", B, "r2")`
+against `r bl("trees", "random", "r2")`, and for growth `r bl("growth", B, "r2")`
+against `r bl("growth", "random", "r2")`. Where the R² falls while the
+correlation of the same cells holds, the model orders the warm sites but
+misplaces their level, and the bias column says in which direction.
+That is what an environmental response that is extrapolating looks like, and a
+random holdout cannot show it. It is also the reason to keep the climate formula
 small: a response curve fitted to two collinear drivers can fit the training
 block and still extrapolate in opposite directions.
+
+## What the model learned: `summary()` and `plot()`
+
+`summary()` brings the checks of a fit together: the skill that `evaluate()`
+stored on the model (without a stored evaluation it evaluates the training
+sites itself), the convergence of the loss and of the parameters over the last
+50 epochs, the bare-ground runs, and for each process and species how important
+each environmental predictor is (ALE-variance importance, rate-normalised) and
+its average conditional effect. The conditional effects need a simulation and
+the local derivatives of every process, which takes long on all 200 training
+sites, so we compute them on a subset of 30 sites; `env` and `init_cohort`
+choose the sites (without them, all training sites).
+
+```{r xai-sites}
+xai_sites <- sort(unique(env_dt$siteID))[1:30]
+env_xai   <- env_dt[siteID %in% xai_sites]
+init_xai  <- makeInitCohorts(init_trees[siteID %in% xai_sites], Nspecies = Nsp)
+```
+
+```{r model-summary, comment = "", class.output = "summary-out"}
+s <- summary(m, env = env_xai, init_cohort = init_xai)
+s
+```
+
+The convergence section answers what the loss curves cannot. The loss has
+settled when its terms change by a fraction of a percent over the last 50
+epochs, the parameters when theirs do too. At a constant learning rate the
+parameters can keep moving by several percent while the loss is flat: part of
+that is the jitter of mini-batch Adam, which a learning-rate schedule
+(`control = finnControl(lr_scheduler = "step")` or `"cosine"`) damps at the end
+of a fit, the rest drift along directions the objective does not care about.
+Two seeds, or two checkpoints, compared on the holdout tell whether such drift
+reaches the predictions.
+
+`plot()` of a fitted model draws the fitted parameters themselves, one point
+per species, on the scale on which they enter the process functions; the
+dashed lines mark the bounds of a parameter where a species comes near one, and
+an open triangle a species that ended the fit at a bound:
+
+```{r plot-parameters, fig.width = 8, fig.height = 6}
+plot(m)
+```
+
+`pars = "env"` draws the environmental niches of the processes whose response
+is linear: the fitted environmental term of every species across the range of
+each predictor, the other held at its mean. For growth and regeneration a higher
+curve means faster growth or more recruits, for mortality more deaths:
+
+```{r plot-niches, fig.width = 8, fig.height = 6}
+plot(m, pars = "env")
+```
+
+### From bare ground
+
+The bare-ground runs that `evaluate()` stored start from an empty stand under
+the climate of the coldest, a middle and the warmest training site, held
+constant for 500 years. `plot(ev, type = "bare_ground")` draws them as
+successions, one panel per site labelled with its climate; outside an
+evaluation, `simulateForest(m, bare_ground = TRUE, years = 500, sites = ...)`
+gives the same run.
+
+```{r bare-ground, fig.width = 9, fig.height = 4}
+plot(ev, type = "bare_ground")
+```
+
+```{r bare-numbers, include = FALSE}
+bg <- as.data.table(s$bare_ground)
+```
+
+Basal area here is per patch of 0.06 ha, as in the inventory plots. Over the
+last tenth of the run the three stands hold `r round(min(bg$total_ba), 1)` to
+`r round(max(bg$total_ba), 1)` m² per patch (`r round(min(bg$total_ba) / 0.06)`
+to `r round(max(bg$total_ba) / 0.06)` m² per hectare), led by
+`r paste(unique(bg$leading_species), collapse = " and ")` (the bare-ground table
+of `summary()` above). These are long extrapolations from two inventories, and
+the place to see whether the fitted processes produce a plausible forest at all:
+a stand that collapses, or one species that takes every site, would show here
+long before it shows in the skill tables. Here it does: at the warmest site the stand grows to
+about `r round(max(bg$total_ba) / 0.06)` m² per hectare, with
+`r bg$leading_species[which.max(bg$total_ba)]` holding
+`r round(100 * bg$leading_share[which.max(bg$total_ba)])` % of it, which is not a
+plausible forest; the skill tables on the held-out sites do not reveal this.
+
+### Trajectories against the inventories
+
+`simulateForest()` returns the whole trajectory, not only the census years.
+`comparePlot(type = "timeseries")`, or the same `plot(sim, obs, type =
+"timeseries")`, draws it as a line, averaged over the sites, with the
+observations at their census years as points; `species` gives one row of panels
+per species. The holdout sites, for the four most common species:
+
+```{r timeseries, fig.width = 9, fig.height = 7.5}
+FINN.seed(1)
+sim_test <- simulateForest(m, env = env_test, init_cohort = init_cohorts_test)
+comparePlot(sim_test, obs_test, type = "timeseries", species = c(1, 2, 4, 5))
+```
+
+Each panel is the mean over the holdout sites where the species was observed.
+The line shows what the model does between the censuses, which the scatter
+plots cannot: whether a species' basal area and stem numbers rise or fall
+steadily, and whether the rates the inventories report at year 10 and 20 sit
+on the simulated course. `plot(sim_test)` alone draws the simulation without
+the observations.
 
 ## Scoring mortality per tree
 
@@ -655,10 +749,12 @@ tree_pred <- function(model, label)
   cbind(fia_tree_test, model = label,
         mort_pred = predictTrees(model, tree_data = fia_tree_test, env = env_tree, patch_size = 0.06)$mort_pred)
 tp <- rbind(tree_pred(m, "site-level mortality"), tree_pred(m_tree, "per-tree mortality"))
-tp[, .(trees = .N, deaths = sum(died), AUC = round(auc_binom(mort_pred, died, 1 - died), 3)), by = model]
+tree_auc <- tp[, .(trees = .N, deaths = sum(died), AUC = round(auc_binom(mort_pred, died, 1 - died), 3)), by = model]
+tree_auc
 ```
 
-Both fits rank the holdout trees alike, AUC 0.57 and 0.60: on this sample the
+Both fits rank the holdout trees alike, AUC `r tree_auc[model == "site-level mortality", AUC]`
+for the site-level and `r tree_auc[model == "per-tree mortality", AUC]` for the per-tree fit: on this sample the
 per-tree term buys little ranking skill, which is the picture of the mortality
 vignette, where two censuses carry little transferable mortality signal.
 
@@ -676,19 +772,25 @@ observed <- tp[model == "per-tree mortality",
                  observed = round(100 * annual(mean(died), mean(period_length)), 2)), by = dbh_class]
 predicted <- dcast(tp[, .(pred = round(100 * mean(annual(mort_pred, period_length)), 2)), by = .(dbh_class, model)],
                    dbh_class ~ model, value.var = "pred")
-merge(observed, predicted, by = "dbh_class")[order(dbh_class)]
+size_tab <- merge(observed, predicted, by = "dbh_class")[order(dbh_class)]
+size_tab
+```
+
+```{r tree-size-numbers, include = FALSE}
+sz <- function(cl, col) size_tab[dbh_class == cl][[col]]
+factor_tree <- size_tab[, max(pmax(`per-tree mortality` / observed, observed / `per-tree mortality`))]
 ```
 
 The site-level fit reproduces the pooled rate of a cell and leaves the shape
-over size to the simulated size distribution: it predicts nearly twice the
-observed mortality of the trees below 20 cm (1.7 against 1.0 % a year) and
-about two thirds of that of the trees above 100 cm (0.22 against 0.33 %), the
+over size to the simulated size distribution: for the trees below 20 cm it
+predicts `r sz("13-20", "site-level mortality")` % a year against the observed
+`r sz("13-20", "observed")` %, for the trees above 100 cm
+`r sz(">100", "site-level mortality")` against `r sz(">100", "observed")` %, the
 large-tree arm of the size response that site-level rates leave unidentified.
-Scored per tree, the same hazard function stays within a factor of 1.5 of the
-observation in every class and meets it above 100 cm (0.31 against 0.33 %).
-What the route does not buy here is calibration overall: the per-tree fit
-predicts more deaths than the holdout saw between 20 and 45 cm, and the
-site-level fit in every class below 45 cm.
+Scored per tree, the same hazard function predicts `r sz("13-20", "per-tree mortality")`
+and `r sz(">100", "per-tree mortality")` % in these two classes and stays within a
+factor of `r round(factor_tree, 1)` of the observation in every class. Neither
+route is calibrated in every class; compare the columns class by class.
 
 ## The recruitment cap, and why stem counts hinge on a few bursts
 
@@ -706,43 +808,53 @@ the joint model:
 
 ```{r cap-K}
 # the fitted carrying capacity, recruits per hectare and year
-exp(as.numeric(m$reg_logK))
+K <- exp(as.numeric(m$reg_logK))
+K
+# the largest expected recruitment of a holdout site and species over an interval
+max_reg <- ev$holdout$matched[variable == "reg", max(pred)]
+max_reg
 ```
 
-Here `K` stays at its start, 14.6 recruits per hectare and year, and it does
-not bind: the largest expected recruitment of any site and species over a whole
-census interval is about 36 per hectare (the table below), under 4 a year. On
-this sample the cap is a guard rail that the climate response never reaches.
+The fitted `K` is `r round(K, 1)` recruits per hectare and year. The largest
+expected recruitment of any holdout site and species over a whole census
+interval is `r round(max_reg)` per hectare, about `r round(max_reg / 10, 1)` a
+year, `r if (max_reg / 10 < K / 2) "far below the cap: on this sample the cap is a guard rail that the climate response never reaches" else "close enough to the cap for it to act"`.
 
 The stem count deserves a closer look, because its skill is the least stable of
 the three state variables. Recruits are *sampled* at prediction time
 (`createProcess(sample_regeneration = TRUE)`, the default), so a cell whose
 expected recruitment is large can receive a burst in one simulation and nothing
-in the next. The same model predicted five times with different seeds:
+in the next. The same model evaluated five times on the holdout with different
+seeds:
 
 ```{r reg-bursts}
-reps <- rbindlist(lapply(1:5, function(s) {
+reps <- lapply(1:5, function(s) {
   FINN.seed(s)
-  pred_of(m, "Joint", env_test, init_cohorts_test, test_long, "holdout")[, seed := s]
-}))
-trees_by_seed <- reps[variable == "trees" & is.finite(obs),
-  .(spearman = round(cor(obs, value, method = "spearman"), 3),
-    rmse     = round(sqrt(mean((obs - value)^2)), 3)), by = seed]
+  evaluate(m, holdout = list(data = obs_test, env = env_test,
+                             init_cohort = init_cohorts_test))$holdout
+})
+trees_by_seed <- rbindlist(lapply(1:5, function(s)
+  reps[[s]]$skill[variable == "trees", .(seed = s, r2 = round(r2, 3), r = round(r, 3),
+                                         rmse = round(rmse, 3))]))
 trees_by_seed
 
 # which cells carry the stem error? those whose predicted recruitment is in the
 # top 1 % of the same simulation
-burst <- merge(reps[variable == "trees", .(siteID, year, species, seed, obs, trees = value)],
-               reps[variable == "reg",   .(siteID, year, species, seed, reg = value)],
-               by = c("siteID", "year", "species", "seed"))
-burst <- burst[is.finite(obs)]
+burst <- rbindlist(lapply(1:5, function(s) {
+  d <- reps[[s]]$matched
+  merge(d[variable == "trees", .(siteID, year, species, obs, trees = pred)],
+        d[variable == "reg",   .(siteID, year, species, reg = pred)],
+        by = c("siteID", "year", "species"))[, seed := s]
+}))
 burst[, top := reg >= quantile(reg, 0.99), by = seed]
 total_sq_error <- burst[, sum((obs - trees)^2)]
-burst[, .(cells = .N, share_of_sq_error = round(sum((obs - trees)^2) / total_sq_error, 2),
-          max_reg = round(max(reg), 1)), by = .(top_1pct_recruitment = top)]
+burst_tab <- burst[, .(cells = .N, share_of_sq_error = round(sum((obs - trees)^2) / total_sq_error, 2),
+                       max_reg = round(max(reg), 1)), by = .(top_1pct_recruitment = top)]
+burst_tab
 ```
 
-The 1 % of cells with the largest predicted recruitment carry about a sixth of
+The 1 % of cells with the largest predicted recruitment carry
+`r round(100 * burst_tab[top_1pct_recruitment == TRUE, share_of_sq_error])` % of
 the squared stem error, and the seed-to-seed spread in the stem metrics
 is the same mechanism at work: a site that receives a burst in one draw and not
 in the next. That is why a single stems R² on a holdout should not decide
@@ -760,12 +872,23 @@ unrealistic combinations. Running it on **both** fitted models lets us read what
 growth responds to *and* compare the mechanistic process with the neural-network
 hybrid, across growth's **structural** inputs (tree size, light) and its
 **environmental niche** (climate). It returns one table per process (`growth`,
-`mortality`, `regeneration`); we use the growth table of each model.
+`mortality`, `regeneration`). Without `env` and `init_cohort` it reads the
+effects over all training sites the model keeps from `fit()`; as for
+`summary()`, we use the 30-site subset, which is much faster.
+
+`plot()` draws the environmental drivers of the three processes, one line per
+species, here of the mechanistic model:
+
+```{r ale-all, fig.width = 8, fig.height = 7}
+ale_proc <- ALE(m,        env = env_xai, init_cohort = init_xai, plot = FALSE)   # mechanistic growth
+ale_hyb  <- ALE(m_hybrid, env = env_xai, init_cohort = init_xai, plot = FALSE)   # growth = NN
+plot(ale_proc)
+```
+
+The drivers are on the standardised scale the model works on. To compare the
+two models, we use the growth table of each:
 
 ```{r ale-code, results = "hide"}
-FINN.seed(1)
-ale_proc <- ALE(m,        env_dt, init_cohorts, plot = FALSE)   # mechanistic growth
-ale_hyb  <- ALE(m_hybrid, env_dt, init_cohorts, plot = FALSE)   # growth = NN
 
 # one tidy table with both variants. Environmental drivers come back on the
 # model's scaled axis, so back-transform temp/prec to natural units (deg C, mm);
@@ -803,10 +926,10 @@ plot_growth_ale <- function(vars, labs) {
 
 Because the environmental responses are learned rather than prescribed, each
 curve is an inferred **niche**, how a species' growth scales along a climate
-gradient. Growth rises with precipitation in most curves, steeply for ponderosa
-pine and Douglas fir. The temperature responses differ between the two models:
-monotone in the mechanistic process, single-peaked with an optimum in the middle
-of the sampled range in the network.
+gradient. The mechanistic process can bend a curve only as far as its
+exponential response to a linear climate term allows; the network can shape it
+freely, so a curve with an optimum inside the sampled range is something only
+the hybrid can draw.
 
 Read these as *illustrations of what ALE recovers*, not as settled ecology. The
 per-species shapes are noisier than the structural responses below; growth is
@@ -845,22 +968,18 @@ ggplot(fimp_growth, aes(reorder(variable, importance), importance, fill = import
   labs(x = NULL, y = "permutation importance (delta error)") + theme_minimal()
 ```
 
-Ponderosa pine leans on precipitation, three times as much as on temperature;
-for the other three species the two drivers matter about equally. The
-importances are learned per species, not shared.
+The importances are learned per species, not shared: the same driver can carry
+most of the response of one species and little of another.
 
 ### Response to size and light: did the network recover the mechanistic form?
 
 The point of a hybrid is to ask which functional form the neural network learned
-and how it *compares* to the mechanistic function it replaced. Here the two agree
-on the response the data constrain best: growth **declines with tree size** for
-every species, and the network recovered that shape without being given the
-functional form. Light is less clear. In the mechanistic process growth
-**increases with light availability** for every species; the network finds that
-rise for ponderosa pine and Douglas fir at high light and an almost flat
-response for the two firs. The size response says the mechanistic form was a
-reasonable choice; where the light curves part, the data do not pin the
-response down.
+and how it *compares* to the mechanistic function it replaced. In the
+mechanistic process growth **declines with tree size** and **increases with
+light availability**, by construction. Where the network recovers the same
+shape without being given the functional form, the mechanistic form was a
+reasonable choice; where its curves part from the mechanistic ones, the data
+do not pin the response down.
 
 ```{r ale-structural, fig.width = 7, fig.height = 6.5}
 plot_growth_ale(c("dbh", "light"),
@@ -868,8 +987,8 @@ plot_growth_ale(c("dbh", "light"),
 ```
 
 Each curve spans only the range its *own* model actually simulates (ALE never
-extrapolates), so where the process and hybrid cover different ranges, as for
-*Abies grandis* light, the two models simply place that species in different
+extrapolates), so where the process and hybrid cover different ranges, the two
+models simply place that species in different
 conditions; the mismatch is information, not an artefact.
 
 ```{r session}

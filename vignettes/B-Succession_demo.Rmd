@@ -184,7 +184,9 @@ shade. Other parameters are based on basic ecological understanding (see comment
 
 In this example we simulate under constant environment (`climate = 0`), so succession here comes
 purely from the demographic trade-offs. We run from bare ground with no
-disturbance. We will explore the implications of adding an environmental gradient in the next section.
+disturbance: `simulateForest(bare_ground = TRUE)` starts from an empty stand and
+holds the climate of `env` constant at its mean for `years` years. We will
+explore the implications of adding an environmental gradient in the next section.
 
 
 ``` r
@@ -199,62 +201,40 @@ m <- finn(
   mortality_process    = createProcess(~1+climate, FINN::mortality,    initSpecies = parMort,   initEnv = parMortEnv)
 )
 
-sim <- predict(m, init_cohort = NULL, env = env_dt, disturbance = NULL,
-               patches = 100, device = "cpu")
-
-# average over patches; convert per-patch ba/trees to per-hectare
-p_dat <- sim$long$site[, .(value = mean(value)), by = .(year, species, variable)]
-p_dat[variable %in% c("ba", "trees"), value := value / patch_size]
-
-sp_labs <- species   # Betula, Tilia, Carpinus, Fagus (pioneer -> climax)
+sim <- simulateForest(m, env = env_dt, bare_ground = TRUE, years = Ntimesteps,
+                      patches = 100, patch_size = patch_size)
 ```
 
 ## The successional pattern
 
+`plot()` draws a bare-ground run as a succession, basal area by species. The
+model carries no species names (it was not fitted to data), so we pass them.
+Basal area and tree numbers in the simulation are per patch, here 0.1 ha:
+multiply by 10 for values per hectare.
+
 
 ``` r
-ba <- p_dat[variable == "ba"]
-ggplot(ba[year <= 150], aes(year, value, colour = factor(species))) +
-  geom_line(linewidth = 0.9) +
-  scale_colour_brewer(palette = "Dark2", name = "Species", labels = sp_labs) +
-  labs(x = "Year", y = expression(Basal~area~(m^2/ha))) +
-  theme_minimal()
+plot(sim, species_names = species)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="B/B-plot-succession-1.png" alt="Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."  />
-<p class="caption">Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand.</p>
+<img src="B/B-plot-succession-1.png" alt="Basal area by species over time (m² per patch of 0.1 ha); the dashed line is the stand total. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."  />
+<p class="caption">Basal area by species over time (m² per patch of 0.1 ha); the dashed line is the stand total. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand.</p>
 </div>
 
 The same run, across every state variable FINN tracks (diameter, basal
-area, tree numbers, growth, mortality and regeneration):
+area, tree numbers, growth, mortality and the expected regeneration per
+hectare, `r_mean_ha`):
 
 
 ``` r
-panel <- copy(p_dat)
-# regeneration is shown as the mean per hectare (r_mean_ha); the per-patch
-# count (reg) is dropped.
-panel[, variable2 := factor(
-  variable,
-  levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "r_mean_ha"),
-  labels = c("avg. DBH [cm]", "Basal Area [m2/ha]", "Trees [N/ha]",
-             "Available Light [%]", "Growth [cm/yr]", "Mortality [%]",
-             "Regeneration [N/ha]"))]
-ggplot(panel[!is.na(variable2) & year <= 150], aes(year, value, colour = factor(species))) +
-  geom_line(linewidth = 0.6) +
-  facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +
-  coord_cartesian(ylim = c(0, NA)) +
-  scale_colour_brewer(palette = "Dark2", name = "Species", labels = sp_labs) +
-  labs(x = "Year", y = NULL) +
-  theme_minimal() +
-  theme(strip.placement = "outside",
-        strip.text.y.left = element_text(angle = 90),
-        axis.title.y = element_blank())
+plot(sim, response = c("ba", "dbh", "trees", "growth", "mort", "r_mean_ha"),
+     species_names = species)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="B/B-plot-all-variables-1.png" alt="Succession across all FINN state variables for the four species."  />
-<p class="caption">Succession across all FINN state variables for the four species.</p>
+<img src="B/B-plot-all-variables-1.png" alt="Succession across the FINN state variables for the four species."  />
+<p class="caption">Succession across the FINN state variables for the four species.</p>
 </div>
 
 ### Ecological plausibility of the successional pattern
@@ -268,7 +248,7 @@ and every feature maps back to a parameter choice we made earlier:
   as the canopy closes, light drops below its high `shade` threshold and
   it can no longer regenerate because it is shade-intolerant. Its
   mortality increases rapidly once overtopped (visible in the mortality
-  panel: from \~0.08 yr⁻¹ in full light to \~0.3 yr⁻¹ in shade),
+  panel: from \~0.08 yr⁻¹ in full light to \~0.25 yr⁻¹ in shade),
   clearing the standing trees. By mid-succession it is nearly gone.
 - **Each mid-successional species has its turn.** Lime and hornbeam have
   progressively lower light requirements and lower mortality, so each
@@ -277,7 +257,7 @@ and every feature maps back to a parameter choice we made earlier:
 - **The climax (beech) dominates the stand.** It grows slowly and regenerates
   sparsely, so early on it is barely visible. But it regenerates under
   shade (lowest `shade`), is shade-tolerant so it barely dies even when
-  overtopped (mortality stays \~0.02–0.03 yr⁻¹ throughout), and is the
+  overtopped (mortality stays at \~0.03 yr⁻¹ throughout), and is the
   tallest (highest `height_allom`). So once the early- and mid-successional canopy
   disappears it overtops and dominates the mature forest.
 
@@ -394,37 +374,24 @@ stays flat, the generalist that pioneers every site.
 <p class="caption">Left: Ellenberg temperature value T mapped to each species' climate optimum. Right: the resulting climate niche along the cold-wet to warm-dry axis, a bell peaking at the optimum (birch stays flat). On top of these niches the model adds a site-productivity hump that makes the benign middle most productive.</p>
 </div>
 
-We use the `predict` function to simulate from `m_T` for three artificial sites along the climate gradient and compare the simulated succession trajectories.
+We simulate `m_T` from bare ground for three artificial sites along the climate
+gradient, one row of `env` per site, and compare the simulated succession
+trajectories. With `sites`, `simulateForest(bare_ground = TRUE)` runs each site
+under its own climate, and `plot()` draws one panel per site.
 
 
 ``` r
-site_temp <- c(`cold-wet` = -1, benign = 0.33, `warm-dry` = 1)
-runs <- rbindlist(lapply(names(site_temp), function(nm) {
-  tt <- site_temp[[nm]]
-  env_dt <- data.table(expand.grid(siteID = 1:Nsites, year = 1:Ntimesteps))
-  env_dt$climate <- tt
-  env_dt$climate_sq <- tt^2
-  sim <- predict(m_T, init_cohort = NULL, env = env_dt, disturbance = NULL,
-                 patches = 100, device = "cpu")
-  ba <- sim$long$site[variable == "ba", .(value = mean(value) / patch_size),
-                      by = .(year, species)]
-  ba[, climate := factor(nm, levels = names(site_temp))]
-  ba
-}))
-
-ggplot(runs, aes(year, value, colour = factor(species))) +
-  geom_line(linewidth = 0.7) +
-  facet_wrap(~climate, ncol = 3) +
-  scale_colour_brewer(palette = "Dark2", name = "Species", labels = species_T) +
-  labs(x = "Year", y = expression(Basal~area~(m^2/ha))) +
-  guides(colour = guide_legend(nrow = 2)) +
-  theme_minimal() +
-  theme(legend.position = "bottom")
+site_climate <- c(`cold-wet` = -1, benign = 0.33, `warm-dry` = 1)
+env_T <- data.table(siteID = 1:3, year = 1L, climate = site_climate,
+                    climate_sq = site_climate^2)
+runs <- simulateForest(m_T, env = env_T, bare_ground = TRUE, sites = 1:3,
+                       years = Ntimesteps, patches = 100, patch_size = patch_size)
+plot(runs, species_names = species_T, n_species = Nsp_T)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="B/B-climate-succession-1.png" alt="The same species pool along a cold-wet to warm-dry climate gradient. A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer."  />
-<p class="caption">The same species pool along a cold-wet to warm-dry climate gradient. A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer.</p>
+<img src="B/B-climate-succession-1.png" alt="The same species pool along a cold-wet to warm-dry climate gradient (basal area in m² per patch of 0.1 ha; panels from cold-wet, climate -1, to warm-dry, climate 1). A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer."  />
+<p class="caption">The same species pool along a cold-wet to warm-dry climate gradient (basal area in m² per patch of 0.1 ha; panels from cold-wet, climate -1, to warm-dry, climate 1). A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer.</p>
 </div>
 
 One pioneer and six climate specialists, and FINN sorts them into three

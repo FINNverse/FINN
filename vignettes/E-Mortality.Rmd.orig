@@ -23,6 +23,10 @@ knitr::opts_chunk$set(
 )
 ```
 
+<style>
+pre.summary-out, .summary-out pre { max-height: 22em; overflow: auto; }
+</style>
+
 Mortality is the hardest of FINN's six responses to calibrate, and the one where
 the choice of likelihood matters most. This vignette takes it on its own terms:
 what the observation actually *is*, which likelihood belongs to it, how to swap
@@ -185,32 +189,32 @@ observation as `fit()` compares it: the simulated yearly mortalities of the
 `1 - exp(mean(log1p(-m)))`, the functional behind the observed
 `1 - (1 - n_died / n_at_risk)^(1 / period_length)`.
 
-```{r predict}
-# the simulated yearly mortality, compounded over each observation's interval
-at_census <- function(site, obs_l) {
-  win <- unique(obs_l[, .(siteID, census = year, period_length)])
-  win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
-  merge(site[variable == "mort", .(siteID, year, species, value)], win, by = c("siteID", "year"))[
-    , .(variable = "mort", value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species)]
-}
-pred_of <- function(model, label, env, init, obs_l, split) {
-  model$eval()
-  sim <- predict(model, env = env, init_cohort = init,
-                 patches = 4, patch_size = 0.06, device = "cpu")
-  merge(obs_l, at_census(sim$long$site, obs_l), by = c("siteID", "year", "species", "variable"
-  ))[, `:=`(model = label, split = split)][]
-}
-to_long <- function(d) melt(d, id.vars = c("siteID", "year", "period_length", "species", "species_name"),
-                            measure.vars = "mort", variable.name = "variable", value.name = "obs",
-                            variable.factor = FALSE)
+`evaluate()` does this pairing. It simulates the model on the sites it was
+fitted to and, with `holdout`, on sites it has not seen, aggregates every
+response the way `fit()` scores it, and keeps the paired table (`$matched`) and
+the skill measures (`$skill`) of each set. The result is also stored on the
+model, where `summary()` reads it.
 
+```{r predict}
+holdout <- list(data = obs_test, env = env_test, init_cohort = init_cohorts_test)
+m$eval(); m_mort$eval()
 FINN.seed(1)
-obs_pred <- rbind(
-  pred_of(m,      "Process (mechanistic)",   env_dt,   init_cohorts,      to_long(obs_dt),   "train"),
-  pred_of(m,      "Process (mechanistic)",   env_test, init_cohorts_test, to_long(obs_test), "holdout"),
-  pred_of(m_mort, "Hybrid (mortality = NN)", env_dt,   init_cohorts,      to_long(obs_dt),   "train"),
-  pred_of(m_mort, "Hybrid (mortality = NN)", env_test, init_cohorts_test, to_long(obs_test), "holdout"))
+ev      <- evaluate(m,      holdout = holdout)
+ev_mort <- evaluate(m_mort, holdout = holdout)
+
+# the paired mortality cells of both models on both sets
+mort_of <- function(ev, label)
+  rbind(ev$train$matched[variable == "mort"][, `:=`(model = label, split = "train")],
+        ev$holdout$matched[variable == "mort"][, `:=`(model = label, split = "holdout")])
+mort_pred <- rbind(mort_of(ev,      "Process (mechanistic)"),
+                   mort_of(ev_mort, "Hybrid (mortality = NN)"))
+mort_pred[1:3, .(siteID, year, species_name, period_length, n_at_risk, n_died, obs, pred, p_interval)]
 ```
+
+Each row is one site, census and species: the observed yearly rate `obs`, the
+simulated yearly rate `pred` compounded over the interval, and `p_interval`,
+the probability that a tree dies over the whole interval,
+`1 - (1 - pred)^period_length`.
 
 Rank correlation is the natural first reach, and it is a trap here. Two-thirds of
 the observed proportions are exactly zero, so Spearman spends most of its power
@@ -218,17 +222,17 @@ ranking ties against each other; a value near zero cannot distinguish "the model
 learned nothing" from "the metric cannot see what it learned".
 
 ```{r spearman}
-obs_pred[is.finite(obs) & is.finite(value),
-         .(spearman = round(cor(obs, value, method = "spearman"), 2), n = .N),
-         by = .(model, split)][order(split, model)]
+mort_pred[, .(spearman = round(cor(obs, pred, method = "spearman"), 2), n = .N),
+          by = .(model, split)][order(split, model)]
 ```
 
 **AUC** asks the question the binomial actually poses: does the model give a
 higher death probability to a tree that died than to one that survived? Each
 observation stands for `n_at_risk` Bernoulli trials of which `n_died` are deaths,
-all sharing that observation's predicted probability, so rather than expand the
-trials we weight them, with tied predictions taking half credit (the standard
-Mann-Whitney treatment).
+all sharing that observation's predicted probability of death over the
+interval, so rather than expand the trials we weight them, with tied
+predictions taking half credit (the standard Mann-Whitney treatment). Written
+out:
 
 ```{r auc}
 auc_binom <- function(p, pos, neg) {
@@ -240,24 +244,61 @@ auc_binom <- function(p, pos, neg) {
   sum(g$pos * (neg_below + 0.5 * g$neg)) / den    # 0.5 credit for ties
 }
 
-counts <- rbind(
-  obs_dt[,   .(siteID, year, species, n_at_risk, n_died, split = "train")],
-  obs_test[, .(siteID, year, species, n_at_risk, n_died, split = "holdout")])
-mort_pred <- merge(obs_pred, counts, by = c("siteID", "year", "species", "split"))
-
-auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
-  .(AUC     = round(auc_binom(value, n_died, n_at_risk - n_died), 3),
+auc_tab <- mort_pred[n_at_risk > 0,
+  .(AUC     = round(auc_binom(p_interval, n_died, n_at_risk - n_died), 3),
     deaths  = sum(n_died),
     at_risk = sum(n_at_risk)), by = .(model, split)]
 auc_tab[order(split, -AUC)]
 ```
 
-0.5 is coin-flipping, 1.0 is perfect ranking.
+```{r auc-numbers, include = FALSE}
+auc_range <- function(s) paste(sort(auc_tab[split == s, sprintf("%.2f", AUC)]), collapse = " and ")
+```
+
+0.5 is coin-flipping, 1.0 is perfect ranking. `evaluate()` computes the same
+AUC in its skill table, next to the ratio of the predicted to the observed
+deaths (the expected deaths `n_at_risk * p_interval` summed over the cells):
+
+```{r auc-evaluate}
+skill_of <- function(ev, label)
+  rbind(ev$train$skill[variable == "mort", .(model = label, split = "train", AUC = round(auc, 3),
+                                             deaths_ratio = round(deaths_ratio, 2))],
+        ev$holdout$skill[variable == "mort", .(model = label, split = "holdout", AUC = round(auc, 3),
+                                               deaths_ratio = round(deaths_ratio, 2))])
+rbind(skill_of(ev, "Process (mechanistic)"), skill_of(ev_mort, "Hybrid (mortality = NN)"))
+```
+
+`plot()` of the evaluation draws the ROC curve behind it, here of the
+mechanistic model on the holdout (`response` keeps the mortality panel only;
+without it the page also shows the other responses):
+
+```{r roc-holdout, fig.width = 4.5, fig.height = 4.5}
+plot(ev, response = "mort")
+```
+
+and on its training sites:
+
+```{r roc-train, fig.width = 4.5, fig.height = 4.5}
+plot(ev, response = "mort", set = "train")
+```
+
+`summary()` prints the skill tables of both sets with the AUC, followed by the
+convergence of the fit and the environmental effects. The environmental
+effects take long on all 200 training sites, so `env` and `init_cohort` give
+them a subset of 30 sites:
+
+```{r model-summary, comment = "", class.output = "summary-out"}
+xai_sites <- sort(unique(env_dt$siteID))[1:30]
+env_xai   <- env_dt[siteID %in% xai_sites]
+init_xai  <- makeInitCohorts(init_trees[siteID %in% xai_sites], Nspecies = Nsp)
+summary(m, env = env_xai, init_cohort = init_xai)
+```
 
 Read the two splits **together**, because the gap between them is the result. On
-the training sites the model ranks deaths above survivors better than chance, so
-there *is* a learnable mortality signal, and the model finds it. On the held-out
-sites that skill collapses to ~0.5. The model is not failing to fit mortality; it
+the training sites the models rank deaths above survivors better than chance
+(AUC `r auc_range("train")`), so there *is* a learnable mortality signal, and the
+models find it. On the held-out sites that skill falls to
+`r auc_range("holdout")`, close to 0.5. The model is not failing to fit mortality; it
 is fitting it and **not generalising**.
 
 That is what a few hundred deaths buys. With ~69% of observations at exactly zero
@@ -381,10 +422,21 @@ mean would let the simulated size distribution answer instead.
 mortality function and a neural network standing in its place. The effect is on
 the yearly mortality **probability**.
 
+We read the effects over the same 30 training sites as `summary()` above
+(without `env` and `init_cohort`, `ALE()` uses all training sites the model
+keeps from `fit()`). `plot()` draws the environmental drivers, one line per
+species, here for the network:
+
+```{r ale-network, fig.width = 7, fig.height = 3.5}
+ale_proc <- ALE(m,      env = env_xai, init_cohort = init_xai, plot = FALSE)
+ale_hyb  <- ALE(m_mort, env = env_xai, init_cohort = init_xai, plot = FALSE)
+plot(ale_hyb, process = "mortality")
+```
+
+To compare the two models on the same axes, we put both tables together, on the
+natural scale of the climate drivers:
+
 ```{r ale-code, results = "hide"}
-FINN.seed(1)
-ale_proc <- ALE(m,      env_dt, init_cohorts, plot = FALSE)
-ale_hyb  <- ALE(m_mort, env_dt, init_cohorts, plot = FALSE)
 
 to_natural <- function(a, model) {
   sc <- as.data.table(model$env_scaling)[, .(var = variable, center, scale)]
