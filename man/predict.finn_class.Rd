@@ -101,7 +101,8 @@ all users want.}
 \item{model}{(\code{finn_class})\cr The model built by \code{\link[=finn]{finn()}}, fitted with \code{\link[=fit]{fit()}}.}
 }
 \value{
-A named list. \verb{$long$site} (and \verb{$wide$site}) give the site-level
+A named list of class \code{finn_simulation}, which \code{\link[=plot.finn_simulation]{plot.finn_simulation()}}
+draws. \verb{$long$site} (and \verb{$wide$site}) give the site-level
 results, averaged over the patches: columns \code{siteID}, \code{year}, \code{species},
 \code{variable} (\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mort}, \code{reg}, \code{r_mean_ha}) and
 \code{value}; \verb{$wide$site} has one column per variable instead. \code{siteID} is the

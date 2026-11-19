@@ -1170,7 +1170,8 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   large runs). The default processes all sites in one batch and is what almost
 #'   all users want.
 #'
-#' @return A named list. `$long$site` (and `$wide$site`) give the site-level
+#' @return A named list of class `finn_simulation`, which [plot.finn_simulation()]
+#'   draws. `$long$site` (and `$wide$site`) give the site-level
 #'   results, averaged over the patches: columns `siteID`, `year`, `species`,
 #'   `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `reg`, `r_mean_ha`) and
 #'   `value`; `$wide$site` has one column per variable instead. `siteID` is the
@@ -1232,17 +1233,21 @@ predict.finn_class = function(object,
   if (is.null(patch_size)) patch_size = if (is.null(object$patch_size_ha)) 0.1 else object$patch_size_ha
   check_patch_arguments(object, patches, patch_size, init_cohort,
                         patches_given = patches_given, caller = "predict()")
-  do.call(object$simulate, c(list(env = env,
-                                  disturbance = disturbance,
-                                  patches = patches,
-                                  patch_size = patch_size,
-                                  init_cohort = init_cohort,
-                                  device = device,
-                                  return_cohorts = return_cohorts,
-                                  debug = debug,
-                                  recruits = match.arg(recruits),
-                                  obs_recruits = obs_recruits),
-                             dots))
+  out = do.call(object$simulate, c(list(env = env,
+                                        disturbance = disturbance,
+                                        patches = patches,
+                                        patch_size = patch_size,
+                                        init_cohort = init_cohort,
+                                        device = device,
+                                        return_cohorts = return_cohorts,
+                                        debug = debug,
+                                        recruits = match.arg(recruits),
+                                        obs_recruits = obs_recruits),
+                                   dots))
+  # the class goes on the outer list only, so plot() can dispatch; the tables
+  # inside ($long$site, $wide$site, ...) stay exactly as before
+  class(out) = c("finn_simulation", class(out))
+  out
 }
 
 

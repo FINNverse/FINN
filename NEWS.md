@@ -105,8 +105,7 @@ and gives the same result.
 
 * Removed from the exported interface, as nothing in the package, the tests
   or the vignettes used them: `aggregate_results_old()`, `np_runif()`,
-  `sample_poisson_relaxed()`, the undocumented `plot()` method of a model
-  (use `ALE()` and `summary()`), and the internal helpers `groupby_mean()`
+  `sample_poisson_relaxed()`, and the internal helpers `groupby_mean()`
   and `index_species()` are no longer exported.
 
 ## Documentation and data preparation
@@ -361,6 +360,27 @@ someone who was affected.
 | A U+039B and a U+00D7 in `?fit`, a stray `\cr`, two dangling `\link` targets, a `@param` on the wrong function | no — the LaTeX manual and two `R CMD check` WARNINGs |
 
 ## New features
+
+* **`plot()` of a fitted model draws its parameters.** `plot(model)` now runs
+  from a bare call and shows the fitted parameters themselves, per species:
+  the species-specific parameters of every process and the recruit dispersion
+  `theta` on the scale they act on, each against its admissible range from
+  `createProcess(lower, upper)`, so a parameter that ended the fit at a bound
+  stands out; and, for every process whose environmental response is linear,
+  the fitted environmental term over the range each predictor covers in the
+  training data, on the predictor's original scale. A process with a neural
+  network response is skipped with a warning that points to `ALE()`.
+  `what = "process"` / `"env"` and `species =` select. In 0.1.0 this method
+  was undocumented, failed on a bare call (a length-2 condition in `if()`,
+  an error since R 4.2.0) and drew the first-layer weights of the
+  environmental network as bars.
+
+* **`plot()` of a simulation.** `simulateForest()` and `predict()` return a
+  list of class `finn_simulation` (the tables inside are unchanged), and
+  `plot(sim)` draws basal area, mean dbh and stem number per species over the
+  simulated years, averaged over the sites with the spread between sites as
+  a band; `response =` takes any of the seven simulated variables and
+  `sites =` restricts the sites.
 
 * **`regeneration_adult_effect()`: conspecific adults as an effect, not a
   gate.** `regeneration_adult()` multiplies the whole potential recruitment by

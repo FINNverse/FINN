@@ -45,5 +45,7 @@ utils::globalVariables(c(
   "siteName", "species", "species_before", "species_name", "status", "td",
   "treeName", "trees", "trees_ha", "value", "var", "variable", "year_before",
   "TransformerEncoderLayer", ".env_row", "first", "growth",
-  "period_length_in", "pl_rate", "step"
+  "period_length_in", "pl_rate", "step",
+  # plot.finn_class() and plot.finn_simulation()
+  "at_bound", "hi", "lo", "lower", "n_sites", "panel", "predictor", "upper", "x", "year"
 ))

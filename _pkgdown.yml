@@ -57,6 +57,7 @@ reference:
   - finnControl
   - predict.finn_class
   - simulateForest
+  - plot.finn_simulation
   - predictTrees
   - FINN.seed
 
@@ -106,6 +107,7 @@ reference:
 - title: Interpretation (xAI)
   desc: Read back what a fitted - or hybrid - model actually learned.
   contents:
+  - plot.finn_class
   - ALE
   - plot.FINNale
   - summary.finn_class
