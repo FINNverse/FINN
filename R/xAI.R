@@ -658,15 +658,36 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' Summarise a fitted FINN model
 #'
 #' @description
-#' Prints, per process and per species, the environmental variable importance
-#' and the average conditional effects. Both are derived from the model's
-#' conditional effects, which are computed once and cached — so if [ALE()] was
-#' already run (or a previous `summary()`), the default path needs no further
-#' simulation.
+#' Collects what is needed to judge a fitted model, in this order:
+#'
+#' 1. **Skill**: per response, R2 (`1 - SSE/SST`) first, then RMSE, Pearson r,
+#'    the bias, the ratio of the mean prediction to the mean observation (is the
+#'    magnitude right?) and n; for mortality also the tree-level AUC and the
+#'    ratio of predicted to observed deaths. On the training data and, when
+#'    [evaluate()] or `fit(holdout = )` stored one, on the holdout. The
+#'    observations are compared with the simulation aggregated as [fit()] scores
+#'    them (see [comparePlot()]). Without a stored evaluation, `summary()` runs
+#'    [evaluate()] on the training data first (one simulation).
+#' 2. **Convergence**: by how many percent each loss term changed over the last
+#'    `epochs_back` epochs (the mean of the last `epochs_back` epochs against
+#'    the mean of the `epochs_back` before), and by how many percent each
+#'    parameter block moved over the last `epochs_back` epochs (relative L2
+#'    change, `||theta_now - theta_then|| / ||theta_then||`). [fit()] keeps the
+#'    parameters of the last 51 epochs for this, so `epochs_back` can be at
+#'    most 50 for the parameters. A fit has settled when both are small.
+#' 3. **Bare ground**, when [evaluate()] stored a bare-ground run: the total
+#'    basal area at the end and the leading species.
+#' 4. **Environmental importance and average conditional effects**, per process
+#'    and species, from the model's conditional effects (computed once and
+#'    cached, see [ALE()]).
+#'
+#' `print()` shows it; `print(s, epochs_back = 10)` redoes the convergence
+#' check over another window without recomputing anything.
 #'
 #' @param object (`finn_class`)\cr fitted model.
-#' @param env,init_cohort (`NULL` or data)\cr interpretation data; `NULL` uses the cached
-#'   training data (see [ALE()]).
+#' @param env,init_cohort (`NULL` or data)\cr interpretation data for the
+#'   importance and the conditional effects; `NULL` uses the cached training
+#'   data (see [ALE()]).
 #' @param importance (`character(1)`)\cr `"ale"` (default) = analytical ALE-variance importance
 #'   (cheap, from the cache); `"permutation"` = re-simulating permutation importance
 #'   (see [feature_importance()]), cached on the model under the same input key.
@@ -676,10 +697,16 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' @param scale (`logical(1)`)\cr for `importance = "ale"`, divide `Var(ALE)` by the
 #'   process x species rate variance so the importances are dimensionless and comparable
 #'   across processes and species (Sobol-style). Default `TRUE`.
+#' @param epochs_back (`integer(1)`)\cr the window of the convergence check, in
+#'   epochs. Default `50`.
 #' @param ... passed through (e.g. to [predict()] for the permutation option).
-#' @return invisibly, a list with `importance`, `average_conditional_effects`, and `method`.
+#' @return An object of class `summary.finn_class`: a list with `skill` (per set,
+#'   overall), `skill_species` (per set and species), `convergence` (the loss
+#'   history and the recent parameters), `bare_ground`, `importance`,
+#'   `average_conditional_effects` and `method`.
 #'
-#' @seealso [ALE()], [averageConditionalEffects()], [feature_importance()]
+#' @seealso [evaluate()], [comparePlot()], [plot.finn_class()], [ALE()],
+#'   [averageConditionalEffects()], [feature_importance()]
 #'
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -693,19 +720,47 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'           mortality_process    = createProcess(~ temp + prec, mortality),
 #'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 #' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
-#'     init_cohort = init, epochs = 1L, patches = 4, patch_size = 0.06,
+#'     init_cohort = init, epochs = 3L, patches = 4, patch_size = 0.06,
 #'     plot_progress = FALSE)
 #'
-#' # which predictor matters for which process and species, and in which direction
 #' s <- summary(m)
-#' # the printed tables are also returned
-#' head(s$importance$growth)
+#' s
+#' # the convergence check over the last two epochs instead
+#' print(s, epochs_back = 2)
+#' # the tables are also returned
+#' s$skill$train
 #'
 #' @method summary finn_class
 #' @export
-summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, ...) {
+summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, epochs_back = 50L, ...) {
   importance = match.arg(importance)
 
+  # 1. skill, from the stored evaluation (run on the training data if missing)
+  if (is.null(object$evaluation) && !is.null(object$train_data)) {
+    message("Evaluating on the training data (one simulation); evaluate() can add a holdout and a bare-ground run.")
+    evaluate(object)
+  }
+  ev = object$evaluation
+  sets = intersect(c("train", "holdout"), names(ev))
+  skill = stats::setNames(lapply(sets, function(s) ev[[s]]$skill), sets)
+  skill_species = stats::setNames(lapply(sets, function(s) ev[[s]]$skill_species), sets)
+
+  # 2. convergence: the stored history, judged at print time
+  loss = if (length(object$history)) do.call(rbind, object$history) else NULL
+  convergence = list(loss = loss, params = object$param_recent, epochs = object$param_recent_epochs)
+
+  # 3. bare ground
+  bare = NULL
+  if (!is.null(ev$bare_ground)) {
+    d = data.table::as.data.table(ev$bare_ground$long$site)[variable == "ba"]
+    last = max(d$year)
+    end = d[year > last - max(1L, floor(0.1 * last)), list(ba = mean(value)), by = list(siteID, species)]
+    bare = end[, list(total_ba = sum(ba), leading_species = species[which.max(ba)],
+                      leading_share = max(ba) / sum(ba)), by = siteID]
+    bare[, years := last]
+  }
+
+  # 4. importance and average conditional effects
   if(importance == "ale") {
     vi       = .importance_ale_var(object, env, init_cohort, env_autoscale, sim_seed, scale = scale)
     vi_label = if(isTRUE(scale)) "Analytical ALE importance (rate-normalised)" else "Analytical ALE-variance importance"
@@ -721,8 +776,94 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     }
     vi_label = sprintf("Permutation importance (nperm = %d)", nperm)
   }
-
   ace = averageConditionalEffects(object, env, init_cohort, env_autoscale, sim_seed)
+
+  structure(list(skill = skill, skill_species = skill_species, convergence = convergence,
+                 bare_ground = bare, importance = vi, average_conditional_effects = ace,
+                 method = importance, importance_label = vi_label, epochs_back = as.integer(epochs_back)),
+            class = "summary.finn_class")
+}
+
+# Percent change of every loss term over the last k epochs, and of every
+# parameter block over the last k (at most 50) stored epochs.
+convergence_table = function(conv, k) {
+  k = as.integer(k)
+  out = list(loss = NULL, params = NULL, k_loss = NA_integer_, k_params = NA_integer_)
+  L = conv$loss
+  if (!is.null(L) && nrow(L) > k) {
+    n = nrow(L)
+    now  = colMeans(L[(n - k + 1):n, , drop = FALSE], na.rm = TRUE)
+    then = colMeans(L[max(1, n - 2 * k + 1):(n - k), , drop = FALSE], na.rm = TRUE)
+    terms = c("dbh", "ba", "trees", "growth", "mortality", "regeneration", "prior penalty")
+    nm = if (ncol(L) == length(terms)) terms else paste0("term ", seq_len(ncol(L)))
+    keep = is.finite(now) & is.finite(then) & then != 0
+    out$loss = data.frame(term = nm[keep], loss_now = now[keep],
+                          change_pct = 100 * (now[keep] - then[keep]) / abs(then[keep]))
+    out$k_loss = k
+  }
+  P = conv$params
+  if (length(P) >= 2L) {
+    kk = min(k, length(P) - 1L)
+    a = P[[length(P)]]; b = P[[length(P) - kk]]
+    nms = intersect(names(a), names(b))
+    ch = vapply(nms, function(nm) {
+      den = sqrt(sum(b[[nm]]^2))
+      if (!is.finite(den) || den == 0) return(NA_real_)
+      100 * sqrt(sum((a[[nm]] - b[[nm]])^2)) / den
+    }, numeric(1))
+    out$params = data.frame(block = nms, change_pct = ch)[order(-ch), , drop = FALSE]
+    out$k_params = kk
+  }
+  out
+}
+
+#' @rdname summary.finn_class
+#' @param x A `summary.finn_class` object.
+#' @param species (`logical(1)`)\cr also print the skill per species. Default `FALSE`.
+#' @export
+print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FALSE, ...) {
+  cat("FINN model summary\n==================\n")
+
+  fmt_skill = function(s) {
+    d = as.data.frame(s)
+    cols = intersect(c("variable", "species", "r2", "rmse", "r", "bias", "ratio", "n", "auc", "deaths_ratio"), names(d))
+    d = d[, cols, drop = FALSE]
+    names(d) = c(variable = "response", species = "species", r2 = "R2", rmse = "RMSE", r = "r", bias = "bias",
+                 ratio = "pred/obs", n = "n", auc = "AUC", deaths_ratio = "deaths pred/obs")[cols]
+    d
+  }
+  cat("\n## Skill (observed vs simulated, aggregated as fit() scores)\n")
+  if (!length(x$skill)) {
+    cat("  (no evaluation: run evaluate() on a model fitted with this version)\n")
+  } else for (s in names(x$skill)) {
+    cat(sprintf("\n%s:\n", if (s == "train") "Training data" else "Holdout"))
+    print(fmt_skill(x$skill[[s]]), row.names = FALSE, digits = 3)
+    if (isTRUE(species)) {
+      cat(sprintf("\n%s, per species:\n", if (s == "train") "Training data" else "Holdout"))
+      print(fmt_skill(x$skill_species[[s]]), row.names = FALSE, digits = 3)
+    }
+  }
+
+  cv = convergence_table(x$convergence, epochs_back)
+  cat("\n## Convergence\n")
+  if (is.null(cv$loss)) {
+    cat(sprintf("  loss: fewer than %d + 1 epochs recorded\n", epochs_back))
+  } else {
+    cat(sprintf("\nLoss, mean of the last %d epochs against the %d before (%% change):\n", cv$k_loss, cv$k_loss))
+    print(cv$loss, row.names = FALSE, digits = 3)
+  }
+  if (is.null(cv$params)) {
+    cat("  parameters: no recent parameters stored (model fitted before this version, or one epoch)\n")
+  } else {
+    cat(sprintf("\nParameters, change over the last %d epochs (relative L2, %%), largest first:\n", cv$k_params))
+    print(utils::head(cv$params, 12L), row.names = FALSE, digits = 3)
+    if (nrow(cv$params) > 12L) cat(sprintf("  ... %d more blocks in summary(m)$convergence\n", nrow(cv$params) - 12L))
+  }
+
+  if (!is.null(x$bare_ground)) {
+    cat("\n## Bare ground (mean of the last tenth of the run)\n")
+    print(as.data.frame(x$bare_ground), row.names = FALSE, digits = 3)
+  }
 
   wide = function(df, value_col) {
     if(is.null(df) || !nrow(df)) return(df)
@@ -734,19 +875,17 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     w   = w[order(-rowMeans(abs(as.matrix(w[, ..spc])), na.rm = TRUE))]
     as.data.frame(w)
   }
-
-  cat("FINN model summary\n==================\n")
+  cat("\n## Environment\n")
   for(process in c("growth", "mortality", "regeneration")) {
     cat(sprintf("\n### %s\n", toupper(process)))
-    cat(sprintf("\n%s (species in columns):\n", vi_label))
-    vp = vi[[process]]
+    cat(sprintf("\n%s (species in columns):\n", x$importance_label))
+    vp = x$importance[[process]]
     if(is.null(vp) || !nrow(vp)) { cat("  (no environmental predictors)\n") } else { print(wide(vp, "importance"), row.names = FALSE, digits = 3) }
     cat("\nAverage conditional effects (mean; species in columns):\n")
-    ap = ace[[process]]
+    ap = x$average_conditional_effects[[process]]
     if(is.null(ap) || !nrow(ap)) { cat("  (no environmental predictors)\n") } else { print(wide(ap, "mean_effect"), row.names = FALSE, digits = 3) }
   }
-
-  invisible(list(importance = vi, average_conditional_effects = ace, method = importance))
+  invisible(x)
 }
 
 

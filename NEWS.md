@@ -22,6 +22,7 @@ or documentation. Each row names the setting that restores the 0.1.0 result.
 | `predict()` and `simulateForest()` leave `requires_grad` as they found it instead of switching every parameter on (#55) | always | - |
 | `resolveSiteIDs()` numbers sites, patches and species by radix order instead of the collation locale's | always | reproduces 0.1.0 where `LC_COLLATE` was already `C` |
 | A hybrid growth process reads the growth predictors and a hybrid mortality process the mortality predictors (#72, B2) | always | - (0.1.0 and 0.2.0-rc fed each the other's; identical where the two formulas are the same) |
+| `predict()` / `simulateForest()` from bare ground without `patches` use the patch count of the fit instead of 100 | `patches` not given: `model$patches` | `patches = 100` |
 
 The sections *The stem-count gradient*, *The death draw*, *The recruit draw*, *The
 mortality limits* and *The recruitment cap* under **The release in detail** carry
@@ -379,9 +380,46 @@ someone who was affected.
 * **`plot()` of a simulation.** `simulateForest()` and `predict()` return a
   list of class `finn_simulation` (the tables inside are unchanged), and
   `plot(sim)` draws basal area, mean dbh and stem number per species over the
-  simulated years, averaged over the sites with the spread between sites as
-  a band; `response =` takes any of the seven simulated variables and
-  `sites =` restricts the sites.
+  simulated years, averaged over the sites, or for one site with
+  `sites =`; `response =` takes any of the seven simulated variables.
+
+* **`comparePlot()`: simulation against observations.** `comparePlot(sim, obs)`,
+  or `plot(sim, obs)`, pairs a simulation with the observed data, aggregated
+  the way `fit()` scores it (states at the census, growth and mortality
+  compounded over the interval, recruits summed), and draws observed against
+  simulated for every response with R2 in each panel; mortality shows the
+  tree-level AUC instead. `type = "timeseries"` draws the simulated trajectory
+  with the observations as points at their census years. `species =` pools all
+  species (default) or draws chosen species; long and wide tables are both
+  accepted, and observations without a simulated counterpart are left out with
+  a message.
+
+* **`evaluate()`: an optional step after the fit.** It simulates the training
+  data, a holdout (`holdout = list(data =, env =, init_cohort =)`) and,
+  optionally, a bare-ground run (`bare_ground = TRUE`, `years = 500`), and
+  stores the comparison on the model as `model$evaluation`.
+  `fit(..., holdout = )` runs it right after the fit. A model fitted with an
+  earlier version takes its training data through `train =`.
+
+* **`summary()` of a model judges the fit.** It now shows, before the
+  environmental importance and the average conditional effects, the skill per
+  response on the training data and the holdout (R2 first, then RMSE, r, bias,
+  the ratio of the means, and the AUC for mortality) and a convergence check:
+  by how many percent each loss term and each parameter block changed over
+  the last `epochs_back` epochs (`print(s, epochs_back = 10)`). For this
+  `fit()` keeps the parameters of the last 51 epochs. `summary()` returns an
+  object of class `summary.finn_class` that `print()` shows, instead of
+  printing as it computes.
+
+* **Bare-ground runs in one call.** `simulateForest(model, bare_ground = TRUE)`
+  runs the model from an empty stand for `years = 500` years under the mean
+  climate of the fitted environment held constant, or under each site's mean
+  climate with `sites =`.
+
+* **The patch count of the fit is the default.** `fit()` stores the patch
+  count it used (`model$patches`), together with the training observations;
+  `predict()`, `simulateForest()` and `evaluate()` take it when `patches` is
+  not given.
 
 * **`regeneration_adult_effect()`: conspecific adults as an effect, not a
   gate.** `regeneration_adult()` multiplies the whole potential recruitment by
@@ -706,6 +744,21 @@ someone who was affected.
   and `predictTrees()` by 3e-6 (FINN-bwi fits/2026-11-06-finn-speed-review).
 
 ## Bug fixes
+
+* Initial cohorts survive `saveRDS()` / `readRDS()` (#77). A `CohortMat` (e.g.
+  `initCohorts` of the list `resolveSiteIDs()` returns) keeps a plain R copy of
+  its arrays and rebuilds its torch tensors, which `saveRDS()` cannot store,
+  when `fit()`, `predict()` or `simulateForest()` use it, or with
+  `x$restore()`. Before, every tensor failed with "external pointer is not
+  valid" after reading.
+
+* An environment with no covariate column gives the process an intercept
+  instead of an all-`NA` design (#64): `model.matrix()` on a frame with no
+  columns returned zero rows, and the recruitment of an intercept-only
+  process became `NaN`.
+
+* `createProcess(initSpecies = , initEnv = )` accept a data.frame and use the
+  matrix it holds, instead of failing with "Can't convert argument" (#11).
 
 * `fit()` no longer creates or overwrites an object `counter` in the global
   environment. The batch counter was advanced with `<<-`, which also left the

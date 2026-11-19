@@ -22,7 +22,7 @@
 
 simulateForest(
   model,
-  env,
+  env = NULL,
   disturbance = NULL,
   patches = 100L,
   patch_size = NULL,
@@ -32,6 +32,9 @@ simulateForest(
   debug = FALSE,
   recruits = c("simulated", "observed"),
   obs_recruits = NULL,
+  bare_ground = FALSE,
+  years = 500L,
+  sites = NULL,
   ...
 )
 }
@@ -48,7 +51,9 @@ row per \code{siteID} and \code{year} with the column \code{intensity}, the prob
 \link{finn_data}.}
 
 \item{patches}{(\code{integer(1)})\cr Number of patches per site when the
-simulation starts from bare ground (\code{init_cohort = NULL}). Ignored, with a
+simulation starts from bare ground (\code{init_cohort = NULL}); not given, the
+patch count the model was fitted with (\code{model$patches}), or \code{100} for a
+model fitted before 0.2.0 or never fitted. Ignored, with a
 warning when it differs, as soon as \code{init_cohort} is given: the patch
 count then comes from the initial cohorts.}
 
@@ -99,6 +104,20 @@ large runs). The default processes all sites in one batch and is what almost
 all users want.}
 
 \item{model}{(\code{finn_class})\cr The model built by \code{\link[=finn]{finn()}}, fitted with \code{\link[=fit]{fit()}}.}
+
+\item{bare_ground}{(\code{logical(1)})\cr \code{simulateForest()} only: \code{TRUE} runs the
+model from an empty stand for \code{years} years under a constant climate, the
+mean of every predictor over the environment the model was fitted on (or
+over \code{env} when given), as \code{\link[=evaluate]{evaluate()}} does for its bare-ground run.
+\code{init_cohort} and \code{disturbance} are not used. Default \code{FALSE}.}
+
+\item{years}{(\code{integer(1)})\cr \code{simulateForest()} with \code{bare_ground = TRUE}:
+the length of the run. Default \code{500}.}
+
+\item{sites}{\code{simulateForest()} with \code{bare_ground = TRUE}: \code{NULL} (default)
+one run under the mean climate of all sites, or site ids for one run per
+site under that site's mean climate (the \code{siteID} of the fitted
+environment, kept in the result).}
 }
 \value{
 A named list of class \code{finn_simulation}, which \code{\link[=plot.finn_simulation]{plot.finn_simulation()}}

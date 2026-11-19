@@ -47,5 +47,8 @@ utils::globalVariables(c(
   "TransformerEncoderLayer", ".env_row", "first", "growth",
   "period_length_in", "pl_rate", "step",
   # plot.finn_class() and plot.finn_simulation()
-  "at_bound", "hi", "lo", "lower", "n_sites", "panel", "predictor", "upper", "x", "year"
+  "at_bound", "hi", "lo", "lower", "n_sites", "panel", "predictor", "upper", "x", "year",
+  # comparePlot(), evaluate(), summary()
+  "auc", "census", "deaths_ratio", "label", "max_year", "obs", "p_interval", "pred",
+  "r2", "species_lab", "total_ba", "years"
 ))

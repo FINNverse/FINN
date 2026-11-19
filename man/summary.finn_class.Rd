@@ -2,6 +2,7 @@
 % Please edit documentation in R/xAI.R
 \name{summary.finn_class}
 \alias{summary.finn_class}
+\alias{print.summary.finn_class}
 \title{Summarise a fitted FINN model}
 \usage{
 \method{summary}{finn_class}(
@@ -13,14 +14,18 @@
   sim_seed = 42L,
   nperm = 20L,
   scale = TRUE,
+  epochs_back = 50L,
   ...
 )
+
+\method{print}{summary.finn_class}(x, epochs_back = x$epochs_back, species = FALSE, ...)
 }
 \arguments{
 \item{object}{(\code{finn_class})\cr fitted model.}
 
-\item{env, init_cohort}{(\code{NULL} or data)\cr interpretation data; \code{NULL} uses the cached
-training data (see \code{\link[=ALE]{ALE()}}).}
+\item{env, init_cohort}{(\code{NULL} or data)\cr interpretation data for the
+importance and the conditional effects; \code{NULL} uses the cached training
+data (see \code{\link[=ALE]{ALE()}}).}
 
 \item{importance}{(\code{character(1)})\cr \code{"ale"} (default) = analytical ALE-variance importance
 (cheap, from the cache); \code{"permutation"} = re-simulating permutation importance
@@ -36,17 +41,48 @@ training data (see \code{\link[=ALE]{ALE()}}).}
 process x species rate variance so the importances are dimensionless and comparable
 across processes and species (Sobol-style). Default \code{TRUE}.}
 
+\item{epochs_back}{(\code{integer(1)})\cr the window of the convergence check, in
+epochs. Default \code{50}.}
+
 \item{...}{passed through (e.g. to \code{\link[=predict]{predict()}} for the permutation option).}
+
+\item{x}{A \code{summary.finn_class} object.}
+
+\item{species}{(\code{logical(1)})\cr also print the skill per species. Default \code{FALSE}.}
 }
 \value{
-invisibly, a list with \code{importance}, \code{average_conditional_effects}, and \code{method}.
+An object of class \code{summary.finn_class}: a list with \code{skill} (per set,
+overall), \code{skill_species} (per set and species), \code{convergence} (the loss
+history and the recent parameters), \code{bare_ground}, \code{importance},
+\code{average_conditional_effects} and \code{method}.
 }
 \description{
-Prints, per process and per species, the environmental variable importance
-and the average conditional effects. Both are derived from the model's
-conditional effects, which are computed once and cached — so if \code{\link[=ALE]{ALE()}} was
-already run (or a previous \code{summary()}), the default path needs no further
-simulation.
+Collects what is needed to judge a fitted model, in this order:
+\enumerate{
+\item \strong{Skill}: per response, R2 (\code{1 - SSE/SST}) first, then RMSE, Pearson r,
+the bias, the ratio of the mean prediction to the mean observation (is the
+magnitude right?) and n; for mortality also the tree-level AUC and the
+ratio of predicted to observed deaths. On the training data and, when
+\code{\link[=evaluate]{evaluate()}} or \code{fit(holdout = )} stored one, on the holdout. The
+observations are compared with the simulation aggregated as \code{\link[=fit]{fit()}} scores
+them (see \code{\link[=comparePlot]{comparePlot()}}). Without a stored evaluation, \code{summary()} runs
+\code{\link[=evaluate]{evaluate()}} on the training data first (one simulation).
+\item \strong{Convergence}: by how many percent each loss term changed over the last
+\code{epochs_back} epochs (the mean of the last \code{epochs_back} epochs against
+the mean of the \code{epochs_back} before), and by how many percent each
+parameter block moved over the last \code{epochs_back} epochs (relative L2
+change, \verb{||theta_now - theta_then|| / ||theta_then||}). \code{\link[=fit]{fit()}} keeps the
+parameters of the last 51 epochs for this, so \code{epochs_back} can be at
+most 50 for the parameters. A fit has settled when both are small.
+\item \strong{Bare ground}, when \code{\link[=evaluate]{evaluate()}} stored a bare-ground run: the total
+basal area at the end and the leading species.
+\item \strong{Environmental importance and average conditional effects}, per process
+and species, from the model's conditional effects (computed once and
+cached, see \code{\link[=ALE]{ALE()}}).
+}
+
+\code{print()} shows it; \code{print(s, epochs_back = 10)} redoes the convergence
+check over another window without recomputing anything.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
@@ -61,15 +97,18 @@ m <- finn(N_species = Nsp, recruits_dbh = 12.9,
           mortality_process    = createProcess(~ temp + prec, mortality),
           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
-    init_cohort = init, epochs = 1L, patches = 4, patch_size = 0.06,
+    init_cohort = init, epochs = 3L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
 
-# which predictor matters for which process and species, and in which direction
 s <- summary(m)
-# the printed tables are also returned
-head(s$importance$growth)
+s
+# the convergence check over the last two epochs instead
+print(s, epochs_back = 2)
+# the tables are also returned
+s$skill$train
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[=ALE]{ALE()}}, \code{\link[=averageConditionalEffects]{averageConditionalEffects()}}, \code{\link[=feature_importance]{feature_importance()}}
+\code{\link[=evaluate]{evaluate()}}, \code{\link[=comparePlot]{comparePlot()}}, \code{\link[=plot.finn_class]{plot.finn_class()}}, \code{\link[=ALE]{ALE()}},
+\code{\link[=averageConditionalEffects]{averageConditionalEffects()}}, \code{\link[=feature_importance]{feature_importance()}}
 }

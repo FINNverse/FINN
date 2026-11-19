@@ -388,6 +388,8 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$func = func
   out$custom = TRUE
   if(isNamespace(environment(func))) out$custom = getNamespaceName(environment(func)) != "FINN"
+  # a data.frame of starting values is taken as the matrix it holds (#11)
+  if (is.data.frame(initSpecies)) initSpecies = as.matrix(initSpecies)
   out$initSpecies = initSpecies
   out$optimizeSpecies = optimizeSpecies
   out$optimizeEnv = optimizeEnv
@@ -403,7 +405,9 @@ createProcess = function(formula = NULL, func, initSpecies = NULL, initEnv = NUL
   out$continuous = continuous
   out$light_mask = light_mask
   if(!is.null(initEnv)) {
+    if(is.data.frame(initEnv)) initEnv = as.matrix(initEnv)   # #11
     if(!is.list(initEnv)) initEnv = list(initEnv) # must be a list!
+    initEnv = lapply(initEnv, function(x) if (is.data.frame(x)) as.matrix(x) else x)
   }
   out$initEnv = initEnv
   out$hidden = hidden
@@ -625,7 +629,12 @@ createHybrid = function(formula = NULL, optimize = TRUE, dispersion_parameter = 
 #'
 #' @noRd
 extract_env = function(formula, env) {
-  process_env = stats::model.matrix(formula, env[,-c("siteID", "year")])
+  covariates = env[,-c("siteID", "year")]
+  # an env with no covariate column (an intercept-only process) is a frame with
+  # no columns, from which model.matrix() cannot tell the row count: it returned
+  # 0 rows and the recruitment became NaN (#64). A placeholder column restores it.
+  if (!ncol(covariates)) covariates = data.frame(.no_covariate = numeric(nrow(env)))
+  process_env = stats::model.matrix(formula, covariates)
   env_names = colnames(process_env)
   env_array = climateDF2array(climate_dt =  cbind(env[,c("siteID", "year")],process_env), env_vars = env_names)
   return(env_array)

@@ -79,6 +79,9 @@ test_that("a simulation has class finn_simulation and plot() draws it", {
 
   p2 <- plot(sim, response = c("growth", "mort"), sites = sort(unique(toy$env$siteID))[1])
   expect_setequal(as.character(unique(p2$data$variable)), c("growth", "mort"))
-  expect_equal(unique(p2$data$n_sites), 1L)
+  # one site: its own trajectory
+  one <- sort(unique(toy$env$siteID))[1]
+  expect_equal(p2$data[variable == "mort" & species == 1 & year == 1]$mean,
+               sim$long$site[siteID == one & variable == "mort" & species == 1 & year == 1]$value)
   expect_error(plot(sim, response = "height"), "Unknown `response`")
 })

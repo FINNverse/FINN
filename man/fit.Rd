@@ -42,6 +42,7 @@ fit(
   teacher_forcing = FALSE,
   rb_gradient = TRUE,
   trees_offset = 0.01,
+  holdout = NULL,
   ...,
   loss = NULL
 )
@@ -310,6 +311,12 @@ default \code{0.01} keeps that cell's gradient comparable with every other term;
 the historical \code{1e-5} (poisson) and \code{0.001} (nbinom) left it at \code{y/offset},
 four orders above the rest. \code{NULL} restores those two historical constants
 and so reproduces a fit made before 0.2.0.}
+
+\item{holdout}{\code{NULL} (default), or a list with holdout \code{data}, \code{env} and
+\code{init_cohort} (and optionally \code{disturbance}): after the fit, \code{\link[=evaluate]{evaluate()}}
+simulates the training data and the holdout and stores the comparison on
+the model (\code{model$evaluation}), which \code{\link[=summary.finn_class]{summary.finn_class()}} prints. The
+same as calling \code{evaluate(model, holdout = )} after the fit.}
 
 \item{...}{Arguments of earlier versions, still accepted with a warning:
 \code{weights} (now \code{loss_weights}), \code{recruits} (now \code{loss_recruit}), and

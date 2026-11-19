@@ -59,6 +59,13 @@ reference:
   - simulateForest
   - plot.finn_simulation
   - predictTrees
+
+- title: Evaluation
+  desc: Judge a fitted model against the observations, on the training data and a holdout.
+  contents:
+  - evaluate
+  - comparePlot
+  - summary.finn_class
   - FINN.seed
 
 - title: Processes
@@ -110,7 +117,6 @@ reference:
   - plot.finn_class
   - ALE
   - plot.FINNale
-  - summary.finn_class
   - conditionalEffects
   - averageConditionalEffects
   - feature_importance

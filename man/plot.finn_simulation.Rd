@@ -5,7 +5,7 @@
 \alias{print.finn_simulation}
 \title{Plot a FINN simulation}
 \usage{
-\method{plot}{finn_simulation}(x, response = NULL, sites = NULL, ...)
+\method{plot}{finn_simulation}(x, y = NULL, response = NULL, sites = NULL, ...)
 
 \method{print}{finn_simulation}(x, ...)
 }
@@ -13,22 +13,29 @@
 \item{x}{The object returned by \code{\link[=simulateForest]{simulateForest()}} or \code{\link[=predict]{predict()}} (class
 \code{finn_simulation}).}
 
+\item{y}{\code{NULL} (default), or observations to compare with (see
+\code{\link[=comparePlot]{comparePlot()}}).}
+
 \item{response}{Responses to draw, any of \code{"dbh"}, \code{"ba"}, \code{"trees"},
 \code{"growth"}, \code{"mort"}, \code{"reg"}, \code{"r_mean_ha"}; \code{NULL} (default) the stand
 variables \code{ba}, \code{dbh} and \code{trees}.}
 
 \item{sites}{Site ids to include; \code{NULL} (default) all.}
 
-\item{...}{Unused.}
+\item{...}{Passed to \code{\link[=comparePlot]{comparePlot()}} when \code{y} is given (\code{type}, \code{species}).}
 }
 \value{
 The \code{ggplot} object, invisibly; it is printed.
 }
 \description{
 Draws the trajectories returned by \code{\link[=simulateForest]{simulateForest()}} or \code{\link[=predict]{predict()}}: one
-panel per response, one line per species, averaged over the sites, with the
-spread between sites (10 \% to 90 \% quantile) as a light band when there is
-more than one site.
+panel per response, one line per species, averaged over the sites; with
+\code{sites} one site (or the average over a few). To see every site, loop over
+them.
+}
+\details{
+Given observations as the second argument, \code{plot(sim, obs)} compares the
+simulation with them instead: it is \code{\link[=comparePlot]{comparePlot()}}, with the same arguments.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
@@ -44,12 +51,13 @@ m <- finn(N_species = Nsp, recruits_dbh = 12.9,
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
-sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init,
-                      patches = 4, patch_size = 0.06)
+sim <- simulateForest(m, env = fia_env_dt[siteID \%in\% sites], init_cohort = init)
 plot(sim)
 plot(sim, response = c("growth", "mort"), sites = 1)
+# against the observations
+plot(sim, fia_obs_dt[siteID \%in\% sites])
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[=plot.finn_class]{plot.finn_class()}} for the fitted parameters.
+\code{\link[=plot.finn_class]{plot.finn_class()}} for the fitted parameters, \code{\link[=comparePlot]{comparePlot()}}.
 }

@@ -240,19 +240,24 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #' Plot a FINN simulation
 #'
 #' Draws the trajectories returned by [simulateForest()] or [predict()]: one
-#' panel per response, one line per species, averaged over the sites, with the
-#' spread between sites (10 % to 90 % quantile) as a light band when there is
-#' more than one site.
+#' panel per response, one line per species, averaged over the sites; with
+#' `sites` one site (or the average over a few). To see every site, loop over
+#' them.
+#'
+#' Given observations as the second argument, `plot(sim, obs)` compares the
+#' simulation with them instead: it is [comparePlot()], with the same arguments.
 #'
 #' @param x The object returned by [simulateForest()] or [predict()] (class
 #'   `finn_simulation`).
+#' @param y `NULL` (default), or observations to compare with (see
+#'   [comparePlot()]).
 #' @param response Responses to draw, any of `"dbh"`, `"ba"`, `"trees"`,
 #'   `"growth"`, `"mort"`, `"reg"`, `"r_mean_ha"`; `NULL` (default) the stand
 #'   variables `ba`, `dbh` and `trees`.
 #' @param sites Site ids to include; `NULL` (default) all.
-#' @param ... Unused.
+#' @param ... Passed to [comparePlot()] when `y` is given (`type`, `species`).
 #' @return The `ggplot` object, invisibly; it is printed.
-#' @seealso [plot.finn_class()] for the fitted parameters.
+#' @seealso [plot.finn_class()] for the fitted parameters, [comparePlot()].
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' sites <- 1:3
@@ -266,12 +271,14 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
 #'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
 #'     plot_progress = FALSE)
-#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init,
-#'                       patches = 4, patch_size = 0.06)
+#' sim <- simulateForest(m, env = fia_env_dt[siteID %in% sites], init_cohort = init)
 #' plot(sim)
 #' plot(sim, response = c("growth", "mort"), sites = 1)
+#' # against the observations
+#' plot(sim, fia_obs_dt[siteID %in% sites])
 #' @export
-plot.finn_simulation = function(x, response = NULL, sites = NULL, ...) {
+plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...) {
+  if (!is.null(y)) return(comparePlot(x, y, response = response, sites = sites, ...))
   d = x$long$site
   if (is.null(d) || !nrow(d))
     stop("This simulation holds no site table (`$long$site`) to plot.", call. = FALSE)
@@ -286,20 +293,17 @@ plot.finn_simulation = function(x, response = NULL, sites = NULL, ...) {
     d = d[siteID %in% sites]
     if (!nrow(d)) stop("None of `sites` is in the simulation.", call. = FALSE)
   }
-  agg = d[, list(mean = mean(value, na.rm = TRUE),
-                 lo = stats::quantile(value, 0.1, na.rm = TRUE, names = FALSE),
-                 hi = stats::quantile(value, 0.9, na.rm = TRUE, names = FALSE),
-                 n_sites = data.table::uniqueN(siteID)),
+  n_sites = data.table::uniqueN(d$siteID)
+  agg = d[, list(mean = mean(value, na.rm = TRUE)),
           by = list(variable = as.character(variable), year, species)]
   agg[, variable := factor(variable, levels = intersect(levels_all, response))]
   agg[, species := factor(species)]
-  p = ggplot2::ggplot(agg, ggplot2::aes(x = year, y = mean, colour = species, group = species))
-  if (any(agg$n_sites > 1L))
-    p = p + ggplot2::geom_ribbon(ggplot2::aes(ymin = lo, ymax = hi, fill = species),
-                                 alpha = 0.08, colour = NA, show.legend = FALSE)
-  p = p + ggplot2::geom_line() +
+  p = ggplot2::ggplot(agg, ggplot2::aes(x = year, y = mean, colour = species, group = species)) +
+    ggplot2::geom_line() +
     ggplot2::facet_wrap(~ variable, scales = "free_y") +
-    ggplot2::labs(x = "simulated year", y = "mean over sites", colour = "species") +
+    ggplot2::labs(x = "simulated year",
+                  y = if (n_sites == 1L) sprintf("site %s", unique(d$siteID)) else sprintf("mean over %d sites", n_sites),
+                  colour = "species") +
     ggplot2::theme_minimal() +
     ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
   print(p)
@@ -312,3 +316,4 @@ print.finn_simulation = function(x, ...) {
   print(unclass(x), ...)
   invisible(x)
 }
+

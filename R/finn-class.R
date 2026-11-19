@@ -682,6 +682,11 @@ finn = function(N_species,
 #'   the historical `1e-5` (poisson) and `0.001` (nbinom) left it at `y/offset`,
 #'   four orders above the rest. `NULL` restores those two historical constants
 #'   and so reproduces a fit made before 0.2.0.
+#' @param holdout `NULL` (default), or a list with holdout `data`, `env` and
+#'   `init_cohort` (and optionally `disturbance`): after the fit, [evaluate()]
+#'   simulates the training data and the holdout and stores the comparison on
+#'   the model (`model$evaluation`), which [summary.finn_class()] prints. The
+#'   same as calling `evaluate(model, holdout = )` after the fit.
 #' @param ... Arguments of earlier versions, still accepted with a warning:
 #'   `weights` (now `loss_weights`), `recruits` (now `loss_recruit`), and
 #'   `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` (now
@@ -762,6 +767,7 @@ fit = function(model,
                teacher_forcing = FALSE,
                rb_gradient = TRUE,
                trees_offset = 0.01,
+               holdout = NULL,
                ...,
                loss = NULL) {
   # the thread count is validated (and set) before anything else, so a wrong
@@ -825,10 +831,13 @@ fit = function(model,
     env = check_fit_env(env, data = data, caller = "fit()")
     disturbance = check_fit_disturbance(disturbance, env, caller = "fit()")
   }
+  if (!is.null(holdout) && (!is.list(holdout) || is.null(holdout$data) || is.null(holdout$env)))
+    stop("`holdout` must be a list with `data`, `env` and `init_cohort` (see ?evaluate).", call. = FALSE)
+  init_cohort = restore_init_cohort(init_cohort)
   check_patch_arguments(model, patches, patch_size, init_cohort,
                         patches_given = !missing(patches), caller = "fit()")
 
-  invisible(model$fit(data = data,
+  out = model$fit(data = data,
                       env = env,
                       disturbance = disturbance,
                       patches = patches,
@@ -866,7 +875,10 @@ fit = function(model,
                       trees_offset = trees_offset,
                       loss_resolution = match.arg(loss_resolution),
                       recruits = loss_recruit,
-                      optimizer_args = optimizer_args))
+                      optimizer_args = optimizer_args)
+  # optional: evaluate on the training data and the holdout right away
+  if (!is.null(holdout) && !is.null(data)) evaluate(model, holdout = holdout)
+  invisible(out)
 }
 
 # The six-slot loss_family vector fit() works on, from a full vector or a
@@ -1128,7 +1140,9 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   (0 to 1) that a patch of that site loses all its trees in that year. See
 #'   [finn_data].
 #' @param patches (`integer(1)`)\cr Number of patches per site when the
-#'   simulation starts from bare ground (`init_cohort = NULL`). Ignored, with a
+#'   simulation starts from bare ground (`init_cohort = NULL`); not given, the
+#'   patch count the model was fitted with (`model$patches`), or `100` for a
+#'   model fitted before 0.2.0 or never fitted. Ignored, with a
 #'   warning when it differs, as soon as `init_cohort` is given: the patch
 #'   count then comes from the initial cohorts.
 #' @param patch_size (`numeric(1)`)\cr Area of one patch in ha. `NULL`
@@ -1165,6 +1179,17 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   among those of `env`. Intervals map to simulated years exactly as in
 #'   [FINN::fit]. An `NA` `reg` in an interval, a year in two intervals and a year
 #'   in none are errors.
+#' @param bare_ground (`logical(1)`)\cr `simulateForest()` only: `TRUE` runs the
+#'   model from an empty stand for `years` years under a constant climate, the
+#'   mean of every predictor over the environment the model was fitted on (or
+#'   over `env` when given), as [evaluate()] does for its bare-ground run.
+#'   `init_cohort` and `disturbance` are not used. Default `FALSE`.
+#' @param years (`integer(1)`)\cr `simulateForest()` with `bare_ground = TRUE`:
+#'   the length of the run. Default `500`.
+#' @param sites `simulateForest()` with `bare_ground = TRUE`: `NULL` (default)
+#'   one run under the mean climate of all sites, or site ids for one run per
+#'   site under that site's mean climate (the `siteID` of the fitted
+#'   environment, kept in the result).
 #' @param ... Advanced options forwarded to the internal simulator, chiefly
 #'   `batchsize` (split the sites into batches of this many to cap memory for very
 #'   large runs). The default processes all sites in one batch and is what almost
@@ -1228,6 +1253,9 @@ predict.finn_class = function(object,
   # simulateForest() says whether `patches` was given; a direct predict() call knows itself
   patches_given = if (!is.null(dots$.patches_given)) dots$.patches_given else !missing(patches)
   dots$.patches_given = NULL
+  # not given: the patch count of the fit
+  if (!patches_given && !is.null(object$patches)) patches = object$patches
+  init_cohort = restore_init_cohort(init_cohort)
   env = check_fit_env(env, caller = "predict()")
   disturbance = check_fit_disturbance(disturbance, env, caller = "predict()")
   if (is.null(patch_size)) patch_size = if (is.null(object$patch_size_ha)) 0.1 else object$patch_size_ha
@@ -1255,7 +1283,7 @@ predict.finn_class = function(object,
 #' @param model (`finn_class`)\cr The model built by [FINN::finn()], fitted with [FINN::fit()].
 #' @export
 simulateForest = function(model,
-                          env,
+                          env = NULL,
                           disturbance = NULL,
                           patches = 100L,
                           patch_size = NULL,
@@ -1265,7 +1293,18 @@ simulateForest = function(model,
                           debug = FALSE,
                           recruits = c("simulated", "observed"),
                           obs_recruits = NULL,
+                          bare_ground = FALSE,
+                          years = 500L,
+                          sites = NULL,
                           ...) {
+  if (isTRUE(bare_ground)) {
+    if (!is.null(init_cohort))
+      stop("`bare_ground = TRUE` starts from an empty stand; leave `init_cohort` out.", call. = FALSE)
+    env = bare_ground_env(model, sites = sites, years = years, env = env)
+    disturbance = NULL
+  } else if (is.null(env)) {
+    stop("`env` is needed, unless `bare_ground = TRUE`.", call. = FALSE)
+  }
   predict(model,
           env = env,
           disturbance = disturbance,
@@ -1377,7 +1416,8 @@ reserved_model_fields = c(
   "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
   "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler", "theta_floor",
   "rb_gradient", "trees_offset", "reg_cap", "reg_prior", "reg_prior_lambda", "reg_prior_value", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
-  "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
+  "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred",
+  "train_data", "train_disturbance", "patches", "evaluation", "param_recent", "param_recent_epochs")
 is_reserved_model_field = function(name) {
   name %in% reserved_model_fields ||
     grepl("^(par|env|nn|loss|process)_|_(formula|func|optimized)$", name)
@@ -2898,6 +2938,15 @@ finn_class = nn_module(
 
     self$train_env         = data.table::copy(data.table::as.data.table(env))
     self$train_init_cohort = if(is.null(init_cohort)) NULL else list(cohort = init_cohort)
+    # kept for evaluate() and summary(): the observations, the disturbances and the
+    # patch count of this fit (the initial cohorts fix the patches when given)
+    self$train_data        = data.table::copy(data.table::as.data.table(data))
+    self$train_disturbance = if(is.null(disturbance)) NULL else data.table::copy(data.table::as.data.table(disturbance))
+    self$patches           = if(!is.null(init_cohort) && !is.null(init_cohort$species_r)) as.integer(dim(init_cohort$species_r)[2]) else as.integer(patches)
+    self$evaluation        = NULL
+    # the parameters of the last epochs, for the convergence check of summary()
+    self$param_recent        = list()
+    self$param_recent_epochs = integer(0)
     self$fit_id            = as.numeric(Sys.time())
     self$conditional_effects = NULL
     self$ale                 = NULL
@@ -3573,6 +3622,11 @@ finn_class = nn_module(
 
       #cat("Epoch: ", epoch, "Loss: ", bl, "\n")
       self$history[[epoch]] = colMeans(batch_loss, na.rm = TRUE)
+      # the parameters of the last 51 epochs, for the convergence check of
+      # summary() (a copy only; the training is not touched)
+      self$param_recent = c(utils::tail(self$param_recent, 50L),
+                            list(lapply(self$parameters, function(p) as.matrix(p$detach()$cpu()))))
+      self$param_recent_epochs = c(utils::tail(self$param_recent_epochs, 50L), epoch)
 
       # How often the simulation killed a tree the inventory found alive, summed over this
       # epoch's batches. Every tracked cohort is scored over its whole window, so this is a
