@@ -54,5 +54,5 @@ utils::globalVariables(c(
   "at_bound", "hi", "lo", "lower", "n_sites", "panel", "predictor", "upper", "x", "year",
   # comparePlot(), evaluate(), summary()
   "auc", "census", "deaths_ratio", "label", "max_year", "obs", "p_interval", "pred",
-  "r2", "species_lab", "total_ba", "years"
+  "r2", "species_lab", "total_ba", "years", "ratio", "ratio_w"
 ))

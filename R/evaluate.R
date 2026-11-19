@@ -93,6 +93,8 @@ match_simulation = function(sim, obs, quiet = FALSE) {
   vars = intersect(response_levels, names(o))
   keep = c("siteID", "year", "species", "period_length",
            intersect(c("n_at_risk", "n_died", "species_name"), names(o)))
+  o = data.table::copy(o)
+  for (v in vars) data.table::set(o, j = v, value = as.numeric(o[[v]]))
   ol = data.table::melt(o[, c(keep, vars), with = FALSE], id.vars = keep, measure.vars = vars,
                         variable.name = "variable", value.name = "obs")
   ol[, variable := as.character(variable)]
@@ -116,7 +118,8 @@ auc_counts = function(p, pos, neg) {
 
 # Skill per response (and per species with by_species): R2 (1 - SSE/SST) first,
 # then RMSE, Pearson r, bias, the ratio of the mean prediction to the mean
-# observation and n; for mortality also the tree-level AUC and the ratio of
+# observation (for mortality weighted by the trees at risk) and n; for
+# mortality also the tree-level AUC and the ratio of
 # predicted to observed deaths when the counts are there.
 skill_table = function(op, by_species = FALSE) {
   by = c("variable", if (by_species) "species")
@@ -130,9 +133,14 @@ skill_table = function(op, by_species = FALSE) {
   if (all(c("n_at_risk", "n_died") %in% names(op))) {
     mo = op[variable == "mort" & is.finite(n_at_risk) & n_at_risk > 0,
             list(auc = auc_counts(p_interval, n_died, n_at_risk - n_died),
-                 deaths_ratio = if (sum(n_died) > 0) sum(p_interval * n_at_risk) / sum(n_died) else NA_real_),
+                 deaths_ratio = if (sum(n_died) > 0) sum(p_interval * n_at_risk) / sum(n_died) else NA_real_,
+                 # the ratio of the means weighted by the trees at risk: a plot with
+                 # one tree must not count as much as one with fifty
+                 ratio_w = if (sum(n_at_risk * obs) > 0) sum(n_at_risk * pred) / sum(n_at_risk * obs) else NA_real_),
             by = by]
     m = merge(m, mo, by = by, all.x = TRUE)
+    m[variable == "mort" & is.finite(ratio_w), ratio := ratio_w]
+    m[, ratio_w := NULL]
   } else {
     m[, `:=`(auc = NA_real_, deaths_ratio = NA_real_)]
   }
@@ -411,8 +419,10 @@ evaluate = function(model, holdout = NULL, bare_ground = FALSE, years = 500L, si
   if (is.null(patches)) patches = if (is.null(model$patches)) 100L else model$patches
 
   one_set = function(data, env, init_cohort, disturbance = NULL) {
-    sim = predict(model, env = env, disturbance = disturbance, init_cohort = init_cohort,
-                  patches = patches)
+    # with initial cohorts the patch count is theirs; patches only for bare ground
+    sim = if (is.null(init_cohort))
+      predict(model, env = env, disturbance = disturbance, init_cohort = NULL, patches = patches)
+    else predict(model, env = env, disturbance = disturbance, init_cohort = init_cohort)
     op = match_simulation(sim, data, quiet = TRUE)
     list(matched = op, skill = skill_table(op), skill_species = skill_table(op, by_species = TRUE))
   }

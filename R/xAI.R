@@ -770,7 +770,9 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     bare[, years := last]
   }
 
-  # 4. importance and average conditional effects
+  # 4. importance and average conditional effects; if they cannot be computed
+  # for this model, the sections above are still returned and printed
+  env_section = tryCatch({
   if(importance == "ale") {
     vi       = .importance_ale_var(object, env, init_cohort, env_autoscale, sim_seed, scale = scale)
     vi_label = if(isTRUE(scale)) "Analytical ALE importance (rate-normalised)" else "Analytical ALE-variance importance"
@@ -787,10 +789,18 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     vi_label = sprintf("Permutation importance (nperm = %d)", nperm)
   }
   ace = averageConditionalEffects(object, env, init_cohort, env_autoscale, sim_seed)
+  list(vi = vi, ace = ace, vi_label = vi_label, error = NULL)
+  }, error = function(e) {
+    warning(sprintf("summary(): the environmental importance and conditional effects could not be computed for this model (%s); the other sections are shown.",
+                    conditionMessage(e)), call. = FALSE)
+    list(vi = NULL, ace = NULL, vi_label = NULL, error = conditionMessage(e))
+  })
 
   structure(list(skill = skill, skill_species = skill_species, convergence = convergence,
-                 bare_ground = bare, importance = vi, average_conditional_effects = ace,
-                 method = importance, importance_label = vi_label, epochs_back = as.integer(epochs_back)),
+                 bare_ground = bare, importance = env_section$vi,
+                 average_conditional_effects = env_section$ace,
+                 method = importance, importance_label = env_section$vi_label,
+                 environment_error = env_section$error, epochs_back = as.integer(epochs_back)),
             class = "summary.finn_class")
 }
 
@@ -886,6 +896,10 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
     as.data.frame(w)
   }
   cat("\n## Environment\n")
+  if (!is.null(x$environment_error)) {
+    cat(sprintf("  (not available for this model: %s)\n", x$environment_error))
+    return(invisible(x))
+  }
   for(process in c("growth", "mortality", "regeneration")) {
     cat(sprintf("\n### %s\n", toupper(process)))
     cat(sprintf("\n%s (species in columns):\n", x$importance_label))
