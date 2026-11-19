@@ -2,20 +2,24 @@
 % Please edit documentation in R/evaluate.R
 \name{comparePlot}
 \alias{comparePlot}
+\alias{print.finn_heatmap}
 \alias{print.finn_comparison}
 \title{Compare a simulation with observations}
 \usage{
 comparePlot(
   sim,
   obs,
-  type = c("scatter", "timeseries"),
+  type = c("scatter", "timeseries", "heatmap"),
   species = NULL,
   response = NULL,
   sites = NULL,
+  tree_data = NULL,
   n_species = 12L,
   species_names = NULL,
   ...
 )
+
+\method{print}{finn_heatmap}(x, ...)
 
 \method{print}{finn_comparison}(x, ...)
 }
@@ -28,7 +32,7 @@ comparePlot(
 \code{variable} and \code{value}; \code{period_length}, \code{n_at_risk} and \code{n_died} are used
 where present.}
 
-\item{type}{\code{"scatter"} (default) or \code{"timeseries"}.}
+\item{type}{\code{"scatter"} (default), \code{"heatmap"} or \code{"timeseries"}.}
 
 \item{species}{\code{NULL} (default) pools all species in one panel per response;
 species numbers draw one row of panels per species.}
@@ -37,6 +41,11 @@ species numbers draw one row of panels per species.}
 \code{"growth"}, \code{"mort"}, \code{"reg"}; \code{NULL} (default) all that are observed.}
 
 \item{sites}{Site ids to include; \code{NULL} (default) all.}
+
+\item{tree_data}{\code{NULL} (default), or the observed trees in the format of the
+\code{tree_data} of \code{\link[=fit]{fit()}} (see \link{finn_data}: \code{siteID}, \code{year}, \code{species}, \code{dbh}
+at the start of the interval, and \code{growth}, \code{died}, \code{period_length}): adds
+the largest diameter (\code{dbh_max}) to the comparison.}
 
 \item{n_species}{Number of species in the recruitment panel. Default \code{12}.}
 
@@ -52,8 +61,10 @@ carries from the model, else the \code{species_name} column of \code{obs}.}
 \value{
 \code{type = "scatter"}: a \code{finn_comparison} object (a list of the
 \code{ggplot} panels \code{scatter}, \code{mort} and \code{reg}, which \code{print()} arranges on
-one page), invisibly; \code{type = "timeseries"}: the \code{ggplot} object,
-invisibly. It is printed. The paired table is
+one page), invisibly; \code{type = "heatmap"}: a \code{finn_heatmap} object (the
+panels \code{skill} and \code{ratio}, side by side when printed), invisibly;
+\code{type = "timeseries"}: the \code{ggplot} object, invisibly. It is printed. The
+paired table is
 attached as attribute \code{"matched"} and the skill measures as \code{"skill"}
 (per response, and per species when \code{species} is given; the measures are
 described in \code{\link[=summary.finn_class]{summary.finn_class()}}).
@@ -81,6 +92,15 @@ scatter of the annual rates); for recruitment, whose site-level values are
 too noisy for a correlation, the ratio of simulated to observed
 recruitment summed over all sites, per species (the \code{n_species} species
 with most observed recruitment).
+With \code{tree_data}, the dbh panel shows the largest diameter instead of the
+mean: per site, census and species, or, all species pooled, per site and
+census (the maximum over the species), which is robust against a few
+large or many small trees. The simulation must have recorded its cohorts
+at the census years (\verb{simulateForest(..., return_cohorts = <census years>)}; \code{\link[=evaluate]{evaluate()}} does this itself).
+\item \code{type = "heatmap"}: the skill per species at a glance, every species a row
+(by name): R2 of every response and the AUC of mortality on the left, the
+ratio of simulated to observed on the right (log scale, white at 1, so
+over- and underestimation show as colours).
 \item \code{type = "timeseries"}: the simulated trajectory over the years as a line
 and the observations as points at their census years, averaged over the
 selected sites. With all species pooled, \code{ba} and \code{trees} are the stand

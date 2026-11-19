@@ -2,7 +2,32 @@
 # scores them), skill measures, comparePlot(), evaluate(), and the bare-ground
 # environment used by simulateForest(bare_ground = TRUE).
 
-response_levels = c("dbh", "ba", "trees", "growth", "mort", "reg")
+response_levels = c("dbh", "dbh_max", "ba", "trees", "growth", "mort", "reg")
+
+# The largest diameter per site, census and species. Observed: from the tree
+# list (the `tree_data` of fit()): every tree that survived its interval, grown
+# from its dbh at the start with its annual growth over period_length years.
+# Simulated: the largest cohort that holds trees, from the cohorts the
+# simulation recorded (predict(return_cohorts = <census years>)).
+observed_dbh_max = function(tree_data) {
+  td = data.table::as.data.table(tree_data)
+  need = c("siteID", "year", "species", "dbh")
+  if (!all(need %in% names(td)))
+    stop(sprintf("`tree_data` needs the columns %s (see ?finn_data).", paste(need, collapse = ", ")), call. = FALSE)
+  if ("died" %in% names(td)) td = td[is.na(died) | died == 0]
+  p = if ("period_length" %in% names(td)) td$period_length else 1
+  g = if ("growth" %in% names(td)) td$growth else 0
+  td[, dbh_end := dbh * (1 + ifelse(is.finite(g), g, 0))^p]
+  td[is.finite(dbh_end), list(dbh_max = max(dbh_end)), by = list(siteID, year, species)]
+}
+
+simulated_dbh_max = function(sim) {
+  co = if (is.list(sim) && !is.null(sim$long$cohort)) data.table::as.data.table(sim$long$cohort) else NULL
+  if (is.null(co) || !nrow(co)) return(NULL)
+  w = data.table::dcast(co[as.character(variable) %in% c("dbh", "trees")],
+                        siteID + patchID + year + species + cohortID ~ variable, value.var = "value")
+  w[trees >= 0.5 & is.finite(dbh), list(pred = max(dbh)), by = list(siteID, year, species)]
+}
 
 # The simulation as a long site table (siteID, year, species, variable, value),
 # from a finn_simulation, its $long$site table, or a wide site table.
@@ -50,7 +75,7 @@ observations_wide = function(obs) {
 # minus the geometric-mean survival), and the expected recruits summed over them.
 # Returns one row per site, census, species and response with `obs` and `pred`,
 # and for mortality the counts n_at_risk / n_died and the interval probability.
-match_simulation = function(sim, obs, quiet = FALSE) {
+match_simulation = function(sim, obs, quiet = FALSE, tree_data = NULL) {
   s = simulation_long(sim)
   o = observations_wide(obs)
 
@@ -99,6 +124,24 @@ match_simulation = function(sim, obs, quiet = FALSE) {
                         variable.name = "variable", value.name = "obs")
   ol[, variable := as.character(variable)]
   op = merge(ol, pred, by = c("siteID", "year", "species", "variable"))
+  # the largest diameter, when the trees are given and the simulation recorded
+  # its cohorts at the census years
+  if (!is.null(tree_data)) {
+    sm = simulated_dbh_max(sim)
+    if (is.null(sm)) {
+      note("`tree_data` is given, but the simulation recorded no cohorts: simulate with return_cohorts = <the census years> for the largest dbh.")
+    } else {
+      om = observed_dbh_max(tree_data)
+      dm = merge(om, sm, by = c("siteID", "year", "species"))
+      dm = merge(dm, unique(o[, c("siteID", "year", "species", "period_length",
+                                   intersect("species_name", names(o))), with = FALSE]),
+                 by = c("siteID", "year", "species"))
+      if (nrow(dm)) {
+        dm[, `:=`(variable = "dbh_max", obs = dbh_max)][, dbh_max := NULL]
+        op = data.table::rbindlist(list(op, dm), use.names = TRUE, fill = TRUE)
+      }
+    }
+  }
   op = op[is.finite(obs) & is.finite(pred)]
   # the interval death probability the annual rate implies, for the AUC
   op[variable == "mort", p_interval := 1 - (1 - pred)^period_length]
@@ -123,6 +166,7 @@ auc_counts = function(p, pos, neg) {
 # predicted to observed deaths when the counts are there.
 skill_table = function(op, by_species = FALSE) {
   by = c("variable", if (by_species) "species")
+  op = pool_dbh_max(op, by_species)
   m = op[, list(n = .N,
                 r2 = if (.N > 1L && stats::var(obs) > 0) 1 - sum((pred - obs)^2) / sum((obs - mean(obs))^2) else NA_real_,
                 rmse = sqrt(mean((pred - obs)^2)),
@@ -147,6 +191,16 @@ skill_table = function(op, by_species = FALSE) {
   m[, variable := factor(variable, levels = response_levels)]
   data.table::setorderv(m, by)
   m[]
+}
+
+# All species pooled, the largest diameter is that of the site: the maximum over
+# the species of each site and census, observed and simulated alike.
+pool_dbh_max = function(op, by_species) {
+  if (by_species || !any(op$variable == "dbh_max")) return(op)
+  dm = op[variable == "dbh_max", list(obs = max(obs), pred = max(pred), species = NA_integer_,
+                                      period_length = period_length[1]),
+          by = list(siteID, year, variable)]
+  data.table::rbindlist(list(op[variable != "dbh_max"], dm), use.names = TRUE, fill = TRUE)
 }
 
 # Species names, as a character vector named by the species number 1..N. Taken
@@ -192,6 +246,16 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #'   too noisy for a correlation, the ratio of simulated to observed
 #'   recruitment summed over all sites, per species (the `n_species` species
 #'   with most observed recruitment).
+#'   With `tree_data`, the dbh panel shows the largest diameter instead of the
+#'   mean: per site, census and species, or, all species pooled, per site and
+#'   census (the maximum over the species), which is robust against a few
+#'   large or many small trees. The simulation must have recorded its cohorts
+#'   at the census years (`simulateForest(..., return_cohorts = <census
+#'   years>)`; [evaluate()] does this itself).
+#' * `type = "heatmap"`: the skill per species at a glance, every species a row
+#'   (by name): R2 of every response and the AUC of mortality on the left, the
+#'   ratio of simulated to observed on the right (log scale, white at 1, so
+#'   over- and underestimation show as colours).
 #' * `type = "timeseries"`: the simulated trajectory over the years as a line
 #'   and the observations as points at their census years, averaged over the
 #'   selected sites. With all species pooled, `ba` and `trees` are the stand
@@ -206,12 +270,16 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #' @param obs Observations as [makeObsData()] returns them (wide), or long with
 #'   `variable` and `value`; `period_length`, `n_at_risk` and `n_died` are used
 #'   where present.
-#' @param type `"scatter"` (default) or `"timeseries"`.
+#' @param type `"scatter"` (default), `"heatmap"` or `"timeseries"`.
 #' @param species `NULL` (default) pools all species in one panel per response;
 #'   species numbers draw one row of panels per species.
 #' @param response Responses to draw, any of `"dbh"`, `"ba"`, `"trees"`,
 #'   `"growth"`, `"mort"`, `"reg"`; `NULL` (default) all that are observed.
 #' @param sites Site ids to include; `NULL` (default) all.
+#' @param tree_data `NULL` (default), or the observed trees in the format of the
+#'   `tree_data` of [fit()] (see [finn_data]: `siteID`, `year`, `species`, `dbh`
+#'   at the start of the interval, and `growth`, `died`, `period_length`): adds
+#'   the largest diameter (`dbh_max`) to the comparison.
 #' @param n_species Number of species in the recruitment panel. Default `12`.
 #' @param species_names Species names for the labels: a character vector in
 #'   species order, a vector named by species number, or a table with
@@ -221,8 +289,10 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #' @param ... Unused.
 #' @return `type = "scatter"`: a `finn_comparison` object (a list of the
 #'   `ggplot` panels `scatter`, `mort` and `reg`, which `print()` arranges on
-#'   one page), invisibly; `type = "timeseries"`: the `ggplot` object,
-#'   invisibly. It is printed. The paired table is
+#'   one page), invisibly; `type = "heatmap"`: a `finn_heatmap` object (the
+#'   panels `skill` and `ratio`, side by side when printed), invisibly;
+#'   `type = "timeseries"`: the `ggplot` object, invisibly. It is printed. The
+#'   paired table is
 #'   attached as attribute `"matched"` and the skill measures as `"skill"`
 #'   (per response, and per species when `species` is given; the measures are
 #'   described in [summary.finn_class()]).
@@ -246,10 +316,11 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #' comparePlot(sim, fia_obs_dt[siteID %in% sites])
 #' plot(sim, fia_obs_dt[siteID %in% sites], type = "timeseries", species = 1:2)
 #' @export
-comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NULL,
-                       response = NULL, sites = NULL, n_species = 12L, species_names = NULL, ...) {
+comparePlot = function(sim, obs, type = c("scatter", "timeseries", "heatmap"), species = NULL,
+                       response = NULL, sites = NULL, tree_data = NULL, n_species = 12L,
+                       species_names = NULL, ...) {
   type = match.arg(type)
-  op = match_simulation(sim, obs)
+  op = match_simulation(sim, obs, tree_data = tree_data)
   N = max(c(op$species, simulation_long(sim)$species))
   if (is.null(species_names)) species_names = attr(sim, "species_names")
   labs = species_names_lookup(N, species_names, tab = obs)
@@ -278,13 +349,17 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
   theme_finn = ggplot2::theme_minimal() +
     ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
 
-  if (type == "scatter") {
+  if (type == "heatmap") {
+    p = skill_heatmap(op, labs)
+  } else if (type == "scatter") {
     panels = list()
-    # (1) the states and growth: observed against simulated, R2 in each panel
-    sc = op[variable %in% c("dbh", "ba", "trees", "growth")]
+    # (1) the states and growth: observed against simulated, R2 in each panel;
+    # the largest dbh instead of the mean when the trees are given
+    states = c(if (any(op$variable == "dbh_max")) "dbh_max" else "dbh", "ba", "trees", "growth")
+    sc = pool_dbh_max(op[variable %in% states], by_species = !is.null(species))
     if (nrow(sc)) {
       sc[, variable := droplevels(variable)]
-      sk = skill[variable %in% c("dbh", "ba", "trees", "growth")]
+      sk = skill[variable %in% states]
       if (!is.null(species)) sk[, species_lab := labs[as.character(species)]]
       sk[, label := ifelse(is.finite(r2), sprintf("R\u00b2 = %.2f", r2), "R\u00b2 = NA")]
       fct = if (is.null(species)) ggplot2::facet_wrap(~ variable, scales = "free", nrow = 1)
@@ -353,6 +428,8 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
     s = simulation_long(sim)
     s = s[variable != "reg"]                       # the drawn recruits; the expected ones are compared
     s[variable == "r_mean_ha", variable := "reg"]
+    op = op[variable != "dbh_max"]                 # a census quantity, no trajectory
+    op[, variable := droplevels(variable)]
     # the simulation over the same site-species pairs as the observations of
     # each response: a species absent from a site has dbh 0 in the simulation
     # and no observation, and must not pull the mean down
@@ -387,6 +464,58 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
   attr(p, "skill") = skill
   print(p)
   invisible(p)
+}
+
+# The skill per species as two heatmaps side by side: (left) R2 for the states and
+# growth, AUC for mortality; (right) the ratio of simulated to observed (log
+# scale, white at 1) for every response. Species by name, those with most
+# observations at the top; each tile carries its value.
+skill_heatmap = function(op, labs) {
+  sk = skill_table(op, by_species = TRUE)[!is.na(species)]
+  # species never observed (all observations 0) carry no information
+  seen = op[, list(any_obs = any(obs > 0)), by = species][any_obs == TRUE]$species
+  sk = sk[species %in% seen]
+  freq = op[species %in% seen, list(n = sum(obs > 0)), by = species][order(-n)]
+  sk[, species_lab := factor(labs[as.character(species)], levels = rev(labs[as.character(freq$species)]))]
+  theme_h = ggplot2::theme_minimal() +
+    ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text.x = ggplot2::element_text(angle = 0),
+                   plot.title = ggplot2::element_text(size = 10), legend.position = "bottom")
+  s1 = sk[variable != "reg", list(species_lab, variable,
+                                  value = ifelse(variable == "mort", auc, r2))]
+  s1[, variable := factor(ifelse(variable == "mort", "mort (AUC)", as.character(variable)),
+                          levels = c(setdiff(response_levels, c("mort", "reg")), "mort (AUC)"))]
+  s1 = s1[!is.na(variable)]
+  skill = ggplot2::ggplot(s1, ggplot2::aes(x = variable, y = species_lab, fill = value)) +
+    ggplot2::geom_tile(colour = "white") +
+    ggplot2::geom_text(ggplot2::aes(label = ifelse(!is.finite(value), "",
+                                                   ifelse(value < -1, "< -1", sprintf("%.2f", value)))), size = 3) +
+    ggplot2::scale_fill_gradient(low = "#F7FBFF", high = "#2171B5", limits = c(0, 1),
+                                 oob = function(x, ...) pmin(pmax(x, 0), 1), na.value = "grey95",
+                                 name = "R\u00b2 / AUC") +
+    ggplot2::labs(x = NULL, y = NULL, title = "Skill per species: R\u00b2 (mortality: AUC); below 0 drawn as 0") +
+    theme_h
+  s2 = sk[, list(species_lab, variable, ratio)]
+  s2[, variable := factor(as.character(variable), levels = response_levels)]
+  ratio = ggplot2::ggplot(s2, ggplot2::aes(x = variable, y = species_lab, fill = log2(ratio))) +
+    ggplot2::geom_tile(colour = "white") +
+    ggplot2::geom_text(ggplot2::aes(label = ifelse(is.finite(ratio), sprintf("%.2f", ratio), "")), size = 3) +
+    ggplot2::scale_fill_gradient2(low = "#B2182B", mid = "white", high = "#2166AC", midpoint = 0,
+                                  limits = c(-2, 2), oob = function(x, ...) pmin(pmax(x, -2), 2),
+                                  na.value = "grey95", name = "log2(sim / obs)") +
+    ggplot2::labs(x = NULL, y = NULL, title = "Magnitude per species: simulated / observed (1 = right)") +
+    theme_h
+  structure(list(skill = skill, ratio = ratio), class = "finn_heatmap")
+}
+
+#' @rdname comparePlot
+#' @export
+print.finn_heatmap = function(x, ...) {
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout = grid::grid.layout(1, 2)))
+  print(x$skill, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
+  print(x$ratio, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 2))
+  grid::popViewport()
+  invisible(x)
 }
 
 # ROC points of a probability against counts of positives and negatives that
@@ -469,8 +598,10 @@ bare_ground_env = function(model, sites = NULL, years = 500L, env = NULL) {
 #' @param model A model built by [finn()] and fitted with [fit()].
 #' @param holdout `NULL` (default) or a list with the holdout `data`
 #'   (observations as for [fit()]), its `env` and its `init_cohort`, and
-#'   optionally `disturbance` (see [finn_data] for the four tables). Without
-#'   `init_cohort` the holdout sites start from bare ground, with a warning.
+#'   optionally `disturbance` (see [finn_data] for the four tables) and
+#'   `tree_data` (the observed trees, as for [fit()]: adds the largest diameter
+#'   `dbh_max` to the comparison, see [comparePlot()]). Without `init_cohort`
+#'   the holdout sites start from bare ground, with a warning.
 #' @param bare_ground (`logical(1)`)\cr Run the bare-ground simulation too.
 #'   Default `FALSE`.
 #' @param years (`integer(1)`)\cr With `bare_ground = TRUE`: the length of the
@@ -524,27 +655,30 @@ evaluate = function(model, holdout = NULL, bare_ground = FALSE, years = 500L, si
   check_set(holdout, "holdout"); check_set(train, "train")
   if (is.null(train) && !is.null(model$train_data))
     train = list(data = model$train_data, env = model$train_env,
-                 init_cohort = model$train_init_cohort$cohort, disturbance = model$train_disturbance)
+                 init_cohort = model$train_init_cohort$cohort, disturbance = model$train_disturbance,
+                 tree_data = model$train_tree_data)
   if (is.null(train) && is.null(holdout) && !isTRUE(bare_ground))
     stop("Nothing to evaluate: this model keeps no training data (it was fitted before this version of FINN or not at all); pass `train = list(data =, env =, init_cohort =)` or a `holdout`.", call. = FALSE)
   if (is.null(patches)) patches = if (is.null(model$patches)) 100L else model$patches
 
-  one_set = function(data, env, init_cohort, disturbance = NULL) {
+  one_set = function(data, env, init_cohort, disturbance = NULL, tree_data = NULL) {
+    # with tree_data the cohorts are recorded at the census years, for the largest dbh
+    rc = if (is.null(tree_data)) FALSE else sort(unique(as.integer(data$year)))
     # with initial cohorts the patch count is theirs; patches only for bare ground
     sim = if (is.null(init_cohort))
-      predict(model, env = env, disturbance = disturbance, init_cohort = NULL, patches = patches)
-    else predict(model, env = env, disturbance = disturbance, init_cohort = init_cohort)
-    op = match_simulation(sim, data, quiet = TRUE)
+      predict(model, env = env, disturbance = disturbance, init_cohort = NULL, patches = patches, return_cohorts = rc)
+    else predict(model, env = env, disturbance = disturbance, init_cohort = init_cohort, return_cohorts = rc)
+    op = match_simulation(sim, data, quiet = TRUE, tree_data = tree_data)
     list(matched = op, skill = skill_table(op), skill_species = skill_table(op, by_species = TRUE))
   }
 
   ev = list()
   if (!is.null(train))
-    ev$train = one_set(train$data, train$env, train$init_cohort, train$disturbance)
+    ev$train = one_set(train$data, train$env, train$init_cohort, train$disturbance, train$tree_data)
   if (!is.null(holdout)) {
     if (is.null(holdout$init_cohort))
       warning("`holdout` has no `init_cohort`: the holdout sites start from bare ground.", call. = FALSE)
-    ev$holdout = one_set(holdout$data, holdout$env, holdout$init_cohort, holdout$disturbance)
+    ev$holdout = one_set(holdout$data, holdout$env, holdout$init_cohort, holdout$disturbance, holdout$tree_data)
   }
   if (isTRUE(bare_ground)) {
     ev$bare_ground = simulateForest(model, bare_ground = TRUE, years = years, sites = sites, patches = patches)

@@ -19,8 +19,10 @@ evaluate(
 
 \item{holdout}{\code{NULL} (default) or a list with the holdout \code{data}
 (observations as for \code{\link[=fit]{fit()}}), its \code{env} and its \code{init_cohort}, and
-optionally \code{disturbance} (see \link{finn_data} for the four tables). Without
-\code{init_cohort} the holdout sites start from bare ground, with a warning.}
+optionally \code{disturbance} (see \link{finn_data} for the four tables) and
+\code{tree_data} (the observed trees, as for \code{\link[=fit]{fit()}}: adds the largest diameter
+\code{dbh_max} to the comparison, see \code{\link[=comparePlot]{comparePlot()}}). Without \code{init_cohort}
+the holdout sites start from bare ground, with a warning.}
 
 \item{bare_ground}{(\code{logical(1)})\cr Run the bare-ground simulation too.
 Default \code{FALSE}.}

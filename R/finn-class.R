@@ -1462,7 +1462,7 @@ reserved_model_fields = c(
   "rb_gradient", "trees_offset", "reg_cap", "reg_prior", "reg_prior_lambda", "reg_prior_value", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
   "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred",
   "train_data", "train_disturbance", "patches", "evaluation", "param_recent", "param_recent_epochs",
-  "species_names")
+  "species_names", "train_tree_data")
 is_reserved_model_field = function(name) {
   name %in% reserved_model_fields ||
     grepl("^(par|env|nn|loss|process)_|_(formula|func|optimized)$", name)
@@ -2986,6 +2986,8 @@ finn_class = nn_module(
     # kept for evaluate() and summary(): the observations, the disturbances and the
     # patch count of this fit (the initial cohorts fix the patches when given)
     self$train_data        = data.table::copy(data.table::as.data.table(data))
+    # the observed trees, for the largest diameter in evaluate()
+    self$train_tree_data   = if (is.null(tree_data)) NULL else data.table::copy(data.table::as.data.table(tree_data))
     # the species names of the data, for the labels of the plots
     self$species_names     = if ("species_name" %in% names(data))
       unique(as.data.frame(data)[, c("species", "species_name")]) else self$species_names

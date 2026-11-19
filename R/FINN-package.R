@@ -55,5 +55,6 @@ utils::globalVariables(c(
   # comparePlot(), evaluate(), summary()
   "auc", "census", "deaths_ratio", "label", "max_year", "obs", "p_interval", "pred",
   "r2", "species_lab", "total_ba", "years", "ratio", "ratio_w",
-  "fpr", "tpr", "name", "share", "bound", "total", "colour_group", "site_lab", "value_max"
+  "fpr", "tpr", "name", "share", "bound", "total", "colour_group", "site_lab", "value_max",
+  "dbh_end", "dbh_max", "died", "any_obs"
 ))

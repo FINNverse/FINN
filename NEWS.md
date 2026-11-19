@@ -397,7 +397,13 @@ someone who was affected.
   simulated for `dbh`, `ba`, `trees` and `growth` with R2 in each panel, the
   ROC curve of the interval death probability with its AUC for mortality, and
   for recruitment the ratio of simulated to observed recruitment over all
-  sites per species. `type = "timeseries"` draws the simulated trajectory
+  sites per species. With the observed trees (`tree_data =`, as for `fit()`)
+  the dbh panel shows the largest diameter per site and species (all species
+  pooled: per site), which is robust against a few large or many small trees;
+  the simulation records its cohorts at the census years for it.
+  `type = "heatmap"` shows the skill of every species at a glance: R2 (and the
+  AUC for mortality) per response and species, next to the ratio of
+  simulated to observed. `type = "timeseries"` draws the simulated trajectory
   with the observations as points at their census years. `species =` pools all
   species (default) or draws chosen species; long and wide tables are both
   accepted, and observations without a simulated counterpart are left out with

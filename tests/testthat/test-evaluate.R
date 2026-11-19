@@ -81,6 +81,38 @@ test_that("comparePlot() and plot(sim, obs): scatter and time series, pooled and
   expect_error(comparePlot(sim, toy$obs, species = 99), "no matching observation")
 })
 
+test_that("the largest dbh from tree_data, pooled as the site maximum; the heatmap per species", {
+  skip_if_no_torch()
+  toy <- eval_toy(1L)
+  td <- FINN::fia_tree_dt[siteID %in% 1:4]
+  sim <- simulateForest(toy$model, env = toy$env, init_cohort = toy$init, return_cohorts = c(10L, 20L))
+  op <- FINN:::match_simulation(sim, toy$obs, quiet = TRUE, tree_data = td)
+  dm <- op[variable == "dbh_max"]
+  expect_gt(nrow(dm), 0)
+  # observed: the surviving trees grown to the census
+  r <- dm[1]
+  t1 <- td[siteID == r$siteID & year == r$year & species == r$species & died == 0]
+  expect_equal(r$obs, max(t1$dbh * (1 + t1$growth)^t1$period_length), tolerance = 1e-8)
+  # simulated: the largest cohort holding trees
+  co <- data.table::dcast(sim$long$cohort[siteID == r$siteID & year == r$year & species == r$species],
+                          siteID + patchID + year + species + cohortID ~ variable, value.var = "value")
+  expect_equal(r$pred, max(co[trees >= 0.5]$dbh))
+  # pooled over species: the site maximum
+  pooled <- FINN:::pool_dbh_max(op, by_species = FALSE)[variable == "dbh_max"]
+  expect_equal(nrow(pooled), data.table::uniqueN(dm[, .(siteID, year)]))
+  s1 <- pooled[siteID == r$siteID & year == r$year]
+  expect_equal(s1$obs, max(dm[siteID == r$siteID & year == r$year]$obs))
+  # without recorded cohorts the largest dbh is left out, with a message
+  sim0 <- simulateForest(toy$model, env = toy$env, init_cohort = toy$init)
+  expect_message(op0 <- FINN:::match_simulation(sim0, toy$obs, tree_data = td), "return_cohorts")
+  expect_false(any(op0$variable == "dbh_max"))
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+  h <- comparePlot(sim, toy$obs, type = "heatmap", tree_data = td)
+  expect_s3_class(h, "finn_heatmap")
+  expect_true("dbh_max" %in% as.character(h$ratio$data$variable))
+  expect_true(all(as.character(h$skill$data$species_lab) %in% unique(toy$obs$species_name)))
+})
+
 test_that("summary() prints skill, convergence and the environment; print() takes the window", {
   skip_if_no_torch()
   toy <- eval_toy(4L)
