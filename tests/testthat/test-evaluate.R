@@ -61,8 +61,16 @@ test_that("comparePlot() and plot(sim, obs): scatter and time series, pooled and
   sim <- simulateForest(toy$model, env = toy$env, init_cohort = toy$init)
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
   p <- comparePlot(sim, toy$obs)
-  expect_s3_class(p, "ggplot")
-  expect_true(any(grepl("AUC", ggplot2::layer_data(p, 3)$label)))
+  expect_s3_class(p, "finn_comparison")
+  expect_named(unclass(p), c("scatter", "mort", "reg"))
+  # mortality is a ROC curve from (0, 0) to (1, 1); recruitment a ratio per named species
+  roc <- ggplot2::layer_data(p$mort, 2)
+  expect_equal(range(roc$x), c(0, 1)); expect_equal(range(roc$y), c(0, 1))
+  rg <- p$reg$data
+  op <- attr(p, "matched")[variable == "reg"]
+  sp1 <- rg$species[1]
+  expect_equal(rg$ratio[1], sum(op[species == sp1]$pred) / sum(op[species == sp1]$obs))
+  expect_true(all(as.character(rg$name) %in% unique(toy$obs$species_name)))
   p2 <- plot(sim, toy$obs, type = "timeseries", species = 1:2)
   expect_setequal(unique(attr(p2, "matched")$species), 1:2)
   long <- data.table::melt(toy$obs, id.vars = c("siteID", "year", "species", "species_name", "period_length",
@@ -99,6 +107,12 @@ test_that("simulateForest(bare_ground = TRUE) runs from an empty stand under the
   expect_equal(e2[siteID == 4]$prec[1], mean(toy$env[siteID == 4]$prec))
   bg <- simulateForest(toy$model, bare_ground = TRUE, years = 10)
   expect_s3_class(bg, "finn_simulation")
+  expect_true(isTRUE(attr(bg, "bare_ground")))
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+  pb <- plot(bg)
+  expect_true("site_lab" %in% names(pb$layers[[2]]$data))
+  # the names fit() kept from the data label the species
+  expect_true(all(stats::na.omit(unique(pb$layers[[2]]$data$colour_group)) %in% unique(toy$obs$species_name)))
   expect_equal(max(bg$long$site$year), 10L)
   expect_equal(sum(bg$long$site[year == 1 & variable == "trees"]$value > 0) >= 0, TRUE)
   expect_error(simulateForest(toy$model), "`env` is needed")

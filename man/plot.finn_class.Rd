@@ -4,7 +4,14 @@
 \alias{plot.finn_class}
 \title{Plot the fitted parameters of a FINN model}
 \usage{
-\method{plot}{finn_class}(x, pars = c("process", "env"), species = NULL, env = NULL, ...)
+\method{plot}{finn_class}(
+  x,
+  pars = c("process", "env"),
+  species = NULL,
+  env = NULL,
+  species_names = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{A model built by \code{\link[=finn]{finn()}}, usually fitted with \code{\link[=fit]{fit()}}.}
@@ -19,6 +26,11 @@ as \code{plot(m, pars = "env")} keeps working.}
 \item{env}{Table whose predictor ranges the niches span, in the format of
 the \code{env} of \code{\link[=fit]{fit()}} (see \link{finn_data}); \code{NULL} (default) the environment
 the model was fitted on. Only used with \code{pars = "env"}.}
+
+\item{species_names}{Species names for the labels: a character vector in
+species order, a vector named by species number, or a table with \code{species}
+and \code{species_name}. \code{NULL} (default): the names \code{\link[=fit]{fit()}} kept from the
+\code{species_name} column of the data, else "species 1", "species 2", ...}
 
 \item{...}{Unused.}
 }
@@ -36,11 +48,12 @@ parameters; \code{pars = "env"} switches to the environmental niches.
 \item \strong{Process parameters} (\code{pars = "process"}, the default): one panel per parameter of the
 growth, mortality, regeneration and competition processes, and the recruit
 dispersion \code{theta}; one point per species, on the constrained scale the
-process function uses. The admissible range set by the arguments \code{lower}
-and \code{upper} of \code{\link[=createProcess]{createProcess()}} is the light band behind the points (for
-\code{theta} it starts at the floor, its argument \code{theta_floor}), so a species
-whose parameter ended the fit at a bound -- drawn as an open triangle -- is
-visible at a glance (see \code{\link[=createProcess]{createProcess()}} on what such a parameter means).
+process function uses, the axis spanning the fitted values. A bound of the
+admissible range set by the arguments \code{lower} and \code{upper} of
+\code{\link[=createProcess]{createProcess()}} (for \code{theta} the floor, its argument \code{theta_floor}) is
+drawn as a dashed line where a value comes near it, and a species whose
+parameter ended the fit at a bound is an open triangle (see
+\code{\link[=createProcess]{createProcess()}} on what such a parameter means).
 \item \strong{Environmental niches} (\code{pars = "env"}): for each process whose
 environmental response is linear (no \code{hidden}, no custom \code{NN}, not
 \code{\link[=createHybrid]{createHybrid()}}), the fitted environmental term of every species across

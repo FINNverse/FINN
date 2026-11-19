@@ -43,7 +43,8 @@ Imports:
     Rcpp,
     torch,
     ggplot2,
-    glue
+    glue,
+    grid
 Suggests:
     testthat (>= 3.0.0),
     knitr,

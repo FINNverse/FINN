@@ -381,14 +381,23 @@ someone who was affected.
   list of class `finn_simulation` (the tables inside are unchanged), and
   `plot(sim)` draws basal area, mean dbh and stem number per species over the
   simulated years, averaged over the sites, or for one site with
-  `sites =`; `response =` takes any of the seven simulated variables.
+  `sites =`; `response =` takes any of the seven simulated variables. The
+  leading species are coloured and named, every other species is a pale grey
+  line, and the stand total is dashed. A bare-ground run is drawn as a
+  succession, one panel per site labelled with its mean climate.
+
+* **Species by their names.** `fit()` keeps the names of the `species_name`
+  column of the data (`model$species_names`); the plots label species by
+  name, and every plot takes `species_names =` for a model without them.
 
 * **`comparePlot()`: simulation against observations.** `comparePlot(sim, obs)`,
   or `plot(sim, obs)`, pairs a simulation with the observed data, aggregated
   the way `fit()` scores it (states at the census, growth and mortality
-  compounded over the interval, recruits summed), and draws observed against
-  simulated for every response with R2 in each panel; mortality shows the
-  tree-level AUC instead. `type = "timeseries"` draws the simulated trajectory
+  compounded over the interval, recruits summed). It draws observed against
+  simulated for `dbh`, `ba`, `trees` and `growth` with R2 in each panel, the
+  ROC curve of the interval death probability with its AUC for mortality, and
+  for recruitment the ratio of simulated to observed recruitment over all
+  sites per species. `type = "timeseries"` draws the simulated trajectory
   with the observations as points at their census years. `species =` pools all
   species (default) or draws chosen species; long and wide tables are both
   accepted, and observations without a simulated counterpart are left out with

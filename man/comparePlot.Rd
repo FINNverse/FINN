@@ -2,6 +2,7 @@
 % Please edit documentation in R/evaluate.R
 \name{comparePlot}
 \alias{comparePlot}
+\alias{print.finn_comparison}
 \title{Compare a simulation with observations}
 \usage{
 comparePlot(
@@ -11,8 +12,12 @@ comparePlot(
   species = NULL,
   response = NULL,
   sites = NULL,
+  n_species = 12L,
+  species_names = NULL,
   ...
 )
+
+\method{print}{finn_comparison}(x, ...)
 }
 \arguments{
 \item{sim}{The result of \code{\link[=simulateForest]{simulateForest()}} or
@@ -33,10 +38,22 @@ species numbers draw one row of panels per species.}
 
 \item{sites}{Site ids to include; \code{NULL} (default) all.}
 
+\item{n_species}{Number of species in the recruitment panel. Default \code{12}.}
+
+\item{species_names}{Species names for the labels: a character vector in
+species order, a vector named by species number, or a table with
+\code{species} and \code{species_name}. \code{NULL} (default): the names the simulation
+carries from the model, else the \code{species_name} column of \code{obs}.}
+
 \item{...}{Unused.}
+
+\item{x}{A \code{finn_comparison} object (the scatter view of \code{comparePlot()}).}
 }
 \value{
-The \code{ggplot} object, invisibly; it is printed. The paired table is
+\code{type = "scatter"}: a \code{finn_comparison} object (a list of the
+\code{ggplot} panels \code{scatter}, \code{mort} and \code{reg}, which \code{print()} arranges on
+one page), invisibly; \code{type = "timeseries"}: the \code{ggplot} object,
+invisibly. It is printed. The paired table is
 attached as attribute \code{"matched"} and the skill measures as \code{"skill"}
 (per response, and per species when \code{species} is given; the measures are
 described in \code{\link[=summary.finn_class]{summary.finn_class()}}).
@@ -55,12 +72,15 @@ Both tables may come in long (\code{variable}, \code{value}) or wide form.
 }
 \details{
 \itemize{
-\item \code{type = "scatter"} (default): observed against simulated for every
-response, with the 1:1 line and R2 (\code{1 - SSE/SST}) in each panel; for
-mortality the panel shows the interval death probability against the
-observed share of deaths and prints the tree-level AUC instead (each tree
-at risk is one case, \code{n_died} positives and \code{n_at_risk - n_died}
-negatives; this needs those two columns in \code{obs}).
+\item \code{type = "scatter"} (default): observed against simulated for \code{dbh}, \code{ba},
+\code{trees} and \code{growth}, with the 1:1 line and R2 (\code{1 - SSE/SST}) in each
+panel; for mortality the ROC curve of the interval death probability with
+its AUC (each tree at risk is one case, \code{n_died} positives and
+\code{n_at_risk - n_died} negatives; without those two columns in \code{obs}, a
+scatter of the annual rates); for recruitment, whose site-level values are
+too noisy for a correlation, the ratio of simulated to observed
+recruitment summed over all sites, per species (the \code{n_species} species
+with most observed recruitment).
 \item \code{type = "timeseries"}: the simulated trajectory over the years as a line
 and the observations as points at their census years, averaged over the
 selected sites. With all species pooled, \code{ba} and \code{trees} are the stand

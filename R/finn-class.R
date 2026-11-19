@@ -1305,6 +1305,7 @@ predict.finn_class = function(object,
   # the class goes on the outer list only, so plot() can dispatch; the tables
   # inside ($long$site, $wide$site, ...) stay exactly as before
   class(out) = c("finn_simulation", class(out))
+  attr(out, "species_names") = object$species_names
   out
 }
 
@@ -1335,19 +1336,32 @@ simulateForest = function(model,
   } else if (is.null(env)) {
     stop("`env` is needed, unless `bare_ground = TRUE`.", call. = FALSE)
   }
-  predict(model,
-          env = env,
-          disturbance = disturbance,
-          patches = patches,
-          patch_size = patch_size,
-          init_cohort = init_cohort,
-          device = device,
-          return_cohorts = return_cohorts,
-          debug = debug,
-          recruits = match.arg(recruits),
-          obs_recruits = obs_recruits,
-          .patches_given = !missing(patches),
-          ...)
+  out = predict(model,
+                env = env,
+                disturbance = disturbance,
+                patches = patches,
+                patch_size = patch_size,
+                init_cohort = init_cohort,
+                device = device,
+                return_cohorts = return_cohorts,
+                debug = debug,
+                recruits = match.arg(recruits),
+                obs_recruits = obs_recruits,
+                .patches_given = !missing(patches),
+                ...)
+  if (isTRUE(bare_ground)) {
+    # plot() draws a bare-ground run as a succession, one panel per site,
+    # labelled with the site's mean climate
+    attr(out, "bare_ground") = TRUE
+    first = env[!duplicated(siteID)]
+    preds = utils::head(setdiff(names(first), c("siteID", "year")), 5L)
+    attr(out, "site_labels") = stats::setNames(
+      vapply(seq_len(nrow(first)), function(i)
+        paste(sprintf("%s %s", preds, signif(unlist(first[i, preds, with = FALSE]), 3)), collapse = ", "),
+        character(1)),
+      first$siteID)
+  }
+  out
 }
 
 # Translate the user-facing `return_cohorts` argument into the concrete vector of
@@ -1447,7 +1461,8 @@ reserved_model_fields = c(
   "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler", "theta_floor",
   "rb_gradient", "trees_offset", "reg_cap", "reg_prior", "reg_prior_lambda", "reg_prior_value", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
   "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred",
-  "train_data", "train_disturbance", "patches", "evaluation", "param_recent", "param_recent_epochs")
+  "train_data", "train_disturbance", "patches", "evaluation", "param_recent", "param_recent_epochs",
+  "species_names")
 is_reserved_model_field = function(name) {
   name %in% reserved_model_fields ||
     grepl("^(par|env|nn|loss|process)_|_(formula|func|optimized)$", name)
@@ -2971,6 +2986,9 @@ finn_class = nn_module(
     # kept for evaluate() and summary(): the observations, the disturbances and the
     # patch count of this fit (the initial cohorts fix the patches when given)
     self$train_data        = data.table::copy(data.table::as.data.table(data))
+    # the species names of the data, for the labels of the plots
+    self$species_names     = if ("species_name" %in% names(data))
+      unique(as.data.frame(data)[, c("species", "species_name")]) else self$species_names
     self$train_disturbance = if(is.null(disturbance)) NULL else data.table::copy(data.table::as.data.table(disturbance))
     self$patches           = if(!is.null(init_cohort) && !is.null(init_cohort$species_r)) as.integer(dim(init_cohort$species_r)[2]) else as.integer(patches)
     self$evaluation        = NULL

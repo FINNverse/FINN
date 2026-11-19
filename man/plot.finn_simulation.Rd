@@ -5,7 +5,15 @@
 \alias{print.finn_simulation}
 \title{Plot a FINN simulation}
 \usage{
-\method{plot}{finn_simulation}(x, y = NULL, response = NULL, sites = NULL, ...)
+\method{plot}{finn_simulation}(
+  x,
+  y = NULL,
+  response = NULL,
+  sites = NULL,
+  ...,
+  n_species = 6L,
+  species_names = NULL
+)
 
 \method{print}{finn_simulation}(x, ...)
 }
@@ -25,6 +33,13 @@ variables \code{ba}, \code{dbh} and \code{trees}. With \code{y}, as in \code{\li
 \item{...}{\code{plot()}: passed to \code{\link[=comparePlot]{comparePlot()}} when \code{y} is given (\code{type},
 \code{species}), otherwise unused. \code{print()}: passed to the print method of a
 list.}
+
+\item{n_species}{Number of species drawn in colour: those reaching the
+highest value of the first response; every other species is a pale grey
+line. Default \code{6}.}
+
+\item{species_names}{Species names for the legend (see \code{\link[=plot.finn_class]{plot.finn_class()}});
+\code{NULL} (default): the names the simulation carries from the model.}
 }
 \value{
 \code{plot()}: the \code{ggplot} object, invisibly; it is printed. \code{print()}:
@@ -33,11 +48,17 @@ list.}
 \description{
 Draws the trajectories returned by \code{\link[=simulateForest]{simulateForest()}} or
 \code{\link[=predict.finn_class]{predict()}}: one
-panel per response, one line per species, averaged over the sites; with
-\code{sites} one site (or the average over a few). To see every site, loop over
-them.
+panel per response, one line per species, averaged over the sites (dbh over
+the sites where the species has trees); with \code{sites} one site (or the
+average over a few). To see every site, loop over them. The \code{n_species}
+leading species are coloured and named, every other species is a pale grey
+line, and the stand total of \code{ba} and \code{trees} is dashed.
 }
 \details{
+A bare-ground run (\code{simulateForest(bare_ground = TRUE)}) is drawn as a
+succession: basal area by default, one panel per site, labelled with the
+site's mean climate.
+
 Given observations as the second argument, \code{plot(sim, obs)} compares the
 simulation with them instead: it is \code{\link[=comparePlot]{comparePlot()}}, with the same arguments.
 

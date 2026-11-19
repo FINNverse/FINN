@@ -149,11 +149,25 @@ skill_table = function(op, by_species = FALSE) {
   m[]
 }
 
-species_label = function(op) {
-  if ("species_name" %in% names(op)) {
-    lab = unique(op[, list(species, species_name)])
-    stats::setNames(paste0(lab$species, " ", lab$species_name), lab$species)
-  } else NULL
+# Species names, as a character vector named by the species number 1..N. Taken
+# from, first found: `species_names` (a character vector in species order, a
+# vector named by species number, or a table with `species` and
+# `species_name`), the names a model keeps from fit(), a table `tab` with
+# `species_name`; a species without a name is "species k".
+species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NULL) {
+  out = stats::setNames(paste("species", seq_len(N)), seq_len(N))
+  src = species_names
+  if (is.null(src) && !is.null(model)) src = model$species_names
+  if (is.null(src) && is.data.frame(tab) && all(c("species", "species_name") %in% names(tab)))
+    src = unique(as.data.frame(tab)[, c("species", "species_name")])
+  put = function(sp, nm) {
+    sp = suppressWarnings(as.integer(sp)); ok = !is.na(sp) & sp >= 1L & sp <= N & !is.na(nm) & nzchar(nm)
+    out[sp[ok]] <<- as.character(nm[ok])
+  }
+  if (is.data.frame(src)) put(src$species, src$species_name)
+  else if (!is.null(names(src))) put(names(src), src)
+  else if (length(src)) put(seq_along(src), src)
+  out
 }
 
 #' Compare a simulation with observations
@@ -169,12 +183,15 @@ species_label = function(op) {
 #' one, are left out with a message.
 #' Both tables may come in long (`variable`, `value`) or wide form.
 #'
-#' * `type = "scatter"` (default): observed against simulated for every
-#'   response, with the 1:1 line and R2 (`1 - SSE/SST`) in each panel; for
-#'   mortality the panel shows the interval death probability against the
-#'   observed share of deaths and prints the tree-level AUC instead (each tree
-#'   at risk is one case, `n_died` positives and `n_at_risk - n_died`
-#'   negatives; this needs those two columns in `obs`).
+#' * `type = "scatter"` (default): observed against simulated for `dbh`, `ba`,
+#'   `trees` and `growth`, with the 1:1 line and R2 (`1 - SSE/SST`) in each
+#'   panel; for mortality the ROC curve of the interval death probability with
+#'   its AUC (each tree at risk is one case, `n_died` positives and
+#'   `n_at_risk - n_died` negatives; without those two columns in `obs`, a
+#'   scatter of the annual rates); for recruitment, whose site-level values are
+#'   too noisy for a correlation, the ratio of simulated to observed
+#'   recruitment summed over all sites, per species (the `n_species` species
+#'   with most observed recruitment).
 #' * `type = "timeseries"`: the simulated trajectory over the years as a line
 #'   and the observations as points at their census years, averaged over the
 #'   selected sites. With all species pooled, `ba` and `trees` are the stand
@@ -195,8 +212,17 @@ species_label = function(op) {
 #' @param response Responses to draw, any of `"dbh"`, `"ba"`, `"trees"`,
 #'   `"growth"`, `"mort"`, `"reg"`; `NULL` (default) all that are observed.
 #' @param sites Site ids to include; `NULL` (default) all.
+#' @param n_species Number of species in the recruitment panel. Default `12`.
+#' @param species_names Species names for the labels: a character vector in
+#'   species order, a vector named by species number, or a table with
+#'   `species` and `species_name`. `NULL` (default): the names the simulation
+#'   carries from the model, else the `species_name` column of `obs`.
+#' @param x A `finn_comparison` object (the scatter view of `comparePlot()`).
 #' @param ... Unused.
-#' @return The `ggplot` object, invisibly; it is printed. The paired table is
+#' @return `type = "scatter"`: a `finn_comparison` object (a list of the
+#'   `ggplot` panels `scatter`, `mort` and `reg`, which `print()` arranges on
+#'   one page), invisibly; `type = "timeseries"`: the `ggplot` object,
+#'   invisibly. It is printed. The paired table is
 #'   attached as attribute `"matched"` and the skill measures as `"skill"`
 #'   (per response, and per species when `species` is given; the measures are
 #'   described in [summary.finn_class()]).
@@ -221,9 +247,12 @@ species_label = function(op) {
 #' plot(sim, fia_obs_dt[siteID %in% sites], type = "timeseries", species = 1:2)
 #' @export
 comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NULL,
-                       response = NULL, sites = NULL, ...) {
+                       response = NULL, sites = NULL, n_species = 12L, species_names = NULL, ...) {
   type = match.arg(type)
   op = match_simulation(sim, obs)
+  N = max(c(op$species, simulation_long(sim)$species))
+  if (is.null(species_names)) species_names = attr(sim, "species_names")
+  labs = species_names_lookup(N, species_names, tab = obs)
   if (!is.null(sites)) {
     op = op[siteID %in% sites]
     if (!nrow(op)) stop("None of `sites` has a matching observation.", call. = FALSE)
@@ -240,52 +269,109 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
   }
   if (!nrow(op)) stop("Nothing left to compare after the selection.", call. = FALSE)
   op[, variable := droplevels(variable)]
-  labs = species_label(op)
-  op[, species_lab := if (is.null(labs)) paste("species", species) else labs[as.character(species)]]
+  op[, species_lab := labs[as.character(species)]]
   skill = skill_table(op, by_species = !is.null(species))
 
   facet = if (is.null(species)) ggplot2::facet_wrap(~ variable, scales = "free")
           else ggplot2::facet_grid(species_lab ~ variable, scales = "free")
 
+  theme_finn = ggplot2::theme_minimal() +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
+
   if (type == "scatter") {
-    d = data.table::copy(op)
-    # mortality: interval probability against the observed share of deaths
-    if (all(c("n_at_risk", "n_died") %in% names(d))) {
-      d[variable == "mort", `:=`(pred = p_interval,
-                                 obs = ifelse(n_at_risk > 0, n_died / n_at_risk, NA_real_))]
+    panels = list()
+    # (1) the states and growth: observed against simulated, R2 in each panel
+    sc = op[variable %in% c("dbh", "ba", "trees", "growth")]
+    if (nrow(sc)) {
+      sc[, variable := droplevels(variable)]
+      sk = skill[variable %in% c("dbh", "ba", "trees", "growth")]
+      if (!is.null(species)) sk[, species_lab := labs[as.character(species)]]
+      sk[, label := ifelse(is.finite(r2), sprintf("R² = %.2f", r2), "R² = NA")]
+      fct = if (is.null(species)) ggplot2::facet_wrap(~ variable, scales = "free", nrow = 1)
+            else ggplot2::facet_grid(species_lab ~ variable, scales = "free")
+      panels$scatter = ggplot2::ggplot(sc, ggplot2::aes(x = pred, y = obs)) +
+        ggplot2::geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = "dashed") +
+        ggplot2::geom_point(alpha = 0.35, size = 1) +
+        ggplot2::geom_text(data = sk, ggplot2::aes(label = label), x = -Inf, y = Inf,
+                           hjust = -0.1, vjust = 1.4, size = 3.4, inherit.aes = FALSE) +
+        fct + ggplot2::labs(x = "simulated", y = "observed") + theme_finn
     }
-    d = d[is.finite(obs) & is.finite(pred)]
-    sk = data.table::copy(skill)
-    if (!is.null(species)) sk[, species_lab := if (is.null(labs)) paste("species", species) else labs[as.character(species)]]
-    sk[, label := ifelse(variable == "mort" & is.finite(auc), sprintf("AUC = %.2f", auc),
-                         ifelse(is.finite(r2), sprintf("R² = %.2f", r2), "R² = NA"))]
-    p = ggplot2::ggplot(d, ggplot2::aes(x = pred, y = obs)) +
-      ggplot2::geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = "dashed") +
-      ggplot2::geom_point(alpha = 0.35, size = 1) +
-      ggplot2::geom_text(data = sk, ggplot2::aes(label = label), x = -Inf, y = Inf,
-                         hjust = -0.1, vjust = 1.4, size = 3.4, inherit.aes = FALSE) +
-      facet +
-      ggplot2::labs(x = "simulated", y = "observed",
-                    caption = "mort: interval death probability vs observed share of deaths, with the tree-level AUC") +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
+    # (2) mortality: the ROC curve of the interval death probability, with the AUC
+    mo = op[variable == "mort"]
+    if (nrow(mo)) {
+      if (all(c("n_at_risk", "n_died") %in% names(mo)) && any(mo$n_at_risk > 0, na.rm = TRUE)) {
+        grp = if (is.null(species)) NULL else "species_lab"
+        roc = mo[is.finite(n_at_risk) & n_at_risk > 0,
+                 roc_counts(p_interval, n_died, n_at_risk - n_died), by = grp]
+        auc_lab = if (is.null(species)) sprintf("AUC = %.2f", skill[variable == "mort"]$auc)
+                  else NULL
+        panels$mort = ggplot2::ggplot(roc, ggplot2::aes(x = fpr, y = tpr)) +
+          ggplot2::geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = "dashed") +
+          (if (is.null(species)) ggplot2::geom_line() else ggplot2::geom_line(ggplot2::aes(colour = species_lab))) +
+          (if (!is.null(auc_lab)) ggplot2::annotate("text", x = 0.6, y = 0.1, label = auc_lab, size = 3.6)) +
+          ggplot2::coord_equal() +
+          ggplot2::labs(x = "false positive rate", y = "true positive rate", colour = NULL,
+                        title = "mort: ROC of the interval death probability (trees at risk)",
+                        subtitle = if (!is.null(species)) paste(sprintf("%s: AUC %.2f", labs[as.character(skill[variable == "mort"]$species)],
+                                                                         skill[variable == "mort"]$auc), collapse = "; ")) +
+          theme_finn + ggplot2::theme(plot.title = ggplot2::element_text(size = 10))
+      } else {
+        sk = skill[variable == "mort"]
+        panels$mort = ggplot2::ggplot(mo, ggplot2::aes(x = pred, y = obs)) +
+          ggplot2::geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = "dashed") +
+          ggplot2::geom_point(alpha = 0.35, size = 1) +
+          ggplot2::labs(x = "simulated", y = "observed", title = sprintf("mort (no n_at_risk / n_died for an AUC): R² = %.2f", sk$r2[1])) +
+          theme_finn + ggplot2::theme(plot.title = ggplot2::element_text(size = 10))
+      }
+    }
+    # (3) recruitment: simulated / observed total per species over all sites
+    rg = op[variable == "reg"]
+    if (nrow(rg)) {
+      rs = rg[, list(obs = sum(obs), pred = sum(pred)), by = species]
+      total_ratio = sum(rs$pred) / sum(rs$obs)
+      rs = rs[obs > 0][order(-obs)]
+      n_hidden = max(0L, nrow(rs) - n_species)
+      rs = utils::head(rs, n_species)
+      rs[, ratio := pred / obs]
+      rs[, name := factor(labs[as.character(species)], levels = rev(labs[as.character(species)]))]
+      rs[, share := obs / sum(rg$obs)]
+      panels$reg = ggplot2::ggplot(rs, ggplot2::aes(x = ratio, y = name)) +
+        ggplot2::geom_vline(xintercept = 1, colour = "grey55", linetype = "dashed") +
+        ggplot2::geom_segment(ggplot2::aes(x = 1, xend = ratio, yend = name), colour = "grey70") +
+        ggplot2::geom_point(ggplot2::aes(size = share)) +
+        ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f", ratio)), nudge_y = 0.35, size = 3) +
+        ggplot2::scale_x_log10() +
+        ggplot2::scale_size_area(max_size = 4, guide = "none") +
+        ggplot2::labs(x = "simulated / observed recruitment, all sites (log scale)", y = NULL,
+                      title = sprintf("reg: total ratio %.2f%s", total_ratio,
+                                      if (n_hidden) sprintf("; %d more species with less recruitment not shown", n_hidden) else ""),
+                      subtitle = "point size: share of the observed recruitment") +
+        theme_finn + ggplot2::theme(plot.title = ggplot2::element_text(size = 10))
+    }
+    p = structure(panels, class = "finn_comparison")
   } else {
     s = simulation_long(sim)
-    s[variable == "r_mean_ha", variable := "reg_annual"]
-    s = s[siteID %in% unique(op$siteID) & variable %in% as.character(unique(op$variable))]
-    if (!is.null(species)) s = s[species %in% unique(op$species)]
+    s = s[variable != "reg"]                       # the drawn recruits; the expected ones are compared
+    s[variable == "r_mean_ha", variable := "reg"]
+    # the simulation over the same site-species pairs as the observations of
+    # each response: a species absent from a site has dbh 0 in the simulation
+    # and no observation, and must not pull the mean down
+    pairs = unique(op[, list(siteID, species, variable = as.character(variable))])
+    s = merge(s[variable %in% unique(pairs$variable)], pairs, by = c("siteID", "species", "variable"))
+    ob = data.table::copy(op)
+    # recruitment: observed per period, simulated per year
+    ob[variable == "reg", obs := obs / period_length]
     by_sp = !is.null(species)
-    sl = s[, list(value = mean(value, na.rm = TRUE)), by = c("year", "variable", if (by_sp) "species")]
-    ob = op[, list(obs = mean(obs, na.rm = TRUE)), by = c("year", "variable", if (by_sp) "species")]
     if (!by_sp) {
-      # all species pooled: stand totals for ba and trees, the mean over species otherwise
-      sl = s[, list(value = if (variable[1] %in% c("ba", "trees")) sum(value, na.rm = TRUE) else mean(value, na.rm = TRUE)),
-             by = list(siteID, year, variable)][, list(value = mean(value)), by = list(year, variable)]
-      ob = op[, list(obs = if (as.character(variable[1]) %in% c("ba", "trees")) sum(obs, na.rm = TRUE) else mean(obs, na.rm = TRUE)),
-              by = list(siteID, year, variable)][, list(obs = mean(obs)), by = list(year, variable)]
+      # all species pooled: stand totals for ba, trees and reg, the mean over species otherwise
+      pool = function(v, x) if (v %in% c("ba", "trees", "reg")) sum(x, na.rm = TRUE) else mean(x, na.rm = TRUE)
+      sl = s[, list(value = pool(variable[1], value)), by = list(siteID, year, variable)][, list(value = mean(value)), by = list(year, variable)]
+      ob = ob[, list(obs = pool(as.character(variable[1]), obs)), by = list(siteID, year, variable)][, list(obs = mean(obs)), by = list(year, variable)]
     } else {
-      sl[, species_lab := if (is.null(labs)) paste("species", species) else labs[as.character(species)]]
-      ob[, species_lab := if (is.null(labs)) paste("species", species) else labs[as.character(species)]]
+      sl = s[, list(value = mean(value, na.rm = TRUE)), by = list(year, variable, species)]
+      ob = ob[, list(obs = mean(obs, na.rm = TRUE)), by = list(year, variable, species)]
+      sl[, species_lab := labs[as.character(species)]]
+      ob[, species_lab := labs[as.character(species)]]
     }
     sl[, variable := factor(variable, levels = levels(op$variable))]
     ob[, variable := factor(as.character(variable), levels = levels(op$variable))]
@@ -293,15 +379,40 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
       ggplot2::geom_line(data = sl, ggplot2::aes(x = year, y = value)) +
       ggplot2::geom_point(data = ob, ggplot2::aes(x = year, y = obs), colour = "#C0392B", size = 2) +
       facet +
-      ggplot2::labs(x = "simulated year", y = if (by_sp) "mean over sites" else "mean over sites (ba, trees: stand total)",
-                    caption = "line: simulated (annual rates for growth and mort); points: observed at the census") +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
+      ggplot2::labs(x = "simulated year", y = if (by_sp) "mean over sites" else "mean over sites (ba, trees, reg: stand total)",
+                    caption = "line: simulated; points: observed at the census (growth, mort, reg as annual rates)") +
+      theme_finn
   }
   attr(p, "matched") = op
   attr(p, "skill") = skill
   print(p)
   invisible(p)
+}
+
+# ROC points of a probability against counts of positives and negatives that
+# share it (every tree at risk one case).
+roc_counts = function(p, pos, neg) {
+  g = data.table::data.table(p = p, pos = pos, neg = neg)[, list(pos = sum(pos), neg = sum(neg)), by = p][order(-p)]
+  if (sum(g$pos) == 0 || sum(g$neg) == 0) return(data.table::data.table(fpr = numeric(0), tpr = numeric(0)))
+  data.table::data.table(fpr = c(0, cumsum(g$neg) / sum(g$neg)), tpr = c(0, cumsum(g$pos) / sum(g$pos)))
+}
+
+#' @rdname comparePlot
+#' @export
+print.finn_comparison = function(x, ...) {
+  panels = unclass(x)[c("scatter", "mort", "reg")]
+  panels = panels[!vapply(panels, is.null, logical(1))]
+  if (!length(panels)) return(invisible(x))
+  grid::grid.newpage()
+  top = !is.null(panels$scatter)
+  bottom = setdiff(names(panels), "scatter")
+  rows = if (top && length(bottom)) c(1.1, 1) else 1
+  grid::pushViewport(grid::viewport(layout = grid::grid.layout(length(rows), max(1L, length(bottom)), heights = grid::unit(rows, "null"))))
+  if (top) print(panels$scatter, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = seq_len(max(1L, length(bottom)))))
+  for (i in seq_along(bottom))
+    print(panels[[bottom[i]]], vp = grid::viewport(layout.pos.row = if (top) 2 else 1, layout.pos.col = i))
+  grid::popViewport()
+  invisible(x)
 }
 
 species_subset_obs = function(species, op) {

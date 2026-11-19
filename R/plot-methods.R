@@ -16,7 +16,10 @@ default_parameter_names = list(
 parameter_labels = function(model, type, k) {
   proc = model[[paste0("process_", type)]]
   def  = default_parameter_names[[type]]
-  same_body = function(f, g) !is.null(f) && is.function(f) && identical(body(f), body(g))
+  # compared as text: a function read back with torch_load() carries the same
+  # code, but not always an identical language object
+  same_body = function(f, g) !is.null(f) && is.function(f) &&
+    identical(deparse(body(f)), deparse(body(g)))
   funcs = list(getExportedValue("FINN", def$func))
   if (type == "regeneration") funcs = c(funcs, list(FINN::regeneration_capped))
   known = !is.null(proc) && any(vapply(funcs, function(g) same_body(proc$func, g), logical(1)))
@@ -132,11 +135,12 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #' * **Process parameters** (`pars = "process"`, the default): one panel per parameter of the
 #'   growth, mortality, regeneration and competition processes, and the recruit
 #'   dispersion `theta`; one point per species, on the constrained scale the
-#'   process function uses. The admissible range set by the arguments `lower`
-#'   and `upper` of [createProcess()] is the light band behind the points (for
-#'   `theta` it starts at the floor, its argument `theta_floor`), so a species
-#'   whose parameter ended the fit at a bound -- drawn as an open triangle -- is
-#'   visible at a glance (see [createProcess()] on what such a parameter means).
+#'   process function uses, the axis spanning the fitted values. A bound of the
+#'   admissible range set by the arguments `lower` and `upper` of
+#'   [createProcess()] (for `theta` the floor, its argument `theta_floor`) is
+#'   drawn as a dashed line where a value comes near it, and a species whose
+#'   parameter ended the fit at a bound is an open triangle (see
+#'   [createProcess()] on what such a parameter means).
 #' * **Environmental niches** (`pars = "env"`): for each process whose
 #'   environmental response is linear (no `hidden`, no custom `NN`, not
 #'   [createHybrid()]), the fitted environmental term of every species across
@@ -159,6 +163,10 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #' @param env Table whose predictor ranges the niches span, in the format of
 #'   the `env` of [fit()] (see [finn_data]); `NULL` (default) the environment
 #'   the model was fitted on. Only used with `pars = "env"`.
+#' @param species_names Species names for the labels: a character vector in
+#'   species order, a vector named by species number, or a table with `species`
+#'   and `species_name`. `NULL` (default): the names [fit()] kept from the
+#'   `species_name` column of the data, else "species 1", "species 2", ...
 #' @param ... Unused.
 #' @return The `ggplot` object, invisibly (`NULL` when there is nothing to
 #'   draw); it is printed.
@@ -181,9 +189,11 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #' plot(m)
 #' plot(m, pars = "env", species = 1:3)
 #' @export
-plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = NULL, ...) {
+plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = NULL,
+                           species_names = NULL, ...) {
   pars = match.arg(pars)
   sp = species_subset(species, x$N_species)
+  labs = species_names_lookup(x$N_species, species_names, model = x)
   out = NULL
 
   if (pars == "process") {
@@ -193,18 +203,26 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
     } else {
       df$panel   = factor(paste0(df$process, ": ", df$parameter),
                           levels = unique(paste0(df$process, ": ", df$parameter)))
-      df$species = factor(df$species, levels = sp)
-      bands = unique(df[, c("panel", "lower", "upper")])
+      df$species = factor(labs[as.character(df$species)], levels = rev(labs[as.character(sp)]))
+      # the axes follow the fitted values; a bound is drawn only where a value
+      # comes near it (within a third of the spread of the values)
+      dt = data.table::as.data.table(df)
+      near = dt[, {
+        span = max(diff(range(value)), 1e-3 * max(1, abs(value)))
+        b = c(lower[1], upper[1])
+        b = b[is.finite(b) & b >= min(value) - span / 3 & b <= max(value) + span / 3]
+        list(bound = b)
+      }, by = panel]
       p = ggplot2::ggplot(df, ggplot2::aes(x = value, y = species)) +
-        ggplot2::geom_rect(data = bands, inherit.aes = FALSE,
-                           ggplot2::aes(xmin = lower, xmax = upper, ymin = -Inf, ymax = Inf),
-                           fill = "grey85", alpha = 0.6) +
+        ggplot2::geom_vline(data = near, ggplot2::aes(xintercept = bound),
+                            colour = "#C0392B", linetype = "dashed", linewidth = 0.4) +
         ggplot2::geom_point(ggplot2::aes(shape = at_bound), size = 2) +
         ggplot2::scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 2),
                                     labels = c(`FALSE` = "inside", `TRUE` = "at a bound"),
                                     name = NULL, drop = FALSE) +
         ggplot2::facet_wrap(~ panel, scales = "free_x") +
-        ggplot2::labs(x = "fitted value (band: admissible range)", y = "species") +
+        ggplot2::labs(x = "fitted value (dashed: a bound of the admissible range, where a value comes near it)",
+                      y = NULL) +
         ggplot2::theme_minimal() +
         ggplot2::theme(panel.grid.minor = ggplot2::element_blank(), legend.position = "bottom")
       print(p)
@@ -222,7 +240,7 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
         message("No linear environmental response to plot.")
       } else {
         df$process = factor(df$process, levels = intersect(c("growth", "mortality", "regeneration"), unique(df$process)))
-        df$species = factor(df$species, levels = sp)
+        df$species = factor(labs[as.character(df$species)], levels = labs[as.character(sp)])
         p = ggplot2::ggplot(df, ggplot2::aes(x = x, y = value, colour = species, group = species)) +
           ggplot2::geom_line() +
           ggplot2::facet_grid(process ~ predictor, scales = "free") +
@@ -243,9 +261,15 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #'
 #' Draws the trajectories returned by [simulateForest()] or
 #' [`predict()`][predict.finn_class]: one
-#' panel per response, one line per species, averaged over the sites; with
-#' `sites` one site (or the average over a few). To see every site, loop over
-#' them.
+#' panel per response, one line per species, averaged over the sites (dbh over
+#' the sites where the species has trees); with `sites` one site (or the
+#' average over a few). To see every site, loop over them. The `n_species`
+#' leading species are coloured and named, every other species is a pale grey
+#' line, and the stand total of `ba` and `trees` is dashed.
+#'
+#' A bare-ground run (`simulateForest(bare_ground = TRUE)`) is drawn as a
+#' succession: basal area by default, one panel per site, labelled with the
+#' site's mean climate.
 #'
 #' Given observations as the second argument, `plot(sim, obs)` compares the
 #' simulation with them instead: it is [comparePlot()], with the same arguments.
@@ -261,6 +285,11 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #'   `"growth"`, `"mort"`, `"reg"`, `"r_mean_ha"`; `NULL` (default) the stand
 #'   variables `ba`, `dbh` and `trees`. With `y`, as in [comparePlot()].
 #' @param sites Site ids to include; `NULL` (default) all.
+#' @param n_species Number of species drawn in colour: those reaching the
+#'   highest value of the first response; every other species is a pale grey
+#'   line. Default `6`.
+#' @param species_names Species names for the legend (see [plot.finn_class()]);
+#'   `NULL` (default): the names the simulation carries from the model.
 #' @param ... `plot()`: passed to [comparePlot()] when `y` is given (`type`,
 #'   `species`), otherwise unused. `print()`: passed to the print method of a
 #'   list.
@@ -287,35 +316,78 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #' # against the observations
 #' plot(sim, fia_obs_dt[siteID %in% sites])
 #' @export
-plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...) {
-  if (!is.null(y)) return(comparePlot(x, y, response = response, sites = sites, ...))
+plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...,
+                                n_species = 6L, species_names = NULL) {
+  # n_species and species_names after `...`, so that `species =` passed on to
+  # comparePlot() is not partially matched to species_names
+  if (!is.null(y)) return(comparePlot(x, y, response = response, sites = sites,
+                                      species_names = species_names, ...))
   d = x$long$site
   if (is.null(d) || !nrow(d))
     stop("This simulation holds no site table (`$long$site`) to plot.", call. = FALSE)
+  bare = isTRUE(attr(x, "bare_ground"))
   levels_all = c("dbh", "ba", "trees", "growth", "mort", "reg", "r_mean_ha")
-  if (is.null(response)) response = c("ba", "dbh", "trees")
+  if (is.null(response)) response = if (bare) "ba" else c("ba", "dbh", "trees")
   bad = setdiff(response, levels_all)
   if (length(bad))
     stop(sprintf("Unknown `response` %s; use any of %s.", paste(bad, collapse = ", "),
                  paste(levels_all, collapse = ", ")), call. = FALSE)
   d = data.table::as.data.table(d)[as.character(variable) %in% response]
+  d[, variable := as.character(variable)]
   if (!is.null(sites)) {
     d = d[siteID %in% sites]
     if (!nrow(d)) stop("None of `sites` is in the simulation.", call. = FALSE)
   }
   n_sites = data.table::uniqueN(d$siteID)
-  agg = d[, list(mean = mean(value, na.rm = TRUE)),
-          by = list(variable = as.character(variable), year, species)]
-  agg[, variable := factor(variable, levels = intersect(levels_all, response))]
-  agg[, species := factor(species)]
-  p = ggplot2::ggplot(agg, ggplot2::aes(x = year, y = mean, colour = species, group = species)) +
-    ggplot2::geom_line() +
-    ggplot2::facet_wrap(~ variable, scales = "free_y") +
-    ggplot2::labs(x = "simulated year",
-                  y = if (n_sites == 1L) sprintf("site %s", unique(d$siteID)) else sprintf("mean over %d sites", n_sites),
-                  colour = "species") +
+  if (is.null(species_names)) species_names = attr(x, "species_names")
+  labs = species_names_lookup(max(d$species), species_names)
+
+  # a bare-ground run: one panel per site; otherwise the mean over the sites
+  # (dbh over the sites where the species has trees, a mean diameter of 0
+  # being no tree)
+  keys = if (bare) c("siteID", "variable") else "variable"
+  agg = d[!(variable == "dbh" & value <= 0),
+          list(value = mean(value, na.rm = TRUE)), by = c(keys, "year", "species")]
+  # the n_species species reaching the highest value of the first response are
+  # coloured; every other species is a pale grey line
+  rank = agg[variable == response[1], list(value_max = max(value, na.rm = TRUE)), by = species][order(-value_max)]
+  top = utils::head(rank$species, n_species)
+  agg[, colour_group := ifelse(species %in% top, labs[as.character(species)], NA_character_)]
+  tot = d[variable %in% c("ba", "trees"), list(total = sum(value, na.rm = TRUE)), by = c("siteID", "variable", "year")]
+  tot = tot[, list(total = mean(total)), by = c(keys, "year")]
+  facet_levels = intersect(levels_all, response)
+  agg[, variable := factor(variable, levels = facet_levels)]
+  tot[, variable := factor(variable, levels = facet_levels)]
+  if (bare) {
+    site_labs = attr(x, "site_labels")
+    lab_of = function(id) if (!is.null(site_labs) && as.character(id) %in% names(site_labs)) site_labs[[as.character(id)]] else paste("site", id)
+    lab_levels = vapply(sort(unique(agg$siteID)), lab_of, character(1))
+    agg[, site_lab := factor(vapply(siteID, lab_of, character(1)), levels = lab_levels)]
+    tot[, site_lab := factor(vapply(siteID, lab_of, character(1)), levels = lab_levels)]
+    fct = if (length(response) == 1L) ggplot2::facet_wrap(~ site_lab)
+          else ggplot2::facet_grid(variable ~ site_lab, scales = "free_y")
+  } else {
+    fct = ggplot2::facet_wrap(~ variable, scales = "free_y")
+  }
+  p = ggplot2::ggplot() +
+    ggplot2::geom_line(data = agg[is.na(colour_group)], ggplot2::aes(x = year, y = value, group = species),
+                       colour = "grey80", linewidth = 0.3) +
+    ggplot2::geom_line(data = agg[!is.na(colour_group)],
+                       ggplot2::aes(x = year, y = value, colour = colour_group, group = species)) +
+    ggplot2::geom_line(data = tot, ggplot2::aes(x = year, y = total), linetype = "dashed", colour = "black") +
+    ggplot2::scale_colour_discrete(breaks = labs[as.character(top)]) +
+    fct +
+    ggplot2::labs(x = if (bare) "year since bare ground" else "simulated year",
+                  y = if (bare) paste(response, collapse = ", ")
+                      else if (n_sites == 1L) sprintf("site %s", unique(d$siteID))
+                      else sprintf("mean over %d sites", n_sites),
+                  colour = NULL,
+                  title = if (bare) sprintf("Succession from bare ground (%d years)", max(d$year)),
+                  subtitle = sprintf("dashed = total (ba, trees); the %d species reaching the highest %s are coloured, every other species is a pale grey line",
+                                     length(top), response[1])) +
     ggplot2::theme_minimal() +
-    ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank(), legend.position = "bottom",
+                   plot.subtitle = ggplot2::element_text(size = 9))
   print(p)
   invisible(p)
 }
