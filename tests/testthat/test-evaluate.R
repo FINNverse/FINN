@@ -140,7 +140,14 @@ test_that("summary() prints skill, convergence and the environment; print() take
   Pt <- s2$convergence$params
   x1 <- on(Pt[[4]]$par_mortality_unconstrained); x0 <- on(Pt[[2]]$par_mortality_unconstrained)
   expect_equal(row$change_pct, 100 * sqrt(sum((x1 - x0)^2)) / sqrt(sum(x0^2)))
-  expect_true(any(grepl("the species parameter that moves most", capture.output(print(s2, epochs_back = 2)))))
+  out2 <- capture.output(print(s2, epochs_back = 2))
+  expect_true(any(grepl("The species parameter that moved most", out2)))
+  # the table: one row per process and part, the parameter that moved most
+  g <- FINN:::parameter_groups(cvt$params)
+  expect_true(all(c("growth", "mortality", "regeneration", "competition") %in% g$process))
+  expect_equal(g$part[g$parameter == "mortality: growth"], "species parameters")
+  expect_equal(unique(g$part[grepl("^nn_growth", g$parameter)]), "environmental response")
+  expect_true(any(grepl("environmental response", out2)))
   # without the per-epoch record, the snapshots of the fit are used
   conv2 <- s$convergence; conv2$params <- list()
   conv2$snapshots <- P; conv2$snap_every <- 1L

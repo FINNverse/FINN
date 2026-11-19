@@ -69,8 +69,8 @@ could not be computed) and \code{epochs_back}. \code{print()}: \code{x}, invisib
 \description{
 Collects what is needed to judge a fitted model, in this order:
 \enumerate{
-\item \strong{Skill}: per response, R2 (\code{1 - SSE/SST}) first, then RMSE, Pearson r,
-the bias, the ratio of the mean prediction to the mean observation (is the
+\item \strong{Skill}: per response, R2 (\code{1 - SSE/SST}) and the correlation (Pearson
+r) of observed and simulated first, then RMSE, the bias, the ratio of the mean prediction to the mean observation (is the
 magnitude right?; for mortality weighted by the trees at risk, where the
 observations carry \code{n_at_risk} and \code{n_died}) and n; for mortality also the
 tree-level AUC and the ratio of predicted to observed deaths. On the
@@ -81,12 +81,18 @@ Without a stored evaluation, \code{summary()} runs \code{\link[=evaluate]{evalua
 data first (one simulation) and stores it on the model.
 \item \strong{Convergence}: by how many percent each loss term changed over the last
 \code{epochs_back} epochs (the mean of the last \code{epochs_back} epochs against
-the mean of the \code{epochs_back} before), and by how many percent each
-parameter moved over the last \code{epochs_back} epochs (relative L2 change
-over the species, \verb{||theta_now - theta_then|| / ||theta_then||}): every
-species-specific parameter of a process by its name and on the scale it
-acts on (e.g. "mortality: growth"), every network and other parameter
-block as a whole. The print names the largest change of each. \code{\link[=fit]{fit()}}
+the mean of the \code{epochs_back} before), as a table with one sentence on
+the largest change; and how much the parameters moved over the last
+\code{epochs_back} epochs, as a table with one row per process (growth,
+mortality, regeneration, competition) and part (its species parameters,
+its environmental response, i.e. the network or the linear climate
+effects, and for regeneration the recruit dispersion and the cap),
+naming the parameter that moved most. The change is the size of the
+step the values took as a percentage of their size,
+\verb{100 * |values now - values then| / |values then|}, over all species of
+a parameter (on the scale it acts on, e.g. "mortality: growth") or all
+weights of a network layer; 1 \% means the values moved by about a
+hundredth of their size. \code{\link[=fit]{fit()}}
 keeps the parameters of the last 51 epochs for this, so \code{epochs_back} can
 be at most 50; for a model fitted before this version the parameter
 snapshots of the fit (\code{model$param_history}, every \code{checkpoints} epochs)

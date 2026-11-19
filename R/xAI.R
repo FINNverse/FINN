@@ -678,8 +678,8 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' @description
 #' Collects what is needed to judge a fitted model, in this order:
 #'
-#' 1. **Skill**: per response, R2 (`1 - SSE/SST`) first, then RMSE, Pearson r,
-#'    the bias, the ratio of the mean prediction to the mean observation (is the
+#' 1. **Skill**: per response, R2 (`1 - SSE/SST`) and the correlation (Pearson
+#'    r) of observed and simulated first, then RMSE, the bias, the ratio of the mean prediction to the mean observation (is the
 #'    magnitude right?; for mortality weighted by the trees at risk, where the
 #'    observations carry `n_at_risk` and `n_died`) and n; for mortality also the
 #'    tree-level AUC and the ratio of predicted to observed deaths. On the
@@ -690,12 +690,18 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'    data first (one simulation) and stores it on the model.
 #' 2. **Convergence**: by how many percent each loss term changed over the last
 #'    `epochs_back` epochs (the mean of the last `epochs_back` epochs against
-#'    the mean of the `epochs_back` before), and by how many percent each
-#'    parameter moved over the last `epochs_back` epochs (relative L2 change
-#'    over the species, `||theta_now - theta_then|| / ||theta_then||`): every
-#'    species-specific parameter of a process by its name and on the scale it
-#'    acts on (e.g. "mortality: growth"), every network and other parameter
-#'    block as a whole. The print names the largest change of each. [fit()]
+#'    the mean of the `epochs_back` before), as a table with one sentence on
+#'    the largest change; and how much the parameters moved over the last
+#'    `epochs_back` epochs, as a table with one row per process (growth,
+#'    mortality, regeneration, competition) and part (its species parameters,
+#'    its environmental response, i.e. the network or the linear climate
+#'    effects, and for regeneration the recruit dispersion and the cap),
+#'    naming the parameter that moved most. The change is the size of the
+#'    step the values took as a percentage of their size,
+#'    `100 * |values now - values then| / |values then|`, over all species of
+#'    a parameter (on the scale it acts on, e.g. "mortality: growth") or all
+#'    weights of a network layer; 1 % means the values moved by about a
+#'    hundredth of their size. [fit()]
 #'    keeps the parameters of the last 51 epochs for this, so `epochs_back` can
 #'    be at most 50; for a model fitted before this version the parameter
 #'    snapshots of the fit (`model$param_history`, every `checkpoints` epochs)
@@ -853,6 +859,26 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
 
 # Percent change of every loss term over the last k epochs, and of every
 # parameter block over the last k (at most 50) stored epochs.
+# Which process and which part of it a parameter row belongs to: the species
+# parameters of a process ("growth: light requirement"), its environmental
+# response (the network or the linear climate effects, nn_<process>.*), the
+# recruit dispersion and the recruitment cap of regeneration, and the rest.
+parameter_groups = function(p) {
+  procs = c("growth", "mortality", "regeneration", "competition")
+  p$process = "other"; p$part = "other parameters"
+  for (pr in procs) {
+    sp = p$kind == "species parameter" & startsWith(p$parameter, paste0(pr, ":"))
+    p$process[sp] = pr; p$part[sp] = "species parameters"
+    nn = grepl(paste0("^nn_", pr, "\\."), p$parameter)
+    p$process[nn] = pr; p$part[nn] = "environmental response"
+  }
+  th = p$parameter == "par_theta_recruits_raw"; p$process[th] = "regeneration"; p$part[th] = "recruit dispersion"
+  ck = p$parameter == "reg_logK";               p$process[ck] = "regeneration"; p$part[ck] = "recruitment cap"
+  ms = grepl("^mort_", p$parameter);           p$process[ms] = "mortality";    p$part[ms] = "other parameters"
+  p$group = paste(p$process, p$part)
+  p
+}
+
 convergence_table = function(conv, k) {
   k = as.integer(k)
   out = list(loss = NULL, params = NULL, k_loss = NA_integer_, k_params = NA_integer_)
@@ -915,9 +941,11 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
 
   fmt_skill = function(s) {
     d = as.data.frame(s)
-    cols = intersect(c("variable", "species", "r2", "rmse", "r", "bias", "ratio", "n", "auc", "deaths_ratio"), names(d))
+    # R2 and the correlation first: how much of the observed variation the
+    # simulation reproduces, and how closely the two go together
+    cols = intersect(c("variable", "species", "r2", "r", "rmse", "bias", "ratio", "n", "auc", "deaths_ratio"), names(d))
     d = d[, cols, drop = FALSE]
-    names(d) = c(variable = "response", species = "species", r2 = "R2", rmse = "RMSE", r = "r", bias = "bias",
+    names(d) = c(variable = "response", species = "species", r2 = "R2", r = "correlation", rmse = "RMSE", bias = "bias",
                  ratio = "pred/obs", n = "n", auc = "AUC", deaths_ratio = "deaths pred/obs")[cols]
     d
   }
@@ -950,15 +978,25 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
   if (is.null(cv$params)) {
     cat("  parameters: none stored (a model fitted before this version without parameter snapshots, or a single epoch)\n")
   } else {
-    p = cv$params
-    sp = p[p$kind == "species parameter", , drop = FALSE]
-    cat(sprintf("\nParameters, change over the last %d epochs (relative L2 over the species, %%; from the %s):\n",
+    p = parameter_groups(cv$params)
+    cat(sprintf("\nParameters: how much they moved over the last %d epochs (from the %s).\n",
                 cv$k_params, if (identical(cv$params_source, "snapshot")) "parameter snapshots of the fit" else "parameters of every epoch"))
-    if (nrow(sp)) cat(sprintf("  the species parameter that moves most: %s, %s\n", sp$parameter[1], pct(sp$change_pct[1])))
-    cat(sprintf("  the block that moves most overall: %s, %s\n", p$parameter[1], pct(p$change_pct[1])))
-    p$change = pct(p$change_pct); p$change_pct = NULL
-    print(utils::head(p, 12L), row.names = FALSE)
-    if (nrow(p) > 12L) cat(sprintf("  ... %d more in summary(m)$convergence\n", nrow(p) - 12L))
+    cat("  The change is the size of the step the values took, as a percentage of the size of the values:\n",
+        "  100 x |values now - values then| / |values then|, over all species of a parameter (or all weights\n",
+        "  of a network layer). 1 % means the values moved by about a hundredth of their size.\n", sep = "")
+    top = p[order(-p$change_pct), , drop = FALSE][!duplicated(p$group[order(-p$change_pct)]), , drop = FALSE]
+    top = top[order(match(top$process, c("growth", "mortality", "regeneration", "competition", "other")),
+                    match(top$part, c("species parameters", "environmental response", "recruit dispersion",
+                                      "recruitment cap", "other parameters"))), , drop = FALSE]
+    sp = p[p$kind == "species parameter", , drop = FALSE]
+    if (nrow(sp)) {
+      j = which.max(sp$change_pct)
+      cat(sprintf("  The species parameter that moved most: %s, %s; the largest change overall: %s, %s.\n",
+                  sp$parameter[j], pct(sp$change_pct[j]), p$parameter[which.max(p$change_pct)], pct(max(p$change_pct, na.rm = TRUE))))
+    }
+    tab = data.frame(process = top$process, part = top$part, `moved most` = top$parameter,
+                     change = pct(top$change_pct), check.names = FALSE)
+    print(tab, row.names = FALSE)
   }
 
   if (!is.null(x$bare_ground)) {

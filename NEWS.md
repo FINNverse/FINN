@@ -431,7 +431,8 @@ someone who was affected.
 
 * **`summary()` of a model judges the fit.** It now shows, before the
   environmental importance and the average conditional effects, the skill per
-  response on the training data and the holdout (R2 first, then RMSE, r, bias,
+  response on the training data and the holdout (R2 and the correlation of
+  observed and simulated first, then RMSE, bias,
   the ratio of the means, and the AUC for mortality) and a convergence check:
   by how many percent each loss term changed over the last `epochs_back`
   epochs, and each parameter: every species-specific parameter by its name on
