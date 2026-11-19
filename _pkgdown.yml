@@ -59,6 +59,7 @@ reference:
   - simulateForest
   - plot.finn_simulation
   - predictTrees
+  - FINN.seed
 
 - title: Evaluation
   desc: Judge a fitted model against the observations, on the training data and a holdout.
@@ -66,7 +67,6 @@ reference:
   - evaluate
   - comparePlot
   - summary.finn_class
-  - FINN.seed
 
 - title: Processes
   desc: The built-in mechanistic demographic functions and allometries.

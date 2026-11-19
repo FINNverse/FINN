@@ -19,7 +19,7 @@ is aggregated before it meets the observation.}
 \item{\code{species}, \code{species_name}}{species index \verb{1..11} and its name;
 \code{"other"} pools the species outside the 98 \% most abundant stems.}
 \item{\code{ba}}{living basal area, m2 -- the mean over the site's patches
-(0.06 ha each; \code{makeObsData(aggregate_by_site = TRUE)}).}
+(0.06 ha each; \code{\link[=makeObsData]{makeObsData(aggregate_by_site = TRUE)}}).}
 \item{\code{trees}}{living stems, mean per patch (hence fractional).}
 \item{\code{dbh}}{mean diameter at breast height of living trees, cm (\code{NA}
 when there are none).}
@@ -73,7 +73,8 @@ the simulated yearly rates of the \code{period_length} years before each
 inventory into the same per-year rate before comparing, and compares \code{reg}
 with the recruits simulated over those years. The trees behind the
 mortality counts are in \link{fia_tree_dt}. Before FINN 0.2.0 the tables had one step per ten-year
-interval (\code{year} 1 and 2, rates over the interval); \code{makeObsData(rates = "interval")} and \code{resolveSiteIDs(time_axis = "census")} still build such
+interval (\code{year} 1 and 2, rates over the interval); \code{\link[=makeObsData]{makeObsData(rates = "interval")}}
+and \code{\link[=resolveSiteIDs]{resolveSiteIDs(time_axis = "census")}} still build such
 tables.
 }
 \examples{

@@ -10,25 +10,29 @@
 \method{print}{finn_simulation}(x, ...)
 }
 \arguments{
-\item{x}{The object returned by \code{\link[=simulateForest]{simulateForest()}} or \code{\link[=predict]{predict()}} (class
-\code{finn_simulation}).}
+\item{x}{The object returned by \code{\link[=simulateForest]{simulateForest()}} or
+\code{\link[=predict.finn_class]{predict()}} (class \code{finn_simulation}).}
 
-\item{y}{\code{NULL} (default), or observations to compare with (see
+\item{y}{\code{NULL} (default), or observations to compare with (the \code{obs} of
 \code{\link[=comparePlot]{comparePlot()}}).}
 
 \item{response}{Responses to draw, any of \code{"dbh"}, \code{"ba"}, \code{"trees"},
 \code{"growth"}, \code{"mort"}, \code{"reg"}, \code{"r_mean_ha"}; \code{NULL} (default) the stand
-variables \code{ba}, \code{dbh} and \code{trees}.}
+variables \code{ba}, \code{dbh} and \code{trees}. With \code{y}, as in \code{\link[=comparePlot]{comparePlot()}}.}
 
 \item{sites}{Site ids to include; \code{NULL} (default) all.}
 
-\item{...}{Passed to \code{\link[=comparePlot]{comparePlot()}} when \code{y} is given (\code{type}, \code{species}).}
+\item{...}{\code{plot()}: passed to \code{\link[=comparePlot]{comparePlot()}} when \code{y} is given (\code{type},
+\code{species}), otherwise unused. \code{print()}: passed to the print method of a
+list.}
 }
 \value{
-The \code{ggplot} object, invisibly; it is printed.
+\code{plot()}: the \code{ggplot} object, invisibly; it is printed. \code{print()}:
+\code{x}, invisibly.
 }
 \description{
-Draws the trajectories returned by \code{\link[=simulateForest]{simulateForest()}} or \code{\link[=predict]{predict()}}: one
+Draws the trajectories returned by \code{\link[=simulateForest]{simulateForest()}} or
+\code{\link[=predict.finn_class]{predict()}}: one
 panel per response, one line per species, averaged over the sites; with
 \code{sites} one site (or the average over a few). To see every site, loop over
 them.
@@ -36,6 +40,9 @@ them.
 \details{
 Given observations as the second argument, \code{plot(sim, obs)} compares the
 simulation with them instead: it is \code{\link[=comparePlot]{comparePlot()}}, with the same arguments.
+
+\code{print()} of a simulation shows the list of tables as before 0.2.0, without
+the class attribute.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
@@ -59,5 +66,6 @@ plot(sim, fia_obs_dt[siteID \%in\% sites])
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[=plot.finn_class]{plot.finn_class()}} for the fitted parameters, \code{\link[=comparePlot]{comparePlot()}}.
+\code{\link[=plot.finn_class]{plot.finn_class()}} for the fitted parameters, \code{\link[=comparePlot]{comparePlot()}} and
+\code{\link[=evaluate]{evaluate()}} for the comparison with observations.
 }

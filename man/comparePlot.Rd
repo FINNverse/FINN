@@ -15,7 +15,8 @@ comparePlot(
 )
 }
 \arguments{
-\item{sim}{The result of \code{\link[=simulateForest]{simulateForest()}} or \code{\link[=predict]{predict()}} for the sites of
+\item{sim}{The result of \code{\link[=simulateForest]{simulateForest()}} or
+\code{\link[=predict.finn_class]{predict()}} for the sites of
 \code{obs}, started from the same initial state (or its site table).}
 
 \item{obs}{Observations as \code{\link[=makeObsData]{makeObsData()}} returns them (wide), or long with
@@ -36,7 +37,9 @@ species numbers draw one row of panels per species.}
 }
 \value{
 The \code{ggplot} object, invisibly; it is printed. The paired table is
-attached as attribute \code{"matched"} and the skill measures as \code{"skill"}.
+attached as attribute \code{"matched"} and the skill measures as \code{"skill"}
+(per response, and per species when \code{species} is given; the measures are
+described in \code{\link[=summary.finn_class]{summary.finn_class()}}).
 }
 \description{
 Pairs a simulation with the observed data and draws, per response, how well
@@ -44,8 +47,10 @@ they agree. The simulation is aggregated the way \code{\link[=fit]{fit()}} score
 states \code{dbh}, \code{ba} and \code{trees} at the census year, \code{growth} and \code{mort}
 compounded over the \code{period_length} years before the census (the geometric
 mean of \code{1 + g} minus one; one minus the geometric-mean survival), and the
-expected recruits (\code{r_mean_ha}) summed over them for \code{reg}. Observations whose
-site, year or species are not in the simulation are left out with a message.
+expected recruits (\code{r_mean_ha}) summed over them for \code{reg} (see \link{finn_loss}
+and, for the observed columns, \link{finn_data}). Observations of a site or a
+species that is not in the simulation, or of a year after the last simulated
+one, are left out with a message.
 Both tables may come in long (\code{variable}, \code{value}) or wide form.
 }
 \details{
@@ -58,10 +63,12 @@ at risk is one case, \code{n_died} positives and \code{n_at_risk - n_died}
 negatives; this needs those two columns in \code{obs}).
 \item \code{type = "timeseries"}: the simulated trajectory over the years as a line
 and the observations as points at their census years, averaged over the
-selected sites.
+selected sites. With all species pooled, \code{ba} and \code{trees} are the stand
+totals and the other responses the mean over the species.
 }
 
-\code{plot(sim, obs)} is the same as \code{comparePlot(sim, obs)}.
+\code{plot(sim, obs)} is the same as \code{comparePlot(sim, obs)} (see
+\code{\link[=plot.finn_simulation]{plot.finn_simulation()}}).
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
@@ -84,5 +91,6 @@ plot(sim, fia_obs_dt[siteID \%in\% sites], type = "timeseries", species = 1:2)
 }
 \seealso{
 \code{\link[=evaluate]{evaluate()}}, which stores the same comparison on the model, and
-\code{\link[=summary.finn_class]{summary.finn_class()}}, which prints it.
+\code{\link[=summary.finn_class]{summary.finn_class()}}, which prints it; \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} for the
+simulation alone.
 }

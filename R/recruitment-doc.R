@@ -12,7 +12,7 @@
 #' One simulated year of recruitment runs in three steps. The regeneration
 #' process returns an EXPECTED recruitment per hectare for every site, patch and
 #' species. This rate is turned into a whole number of recruits per patch, which
-#' enter the stand as new cohorts at `finn(recruits_dbh = )`. During [FINN::fit()]
+#' enter the stand as new cohorts at [`finn(recruits_dbh = )`][finn]. During [FINN::fit()]
 #' the expected rate (not the drawn recruits), summed over an observation
 #' interval, is compared with the observed `reg` by the regeneration likelihood.
 #'
@@ -21,7 +21,7 @@
 #' `finn(regeneration_process = )`. All mechanistic variants share the same core:
 #' a light response gated by the species parameter `parReg`, times the
 #' environmental response `exp(env)`, plus the additive floor
-#' `createProcess(reg_floor = )` of the regeneration process (default `1e-3`
+#' [`createProcess(reg_floor = )`][createProcess] of the regeneration process (default `1e-3`
 #' stems per ha and year).
 #'
 #' * [FINN::regeneration()]: the core alone. The expected recruitment is not
@@ -36,23 +36,23 @@
 #'   recruitment only. It does not bound the variance of the recruit draw, which
 #'   around a capped mean is still `K + K^2 / theta` (see the dispersion section
 #'   below).
-#' * `regeneration_saturation()`: the same function as `regeneration_capped()`
+#' * [FINN::regeneration_saturation()]: the same function as [FINN::regeneration_capped()]
 #'   under its older name, kept as a deprecated alias for one release.
 #' * [FINN::regeneration_adult()]: the capped process with a seed source. The
 #'   recruitment of a species is multiplied by `f(A) = A / (A + A_half)`, where
 #'   `A` is the density of its own adults (stems above an adult threshold `x`)
 #'   pooled over the patches of the site. A species without adults on a site
 #'   recruits only at `reg_floor`. `x` and `A_half` are declared through
-#'   `createProcess(custom_parameters = )`; see its help page.
+#'   [`createProcess(custom_parameters = )`][createProcess]; see its help page.
 #' * [FINN::regeneration_adult_effect()]: the adult density as an effect on
 #'   recruitment instead of a gate,
 #'   `f(A) = f0 + (1 - f0) A / (A + A_half)` with `f0 = plogis(reg_adult_logitf0)`,
 #'   the share of the potential recruitment a species gets without adults on
 #'   the site (seed rain from outside, advance regeneration). Prefer it to
-#'   `regeneration_adult()` whenever a species must be able to establish where
+#'   [FINN::regeneration_adult()] whenever a species must be able to establish where
 #'   it has no adults: colonisation from an empty stand, and any free run from
 #'   bare ground, need `f0 > 0`. `f0 -> 1` removes the adult effect, `f0 -> 0`
-#'   is `regeneration_adult()`.
+#'   is [FINN::regeneration_adult()].
 #'
 #' A regeneration process built with [FINN::createHybrid()] replaces the whole
 #' equation by a network. In 0.2.0 it has no Beverton-Holt cap: `createHybrid()`
@@ -60,7 +60,7 @@
 #'
 #' @section From expected recruitment to recruits:
 #' The expected rate per ha times `patch_size` (in ha) is the expected number
-#' of recruits per patch. `createProcess(sample_regeneration = )` decides how it
+#' of recruits per patch. [`createProcess(sample_regeneration = )`][createProcess] decides how it
 #' becomes a whole number:
 #'
 #' * `sample_regeneration = TRUE` (default): recruits are drawn from a negative
@@ -90,7 +90,7 @@
 #'   not. Default `0.5` since 0.2.0; `0` or `NULL` removes it. A fixed
 #'   `dispersion_parameter` below the floor is raised to the floor.
 #'
-#' With the default `fit(rb_gradient = TRUE)`, `theta` is set only by the
+#' With the default [`fit(rb_gradient = TRUE)`][fit], `theta` is set only by the
 #' regeneration likelihood. On sparse, zero-heavy recruitment data the
 #' likelihood optimum of `theta` is very small: a small `theta` widens the
 #' likelihood and so lowers the loss without improving the predicted mean, and
@@ -115,11 +115,11 @@
 #' short fits, a fixed `theta` gets the level right sooner.
 #'
 #' @section The likelihood and the observation operator:
-#' `fit(loss_family = c(regeneration = ))` chooses the regeneration likelihood.
+#' [`fit(loss_family = c(regeneration = ))`][fit] chooses the regeneration likelihood.
 #' `"nbinom"` (default) uses `theta` as above. `"poisson"` has no dispersion
 #' parameter and so cannot collapse; `theta` then only shapes the recruit draw.
 #'
-#' `finn(recruit_obs_weight = w)` is an observation operator: it maps the
+#' [`finn(recruit_obs_weight = w)`][finn] is an observation operator: it maps the
 #' predicted and the observed recruitment per ha alike into the count space of
 #' the sampling design before they are compared, so that the likelihood sees
 #' the counts that were actually tallied. For an angle-count inventory
@@ -139,17 +139,17 @@
 #' scores the per-ha values as they are and `recruit_obs_weight` has no effect,
 #' without a warning; the Poisson variance then is that of a per-ha value, not of
 #' the tallied count. The Poisson term adds
-#' `fit(trees_offset = )` (default `0.01`) to the prediction.
+#' [`fit(trees_offset = )`][fit] (default `0.01`) to the prediction.
 #'
 #' @section Feeding observed recruitment:
-#' `fit(loss_recruit = "observed")` drives the simulated stand with the observed
+#' [`fit(loss_recruit = "observed")`][fit] drives the simulated stand with the observed
 #' recruitment instead of the regeneration process. The observed `reg` divided
 #' by `period_length` is the expected recruitment per ha and year in every year
 #' of that interval; times `patch_size` it is drawn per patch by the recruit
 #' sampler, as above. Growth, mortality and competition run and are trained as
 #' usual. The regeneration term is weighted 0 and every regeneration parameter
 #' (species parameters, environment response, cap, `theta`, custom parameters)
-#' is frozen for that call. `predict()` and `simulateForest()` take
+#' is frozen for that call. [`predict()`][predict.finn_class] and [FINN::simulateForest()] take
 #' `recruits = "observed"` and the table `obs_recruits` to simulate the same way. With
 #' observed recruitment the model is not an autonomous simulator: every
 #' simulated year must lie in an observed interval, and bare-ground, succession

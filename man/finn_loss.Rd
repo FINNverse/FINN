@@ -53,7 +53,7 @@ observation (see \link{finn_data} and \code{\link[=fit]{fit()}}). Growth is comp
 rate (\code{dbh / dbh_before - 1}), the model's own quantity; training against
 the absolute increment was tested and was worse and more seed-variable,
 because it couples the growth parameters to whichever trees happen to be
-present. \code{finn(growth_rate = )} says whether the observed growth is a rate
+present. \code{\link[=finn]{finn(growth_rate = )}} says whether the observed growth is a rate
 per time step or the increment over the whole interval.
 
 For \code{regeneration}, \code{"nbinom"} (the default) uses the recruit dispersion
@@ -170,7 +170,7 @@ error of the functions plus the drift of the simulated stand.\tabular{lll}{
    the tree is \tab observed: measured dbh, observed competitors, yearly environment \tab simulated: the cohort it started as, along the model's trajectory \cr
    measures \tab the growth and mortality functions alone \tab the functions plus the drift of the simulated stand \cr
    responses \tab chosen separately, e.g. only \code{mortality = "tree"} \tab growth and mortality together \cr
-   \code{init_cohort} \tab any, incl. binned (\code{makeInitCohorts(dbh_binsize = )}) \tab one cohort per tree (\code{makeInitCohorts()} without \code{dbh_binsize}) \cr
+   \code{init_cohort} \tab any, incl. binned (\code{makeInitCohorts(dbh_binsize = )}) \tab one cohort per tree (\code{\link[=makeInitCohorts]{makeInitCohorts()}} without \code{dbh_binsize}) \cr
    \code{tree_data} needs \tab \code{dbh} at the interval start \tab \code{cohortID} of the initial cohort \cr
    combines with \tab the simulated \code{dbh}/\code{ba}/\code{trees}/\code{regeneration} terms \tab \code{reanchor} and \code{teacher_forcing} \cr
    diagnostics \tab \code{\link[=predictTrees]{predictTrees()}} \tab \verb{$tree_deaths}, \verb{$tree_pred} \cr
@@ -199,7 +199,7 @@ score every tree and the scored sample does not depend on the parameters;
 killed a tree the inventory found alive (\code{frac_killed}), in which year
 (\code{mean_kill_year}), and the share that entered the window already dead
 (\code{frac_ghost}). With the binned competition a killed cohort still occupies
-a slot of the height quantiles, so \code{createProcess(light_mask = TRUE)} (the
+a slot of the height quantiles, so \code{\link[=createProcess]{createProcess(light_mask = TRUE)}} (the
 default) or \code{continuous = TRUE} is needed for the competition process;
 \code{fit()} warns otherwise.
 }

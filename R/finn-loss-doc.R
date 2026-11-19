@@ -48,7 +48,7 @@
 #' rate (`dbh / dbh_before - 1`), the model's own quantity; training against
 #' the absolute increment was tested and was worse and more seed-variable,
 #' because it couples the growth parameters to whichever trees happen to be
-#' present. `finn(growth_rate = )` says whether the observed growth is a rate
+#' present. [`finn(growth_rate = )`][finn] says whether the observed growth is a rate
 #' per time step or the increment over the whole interval.
 #'
 #' For `regeneration`, `"nbinom"` (the default) uses the recruit dispersion
@@ -162,7 +162,7 @@
 #' | the tree is | observed: measured dbh, observed competitors, yearly environment | simulated: the cohort it started as, along the model's trajectory |
 #' | measures | the growth and mortality functions alone | the functions plus the drift of the simulated stand |
 #' | responses | chosen separately, e.g. only `mortality = "tree"` | growth and mortality together |
-#' | `init_cohort` | any, incl. binned (`makeInitCohorts(dbh_binsize = )`) | one cohort per tree (`makeInitCohorts()` without `dbh_binsize`) |
+#' | `init_cohort` | any, incl. binned (`makeInitCohorts(dbh_binsize = )`) | one cohort per tree ([makeInitCohorts()] without `dbh_binsize`) |
 #' | `tree_data` needs | `dbh` at the interval start | `cohortID` of the initial cohort |
 #' | combines with | the simulated `dbh`/`ba`/`trees`/`regeneration` terms | `reanchor` and `teacher_forcing` |
 #' | diagnostics | [predictTrees()] | `$tree_deaths`, `$tree_pred` |
@@ -189,7 +189,7 @@
 #' killed a tree the inventory found alive (`frac_killed`), in which year
 #' (`mean_kill_year`), and the share that entered the window already dead
 #' (`frac_ghost`). With the binned competition a killed cohort still occupies
-#' a slot of the height quantiles, so `createProcess(light_mask = TRUE)` (the
+#' a slot of the height quantiles, so [`createProcess(light_mask = TRUE)`][createProcess] (the
 #' default) or `continuous = TRUE` is needed for the competition process;
 #' `fit()` warns otherwise.
 #'

@@ -16,7 +16,7 @@ tree list.
 
 The short version: build \code{data} and \code{env} with \code{\link[=makeObsData]{makeObsData()}} and
 \code{\link[=resolveSiteIDs]{resolveSiteIDs()}}, the initial trees with \code{\link[=makeInitCohorts]{makeInitCohorts()}},
-and pass them to \code{fit(data = , env = , init_cohort = )}. The three helpers
+and pass them to \code{\link[=fit]{fit(data = , env = , init_cohort = )}}. The three helpers
 produce exactly the columns below.
 }
 \section{How the tables fit together}{
@@ -108,7 +108,7 @@ after its last are simulated but not scored.
 \strong{Units.} Use the units of your inventory consistently: \code{dbh} in cm,
 areas in m2 per patch of \code{patch_size} ha, recruits per hectare. The
 per-hectare quantities depend on \code{patch_size}, so pass the plot size of
-the inventory to \code{fit(patch_size = )}.
+the inventory to \code{\link[=fit]{fit(patch_size = )}}.
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{head(fia_obs_dt[, .(siteID, year, period_length, species, dbh, ba, trees, growth, mort,
                     reg, n_at_risk, growth_n)], 2)
@@ -146,7 +146,7 @@ with the stand after ten simulated years and \code{env} starts at year 1.
 
 A climate that does not change between years is repeated for every year,
 as here; a year-by-year climate gives every step its own row. Which
-columns a process uses is set by \code{createProcess(formula = )}, e.g.
+columns a process uses is set by \code{\link[=createProcess]{createProcess(formula = )}}, e.g.
 \code{~ temp + prec}; the default \code{~.} uses every predictor column.
 }
 
@@ -161,11 +161,11 @@ happens. \code{NULL} (the default) means no disturbance.
 
 \section{\code{init_cohort} -- the initial trees}{
 
-A \code{CohortMat}, the trees of every site at the first census grouped into
+A \link{CohortMat}, the trees of every site at the first census grouped into
 cohorts of one species and one diameter per patch, built by
 \code{\link[=makeInitCohorts]{makeInitCohorts()}} from a table with \code{siteID}, \code{patchID}, \code{species},
 \code{dbh} and optionally \code{trees} (stems the row stands for, default 1).
-\code{makeInitCohorts(dbh_binsize = )} bins the diameters into fewer, cheaper
+\code{\link[=makeInitCohorts]{makeInitCohorts(dbh_binsize = )}} bins the diameters into fewer, cheaper
 cohorts; without it every tree is a cohort, which the per-tree scoring
 needs. The number of patches per site is read from \code{init_cohort}, so
 \code{fit(patches = )} is ignored when it is given. Without \code{init_cohort} every

@@ -21,7 +21,7 @@ whose mean is \code{n * p} and whose variance is \code{n * p * (1 - p)}.
 }
 \description{
 The mortality draw of FINN before 0.2.0, selected with
-\code{createProcess(mortality_draw = "gamma")}: a Gamma distribution with the mean
+\code{\link[=createProcess]{createProcess(mortality_draw = "gamma")}}: a Gamma distribution with the mean
 \code{n * p} and the variance \code{n * p * (1 - p)} of the binomial, sampled with
 \code{rsample()} so that the draw carries a pathwise gradient to \code{n} and \code{p}. The
 draw is continuous, not an integer count; the simulation rounds it afterwards.

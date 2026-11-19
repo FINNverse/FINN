@@ -52,7 +52,7 @@
 #'   parameter group. Default `2`.
 #' @param ... Further arguments for `optimizer`, e.g. `weight_decay = 1e-4`.
 #'
-#' @return A list of class `finnControl`, to be passed to `fit(control = )`.
+#' @return A list of class `finnControl`, to be passed to [`fit(control = )`][fit].
 #'
 #' @seealso [FINN::fit()], [finn_loss]
 #'

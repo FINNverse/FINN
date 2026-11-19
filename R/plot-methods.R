@@ -132,11 +132,11 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #' * **Process parameters** (`pars = "process"`, the default): one panel per parameter of the
 #'   growth, mortality, regeneration and competition processes, and the recruit
 #'   dispersion `theta`; one point per species, on the constrained scale the
-#'   process function uses. The admissible range set by
-#'   `createProcess(lower, upper)` is the light band behind the points (for
-#'   `theta` it starts at the floor `createProcess(theta_floor)`), so a species
+#'   process function uses. The admissible range set by the arguments `lower`
+#'   and `upper` of [createProcess()] is the light band behind the points (for
+#'   `theta` it starts at the floor, its argument `theta_floor`), so a species
 #'   whose parameter ended the fit at a bound -- drawn as an open triangle -- is
-#'   visible at a glance (see `?createProcess` on what such a parameter means).
+#'   visible at a glance (see [createProcess()] on what such a parameter means).
 #' * **Environmental niches** (`pars = "env"`): for each process whose
 #'   environmental response is linear (no `hidden`, no custom `NN`, not
 #'   [createHybrid()]), the fitted environmental term of every species across
@@ -156,13 +156,15 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #'   two values are those of the `plot()` method of FINN 0.1.0, so a call such
 #'   as `plot(m, pars = "env")` keeps working.
 #' @param species Species numbers to draw; `NULL` (default) all.
-#' @param env Table whose predictor ranges the niches span; `NULL` (default)
-#'   the environment the model was fitted on. Only used with `pars = "env"`.
+#' @param env Table whose predictor ranges the niches span, in the format of
+#'   the `env` of [fit()] (see [finn_data]); `NULL` (default) the environment
+#'   the model was fitted on. Only used with `pars = "env"`.
 #' @param ... Unused.
 #' @return The `ggplot` object, invisibly (`NULL` when there is nothing to
 #'   draw); it is printed.
 #' @seealso [ALE()] for the effect of a network response, [summary.finn_class()]
-#'   for importances, [plot.finn_simulation()] for a simulation.
+#'   for the skill, the convergence and the environmental importances of a
+#'   fit, [plot.finn_simulation()] for a simulation.
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' sites <- 1:3
@@ -239,7 +241,8 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 
 #' Plot a FINN simulation
 #'
-#' Draws the trajectories returned by [simulateForest()] or [predict()]: one
+#' Draws the trajectories returned by [simulateForest()] or
+#' [`predict()`][predict.finn_class]: one
 #' panel per response, one line per species, averaged over the sites; with
 #' `sites` one site (or the average over a few). To see every site, loop over
 #' them.
@@ -247,17 +250,24 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #' Given observations as the second argument, `plot(sim, obs)` compares the
 #' simulation with them instead: it is [comparePlot()], with the same arguments.
 #'
-#' @param x The object returned by [simulateForest()] or [predict()] (class
-#'   `finn_simulation`).
-#' @param y `NULL` (default), or observations to compare with (see
+#' `print()` of a simulation shows the list of tables as before 0.2.0, without
+#' the class attribute.
+#'
+#' @param x The object returned by [simulateForest()] or
+#'   [`predict()`][predict.finn_class] (class `finn_simulation`).
+#' @param y `NULL` (default), or observations to compare with (the `obs` of
 #'   [comparePlot()]).
 #' @param response Responses to draw, any of `"dbh"`, `"ba"`, `"trees"`,
 #'   `"growth"`, `"mort"`, `"reg"`, `"r_mean_ha"`; `NULL` (default) the stand
-#'   variables `ba`, `dbh` and `trees`.
+#'   variables `ba`, `dbh` and `trees`. With `y`, as in [comparePlot()].
 #' @param sites Site ids to include; `NULL` (default) all.
-#' @param ... Passed to [comparePlot()] when `y` is given (`type`, `species`).
-#' @return The `ggplot` object, invisibly; it is printed.
-#' @seealso [plot.finn_class()] for the fitted parameters, [comparePlot()].
+#' @param ... `plot()`: passed to [comparePlot()] when `y` is given (`type`,
+#'   `species`), otherwise unused. `print()`: passed to the print method of a
+#'   list.
+#' @return `plot()`: the `ggplot` object, invisibly; it is printed. `print()`:
+#'   `x`, invisibly.
+#' @seealso [plot.finn_class()] for the fitted parameters, [comparePlot()] and
+#'   [evaluate()] for the comparison with observations.
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' sites <- 1:3

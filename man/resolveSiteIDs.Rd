@@ -32,7 +32,7 @@ axis. Default TRUE.}
 the inventory (0, 1, 2, ...), one simulation step is one census interval
 (\code{period_length = 1}), \code{env_dt} keeps the inventory years, and
 the observations of the first inventory stay in \code{obs_dt}. Use it
-with \code{makeObsData(rates = "interval")}. Unlike 0.1.0, which built
+with \code{\link[=makeObsData]{makeObsData(rates = "interval")}}. Unlike 0.1.0, which built
 the initial cohorts from the second inventory, the census axis now
 starts from the first one, so 0.1.0 results are not reproduced exactly.}
 }
@@ -44,7 +44,7 @@ calendar year).
 \item \code{tree_dt}: tree table with indices and standardized species.
 \item \code{env_dt}: environment table with indices, the years of the
 simulation: \code{siteID}, \code{year} and the predictors, what
-\code{fit(env = )} takes (\code{siteID_dt} maps the ids back to the
+\code{\link[=fit]{fit(env = )}} takes (\code{siteID_dt} maps the ids back to the
 site names).
 \item \code{obs_dt}: site-aggregated observations by species, with
 \code{period_length}.
@@ -57,8 +57,9 @@ The list can be stored with \code{saveRDS()} and read back with
 \code{readRDS()}: \code{initCohorts} keeps a plain R copy of its arrays and
 rebuilds its torch tensors, which \code{saveRDS()} cannot store, when
 \code{\link{fit}()}, \code{\link{simulateForest}()} or \code{\link{predict.finn_class}()}
-use it (or by \code{x$initCohorts$restore()}). Cohorts saved with FINN
-before this version carry no such copy; rebuild them from the table with
+use it (or by \code{x$initCohorts$restore()}, see \code{\link{CohortMat}}).
+Cohorts saved with FINN before 0.2.0 carry no such copy; rebuild them from
+the table with
 \code{x$initCohorts <- makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt))}.
 }
 \description{

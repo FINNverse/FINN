@@ -66,9 +66,9 @@ an adult at \code{x = 9.4} cm, so a low \code{A_half} gives a non-zero adult ter
 in a stand of seedlings.
 
 The cap \code{reg_logK} is created by \code{\link[=finn]{finn()}} as for
-\link{regeneration_capped} (resolution from \code{createProcess(cap = )}, prior
+\link{regeneration_capped} (resolution from \code{\link[=createProcess]{createProcess(cap = )}}, prior
 from \code{prior}/\code{prior_lambda}), so it need not be declared. Declare the three
-adult parameters with \code{createProcess(custom_parameters = )}; a length-1 init
+adult parameters with \code{\link[=createProcess]{createProcess(custom_parameters = )}}; a length-1 init
 gives one shared value and a length-\code{N_species} init one value per species:
 \itemize{
 \item \code{reg_adult_logx}: the log adult threshold, \code{x = exp(reg_adult_logx)} in the

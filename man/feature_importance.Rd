@@ -31,10 +31,11 @@ feature_importance(
 
 \item{sim_seed}{(\code{integer(1)}|\code{NULL})\cr torch seed for common random numbers across runs.}
 
-\item{env_autoscale}{(\code{logical(1)})\cr see \code{\link[=ALE]{ALE()}}. \code{TRUE} (default) leaves \code{predict()} to
+\item{env_autoscale}{(\code{logical(1)})\cr see \code{\link[=ALE]{ALE()}}. \code{TRUE} (default) leaves
+\code{\link[=predict.finn_class]{predict()}} to
 rescale raw \code{env} internally; \code{FALSE} treats \code{env} as already on the model scale.}
 
-\item{...}{passed to \code{\link[=predict]{predict()}} (e.g. \code{patches}, \code{patch_size}).}
+\item{...}{passed to \code{\link[=predict.finn_class]{predict()}} (e.g. \code{patches}, \code{patch_size}).}
 }
 \value{
 a named list (one per process) of data.frames with columns

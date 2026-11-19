@@ -15,48 +15,62 @@ evaluate(
 )
 }
 \arguments{
-\item{model}{A model fitted with \code{\link[=fit]{fit()}}.}
+\item{model}{A model built by \code{\link[=finn]{finn()}} and fitted with \code{\link[=fit]{fit()}}.}
 
 \item{holdout}{\code{NULL} (default) or a list with the holdout \code{data}
 (observations as for \code{\link[=fit]{fit()}}), its \code{env} and its \code{init_cohort}, and
-optionally \code{disturbance}.}
+optionally \code{disturbance} (see \link{finn_data} for the four tables). Without
+\code{init_cohort} the holdout sites start from bare ground, with a warning.}
 
-\item{bare_ground}{Run the bare-ground simulation too. Default \code{FALSE}.}
+\item{bare_ground}{(\code{logical(1)})\cr Run the bare-ground simulation too.
+Default \code{FALSE}.}
 
-\item{years}{Length of the bare-ground run in years. Default \code{500}.}
+\item{years}{(\code{integer(1)})\cr With \code{bare_ground = TRUE}: the length of the
+run in years, as in \code{\link[=simulateForest]{simulateForest()}}. Default \code{500}.}
 
-\item{sites}{\code{NULL} (default) one bare-ground run under the mean training
-climate; site ids for one run per site under that site's mean climate.}
+\item{sites}{With \code{bare_ground = TRUE}, as in \code{\link[=simulateForest]{simulateForest()}}: \code{NULL}
+(default) one run under the mean climate of all sites, or site ids for
+one run per site under that site's mean climate.}
 
-\item{patches}{Patches per site; \code{NULL} (default) as in the fit.}
+\item{patches}{(\code{integer(1)})\cr Number of patches per site of a run that
+starts from bare ground; \code{NULL} (default) the patch count the model was
+fitted with (\code{model$patches}), or \code{100} for a model fitted before 0.2.0.
+Not used for a set with an \code{init_cohort}: its patch count comes from the
+initial cohorts.}
 
 \item{train}{\code{NULL} (default): the training data the model keeps from
 \code{\link[=fit]{fit()}}. A list like \code{holdout} for a model that keeps none (fitted before
-this version of FINN, e.g. read with \code{torch::torch_load()}).}
+0.2.0, e.g. read with \code{\link[torch:torch_load]{torch::torch_load()}}).}
 }
 \value{
-The model, invisibly, with \code{model$evaluation}: a list with \code{train}
-and, when given, \code{holdout} (each with the paired table \code{matched} and the
-skill measures \code{skill} overall and \code{skill_species} per species), and
-\code{bare_ground} (the simulation).
+The model, invisibly; it is changed in place, as by \code{\link[=fit]{fit()}}, and
+carries \code{model$evaluation}: a list with \code{train} and, when given, \code{holdout}
+(each with the paired table \code{matched} and the skill measures \code{skill}
+overall and \code{skill_species} per species; the measures are described in
+\code{\link[=summary.finn_class]{summary.finn_class()}}), and with \code{bare_ground = TRUE} also \code{bare_ground}
+(the simulation, as \code{\link[=simulateForest]{simulateForest()}} returns it) and
+\code{bare_ground_settings} (\code{years}, \code{sites}, \code{patches}). A new call replaces
+the stored evaluation.
 }
 \description{
 An optional step after \code{\link[=fit]{fit()}} that simulates the model and stores what is
-needed to judge it on the model object, as \code{model$evaluation}; \code{\link[=summary]{summary()}}
-prints it and \code{\link[=comparePlot]{comparePlot()}} draws the same comparison. Calling
-\code{fit(..., holdout = )} runs it right after the fit.
+needed to judge it on the model object, as \code{model$evaluation};
+\code{\link[=summary.finn_class]{summary()}} prints it and \code{\link[=comparePlot]{comparePlot()}} draws the same
+comparison. Calling \code{\link[=fit]{fit()}} with its argument \code{holdout} runs it right after
+the fit.
 }
 \details{
 \itemize{
 \item \strong{Training data}: the model is simulated from the training initial state
 under the training environment and compared with the observations it was
-fitted to, aggregated as \code{\link[=fit]{fit()}} scores them.
+fitted to, aggregated the way \code{\link[=fit]{fit()}} scores them (see \code{\link[=comparePlot]{comparePlot()}}).
 \item \strong{Holdout} (\code{holdout = list(data =, env =, init_cohort =)}): the same on
 data the model has not seen, e.g. a spatially separate set of sites.
-\item \strong{Bare ground} (\code{bare_ground = TRUE}): a run from an empty stand for
-\code{years} years under the mean training climate held constant, or under the
-mean climate of each of \code{sites} (see \code{\link[=simulateForest]{simulateForest()}}). Optional, because
-a long run takes time.
+\item \strong{Bare ground} (\code{bare_ground = TRUE}): the run of
+\code{simulateForest(model, bare_ground = TRUE, years = , sites = )}, from an
+empty stand for \code{years} years under the mean climate of the fitted
+environment held constant, or under each site's mean climate with \code{sites}
+(see \code{\link[=simulateForest]{simulateForest()}}). Optional, because a long run takes time.
 }
 }
 \examples{

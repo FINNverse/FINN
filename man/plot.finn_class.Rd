@@ -16,8 +16,9 @@ as \code{plot(m, pars = "env")} keeps working.}
 
 \item{species}{Species numbers to draw; \code{NULL} (default) all.}
 
-\item{env}{Table whose predictor ranges the niches span; \code{NULL} (default)
-the environment the model was fitted on. Only used with \code{pars = "env"}.}
+\item{env}{Table whose predictor ranges the niches span, in the format of
+the \code{env} of \code{\link[=fit]{fit()}} (see \link{finn_data}); \code{NULL} (default) the environment
+the model was fitted on. Only used with \code{pars = "env"}.}
 
 \item{...}{Unused.}
 }
@@ -35,11 +36,11 @@ parameters; \code{pars = "env"} switches to the environmental niches.
 \item \strong{Process parameters} (\code{pars = "process"}, the default): one panel per parameter of the
 growth, mortality, regeneration and competition processes, and the recruit
 dispersion \code{theta}; one point per species, on the constrained scale the
-process function uses. The admissible range set by
-\code{createProcess(lower, upper)} is the light band behind the points (for
-\code{theta} it starts at the floor \code{createProcess(theta_floor)}), so a species
+process function uses. The admissible range set by the arguments \code{lower}
+and \code{upper} of \code{\link[=createProcess]{createProcess()}} is the light band behind the points (for
+\code{theta} it starts at the floor, its argument \code{theta_floor}), so a species
 whose parameter ended the fit at a bound -- drawn as an open triangle -- is
-visible at a glance (see \code{?createProcess} on what such a parameter means).
+visible at a glance (see \code{\link[=createProcess]{createProcess()}} on what such a parameter means).
 \item \strong{Environmental niches} (\code{pars = "env"}): for each process whose
 environmental response is linear (no \code{hidden}, no custom \code{NN}, not
 \code{\link[=createHybrid]{createHybrid()}}), the fitted environmental term of every species across
@@ -74,5 +75,6 @@ plot(m, pars = "env", species = 1:3)
 }
 \seealso{
 \code{\link[=ALE]{ALE()}} for the effect of a network response, \code{\link[=summary.finn_class]{summary.finn_class()}}
-for importances, \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} for a simulation.
+for the skill, the convergence and the environmental importances of a
+fit, \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} for a simulation.
 }

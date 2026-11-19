@@ -548,9 +548,10 @@ averageConditionalEffects = function(model, env = NULL, init_cohort = NULL, env_
 #' @param method (`character(1)`)\cr `"rmse"` or `"sobol"`.
 #' @param seed (`integer(1)`|`NULL`)\cr R RNG seed controlling which permutations are drawn.
 #' @param sim_seed (`integer(1)`|`NULL`)\cr torch seed for common random numbers across runs.
-#' @param env_autoscale (`logical(1)`)\cr see [ALE()]. `TRUE` (default) leaves `predict()` to
+#' @param env_autoscale (`logical(1)`)\cr see [ALE()]. `TRUE` (default) leaves
+#'   [`predict()`][predict.finn_class] to
 #'   rescale raw `env` internally; `FALSE` treats `env` as already on the model scale.
-#' @param ... passed to [predict()] (e.g. `patches`, `patch_size`).
+#' @param ... passed to [`predict()`][predict.finn_class] (e.g. `patches`, `patch_size`).
 #' @return a named list (one per process) of data.frames with columns
 #'   `species, variable, importance`, sorted within species.
 #' @seealso [summary.finn_class()] (`importance = "permutation"`), [ALE()]
@@ -662,12 +663,14 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'
 #' 1. **Skill**: per response, R2 (`1 - SSE/SST`) first, then RMSE, Pearson r,
 #'    the bias, the ratio of the mean prediction to the mean observation (is the
-#'    magnitude right?) and n; for mortality also the tree-level AUC and the
-#'    ratio of predicted to observed deaths. On the training data and, when
-#'    [evaluate()] or `fit(holdout = )` stored one, on the holdout. The
-#'    observations are compared with the simulation aggregated as [fit()] scores
-#'    them (see [comparePlot()]). Without a stored evaluation, `summary()` runs
-#'    [evaluate()] on the training data first (one simulation).
+#'    magnitude right?; for mortality weighted by the trees at risk, where the
+#'    observations carry `n_at_risk` and `n_died`) and n; for mortality also the
+#'    tree-level AUC and the ratio of predicted to observed deaths. On the
+#'    training data and, when [evaluate()] or the argument `holdout` of [fit()]
+#'    stored one, on the holdout. The observations are compared with the
+#'    simulation aggregated the way [fit()] scores it (see [comparePlot()]).
+#'    Without a stored evaluation, `summary()` runs [evaluate()] on the training
+#'    data first (one simulation) and stores it on the model.
 #' 2. **Convergence**: by how many percent each loss term changed over the last
 #'    `epochs_back` epochs (the mean of the last `epochs_back` epochs against
 #'    the mean of the `epochs_back` before), and by how many percent each
@@ -675,14 +678,17 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'    change, `||theta_now - theta_then|| / ||theta_then||`). [fit()] keeps the
 #'    parameters of the last 51 epochs for this, so `epochs_back` can be at
 #'    most 50 for the parameters. A fit has settled when both are small.
-#' 3. **Bare ground**, when [evaluate()] stored a bare-ground run: the total
-#'    basal area at the end and the leading species.
+#' 3. **Bare ground**, when [evaluate()] stored a bare-ground run: per site,
+#'    the total basal area and the leading species with its share, as the mean
+#'    over the last tenth of the run.
 #' 4. **Environmental importance and average conditional effects**, per process
 #'    and species, from the model's conditional effects (computed once and
-#'    cached, see [ALE()]).
+#'    cached, see [ALE()]). Where they cannot be computed for a model, a
+#'    warning says why and the other sections are still returned.
 #'
 #' `print()` shows it; `print(s, epochs_back = 10)` redoes the convergence
-#' check over another window without recomputing anything.
+#' check over another window without recomputing anything. [plot.finn_class()]
+#' draws the fitted parameters themselves.
 #'
 #' @param object (`finn_class`)\cr fitted model.
 #' @param env,init_cohort (`NULL` or data)\cr interpretation data for the
@@ -699,11 +705,15 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'   across processes and species (Sobol-style). Default `TRUE`.
 #' @param epochs_back (`integer(1)`)\cr the window of the convergence check, in
 #'   epochs. Default `50`.
-#' @param ... passed through (e.g. to [predict()] for the permutation option).
-#' @return An object of class `summary.finn_class`: a list with `skill` (per set,
-#'   overall), `skill_species` (per set and species), `convergence` (the loss
-#'   history and the recent parameters), `bare_ground`, `importance`,
-#'   `average_conditional_effects` and `method`.
+#' @param ... `summary()`: passed to [feature_importance()] with
+#'   `importance = "permutation"` (and from there to
+#'   [`predict()`][predict.finn_class]). `print()`: unused.
+#' @return `summary()`: an object of class `summary.finn_class`, a list with
+#'   `skill` (per set, overall), `skill_species` (per set and species),
+#'   `convergence` (the loss history and the recent parameters), `bare_ground`,
+#'   `importance`, `average_conditional_effects`, `method` (the `importance`
+#'   option), `importance_label`, `environment_error` (`NULL`, or why item 4
+#'   could not be computed) and `epochs_back`. `print()`: `x`, invisibly.
 #'
 #' @seealso [evaluate()], [comparePlot()], [plot.finn_class()], [ALE()],
 #'   [averageConditionalEffects()], [feature_importance()]

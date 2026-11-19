@@ -108,7 +108,7 @@
 #' @param upper,lower (`numeric()`)\cr Boundaries (natural scale) for the
 #'   species-specific process parameters, one value per parameter of the process.
 #'   They are guard rails that keep the optimiser inside the range in which the
-#'   equations stay meaningful, not ranges taken from the data, and `fit()` does
+#'   equations stay meaningful, not ranges taken from the data, and [FINN::fit()] does
 #'   not move them. The defaults, as `lower` / `upper`:
 #'   growth `c(0.01, 0.01)` / `c(0.99, 4.0)` (light requirement of the shade
 #'   response, size decay); mortality `c(-10, -10, -10)` / `c(10, 10, 10)` (the
@@ -152,7 +152,7 @@
 #'   mortality process. `"binomial"` (default since 0.2.0) is `torch`'s exact
 #'   binomial sampler: integer-valued, exact in both moments, at constant memory.
 #'   It has no gradient of its own, which costs nothing under
-#'   `fit(rb_gradient = TRUE)` (the default), where the gradient is taken through
+#'   [`fit(rb_gradient = TRUE)`][fit] (the default), where the gradient is taken through
 #'   the expected number of deaths. Under `fit(rb_gradient = FALSE)` there is no
 #'   such path, and `"binomial"` falls back to the `"gamma"` draw.
 #'   `"bernoulli"` gives each tree of the cohort its own reparameterised Bernoulli
@@ -213,7 +213,7 @@
 #'   species, an equilibrium run -- lost stems the observations did not: at a
 #'   1 % floor it loses 1 % of every cohort per step however low the fitted rate.
 #'
-#'   The floor exists because `binomial_from_gamma()`'s shape `n*p/(1-p)`
+#'   The floor exists because the shape of [FINN::binomial_from_gamma()], `n*p/(1-p)`,
 #'   degenerates as `p -> 0`. Measured with that draw, it stays finite with an
 #'   unbiased mean gradient down to `1e-4`, but single-draw gradients grow
 #'   heavy-tailed as `n*p` shrinks -- the largest per-tree gradient is about ten
@@ -231,7 +231,7 @@
 #'   0.2.0 the floor was hard-coded to `0.2`, which with many species adds a
 #'   large recruitment that does not depend on anything (65 species x 0.2 = 13
 #'   trees per ha and year); models saved before then keep that value when
-#'   reloaded. `finn(reg_floor = )`, the argument of earlier versions, is
+#'   reloaded. [`finn(reg_floor = )`][finn], the argument of earlier versions, is
 #'   still accepted with a warning and overrides this value.
 #' @param growth_scale (`numeric(1)` or `NULL`)\cr Overrides the `growth_scale`
 #'   default of the process `func`. Only used when this process is the mortality
@@ -736,13 +736,13 @@ compute_env_scaling = function(env, spec = TRUE) {
 
 #' Apply stored z-standardization to environmental predictors
 #'
-#' Re-applies the constants learned by \code{compute_env_scaling()} to \code{env}.
+#' Re-applies the constants learned by \code{\link{compute_env_scaling}()} to \code{env}.
 #' The transformation uses the \emph{stored} mean/sd only and never recomputes them
 #' from \code{env}, so calibration and prediction use an identical transformation
 #' (the usual pitfall of \code{scale()} inside a model formula is avoided).
 #'
 #' @param env A \code{data.frame}/\code{data.table} of raw environmental data.
-#' @param scaling The \code{data.frame} returned by \code{compute_env_scaling()},
+#' @param scaling The \code{data.frame} returned by \code{\link{compute_env_scaling}()},
 #'   or \code{NULL} (in which case \code{env} is returned unchanged). For a model
 #'   fit with \code{env_autoscale = TRUE} this is \code{model$env_scaling}.
 #' @return \code{env} with the scaled predictor columns, as a \code{data.table}.

@@ -36,7 +36,7 @@ If \code{treeID_table = FALSE}, a \code{FINN::CohortMat} object.
 If \code{TRUE}, a list with:
 \itemize{
 \item \code{initCohort}: the \code{CohortMat} object.
-\item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat()},
+\item \code{init_trees}: the \code{obs_df} passed to \code{\link{CohortMat}()},
 with the \code{cohortID} of every row.
 }
 }

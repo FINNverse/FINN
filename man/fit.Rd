@@ -74,9 +74,11 @@ have the same sites and years as \code{env}. \code{NULL} (default): no disturban
 See \link{finn_data}.}
 
 \item{patches}{(\code{integer(1)})\cr Number of patches per site when the fit
-starts from bare ground (\code{init_cohort = NULL}). Ignored, with a warning
-when it differs, as soon as \code{init_cohort} is given: the patch count then
-comes from the initial cohorts.}
+starts from bare ground (\code{init_cohort = NULL}). Default \code{100}. Ignored,
+with a warning when it differs, as soon as \code{init_cohort} is given: the
+patch count then comes from the initial cohorts. The patch count of the
+fit is stored as \code{model$patches}; \code{\link[=simulateForest]{simulateForest()}} and
+\code{\link[=evaluate]{evaluate()}} take it when their \code{patches} is not given.}
 
 \item{patch_size}{(\code{numeric(1)})\cr Area of one patch in ha. Default \code{0.1}.
 Use the plot size of the inventory (the bundled FIA data: \code{0.06}). A
@@ -210,7 +212,7 @@ Or one entry per predictor (named, or in column order): \code{"auto"},
 \code{"identity"}, \code{"0to1"} or a function \code{f(x)} returning \code{list(center =, scale =)},
 e.g. \code{c(temp = "auto", management = "identity")} to keep an ordinal
 predictor on its own scale. The constants are stored on the model
-(\code{model$env_scaling}) and re-applied by \code{predict()}/\code{simulateForest()}, so
+(\code{model$env_scaling}) and re-applied by \code{\link[=simulateForest]{simulateForest()}}, so
 \code{env} is always passed in natural units. See \link{finn_data}.}
 
 \item{nonfinite}{(\code{character(1)})\cr What happens when one of the six loss
@@ -249,8 +251,8 @@ because the aggregated rates would then mix pre- and post-anchor state.
 list can be reused across fits. Ignored unless \code{reanchor = TRUE}.
 
 \strong{Build the arrays directly} --
-\code{CohortMat(dbh = , trees = , species = , dims = , sp = )} -- rather than via
-\code{CohortMat(obs_df = )}. The \code{obs_df} path runs \code{obsDF2arrays()}, which rounds
+\code{\link[=CohortMat]{CohortMat(dbh = , trees = , species = , dims = , sp = )}} -- rather than via
+\code{CohortMat(obs_df = )}. The \code{obs_df} path runs \code{\link[=obsDF2arrays]{obsDF2arrays()}}, which rounds
 \code{trees} to whole stems and silently renumbers any \code{siteID}/\code{patchID} that is
 not a complete \code{1:n} sequence; on a simulated or partly empty stand that
 corrupts the anchor, and a renumbered site no longer aligns with \code{init_cohort}.}
@@ -288,7 +290,7 @@ multi-year trajectory to truncate -- and the anchor validation refuses any
 
 \code{anchor_cohorts} must supply an anchor for every observed timestep except the
 last (nothing is conditioned on the final census, because nothing follows it).
-Only \code{fit()} teacher-forces; \code{predict()}/\code{simulateForest()} always simulate,
+Only \code{fit()} teacher-forces; \code{\link[=simulateForest]{simulateForest()}} always simulates,
 so a teacher-forced model is still validated by single shooting.}
 
 \item{rb_gradient}{(\code{logical(1)})\cr Take the gradient of the drawn death and
@@ -313,7 +315,8 @@ four orders above the rest. \code{NULL} restores those two historical constants
 and so reproduces a fit made before 0.2.0.}
 
 \item{holdout}{\code{NULL} (default), or a list with holdout \code{data}, \code{env} and
-\code{init_cohort} (and optionally \code{disturbance}): after the fit, \code{\link[=evaluate]{evaluate()}}
+\code{init_cohort} (and optionally \code{disturbance}), as the \code{holdout} of
+\code{\link[=evaluate]{evaluate()}}: after the fit, \code{\link[=evaluate]{evaluate()}}
 simulates the training data and the holdout and stores the comparison on
 the model (\code{model$evaluation}), which \code{\link[=summary.finn_class]{summary.finn_class()}} prints. The
 same as calling \code{evaluate(model, holdout = )} after the fit.}
@@ -321,15 +324,17 @@ same as calling \code{evaluate(model, holdout = )} after the fit.}
 \item{...}{Arguments of earlier versions, still accepted with a warning:
 \code{weights} (now \code{loss_weights}), \code{recruits} (now \code{loss_recruit}), and
 \code{optimizer}, \code{lr_scheduler}, \code{lr_scheduler_params}, \code{clip_norm} (now
-members of \code{control = finnControl()}). Any other named argument is passed
-on to the optimizer, as before; \code{finnControl(...)} is the place for it now.}
+members of \code{control}, see \code{\link[=finnControl]{finnControl()}}). Any other named argument is passed
+on to the optimizer, as before; \code{\link[=finnControl]{finnControl()}} is the place for it now.}
 
 \item{loss}{Deprecated name of \code{loss_family}, still accepted with a warning.}
 }
 \value{
 The fitted \code{model}, invisibly. \code{fit()} trains the model in place, so
 the returned object is the one passed in, now carrying the training results
-(e.g. \verb{$history}, \verb{$loss_weights}, \verb{$loss_baseline}, \verb{$param_history}).
+(e.g. \verb{$history}, \verb{$loss_weights}, \verb{$loss_baseline}, \verb{$param_history}),
+the patch count of the fit (\verb{$patches}) and, with \code{holdout}, the
+evaluation (\verb{$evaluation}).
 }
 \description{
 Estimates the parameters of a model built with \code{\link[=finn]{finn()}} from forest
@@ -337,7 +342,7 @@ inventory data. The model simulates every site from its initial trees
 through the years of \code{env}, the simulation is compared with the observed
 stand variables and demographic rates in \code{data}, and the parameters of all
 processes -- the species parameters of the mechanistic equations (for a
-process built with \code{createProcess(optimizeSpecies = TRUE)}), their
+process built with \code{\link[=createProcess]{createProcess(optimizeSpecies = TRUE)}}), their
 responses to the environment, and the weights of any neural-network process
 -- are adjusted together, in one joint optimization, until the simulation
 matches the observations as well as it can. The processes are never
@@ -373,7 +378,7 @@ are summed and the stand variables are taken at the census year. A year in
 which a species has no trees in the simulation counts as growth 0 and
 survival 1, and the rate is spread over the full \code{period_length}, because
 the observed rate is derived from the counts over the whole interval. With
-\code{finn(growth_rate = "period")} growth is the compounded increment over the
+\code{\link[=finn]{finn(growth_rate = "period")}} growth is the compounded increment over the
 interval instead.
 
 \strong{Reading the progress.} With the default \code{loss_weights = "auto"} every
@@ -418,7 +423,7 @@ large \code{epochs} in advance.
 
 Before the death draw, the simulation clamps the per-cohort mortality
 probability of every step to the interval
-\code{createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)} of the
+\code{\link[=createProcess]{createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)}} of the
 mortality process, so at least 0.1 \% and at most 99.9 \% of a cohort is at
 risk per simulated step however extreme the fitted rate. The bound is per
 \emph{step}, not per year: on five-year steps the floor is 0.02 \%/yr, on decadal
@@ -512,5 +517,7 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
 simulation is compared with the observations, \code{\link[=finnControl]{finnControl()}} for the
 optimizer settings, \link{recruitment} for the recruitment options
 (\code{loss_recruit}, the regeneration likelihood), \code{\link[=simulateForest]{simulateForest()}}
-to simulate with the fitted model
+to simulate with the fitted model, \code{\link[=evaluate]{evaluate()}},
+\code{\link[=summary.finn_class]{summary.finn_class()}} and \code{\link[=plot.finn_class]{plot.finn_class()}} to judge the
+fit
 }

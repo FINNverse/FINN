@@ -12,7 +12,7 @@
 #'
 #' The short version: build `data` and `env` with [FINN::makeObsData()] and
 #' [FINN::resolveSiteIDs()], the initial trees with [FINN::makeInitCohorts()],
-#' and pass them to `fit(data = , env = , init_cohort = )`. The three helpers
+#' and pass them to [`fit(data = , env = , init_cohort = )`][fit]. The three helpers
 #' produce exactly the columns below.
 #'
 #' @section How the tables fit together:
@@ -99,7 +99,7 @@
 #' **Units.** Use the units of your inventory consistently: `dbh` in cm,
 #' areas in m2 per patch of `patch_size` ha, recruits per hectare. The
 #' per-hectare quantities depend on `patch_size`, so pass the plot size of
-#' the inventory to `fit(patch_size = )`.
+#' the inventory to [`fit(patch_size = )`][fit].
 #'
 #' ```r
 #' head(fia_obs_dt[, .(siteID, year, period_length, species, dbh, ba, trees, growth, mort,
@@ -138,7 +138,7 @@
 #'
 #' A climate that does not change between years is repeated for every year,
 #' as here; a year-by-year climate gives every step its own row. Which
-#' columns a process uses is set by `createProcess(formula = )`, e.g.
+#' columns a process uses is set by [`createProcess(formula = )`][createProcess], e.g.
 #' `~ temp + prec`; the default `~.` uses every predictor column.
 #'
 #' @section `disturbance` -- optional:
@@ -149,11 +149,11 @@
 #' happens. `NULL` (the default) means no disturbance.
 #'
 #' @section `init_cohort` -- the initial trees:
-#' A `CohortMat`, the trees of every site at the first census grouped into
+#' A [CohortMat], the trees of every site at the first census grouped into
 #' cohorts of one species and one diameter per patch, built by
 #' [FINN::makeInitCohorts()] from a table with `siteID`, `patchID`, `species`,
 #' `dbh` and optionally `trees` (stems the row stands for, default 1).
-#' `makeInitCohorts(dbh_binsize = )` bins the diameters into fewer, cheaper
+#' [`makeInitCohorts(dbh_binsize = )`][makeInitCohorts] bins the diameters into fewer, cheaper
 #' cohorts; without it every tree is a cohort, which the per-tree scoring
 #' needs. The number of patches per site is read from `init_cohort`, so
 #' `fit(patches = )` is ignored when it is given. Without `init_cohort` every

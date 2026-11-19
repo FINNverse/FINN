@@ -42,7 +42,7 @@ sites (\code{fia_tree_dt}) and the \link{fia_obs_test} holdout sites (\code{fia_
 every tree alive at the start of an interval, with its diameter then and its
 fate over the interval. These are the closed cohorts whose counts
 (\code{n_at_risk}, \code{n_died}) the site tables carry, and the \code{tree_data} of
-\code{fit(loss_aggregation = c(mortality = "tree"))} and \code{\link[=predictTrees]{predictTrees()}}, which
+\code{\link[=fit]{fit(loss_aggregation = c(mortality = "tree"))}} and \code{\link[=predictTrees]{predictTrees()}}, which
 score the mortality function on every observed tree instead of on the
 site's pooled rate (see \link{finn_loss}). The ids, time axis and species coding
 are those of the site tables, so the two join on \code{siteID}, \code{year} and

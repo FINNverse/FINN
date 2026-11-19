@@ -12,10 +12,14 @@
 #'   \item [finn()] assembles a model from one process per component, each built
 #'     with [createProcess()] (mechanistic) or [createHybrid()] (neural network).
 #'   \item [simulateForest()] runs a model forward from known parameters.
-#'   \item [fit()] calibrates a model to data; [predict.finn_class()] scores it.
+#'   \item [fit()] calibrates a model to data; [predict.finn_class()] simulates
+#'     with it.
 #'   \item [makeObsData()], [resolveSiteIDs()] and [makeInitCohorts()] turn a raw
 #'     tree list into FINN's input tables.
-#'   \item [ALE()], [summary.finn_class()], [feature_importance()] and
+#'   \item [evaluate()], [comparePlot()] and [summary.finn_class()] judge a
+#'     fitted model against the observations, on the training data and a
+#'     holdout; [plot.finn_simulation()] draws a simulation.
+#'   \item [plot.finn_class()], [ALE()], [feature_importance()] and
 #'     [conditionalEffects()] interpret a fitted model.
 #' }
 #'

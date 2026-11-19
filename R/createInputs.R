@@ -34,7 +34,7 @@
 #'   the inventory (0, 1, 2, ...), one simulation step is one census interval
 #'   (\code{period_length = 1}), \code{env_dt} keeps the inventory years, and
 #'   the observations of the first inventory stay in \code{obs_dt}. Use it
-#'   with \code{makeObsData(rates = "interval")}. Unlike 0.1.0, which built
+#'   with \code{\link[=makeObsData]{makeObsData(rates = "interval")}}. Unlike 0.1.0, which built
 #'   the initial cohorts from the second inventory, the census axis now
 #'   starts from the first one, so 0.1.0 results are not reproduced exactly.
 #'
@@ -45,7 +45,7 @@
 #'   \item \code{tree_dt}: tree table with indices and standardized species.
 #'   \item \code{env_dt}: environment table with indices, the years of the
 #'     simulation: \code{siteID}, \code{year} and the predictors, what
-#'     \code{fit(env = )} takes (\code{siteID_dt} maps the ids back to the
+#'     \code{\link[=fit]{fit(env = )}} takes (\code{siteID_dt} maps the ids back to the
 #'     site names).
 #'   \item \code{obs_dt}: site-aggregated observations by species, with
 #'     \code{period_length}.
@@ -58,8 +58,9 @@
 #' \code{readRDS()}: \code{initCohorts} keeps a plain R copy of its arrays and
 #' rebuilds its torch tensors, which \code{saveRDS()} cannot store, when
 #' \code{\link{fit}()}, \code{\link{simulateForest}()} or \code{\link{predict.finn_class}()}
-#' use it (or by \code{x$initCohorts$restore()}). Cohorts saved with FINN
-#' before this version carry no such copy; rebuild them from the table with
+#' use it (or by \code{x$initCohorts$restore()}, see \code{\link{CohortMat}}).
+#' Cohorts saved with FINN before 0.2.0 carry no such copy; rebuild them from
+#' the table with
 #' \code{x$initCohorts <- makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt))}.
 #'
 #' @seealso \code{\link{makeObsData}} for the step before,
@@ -315,13 +316,13 @@ obs_mort <- function(n_died, n_at_risk, period_length, rates = c("annual", "inte
 #'
 #' @details
 #' FINN simulates the forest in steps of one year. With \code{rates = "annual"}
-#' the observation table is in the units that \code{fit()} compares with such a
+#' the observation table is in the units that \code{\link{fit}()} compares with such a
 #' simulation: \code{fit()} compounds the simulated yearly growth and mortality
 #' of the \code{period_length} years before each census into one rate per year
 #' with the same functional (the geometric mean of \eqn{1 + g} minus one, one
 #' minus the geometric mean survival), and sums the simulated recruits over
 #' them (see \code{\link{finn_data}}). \code{rates = "interval"} belongs with
-#' \code{resolveSiteIDs(time_axis = "census")}, where one simulation step is
+#' \code{\link[=resolveSiteIDs]{resolveSiteIDs(time_axis = "census")}}, where one simulation step is
 #' one census interval and nothing is compounded. The counts
 #' (\code{n_at_risk}, \code{n_died}, \code{growth_n}) and \code{reg} stay
 #' quantities of the whole interval in both modes: the counts weight the
@@ -361,7 +362,7 @@ obs_mort <- function(n_died, n_at_risk, period_length, rates = c("annual", "inte
 #'     increment over the interval, \code{dbh/dbh_before - 1}) and
 #'     \code{growth} (the tree's growth rate in the unit of \code{rates}, the
 #'     quantity behind \code{obs_dt$growth} and the \code{growth} column of
-#'     \code{fit(tree_data = )}); an input column \code{growth} is replaced.
+#'     \code{\link[=fit]{fit(tree_data = )}}); an input column \code{growth} is replaced.
 #' }
 #'
 #' @seealso \code{\link{resolveSiteIDs}} for the next step (integer ids, the
@@ -648,7 +649,7 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #'   If \code{TRUE}, a list with:
 #'   \itemize{
 #'     \item \code{initCohort}: the \code{CohortMat} object.
-#'     \item \code{init_trees}: the \code{obs_df} passed to \code{CohortMat()},
+#'     \item \code{init_trees}: the \code{obs_df} passed to \code{\link{CohortMat}()},
 #'       with the \code{cohortID} of every row.
 #'   }
 #'

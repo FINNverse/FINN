@@ -44,29 +44,35 @@ across processes and species (Sobol-style). Default \code{TRUE}.}
 \item{epochs_back}{(\code{integer(1)})\cr the window of the convergence check, in
 epochs. Default \code{50}.}
 
-\item{...}{passed through (e.g. to \code{\link[=predict]{predict()}} for the permutation option).}
+\item{...}{\code{summary()}: passed to \code{\link[=feature_importance]{feature_importance()}} with
+\code{importance = "permutation"} (and from there to
+\code{\link[=predict.finn_class]{predict()}}). \code{print()}: unused.}
 
 \item{x}{A \code{summary.finn_class} object.}
 
 \item{species}{(\code{logical(1)})\cr also print the skill per species. Default \code{FALSE}.}
 }
 \value{
-An object of class \code{summary.finn_class}: a list with \code{skill} (per set,
-overall), \code{skill_species} (per set and species), \code{convergence} (the loss
-history and the recent parameters), \code{bare_ground}, \code{importance},
-\code{average_conditional_effects} and \code{method}.
+\code{summary()}: an object of class \code{summary.finn_class}, a list with
+\code{skill} (per set, overall), \code{skill_species} (per set and species),
+\code{convergence} (the loss history and the recent parameters), \code{bare_ground},
+\code{importance}, \code{average_conditional_effects}, \code{method} (the \code{importance}
+option), \code{importance_label}, \code{environment_error} (\code{NULL}, or why item 4
+could not be computed) and \code{epochs_back}. \code{print()}: \code{x}, invisibly.
 }
 \description{
 Collects what is needed to judge a fitted model, in this order:
 \enumerate{
 \item \strong{Skill}: per response, R2 (\code{1 - SSE/SST}) first, then RMSE, Pearson r,
 the bias, the ratio of the mean prediction to the mean observation (is the
-magnitude right?) and n; for mortality also the tree-level AUC and the
-ratio of predicted to observed deaths. On the training data and, when
-\code{\link[=evaluate]{evaluate()}} or \code{fit(holdout = )} stored one, on the holdout. The
-observations are compared with the simulation aggregated as \code{\link[=fit]{fit()}} scores
-them (see \code{\link[=comparePlot]{comparePlot()}}). Without a stored evaluation, \code{summary()} runs
-\code{\link[=evaluate]{evaluate()}} on the training data first (one simulation).
+magnitude right?; for mortality weighted by the trees at risk, where the
+observations carry \code{n_at_risk} and \code{n_died}) and n; for mortality also the
+tree-level AUC and the ratio of predicted to observed deaths. On the
+training data and, when \code{\link[=evaluate]{evaluate()}} or the argument \code{holdout} of \code{\link[=fit]{fit()}}
+stored one, on the holdout. The observations are compared with the
+simulation aggregated the way \code{\link[=fit]{fit()}} scores it (see \code{\link[=comparePlot]{comparePlot()}}).
+Without a stored evaluation, \code{summary()} runs \code{\link[=evaluate]{evaluate()}} on the training
+data first (one simulation) and stores it on the model.
 \item \strong{Convergence}: by how many percent each loss term changed over the last
 \code{epochs_back} epochs (the mean of the last \code{epochs_back} epochs against
 the mean of the \code{epochs_back} before), and by how many percent each
@@ -74,15 +80,18 @@ parameter block moved over the last \code{epochs_back} epochs (relative L2
 change, \verb{||theta_now - theta_then|| / ||theta_then||}). \code{\link[=fit]{fit()}} keeps the
 parameters of the last 51 epochs for this, so \code{epochs_back} can be at
 most 50 for the parameters. A fit has settled when both are small.
-\item \strong{Bare ground}, when \code{\link[=evaluate]{evaluate()}} stored a bare-ground run: the total
-basal area at the end and the leading species.
+\item \strong{Bare ground}, when \code{\link[=evaluate]{evaluate()}} stored a bare-ground run: per site,
+the total basal area and the leading species with its share, as the mean
+over the last tenth of the run.
 \item \strong{Environmental importance and average conditional effects}, per process
 and species, from the model's conditional effects (computed once and
-cached, see \code{\link[=ALE]{ALE()}}).
+cached, see \code{\link[=ALE]{ALE()}}). Where they cannot be computed for a model, a
+warning says why and the other sections are still returned.
 }
 
 \code{print()} shows it; \code{print(s, epochs_back = 10)} redoes the convergence
-check over another window without recomputing anything.
+check over another window without recomputing anything. \code{\link[=plot.finn_class]{plot.finn_class()}}
+draws the fitted parameters themselves.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}

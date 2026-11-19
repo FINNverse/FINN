@@ -40,7 +40,7 @@ as a deprecated alias for one release.
 }
 \details{
 The cap is the parameter \code{reg_logK} (\code{K = exp(reg_logK)}), which \strong{FINN
-creates itself} -- there is nothing to declare. \code{createProcess(cap = )}
+creates itself} -- there is nothing to declare. \code{\link[=createProcess]{createProcess(cap = )}}
 decides its resolution: \code{"all"} (the default) gives one cap shared by every
 species, \code{"species"} one cap per species. Read the fitted value back with
 \code{exp(as.numeric(m$reg_logK))}.
@@ -54,7 +54,7 @@ the cap carries a prior, added to the objective as
 pull of a staged calibration. It is added \strong{after} the \code{loss_weights = "auto"}
 baseline scaling, so \code{prior_lambda} means the same thing on every dataset.
 
-\code{createProcess(prior = "max_obs_recruits")}, the default, resolves the prior
+\code{\link[=createProcess]{createProcess(prior = "max_obs_recruits")}}, the default, resolves the prior
 from the data at the start of \code{\link[=fit]{fit()}}: the largest observed recruitment
 rate per timestep, \code{max(reg / period_length)}. The division matters on any
 inventory with a remeasurement interval, because \code{reg} is the SUM over that

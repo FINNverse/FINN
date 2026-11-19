@@ -60,12 +60,12 @@ with the same Beverton-Holt term as \link{regeneration_capped},
 \verb{K m / (K + m)}.
 
 The cap \code{reg_logK} is created by \code{\link[=finn]{finn()}} as for
-\link{regeneration_capped}, with its resolution from \code{createProcess(cap = )}
+\link{regeneration_capped}, with its resolution from \code{\link[=createProcess]{createProcess(cap = )}}
 and its prior from \code{prior}/\code{prior_lambda}, so it need not be declared. A
 \code{reg_logK} declared in \code{custom_parameters} (as in the example) is kept and
 sets the resolution by its length, but its start value is replaced by the
 resolved prior at the first \code{\link[=fit]{fit()}}. Declare the two adult parameters
-with \code{createProcess(custom_parameters = )}; a length-1 init gives one shared
+with \code{\link[=createProcess]{createProcess(custom_parameters = )}}; a length-1 init gives one shared
 value and a length-\code{N_species} init one value per species:
 \itemize{
 \item \code{reg_logK} (optional, see above): the log Beverton-Holt cap, stems ha^-1

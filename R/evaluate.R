@@ -155,8 +155,10 @@ species_label = function(op) {
 #' states `dbh`, `ba` and `trees` at the census year, `growth` and `mort`
 #' compounded over the `period_length` years before the census (the geometric
 #' mean of `1 + g` minus one; one minus the geometric-mean survival), and the
-#' expected recruits (`r_mean_ha`) summed over them for `reg`. Observations whose
-#' site, year or species are not in the simulation are left out with a message.
+#' expected recruits (`r_mean_ha`) summed over them for `reg` (see [finn_loss]
+#' and, for the observed columns, [finn_data]). Observations of a site or a
+#' species that is not in the simulation, or of a year after the last simulated
+#' one, are left out with a message.
 #' Both tables may come in long (`variable`, `value`) or wide form.
 #'
 #' * `type = "scatter"` (default): observed against simulated for every
@@ -167,11 +169,14 @@ species_label = function(op) {
 #'   negatives; this needs those two columns in `obs`).
 #' * `type = "timeseries"`: the simulated trajectory over the years as a line
 #'   and the observations as points at their census years, averaged over the
-#'   selected sites.
+#'   selected sites. With all species pooled, `ba` and `trees` are the stand
+#'   totals and the other responses the mean over the species.
 #'
-#' `plot(sim, obs)` is the same as `comparePlot(sim, obs)`.
+#' `plot(sim, obs)` is the same as `comparePlot(sim, obs)` (see
+#' [plot.finn_simulation()]).
 #'
-#' @param sim The result of [simulateForest()] or [predict()] for the sites of
+#' @param sim The result of [simulateForest()] or
+#'   [`predict()`][predict.finn_class] for the sites of
 #'   `obs`, started from the same initial state (or its site table).
 #' @param obs Observations as [makeObsData()] returns them (wide), or long with
 #'   `variable` and `value`; `period_length`, `n_at_risk` and `n_died` are used
@@ -184,9 +189,12 @@ species_label = function(op) {
 #' @param sites Site ids to include; `NULL` (default) all.
 #' @param ... Unused.
 #' @return The `ggplot` object, invisibly; it is printed. The paired table is
-#'   attached as attribute `"matched"` and the skill measures as `"skill"`.
+#'   attached as attribute `"matched"` and the skill measures as `"skill"`
+#'   (per response, and per species when `species` is given; the measures are
+#'   described in [summary.finn_class()]).
 #' @seealso [evaluate()], which stores the same comparison on the model, and
-#'   [summary.finn_class()], which prints it.
+#'   [summary.finn_class()], which prints it; [plot.finn_simulation()] for the
+#'   simulation alone.
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
 #' sites <- 1:3
@@ -323,36 +331,50 @@ bare_ground_env = function(model, sites = NULL, years = 500L, env = NULL) {
 #' Evaluate a fitted model
 #'
 #' An optional step after [fit()] that simulates the model and stores what is
-#' needed to judge it on the model object, as `model$evaluation`; [summary()]
-#' prints it and [comparePlot()] draws the same comparison. Calling
-#' `fit(..., holdout = )` runs it right after the fit.
+#' needed to judge it on the model object, as `model$evaluation`;
+#' [`summary()`][summary.finn_class] prints it and [comparePlot()] draws the same
+#' comparison. Calling [fit()] with its argument `holdout` runs it right after
+#' the fit.
 #'
 #' * **Training data**: the model is simulated from the training initial state
 #'   under the training environment and compared with the observations it was
-#'   fitted to, aggregated as [fit()] scores them.
+#'   fitted to, aggregated the way [fit()] scores them (see [comparePlot()]).
 #' * **Holdout** (`holdout = list(data =, env =, init_cohort =)`): the same on
 #'   data the model has not seen, e.g. a spatially separate set of sites.
-#' * **Bare ground** (`bare_ground = TRUE`): a run from an empty stand for
-#'   `years` years under the mean training climate held constant, or under the
-#'   mean climate of each of `sites` (see [simulateForest()]). Optional, because
-#'   a long run takes time.
+#' * **Bare ground** (`bare_ground = TRUE`): the run of
+#'   `simulateForest(model, bare_ground = TRUE, years = , sites = )`, from an
+#'   empty stand for `years` years under the mean climate of the fitted
+#'   environment held constant, or under each site's mean climate with `sites`
+#'   (see [simulateForest()]). Optional, because a long run takes time.
 #'
-#' @param model A model fitted with [fit()].
+#' @param model A model built by [finn()] and fitted with [fit()].
 #' @param holdout `NULL` (default) or a list with the holdout `data`
 #'   (observations as for [fit()]), its `env` and its `init_cohort`, and
-#'   optionally `disturbance`.
-#' @param bare_ground Run the bare-ground simulation too. Default `FALSE`.
-#' @param years Length of the bare-ground run in years. Default `500`.
-#' @param sites `NULL` (default) one bare-ground run under the mean training
-#'   climate; site ids for one run per site under that site's mean climate.
-#' @param patches Patches per site; `NULL` (default) as in the fit.
+#'   optionally `disturbance` (see [finn_data] for the four tables). Without
+#'   `init_cohort` the holdout sites start from bare ground, with a warning.
+#' @param bare_ground (`logical(1)`)\cr Run the bare-ground simulation too.
+#'   Default `FALSE`.
+#' @param years (`integer(1)`)\cr With `bare_ground = TRUE`: the length of the
+#'   run in years, as in [simulateForest()]. Default `500`.
+#' @param sites With `bare_ground = TRUE`, as in [simulateForest()]: `NULL`
+#'   (default) one run under the mean climate of all sites, or site ids for
+#'   one run per site under that site's mean climate.
+#' @param patches (`integer(1)`)\cr Number of patches per site of a run that
+#'   starts from bare ground; `NULL` (default) the patch count the model was
+#'   fitted with (`model$patches`), or `100` for a model fitted before 0.2.0.
+#'   Not used for a set with an `init_cohort`: its patch count comes from the
+#'   initial cohorts.
 #' @param train `NULL` (default): the training data the model keeps from
 #'   [fit()]. A list like `holdout` for a model that keeps none (fitted before
-#'   this version of FINN, e.g. read with `torch::torch_load()`).
-#' @return The model, invisibly, with `model$evaluation`: a list with `train`
-#'   and, when given, `holdout` (each with the paired table `matched` and the
-#'   skill measures `skill` overall and `skill_species` per species), and
-#'   `bare_ground` (the simulation).
+#'   0.2.0, e.g. read with [torch::torch_load()]).
+#' @return The model, invisibly; it is changed in place, as by [fit()], and
+#'   carries `model$evaluation`: a list with `train` and, when given, `holdout`
+#'   (each with the paired table `matched` and the skill measures `skill`
+#'   overall and `skill_species` per species; the measures are described in
+#'   [summary.finn_class()]), and with `bare_ground = TRUE` also `bare_ground`
+#'   (the simulation, as [simulateForest()] returns it) and
+#'   `bare_ground_settings` (`years`, `sites`, `patches`). A new call replaces
+#'   the stored evaluation.
 #' @seealso [comparePlot()], [summary.finn_class()], [simulateForest()]
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)

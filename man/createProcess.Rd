@@ -85,7 +85,7 @@ environmental-response network architecture.}
 \item{upper, lower}{(\code{numeric()})\cr Boundaries (natural scale) for the
 species-specific process parameters, one value per parameter of the process.
 They are guard rails that keep the optimiser inside the range in which the
-equations stay meaningful, not ranges taken from the data, and \code{fit()} does
+equations stay meaningful, not ranges taken from the data, and \code{\link[=fit]{fit()}} does
 not move them. The defaults, as \code{lower} / \code{upper}:
 growth \code{c(0.01, 0.01)} / \code{c(0.99, 4.0)} (light requirement of the shade
 response, size decay); mortality \code{c(-10, -10, -10)} / \code{c(10, 10, 10)} (the
@@ -146,7 +146,7 @@ from the cohort's mortality probability. Only used when this process is the
 mortality process. \code{"binomial"} (default since 0.2.0) is \code{torch}'s exact
 binomial sampler: integer-valued, exact in both moments, at constant memory.
 It has no gradient of its own, which costs nothing under
-\code{fit(rb_gradient = TRUE)} (the default), where the gradient is taken through
+\code{\link[=fit]{fit(rb_gradient = TRUE)}} (the default), where the gradient is taken through
 the expected number of deaths. Under \code{fit(rb_gradient = FALSE)} there is no
 such path, and \code{"binomial"} falls back to the \code{"gamma"} draw.
 \code{"bernoulli"} gives each tree of the cohort its own reparameterised Bernoulli
@@ -265,7 +265,7 @@ simulated low-mortality stand -- a mature unthinned stand, a slow-growing
 species, an equilibrium run -- lost stems the observations did not: at a
 1 \% floor it loses 1 \% of every cohort per step however low the fitted rate.
 
-The floor exists because \code{binomial_from_gamma()}'s shape \code{n*p/(1-p)}
+The floor exists because the shape of \code{\link[=binomial_from_gamma]{binomial_from_gamma()}}, \code{n*p/(1-p)},
 degenerates as \code{p -> 0}. Measured with that draw, it stays finite with an
 unbiased mean gradient down to \code{1e-4}, but single-draw gradients grow
 heavy-tailed as \code{n*p} shrinks -- the largest per-tree gradient is about ten
@@ -284,7 +284,7 @@ next to nothing. One value for all species or one per species. Before
 0.2.0 the floor was hard-coded to \code{0.2}, which with many species adds a
 large recruitment that does not depend on anything (65 species x 0.2 = 13
 trees per ha and year); models saved before then keep that value when
-reloaded. \code{finn(reg_floor = )}, the argument of earlier versions, is
+reloaded. \code{\link[=finn]{finn(reg_floor = )}}, the argument of earlier versions, is
 still accepted with a warning and overrides this value.}
 }
 \value{
