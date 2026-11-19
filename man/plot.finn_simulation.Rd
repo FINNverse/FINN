@@ -36,7 +36,8 @@ list.}
 
 \item{n_species}{Number of species drawn in colour: those reaching the
 highest value of the first response; every other species is a pale grey
-line. Default \code{6}.}
+line. Default \code{6}. With \code{y}, the \code{n_species} of \code{\link[=comparePlot]{comparePlot()}} (its
+default when not given).}
 
 \item{species_names}{Species names for the legend (see \code{\link[=plot.finn_class]{plot.finn_class()}});
 \code{NULL} (default): the names the simulation carries from the model.}

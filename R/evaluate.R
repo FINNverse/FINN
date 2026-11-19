@@ -9,13 +9,14 @@ response_levels = c("dbh", "dbh_max", "ba", "trees", "growth", "mort", "reg")
 # from its dbh at the start with its annual growth over period_length years.
 # Simulated: the largest cohort that holds trees, from the cohorts the
 # simulation recorded (predict(return_cohorts = <census years>)).
-observed_dbh_max = function(tree_data) {
-  td = data.table::as.data.table(tree_data)
+observed_dbh_max = function(tree_data, period_growth = FALSE) {
+  td = data.table::copy(data.table::as.data.table(tree_data))
   need = c("siteID", "year", "species", "dbh")
   if (!all(need %in% names(td)))
     stop(sprintf("`tree_data` needs the columns %s (see ?finn_data).", paste(need, collapse = ", ")), call. = FALSE)
   if ("died" %in% names(td)) td = td[is.na(died) | died == 0]
-  p = if ("period_length" %in% names(td)) td$period_length else 1
+  # with finn(growth_rate = "period") the growth is the increment over the interval
+  p = if (isTRUE(period_growth)) 1 else if ("period_length" %in% names(td)) td$period_length else 1
   g = if ("growth" %in% names(td)) td$growth else 0
   td[, dbh_end := dbh * (1 + ifelse(is.finite(g), g, 0))^p]
   td[is.finite(dbh_end), list(dbh_max = max(dbh_end)), by = list(siteID, year, species)]
@@ -54,7 +55,7 @@ simulation_long = function(sim) {
 observations_wide = function(obs) {
   if (!is.data.frame(obs))
     stop("`obs` must be a table of observations (as makeObsData() returns it).", call. = FALSE)
-  d = data.table::as.data.table(obs)
+  d = data.table::copy(data.table::as.data.table(obs))   # columns are added below: never to the caller's table
   if (!all(c("siteID", "year", "species") %in% names(d)))
     stop("The observation table needs the columns siteID, year and species.", call. = FALSE)
   if (all(c("variable", "value") %in% names(d))) {
@@ -66,7 +67,20 @@ observations_wide = function(obs) {
     d = w
   }
   if (!"period_length" %in% names(d)) d[, period_length := 1L]
+  # no interval given: one step, as in fit() (see ?finn_data)
+  d[, period_length := as.numeric(period_length)]
+  d[!is.finite(period_length) | period_length < 1, period_length := 1]
   d
+}
+
+# The simulation counts its steps 1, 2, ...: step k is the k-th year of the
+# `env` it was run with, which is how fit() places an observation (the position
+# of its `year` among the years of `env`). predict() keeps those years as the
+# attribute "env_years"; without it (a plain site table) the years are taken as
+# the steps themselves. Returns the step of each year, NA for a year not in env.
+year_to_step = function(year, env_years) {
+  if (is.null(env_years)) return(year)
+  match(year, env_years)
 }
 
 # Pair every observation with the simulation aggregated as fit() scores it: the
@@ -86,9 +100,19 @@ match_simulation = function(sim, obs, quiet = FALSE, tree_data = NULL) {
     o = o[!siteID %in% miss_sites]
   }
   if (!nrow(o)) stop("No observed site is in the simulation: simulate the sites of `obs` (same siteID).", call. = FALSE)
+  # the step of each observation: the position of its year among the years of
+  # the simulated env (calendar years in env and obs, steps 1, 2, ... in sim)
+  env_years = attr(sim, "env_years")
+  period_growth = identical(attr(sim, "growth_rate"), "period")
+  o[, step := year_to_step(year, env_years)]
+  if (anyNA(o$step)) {
+    note("%d observation(s) of a year that is not a year of the simulated `env` are left out.", sum(is.na(o$step)))
+    o = o[!is.na(step)]
+  }
+  if (!nrow(o)) stop("No observation lies in a year of the simulated `env`.", call. = FALSE)
   max_year = s[, list(max_year = max(year)), by = siteID]
   o = merge(o, max_year, by = "siteID")
-  late = o$year > o$max_year
+  late = o$step > o$max_year
   if (any(late)) {
     note("%d observation(s) lie after the last simulated year of their site and are left out.", sum(late))
     o = o[!late]
@@ -101,45 +125,53 @@ match_simulation = function(sim, obs, quiet = FALSE, tree_data = NULL) {
   }
   if (!nrow(o)) stop("No observation matches the simulation in site, year and species.", call. = FALSE)
 
-  win = unique(o[, list(siteID, census = year, period_length)])
-  win = win[, list(year = seq.int(census - period_length + 1L, census)), by = list(siteID, census)]
+  # the steps of each window; as in fit() (window_growth / window_mortality) the
+  # rates are spread over the full period_length, also where a window reaches
+  # back before the first simulated step
+  win = unique(o[, list(siteID, census = step, period_length)])
+  win = win[, list(year = seq.int(census - period_length + 1L, census)), by = list(siteID, census, period_length)]
   sw = merge(s, win, by = c("siteID", "year"), allow.cartesian = TRUE)
   pred = data.table::rbindlist(list(
     sw[variable %in% c("dbh", "ba", "trees") & year == census,
-       list(siteID, year = census, species, variable, pred = value)],
+       list(siteID, step = census, period_length, species, variable, pred = value)],
     sw[variable == "growth",
-       list(pred = exp(mean(log1p(value))) - 1), by = list(siteID, year = census, species, variable)],
+       list(pred = if (period_growth) exp(sum(log1p(value))) - 1 else exp(sum(log1p(value)) / period_length[1]) - 1),
+       by = list(siteID, step = census, period_length, species, variable)],
     sw[variable == "mort",
-       list(pred = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-7))))), by = list(siteID, year = census, species, variable)],
+       list(pred = 1 - exp(sum(log1p(-pmin(value, 1 - 1e-4))) / period_length[1])),
+       by = list(siteID, step = census, period_length, species, variable)],
     sw[variable == "r_mean_ha",
-       list(variable = "reg", pred = sum(value)), by = list(siteID, year = census, species)]
+       list(variable = "reg", pred = sum(value)), by = list(siteID, step = census, period_length, species)]
   ), use.names = TRUE)
 
   vars = intersect(response_levels, names(o))
-  keep = c("siteID", "year", "species", "period_length",
+  keep = c("siteID", "year", "step", "species", "period_length",
            intersect(c("n_at_risk", "n_died", "species_name"), names(o)))
-  o = data.table::copy(o)
   for (v in vars) data.table::set(o, j = v, value = as.numeric(o[[v]]))
   ol = data.table::melt(o[, c(keep, vars), with = FALSE], id.vars = keep, measure.vars = vars,
                         variable.name = "variable", value.name = "obs")
   ol[, variable := as.character(variable)]
-  op = merge(ol, pred, by = c("siteID", "year", "species", "variable"))
+  op = merge(ol, pred, by = c("siteID", "step", "period_length", "species", "variable"))
+  data.table::setcolorder(op, c("siteID", "year", "species", "variable"))
+  data.table::setkeyv(op, c("siteID", "year", "species"))
   # the largest diameter, when the trees are given and the simulation recorded
   # its cohorts at the census years
   if (!is.null(tree_data)) {
     sm = simulated_dbh_max(sim)
     if (is.null(sm)) {
-      note("`tree_data` is given, but the simulation recorded no cohorts: simulate with return_cohorts = <the census years> for the largest dbh.")
+      note("`tree_data` is given, but the simulation recorded no cohorts: simulate with return_cohorts = <the steps of the census years> for the largest dbh.")
     } else {
       td = data.table::as.data.table(tree_data)
       # the interval of each census from the observations when the trees do not carry it
       if (!"period_length" %in% names(td))
         td = merge(td, unique(o[, list(siteID, year, period_length)]), by = c("siteID", "year"))
-      om = observed_dbh_max(td)
-      dm = merge(om, sm, by = c("siteID", "year", "species"))
-      dm = merge(dm, unique(o[, c("siteID", "year", "species", "period_length",
+      om = observed_dbh_max(td, period_growth = period_growth)
+      # the cohorts are recorded by step, the trees by the year of their census
+      data.table::setnames(sm, "year", "step")
+      dm = merge(om, unique(o[, c("siteID", "year", "step", "species", "period_length",
                                    intersect("species_name", names(o))), with = FALSE]),
                  by = c("siteID", "year", "species"))
+      dm = merge(dm, sm, by = c("siteID", "step", "species"))
       if (nrow(dm)) {
         dm[, `:=`(variable = "dbh_max", obs = dbh_max)][, dbh_max := NULL]
         op = data.table::rbindlist(list(op, dm), use.names = TRUE, fill = TRUE)
@@ -147,6 +179,7 @@ match_simulation = function(sim, obs, quiet = FALSE, tree_data = NULL) {
     }
   }
   op = op[is.finite(obs) & is.finite(pred)]
+  op[, step := NULL]
   # the interval death probability the annual rate implies, for the AUC
   op[variable == "mort", p_interval := 1 - (1 - pred)^period_length]
   op[, variable := factor(variable, levels = response_levels)]
@@ -219,6 +252,7 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
   if (is.null(src) && is.data.frame(tab) && all(c("species", "species_name") %in% names(tab)))
     src = unique(as.data.frame(tab)[, c("species", "species_name")])
   put = function(sp, nm) {
+    nm = as.character(nm)   # a factor column of names
     sp = suppressWarnings(as.integer(sp)); ok = !is.na(sp) & sp >= 1L & sp <= N & !is.na(nm) & nzchar(nm)
     out[sp[ok]] <<- as.character(nm[ok])
   }
@@ -236,9 +270,12 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #' compounded over the `period_length` years before the census (the geometric
 #' mean of `1 + g` minus one; one minus the geometric-mean survival), and the
 #' expected recruits (`r_mean_ha`) summed over them for `reg` (see [finn_loss]
-#' and, for the observed columns, [finn_data]). Observations of a site or a
-#' species that is not in the simulation, or of a year after the last simulated
-#' one, are left out with a message.
+#' and, for the observed columns, [finn_data]). An observation is placed as in
+#' [fit()]: its `year` is a year of the `env` the simulation was run with, and
+#' the simulated step is the position of that year among the years of `env`
+#' (for a plain site table, which does not carry those years, `year` is taken
+#' as the step itself). Observations of a site or a species that is not in the
+#' simulation, or of a year that is not simulated, are left out with a message.
 #' Both tables may come in long (`variable`, `value`) or wide form.
 #'
 #' * `type = "scatter"` (default): observed against simulated for `dbh`, `ba`,
@@ -254,8 +291,9 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #'   mean: per site, census and species, or, all species pooled, per site and
 #'   census (the maximum over the species), which is robust against a few
 #'   large or many small trees. The simulation must have recorded its cohorts
-#'   at the census years (`simulateForest(..., return_cohorts = <census
-#'   years>)`; [evaluate()] does this itself).
+#'   at the census steps (`simulateForest(..., return_cohorts = <steps>)`, a
+#'   step being the position of the census year among the years of `env`;
+#'   [evaluate()] does this itself).
 #' * `type = "heatmap"`: the skill per species at a glance, every species a row
 #'   (by name): R2 of every response and the AUC of mortality on the left, the
 #'   ratio of simulated to observed on the right (log scale, white at 1, so
@@ -278,7 +316,8 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #' @param species `NULL` (default) pools all species in one panel per response;
 #'   species numbers draw one row of panels per species.
 #' @param response Responses to draw, any of `"dbh"`, `"ba"`, `"trees"`,
-#'   `"growth"`, `"mort"`, `"reg"`; `NULL` (default) all that are observed.
+#'   `"growth"`, `"mort"`, `"reg"` (and `"dbh_max"` with `tree_data`); `NULL`
+#'   (default) all that are observed.
 #' @param sites Site ids to include; `NULL` (default) all.
 #' @param tree_data `NULL` (default), or the observed trees in the format of the
 #'   `tree_data` of [fit()] (see [finn_data]: `siteID`, `year`, `species`, `dbh`
@@ -431,6 +470,9 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries", "heatmap"), s
     p = structure(panels, class = "finn_comparison")
   } else {
     s = simulation_long(sim)
+    # the simulated steps on the year axis of the observations (the years of env)
+    env_years = attr(sim, "env_years")
+    if (!is.null(env_years)) s[, year := env_years[year]]
     s = s[variable != "reg"]                       # the drawn recruits; the expected ones are compared
     s[variable == "r_mean_ha", variable := "reg"]
     op = op[variable != "dbh_max"]                 # a census quantity, no trajectory
@@ -671,7 +713,11 @@ evaluate = function(model, holdout = NULL, bare_ground = FALSE, years = 500L, si
 
   one_set = function(data, env, init_cohort, disturbance = NULL, tree_data = NULL) {
     # with tree_data the cohorts are recorded at the census years, for the largest dbh
-    rc = if (is.null(tree_data)) FALSE else sort(unique(as.integer(data$year)))
+    # (return_cohorts counts steps: the position of a census year among the years of env)
+    rc = if (is.null(tree_data)) FALSE else {
+      steps = match(sort(unique(data$year)), sort(unique(env$year)))
+      if (all(is.na(steps))) FALSE else steps[!is.na(steps)]
+    }
     # with initial cohorts the patch count is theirs; patches only for bare ground
     sim = if (is.null(init_cohort))
       predict(model, env = env, disturbance = disturbance, init_cohort = NULL, patches = patches, return_cohorts = rc)

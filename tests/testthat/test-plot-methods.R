@@ -74,6 +74,7 @@ test_that("a simulation has class finn_simulation and plot() draws it", {
   # the tables inside are untouched
   expect_identical(class(sim$long$site), c("data.table", "data.frame"))
   expect_output(print(sim), "siteID")
+  expect_false(any(grepl("attr\\(", utils::capture.output(print(sim)))))   # the list alone, no attributes
 
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
   p <- plot(sim)

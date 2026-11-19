@@ -693,7 +693,8 @@ finn = function(N_species,
 #'   [FINN::evaluate()]: after the fit, [FINN::evaluate()]
 #'   simulates the training data and the holdout and stores the comparison on
 #'   the model (`model$evaluation`), which [FINN::summary.finn_class()] prints. The
-#'   same as calling `evaluate(model, holdout = )` after the fit.
+#'   same as calling `evaluate(model, holdout = )` after the fit; if that
+#'   evaluation fails, the fit is kept and a warning says why.
 #' @param ... Arguments of earlier versions, still accepted with a warning:
 #'   `weights` (now `loss_weights`), `recruits` (now `loss_recruit`), and
 #'   `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` (now
@@ -888,7 +889,11 @@ fit = function(model,
                       recruits = loss_recruit,
                       optimizer_args = optimizer_args)
   # optional: evaluate on the training data and the holdout right away
-  if (!is.null(holdout) && !is.null(data)) evaluate(model, holdout = holdout)
+  # (an evaluation that fails must not take the finished fit with it)
+  if (!is.null(holdout) && !is.null(data))
+    tryCatch(evaluate(model, holdout = holdout), error = function(e)
+      warning(sprintf("fit(): the model is fitted, but the evaluation with `holdout` failed (%s); run evaluate() on the model once the holdout is in order.",
+                      conditionMessage(e)), call. = FALSE))
   invisible(out)
 }
 
@@ -1224,7 +1229,9 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #'   `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `reg`, `r_mean_ha`) and
 #'   `value`; `$wide$site` has one column per variable instead. `siteID` is the
 #'   id used in `env`; `year` is the simulation step, counted from 1 (the k-th
-#'   year of a site's `env` is step k), whatever the values of `env$year`. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
+#'   year of a site's `env` is step k), whatever the values of `env$year`; the
+#'   years of `env` are kept as the attribute `"env_years"`, with which
+#'   [FINN::comparePlot()] places observations. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
 #'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
 #'   ...) for the requested timesteps.
 #' @seealso [FINN::fit()], [finn_data] for the input tables, [recruitment] for
@@ -1306,6 +1313,11 @@ predict.finn_class = function(object,
   # inside ($long$site, $wide$site, ...) stay exactly as before
   class(out) = c("finn_simulation", class(out))
   attr(out, "species_names") = object$species_names
+  # the simulated steps are numbered 1, 2, ...; the years of `env` they stand
+  # for (and the growth unit of the model) let comparePlot() and evaluate()
+  # place observations as fit() does
+  attr(out, "env_years") = sort(unique(env[["year"]]))
+  if (isTRUE(object$growth_period_scale)) attr(out, "growth_rate") = "period"
   out
 }
 

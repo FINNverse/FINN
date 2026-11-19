@@ -176,3 +176,86 @@ test_that("an env without covariates builds an intercept (#64); data.frame start
   expect_true(is.matrix(p$initSpecies))
   expect_true(is.matrix(p$initEnv[[1]]))
 })
+
+test_that("observations are placed by the position of their year in env, as fit() does (calendar years)", {
+  skip_if_no_torch()
+  toy <- eval_toy(1L)
+  td <- FINN::fia_tree_dt[siteID %in% 1:4]
+  shift <- function(x) data.table::copy(x)[, year := year + 2000L]
+  FINN.seed(3); sim  <- simulateForest(toy$model, env = toy$env, init_cohort = toy$init, return_cohorts = c(10L, 20L))
+  FINN.seed(3); simc <- simulateForest(toy$model, env = shift(toy$env), init_cohort = toy$init, return_cohorts = c(10L, 20L))
+  expect_equal(attr(simc, "env_years"), sort(unique(toy$env$year)) + 2000L)
+  a <- FINN:::match_simulation(sim, toy$obs, quiet = TRUE, tree_data = td)
+  b <- FINN:::match_simulation(simc, shift(toy$obs), quiet = TRUE, tree_data = shift(td))
+  expect_equal(b$year, a$year + 2000L)
+  expect_equal(b$pred, a$pred); expect_equal(b$obs, a$obs)
+  expect_true(any(b$variable == "dbh_max"))
+  # evaluate() records the cohorts at the steps of the census years
+  evaluate(toy$model, train = list(data = shift(toy$obs), env = shift(toy$env), init_cohort = toy$init,
+                                   tree_data = shift(td)))
+  expect_true("dbh_max" %in% as.character(toy$model$evaluation$train$skill$variable))
+  # the time series is drawn on the years of the observations
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+  p <- plot(simc, shift(toy$obs), type = "timeseries")
+  expect_equal(range(ggplot2::layer_data(p, 1)$x), range(toy$env$year) + 2000L)
+  # a year that is not in env is left out, with a message
+  late <- shift(toy$obs)[year == 2020L][, year := 2050L]
+  expect_message(o <- FINN:::match_simulation(simc, rbind(shift(toy$obs), late)), "not a year of the simulated")
+  expect_equal(nrow(o), nrow(b[variable != "dbh_max"]))
+  # plot(sim, obs, n_species = ) reaches comparePlot()
+  p2 <- plot(sim, toy$obs, response = "reg", n_species = 2)
+  expect_equal(nrow(p2$reg$data), 2L)
+})
+
+test_that("match_simulation(): a missing period_length is one step, the rate of a cut window keeps its length, growth_rate = 'period' compounds", {
+  skip_if_no_torch()
+  toy <- eval_toy(1L)
+  sim <- simulateForest(toy$model, env = toy$env, init_cohort = toy$init)
+  s <- sim$long$site
+  o <- data.table::copy(toy$obs)[year == 10L, period_length := NA]
+  op <- FINN:::match_simulation(sim, o, quiet = TRUE)
+  r <- op[variable == "growth" & year == 10L][1]
+  expect_equal(r$period_length, 1)
+  expect_equal(r$pred, s[siteID == r$siteID & species == r$species & variable == "growth" & year == 10L]$value, tolerance = 1e-6)
+  expect_true(all(is.na(o[year == 10L]$period_length)))          # the caller's table is untouched
+  # a window that reaches back before the first step: spread over the full period_length
+  o15 <- data.table::copy(toy$obs)[year == 10L][, period_length := 15L]
+  r <- FINN:::match_simulation(sim, o15, quiet = TRUE)[variable == "mort"][1]
+  mm <- s[siteID == r$siteID & species == r$species & variable == "mort" & year <= 10L]$value
+  expect_equal(r$pred, 1 - exp(sum(log1p(-mm)) / 15), tolerance = 1e-6)
+  # the increment over the interval for a model with growth_rate = "period"
+  simp <- sim; attr(simp, "growth_rate") <- "period"
+  r <- FINN:::match_simulation(simp, toy$obs, quiet = TRUE)[variable == "growth"][1]
+  g <- s[siteID == r$siteID & species == r$species & variable == "growth" &
+           year %in% seq(r$year - r$period_length + 1, r$year)]$value
+  expect_equal(r$pred, prod(1 + g) - 1, tolerance = 1e-6)
+  # species names given as a factor
+  expect_equal(unname(FINN:::species_names_lookup(2, data.frame(species = 1:2, species_name = factor(c("a", "b"))))),
+               c("a", "b"))
+})
+
+test_that("a failing holdout evaluation keeps the fit; a model read with torch_load() rebuilds its training cohorts", {
+  skip_if_no_torch()
+  Nsp <- max(FINN::fia_obs_dt$species); tr <- 1:3
+  init <- suppressWarnings(makeInitCohorts(FINN::fia_init_trees[siteID %in% tr], Nspecies = Nsp))
+  FINN.seed(1)
+  m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+            growth_process       = createProcess(~ temp + prec, growth),
+            mortality_process    = createProcess(~ temp + prec, mortality),
+            regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+  # a holdout whose observations lie in no year of its env
+  bad <- list(data = data.table::copy(FINN::fia_obs_dt[siteID %in% 5:6])[, year := year + 100L],
+              env = FINN::fia_env_dt[siteID %in% 5:6],
+              init_cohort = suppressWarnings(makeInitCohorts(FINN::fia_init_trees[siteID %in% 5:6], Nspecies = Nsp)))
+  expect_warning(suppressMessages(
+    fit(m, data = FINN::fia_obs_dt[siteID %in% tr], env = FINN::fia_env_dt[siteID %in% tr], init_cohort = init,
+        epochs = 1L, patch_size = 0.06, plot_progress = FALSE, holdout = bad)),
+    "the evaluation with `holdout` failed")
+  expect_equal(length(m$history), 1L)
+  f <- tempfile(fileext = ".pt"); torch::torch_save(m, f)
+  m2 <- torch::torch_load(f)
+  expect_false(FINN:::cohort_tensors_valid(m2$train_init_cohort$cohort))
+  ic <- FINN:::.finn_train_ic(m2)
+  expect_true(FINN:::cohort_tensors_valid(ic))
+  expect_identical(ic$dbh_r, init$dbh_r)
+})

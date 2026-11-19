@@ -287,7 +287,8 @@ plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = 
 #' @param sites Site ids to include; `NULL` (default) all.
 #' @param n_species Number of species drawn in colour: those reaching the
 #'   highest value of the first response; every other species is a pale grey
-#'   line. Default `6`.
+#'   line. Default `6`. With `y`, the `n_species` of [comparePlot()] (its
+#'   default when not given).
 #' @param species_names Species names for the legend (see [plot.finn_class()]);
 #'   `NULL` (default): the names the simulation carries from the model.
 #' @param ... `plot()`: passed to [comparePlot()] when `y` is given (`type`,
@@ -320,8 +321,12 @@ plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...,
                                 n_species = 6L, species_names = NULL) {
   # n_species and species_names after `...`, so that `species =` passed on to
   # comparePlot() is not partially matched to species_names
-  if (!is.null(y)) return(comparePlot(x, y, response = response, sites = sites,
-                                      species_names = species_names, ...))
+  if (!is.null(y)) {
+    args = list(x, y, response = response, sites = sites, species_names = species_names, ...)
+    # n_species has another default there (the species of the recruitment panel)
+    if (!missing(n_species)) args$n_species = n_species
+    return(do.call(comparePlot, args))
+  }
   d = x$long$site
   if (is.null(d) || !nrow(d))
     stop("This simulation holds no site table (`$long$site`) to plot.", call. = FALSE)
@@ -395,7 +400,10 @@ plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...,
 #' @rdname plot.finn_simulation
 #' @export
 print.finn_simulation = function(x, ...) {
-  print(unclass(x), ...)
+  # the list alone: without the class and the attributes plot() and comparePlot() read
+  y = unclass(x)
+  attributes(y) = list(names = names(x))
+  print(y, ...)
   invisible(x)
 }
 

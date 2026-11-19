@@ -162,7 +162,9 @@ ALE_ce = function(X, ce) {
 
 .finn_train_ic = function(model) {
   ic = model$train_init_cohort
-  if(is.null(ic)) NULL else ic$cohort
+  # a model read back with torch_load() holds the cohorts with dead tensors:
+  # rebuilt from their R copy (#77)
+  if(is.null(ic)) NULL else restore_init_cohort(ic$cohort)
 }
 
 .finn_get_ce = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L) {
@@ -748,7 +750,10 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
   # 1. skill, from the stored evaluation (run on the training data if missing)
   if (is.null(object$evaluation) && !is.null(object$train_data)) {
     message("Evaluating on the training data (one simulation); evaluate() can add a holdout and a bare-ground run.")
-    evaluate(object)
+    # a failed comparison must not cost the rest of the summary
+    tryCatch(evaluate(object), error = function(e)
+      warning(sprintf("summary(): the model could not be evaluated on its training data (%s); the skill section is left out.",
+                      conditionMessage(e)), call. = FALSE))
   }
   ev = object$evaluation
   sets = intersect(c("train", "holdout"), names(ev))

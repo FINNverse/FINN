@@ -407,7 +407,9 @@ someone who was affected.
   with the observations as points at their census years. `species =` pools all
   species (default) or draws chosen species; long and wide tables are both
   accepted, and observations without a simulated counterpart are left out with
-  a message.
+  a message. An observation is placed as in `fit()`, by the position of its
+  `year` among the years of `env` (the simulation keeps them as the attribute
+  `"env_years"`), so `env` and the observations may carry calendar years.
 
 * **`evaluate()`: an optional step after the fit.** It simulates the training
   data, a holdout (`holdout = list(data =, env =, init_cohort =)`) and,

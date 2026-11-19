@@ -38,7 +38,8 @@ where present.}
 species numbers draw one row of panels per species.}
 
 \item{response}{Responses to draw, any of \code{"dbh"}, \code{"ba"}, \code{"trees"},
-\code{"growth"}, \code{"mort"}, \code{"reg"}; \code{NULL} (default) all that are observed.}
+\code{"growth"}, \code{"mort"}, \code{"reg"} (and \code{"dbh_max"} with \code{tree_data}); \code{NULL}
+(default) all that are observed.}
 
 \item{sites}{Site ids to include; \code{NULL} (default) all.}
 
@@ -77,9 +78,12 @@ states \code{dbh}, \code{ba} and \code{trees} at the census year, \code{growth} 
 compounded over the \code{period_length} years before the census (the geometric
 mean of \code{1 + g} minus one; one minus the geometric-mean survival), and the
 expected recruits (\code{r_mean_ha}) summed over them for \code{reg} (see \link{finn_loss}
-and, for the observed columns, \link{finn_data}). Observations of a site or a
-species that is not in the simulation, or of a year after the last simulated
-one, are left out with a message.
+and, for the observed columns, \link{finn_data}). An observation is placed as in
+\code{\link[=fit]{fit()}}: its \code{year} is a year of the \code{env} the simulation was run with, and
+the simulated step is the position of that year among the years of \code{env}
+(for a plain site table, which does not carry those years, \code{year} is taken
+as the step itself). Observations of a site or a species that is not in the
+simulation, or of a year that is not simulated, are left out with a message.
 Both tables may come in long (\code{variable}, \code{value}) or wide form.
 }
 \details{
@@ -97,7 +101,9 @@ With \code{tree_data}, the dbh panel shows the largest diameter instead of the
 mean: per site, census and species, or, all species pooled, per site and
 census (the maximum over the species), which is robust against a few
 large or many small trees. The simulation must have recorded its cohorts
-at the census years (\verb{simulateForest(..., return_cohorts = <census years>)}; \code{\link[=evaluate]{evaluate()}} does this itself).
+at the census steps (\verb{simulateForest(..., return_cohorts = <steps>)}, a
+step being the position of the census year among the years of \code{env};
+\code{\link[=evaluate]{evaluate()}} does this itself).
 \item \code{type = "heatmap"}: the skill per species at a glance, every species a row
 (by name): R2 of every response and the AUC of mortality on the left, the
 ratio of simulated to observed on the right (log scale, white at 1, so

@@ -319,7 +319,8 @@ and so reproduces a fit made before 0.2.0.}
 \code{\link[=evaluate]{evaluate()}}: after the fit, \code{\link[=evaluate]{evaluate()}}
 simulates the training data and the holdout and stores the comparison on
 the model (\code{model$evaluation}), which \code{\link[=summary.finn_class]{summary.finn_class()}} prints. The
-same as calling \code{evaluate(model, holdout = )} after the fit.}
+same as calling \code{evaluate(model, holdout = )} after the fit; if that
+evaluation fails, the fit is kept and a warning says why.}
 
 \item{...}{Arguments of earlier versions, still accepted with a warning:
 \code{weights} (now \code{loss_weights}), \code{recruits} (now \code{loss_recruit}), and

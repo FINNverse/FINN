@@ -131,7 +131,9 @@ results, averaged over the patches: columns \code{siteID}, \code{year}, \code{sp
 \code{variable} (\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mort}, \code{reg}, \code{r_mean_ha}) and
 \code{value}; \verb{$wide$site} has one column per variable instead. \code{siteID} is the
 id used in \code{env}; \code{year} is the simulation step, counted from 1 (the k-th
-year of a site's \code{env} is step k), whatever the values of \code{env$year}. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
+year of a site's \code{env} is step k), whatever the values of \code{env$year}; the
+years of \code{env} are kept as the attribute \code{"env_years"}, with which
+\code{\link[=comparePlot]{comparePlot()}} places observations. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
 the per-cohort state (\code{dbh}, \code{trees}, \code{species}, growth \code{g}, mortality \code{m},
 ...) for the requested timesteps.
 }
