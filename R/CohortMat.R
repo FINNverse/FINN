@@ -413,7 +413,13 @@ cohort_tensors_valid = function(x) {
 # Entry check of fit(), predict() / simulateForest() and predictTrees(): a
 # CohortMat read back from disk gets its tensors rebuilt (#77).
 restore_init_cohort = function(init_cohort) {
-  if (inherits(init_cohort, "CohortMat")) init_cohort$restore()
+  if (inherits(init_cohort, "CohortMat")) {
+    if (is.function(init_cohort$restore)) init_cohort$restore()
+    # a CohortMat created by an earlier FINN version (e.g. the one a model read
+    # with torch_load() keeps from its fit) has no restore() and no R copy
+    else if (!cohort_tensors_valid(init_cohort))
+      stop("The tensors of this CohortMat are no longer valid (it was created with an earlier FINN version and read back from disk), and it carries no R copy to rebuild them from. Rebuild the initial cohorts with makeInitCohorts() and pass them as `init_cohort`.", call. = FALSE)
+  }
   init_cohort
 }
 

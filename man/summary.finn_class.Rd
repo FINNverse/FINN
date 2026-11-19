@@ -52,7 +52,8 @@ epochs. Default \code{50}.}
 
 \item{species_names, parameter_names}{Names of the species and of the
 parameters of a process function of one's own, as for \code{\link[=plot.finn_class]{plot.finn_class()}};
-\code{NULL} (default): the names the model keeps.}
+\code{NULL} (default): the species names the model keeps from \code{\link[=fit]{fit()}} and the
+documented parameter names of FINN's own process functions.}
 
 \item{x}{A \code{summary.finn_class} object.}
 
@@ -61,10 +62,13 @@ parameters of a process function of one's own, as for \code{\link[=plot.finn_cla
 \value{
 \code{summary()}: an object of class \code{summary.finn_class}, a list with
 \code{skill} (per set, overall), \code{skill_species} (per set and species),
-\code{convergence} (the loss history and the recent parameters), \code{bare_ground},
+\code{convergence} (the loss history, the recent parameters, the parameter
+snapshots with their estimated spacing, and the bounds and names of the
+species parameters), \code{bare_ground},
 \code{importance}, \code{average_conditional_effects}, \code{method} (the \code{importance}
-option), \code{importance_label}, \code{environment_error} (\code{NULL}, or why item 4
-could not be computed) and \code{epochs_back}. \code{print()}: \code{x}, invisibly.
+option), \code{importance_label}, \code{species_names}, \code{environment_error} (\code{NULL},
+or why item 4 could not be computed) and \code{epochs_back}. \code{print()}: \code{x},
+invisibly.
 }
 \description{
 Collects what is needed to judge a fitted model, in this order:
@@ -85,6 +89,7 @@ the mean of the \code{epochs_back} before), as a table with one sentence on
 the largest change; and how much the parameters moved over the last
 \code{epochs_back} epochs, as a table with one row per process (growth,
 mortality, regeneration, competition) and part (its species parameters,
+where they are fitted (\code{optimizeSpecies = TRUE} in \code{\link[=createProcess]{createProcess()}}),
 its environmental response, i.e. the network or the linear climate
 effects, and for regeneration the recruit dispersion and the cap),
 naming the parameter that moved most. The change is the size of the
@@ -96,8 +101,12 @@ hundredth of their size. \code{\link[=fit]{fit()}}
 keeps the parameters of the last 51 epochs for this, so \code{epochs_back} can
 be at most 50; for a model fitted before this version the parameter
 snapshots of the fit (\code{model$param_history}, every \code{checkpoints} epochs)
-are used instead. A fit has settled when both are small; network weights
-can keep moving while the loss stays flat.
+are used instead; they carry no epoch, so the epochs between them are
+estimated from the length of the loss history and their number (exact
+for one call of \code{\link[=fit]{fit()}} whose \code{epochs} is a multiple of \code{checkpoints}).
+Below the explanation, one sentence names the species parameter that
+moved most and the largest change overall. A fit has settled when both
+are small; network weights can keep moving while the loss stays flat.
 \item \strong{Bare ground}, when \code{\link[=evaluate]{evaluate()}} stored a bare-ground run: per site,
 the total basal area and the leading species with its share, as the mean
 over the last tenth of the run.

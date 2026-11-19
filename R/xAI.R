@@ -51,7 +51,10 @@ ALE_ce = function(X, ce) {
   env_sites  = sort(unique(env_dt$siteID))
   years      = length(env_years)
   sitesTotal = length(env_sites)
-  patches    = dim(model$raw_g[[1]])[2]
+  # the patch count from any process that recorded its inputs: growth may be the
+  # one that recorded none (see below)
+  recorded   = Filter(length, list(model$raw_g, model$raw_m, model$raw_r))
+  patches    = if (length(recorded)) dim(recorded[[1]][[1]])[2] else 0L
 
   processes = list()
 
@@ -694,6 +697,7 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'    the largest change; and how much the parameters moved over the last
 #'    `epochs_back` epochs, as a table with one row per process (growth,
 #'    mortality, regeneration, competition) and part (its species parameters,
+#'    where they are fitted (`optimizeSpecies = TRUE` in [createProcess()]),
 #'    its environmental response, i.e. the network or the linear climate
 #'    effects, and for regeneration the recruit dispersion and the cap),
 #'    naming the parameter that moved most. The change is the size of the
@@ -705,8 +709,12 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'    keeps the parameters of the last 51 epochs for this, so `epochs_back` can
 #'    be at most 50; for a model fitted before this version the parameter
 #'    snapshots of the fit (`model$param_history`, every `checkpoints` epochs)
-#'    are used instead. A fit has settled when both are small; network weights
-#'    can keep moving while the loss stays flat.
+#'    are used instead; they carry no epoch, so the epochs between them are
+#'    estimated from the length of the loss history and their number (exact
+#'    for one call of [fit()] whose `epochs` is a multiple of `checkpoints`).
+#'    Below the explanation, one sentence names the species parameter that
+#'    moved most and the largest change overall. A fit has settled when both
+#'    are small; network weights can keep moving while the loss stays flat.
 #' 3. **Bare ground**, when [evaluate()] stored a bare-ground run: per site,
 #'    the total basal area and the leading species with its share, as the mean
 #'    over the last tenth of the run.
@@ -736,16 +744,20 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'   epochs. Default `50`.
 #' @param species_names,parameter_names Names of the species and of the
 #'   parameters of a process function of one's own, as for [plot.finn_class()];
-#'   `NULL` (default): the names the model keeps.
+#'   `NULL` (default): the species names the model keeps from [fit()] and the
+#'   documented parameter names of FINN's own process functions.
 #' @param ... `summary()`: passed to [feature_importance()] with
 #'   `importance = "permutation"` (and from there to
 #'   [`predict()`][predict.finn_class]). `print()`: unused.
 #' @return `summary()`: an object of class `summary.finn_class`, a list with
 #'   `skill` (per set, overall), `skill_species` (per set and species),
-#'   `convergence` (the loss history and the recent parameters), `bare_ground`,
+#'   `convergence` (the loss history, the recent parameters, the parameter
+#'   snapshots with their estimated spacing, and the bounds and names of the
+#'   species parameters), `bare_ground`,
 #'   `importance`, `average_conditional_effects`, `method` (the `importance`
-#'   option), `importance_label`, `environment_error` (`NULL`, or why item 4
-#'   could not be computed) and `epochs_back`. `print()`: `x`, invisibly.
+#'   option), `importance_label`, `species_names`, `environment_error` (`NULL`,
+#'   or why item 4 could not be computed) and `epochs_back`. `print()`: `x`,
+#'   invisibly.
 #'
 #' @seealso [evaluate()], [comparePlot()], [plot.finn_class()], [ALE()],
 #'   [averageConditionalEffects()], [feature_importance()]
@@ -857,8 +869,6 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
             class = "summary.finn_class")
 }
 
-# Percent change of every loss term over the last k epochs, and of every
-# parameter block over the last k (at most 50) stored epochs.
 # Which process and which part of it a parameter row belongs to: the species
 # parameters of a process ("growth: light requirement"), its environmental
 # response (the network or the linear climate effects, nn_<process>.*), the
@@ -879,6 +889,9 @@ parameter_groups = function(p) {
   p
 }
 
+# Percent change of every loss term over the last k epochs, and of every
+# parameter over the last k (at most 50) stored epochs, or between the
+# snapshots of the fit closest to k epochs apart.
 convergence_table = function(conv, k) {
   k = as.integer(k)
   out = list(loss = NULL, params = NULL, k_loss = NA_integer_, k_params = NA_integer_)
@@ -927,6 +940,7 @@ convergence_table = function(conv, k) {
     pr = do.call(rbind, rows)
     out$params = pr[order(-pr$change_pct), , drop = FALSE]
     out$k_params = kk * step
+    out$k_steps = kk
     out$params_source = src
   }
   out
@@ -979,8 +993,13 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
     cat("  parameters: none stored (a model fitted before this version without parameter snapshots, or a single epoch)\n")
   } else {
     p = parameter_groups(cv$params)
-    cat(sprintf("\nParameters: how much they moved over the last %d epochs (from the %s).\n",
-                cv$k_params, if (identical(cv$params_source, "snapshot")) "parameter snapshots of the fit" else "parameters of every epoch"))
+    # the snapshots carry no epoch: their spacing is the epochs of the last fit()
+    # call over their number, exact for one call with `epochs` a multiple of `checkpoints`
+    if (identical(cv$params_source, "snapshot"))
+      cat(sprintf("\nParameters: how much they moved from the parameter snapshot %d before the last to the last one (about %d epochs, taking the snapshots of the fit as evenly spaced).\n",
+                  cv$k_steps, cv$k_params))
+    else
+      cat(sprintf("\nParameters: how much they moved over the last %d epochs (from the parameters of every epoch).\n", cv$k_params))
     cat("  The change is the size of the step the values took, as a percentage of the size of the values:\n",
         "  100 x |values now - values then| / |values then|, over all species of a parameter (or all weights\n",
         "  of a network layer). 1 % means the values moved by about a hundredth of their size.\n", sep = "")

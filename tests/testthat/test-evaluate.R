@@ -322,3 +322,63 @@ test_that("ALE works with a process function of one's own; parameter names; 'no 
   lab <- h$ratio$data[species == sp0 & variable == "reg"]$tile_label
   expect_equal(lab, "no obs")
 })
+
+test_that("conditional effects leave out a process without recorded inputs, growth included", {
+  skip_if_no_torch()
+  Nsp <- max(FINN::fia_obs_dt$species); tr <- 1:3
+  init <- suppressWarnings(makeInitCohorts(FINN::fia_init_trees[siteID %in% tr], Nspecies = Nsp))
+  # a model saved with an earlier FINN version keeps a forward() that does not
+  # record the inputs of a process function of one's own; mimicked here by a
+  # mortality function that discards the record of growth at every step
+  wiping_mort <- function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL) {
+    if (isTRUE(self$record_raws)) self$raw_g <- NULL
+    torch::torch_sigmoid(pred + light * parMort[, 1][species] + parMort[, 2][species] * dbh / 100 +
+                         growth * 100 * parMort[, 3][species])
+  }
+  FINN.seed(1)
+  m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+            growth_process       = createProcess(~ temp + prec, growth),
+            mortality_process    = createProcess(~ temp + prec, wiping_mort),
+            regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+  suppressMessages(fit(m, data = FINN::fia_obs_dt[siteID %in% tr], env = FINN::fia_env_dt[siteID %in% tr],
+                       init_cohort = init, epochs = 1L, patch_size = 0.06, plot_progress = FALSE))
+  expect_message(a <- ALE(m, plot = FALSE), "growth process recorded no inputs")
+  expect_false("growth" %in% names(a))
+  expect_gt(nrow(a$mortality), 0)
+  expect_gt(nrow(a$regeneration), 0)
+})
+
+test_that("a CohortMat of an earlier version (no restore()) is used when valid, and named when not", {
+  skip_if_no_torch()
+  old <- structure(list(dbh = torch::torch_zeros(1, 1, 1), trees = torch::torch_zeros(1, 1, 1),
+                        species = torch::torch_ones(1, 1, 1)), class = "CohortMat")
+  expect_identical(FINN:::restore_init_cohort(old), old)
+  dead <- structure(list(dbh = NULL, trees = NULL, species = NULL), class = "CohortMat")
+  expect_error(FINN:::restore_init_cohort(dead), "earlier FINN version")
+})
+
+test_that("a bare-ground run of sites with the same mean climate is drawn, the panels told apart by site", {
+  skip_if_no_torch()
+  toy <- eval_toy(1L)
+  env <- data.table::copy(toy$env)
+  for (cc in setdiff(names(env), c("siteID", "year")))
+    data.table::set(env, i = which(env$siteID == 2), j = cc, value = env[siteID == 1][[cc]])
+  bg <- simulateForest(toy$model, bare_ground = TRUE, years = 5, sites = 1:2, env = env)
+  expect_equal(anyDuplicated(unname(attr(bg, "site_labels"))), 2L)
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+  pb <- plot(bg)
+  expect_equal(nlevels(pb$layers[[2]]$data$site_lab), 2L)
+  expect_true(all(grepl("^site [12]: ", levels(pb$layers[[2]]$data$site_lab))))
+})
+
+test_that("the convergence check from snapshots says that their spacing is an estimate", {
+  skip_if_no_torch()
+  toy <- eval_toy(4L)
+  s <- suppressMessages(suppressWarnings(summary(toy$model)))
+  s$convergence$snapshots <- s$convergence$params; s$convergence$snap_every <- 2L
+  s$convergence$params <- list()
+  cv <- FINN:::convergence_table(s$convergence, 4)
+  expect_equal(cv$k_steps, 2L); expect_equal(cv$k_params, 4L)
+  out <- capture.output(print(s, epochs_back = 4))
+  expect_true(any(grepl("parameter snapshot 2 before the last to the last one \\(about 4 epochs", out)))
+})

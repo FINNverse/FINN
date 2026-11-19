@@ -380,6 +380,12 @@ plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...,
     site_labs = attr(x, "site_labels")
     lab_of = function(id) if (!is.null(site_labs) && as.character(id) %in% names(site_labs)) site_labs[[as.character(id)]] else paste("site", id)
     lab_levels = vapply(sort(unique(agg$siteID)), lab_of, character(1))
+    # sites with the same mean climate share a label: told apart by their id
+    if (anyDuplicated(lab_levels)) {
+      lab_climate = lab_of
+      lab_of = function(id) sprintf("site %s: %s", id, lab_climate(id))
+      lab_levels = vapply(sort(unique(agg$siteID)), lab_of, character(1))
+    }
     agg[, site_lab := factor(vapply(siteID, lab_of, character(1)), levels = lab_levels)]
     tot[, site_lab := factor(vapply(siteID, lab_of, character(1)), levels = lab_levels)]
     # at most three sites per row, the climate labels wrapped, so the panels stay readable
