@@ -63,8 +63,7 @@ axis it now builds the initial cohorts from the first inventory.
 * GitHub Actions: ubuntu-latest (R-devel, R-release, R-oldrel-1),
   macos-latest and windows-latest (R-release), without the backend: OK.
 
-* win-builder (R-devel and R-release) on the submitted state: see the results
-  added below once they are in.
+* win-builder R-release (4.6.2 ucrt): Status OK.
 
 ## R CMD check results
 
