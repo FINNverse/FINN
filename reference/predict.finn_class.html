@@ -83,7 +83,7 @@ function under a name that says what it does.</p>
 <span></span>
 <span><span class="fu">simulateForest</span><span class="op">(</span></span>
 <span>  <span class="va">model</span>,</span>
-<span>  <span class="va">env</span>,</span>
+<span>  env <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  disturbance <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  patches <span class="op">=</span> <span class="fl">100L</span>,</span>
 <span>  patch_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -93,6 +93,9 @@ function under a name that says what it does.</p>
 <span>  debug <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  recruits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"simulated"</span>, <span class="st">"observed"</span><span class="op">)</span>,</span>
 <span>  obs_recruits <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  bare_ground <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  years <span class="op">=</span> <span class="fl">500L</span>,</span>
+<span>  sites <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -108,7 +111,10 @@ function under a name that says what it does.</p>
 <dt id="arg-env">env<a class="anchor" aria-label="anchor" href="#arg-env"></a></dt>
 <dd><p>(<code>data.frame</code>)<br> The environment of every site and simulated
 year: one row per <code>siteID</code> and <code>year</code>, plus one column per predictor, as
-in <code><a href="fit.html">fit()</a></code>. Every row is one simulated step. See <a href="finn_data.html">finn_data</a>.</p></dd>
+in <code><a href="fit.html">fit()</a></code>. Every row is one simulated step. See <a href="finn_data.html">finn_data</a>.
+Required, except in <code>simulateForest()</code> with <code>bare_ground = TRUE</code>: there
+<code>NULL</code> (default) takes the environment the model was fitted on, and a
+table given is the one the mean climate is taken from.</p></dd>
 
 
 <dt id="arg-disturbance">disturbance<a class="anchor" aria-label="anchor" href="#arg-disturbance"></a></dt>
@@ -120,7 +126,9 @@ row per <code>siteID</code> and <code>year</code> with the column <code>intensit
 
 <dt id="arg-patches">patches<a class="anchor" aria-label="anchor" href="#arg-patches"></a></dt>
 <dd><p>(<code>integer(1)</code>)<br> Number of patches per site when the
-simulation starts from bare ground (<code>init_cohort = NULL</code>). Ignored, with a
+simulation starts from bare ground (<code>init_cohort = NULL</code>). Not given: the
+patch count the model was fitted with (<code>model$patches</code>), or <code>100</code> for a
+model fitted before 0.2.0 or never fitted. Ignored, with a
 warning when it differs, as soon as <code>init_cohort</code> is given: the patch
 count then comes from the initial cohorts.</p></dd>
 
@@ -163,7 +171,7 @@ step is stored, with the intermediate quantities of the processes.</p></dd>
 <dd><p>(<code>character(1)</code>)<br> Where the recruits come from. <code>"simulated"</code>
 (the default) is the model's regeneration process. <code>"observed"</code> feeds the
 observed recruitment in <code>obs_recruits</code> instead, as
-<code>fit(loss_recruit = "observed")</code> does, to check a model calibrated that way
+<code><a href="fit.html">fit(loss_recruit = "observed")</a></code> does, to check a model calibrated that way
 on the intervals it was calibrated on. With observed recruitment the model
 is not an autonomous simulator: every simulated year must lie in an
 observed interval, and a bare-ground, succession or projection run beyond
@@ -173,7 +181,7 @@ them is refused. See <a href="recruitment.html">recruitment</a> for the unit cha
 <dt id="arg-obs-recruits">obs_recruits<a class="anchor" aria-label="anchor" href="#arg-obs-recruits"></a></dt>
 <dd><p>(<code>data.frame</code>)<br> The observed recruitment for
 <code>recruits = "observed"</code>, required there and refused otherwise: a table like
-<code><a href="fit.html">fit()</a></code>'s <code>data</code> with <code>siteID</code>, <code>year</code>, <code>species</code>, <code>reg</code> and <code>period_length</code>,
+the <code>data</code> of <code><a href="fit.html">fit()</a></code> with <code>siteID</code>, <code>year</code>, <code>species</code>, <code>reg</code> and <code>period_length</code>,
 rows for every species (0 where none recruited), the sites of <code>env</code> and years
 among those of <code>env</code>. Intervals map to simulated years exactly as in
 <a href="fit.html">fit</a>. An <code>NA</code> <code>reg</code> in an interval, a year in two intervals and a year
@@ -190,15 +198,40 @@ all users want.</p></dd>
 <dt id="arg-model">model<a class="anchor" aria-label="anchor" href="#arg-model"></a></dt>
 <dd><p>(<code>finn_class</code>)<br> The model built by <code><a href="finn.html">finn()</a></code>, fitted with <code><a href="fit.html">fit()</a></code>.</p></dd>
 
+
+<dt id="arg-bare-ground">bare_ground<a class="anchor" aria-label="anchor" href="#arg-bare-ground"></a></dt>
+<dd><p>(<code>logical(1)</code>)<br><code>simulateForest()</code> only: <code>TRUE</code> runs the
+model from an empty stand for <code>years</code> years under a constant climate, the
+mean of every predictor over the environment the model was fitted on (or
+over <code>env</code> when given); see <em>Bare-ground runs</em> in the details.
+<code>init_cohort</code> must be left out (an error otherwise) and <code>disturbance</code> is
+ignored. Default <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-years">years<a class="anchor" aria-label="anchor" href="#arg-years"></a></dt>
+<dd><p>(<code>integer(1)</code>)<br><code>simulateForest()</code> with <code>bare_ground = TRUE</code>:
+the length of the run in years. Default <code>500</code>.</p></dd>
+
+
+<dt id="arg-sites">sites<a class="anchor" aria-label="anchor" href="#arg-sites"></a></dt>
+<dd><p><code>simulateForest()</code> with <code>bare_ground = TRUE</code>: <code>NULL</code> (default)
+one run under the mean climate of all sites (<code>siteID</code> 1 in the result),
+or site ids for one run per site under that site's mean climate (the
+<code>siteID</code> of the fitted environment, or of <code>env</code> when given, kept in the
+result).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A named list. <code>$long$site</code> (and <code>$wide$site</code>) give the site-level
+    <p>A named list of class <code>finn_simulation</code>, which <code><a href="plot.finn_simulation.html">plot.finn_simulation()</a></code>
+draws. <code>$long$site</code> (and <code>$wide$site</code>) give the site-level
 results, averaged over the patches: columns <code>siteID</code>, <code>year</code>, <code>species</code>,
 <code>variable</code> (<code>dbh</code>, <code>ba</code>, <code>trees</code>, <code>growth</code>, <code>mort</code>, <code>reg</code>, <code>r_mean_ha</code>) and
 <code>value</code>; <code>$wide$site</code> has one column per variable instead. <code>siteID</code> is the
 id used in <code>env</code>; <code>year</code> is the simulation step, counted from 1 (the k-th
-year of a site's <code>env</code> is step k), whatever the values of <code>env$year</code>. When <code>return_cohorts</code> is set, <code>$long$cohort</code> / <code>$wide$cohort</code> add
+year of a site's <code>env</code> is step k), whatever the values of <code>env$year</code>; the
+years of <code>env</code> are kept as the attribute <code>"env_years"</code>, with which
+<code><a href="comparePlot.html">comparePlot()</a></code> places observations. When <code>return_cohorts</code> is set, <code>$long$cohort</code> / <code>$wide$cohort</code> add
 the per-cohort state (<code>dbh</code>, <code>trees</code>, <code>species</code>, growth <code>g</code>, mortality <code>m</code>,
 ...) for the requested timesteps.</p>
     </div>
@@ -210,11 +243,19 @@ in natural units: the standardisation learned by <code><a href="fit.html">fit()<
 automatically. A model that has not been fitted has no standardisation yet,
 so it must be given <code>env</code> on the scale its processes expect; fit it first
 (two epochs are enough for a trial).</p>
+<p><strong>Bare-ground runs.</strong> <code>simulateForest(model, bare_ground = TRUE)</code> builds the
+environment itself: the model starts from an empty stand and runs for
+<code>years</code> years under a constant climate, the mean of every predictor over
+the environment the model was fitted on, or with <code>sites</code> one run per site
+under that site's mean. It shows what the model does outside the
+observation window; <code><a href="evaluate.html">evaluate()</a></code> stores such a run on the model.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="fit.html">fit()</a></code>, <a href="finn_data.html">finn_data</a> for the input tables, <a href="recruitment.html">recruitment</a> for
-the recruitment options (<code>recruits</code>, <code>obs_recruits</code>)</p></div>
+the recruitment options (<code>recruits</code>, <code>obs_recruits</code>),
+<code><a href="plot.finn_simulation.html">plot.finn_simulation()</a></code> to draw the result, <code><a href="comparePlot.html">comparePlot()</a></code>
+and <code><a href="evaluate.html">evaluate()</a></code> to compare it with observations</p></div>
     </div>
 
     <div class="section level2">
@@ -286,6 +327,12 @@ the recruitment options (<code>recruits</code>, <code>obs_recruits</code>)</p></
 <span class="r-out co"><span class="r-pr">#&gt;</span> 4:      2    50 2.5170323</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5:      3    10 0.9084752</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 6:      3    50 2.0007858</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># the same kind of run in one call: from an empty stand under the mean</span></span></span>
+<span class="r-in"><span><span class="co"># climate of the fitted environment, held constant</span></span></span>
+<span class="r-in"><span><span class="va">bare</span> <span class="op">&lt;-</span> <span class="fu">simulateForest</span><span class="op">(</span><span class="va">m</span>, bare_ground <span class="op">=</span> <span class="cn">TRUE</span>, years <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">bare</span><span class="op">)</span></span></span>
+<span class="r-plt img"><img src="predict.finn_class-1.png" alt="" width="700" height="433"></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

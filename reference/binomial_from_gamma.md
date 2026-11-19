@@ -1,11 +1,11 @@
 # Draw deaths from a Gamma matched to the binomial
 
 The mortality draw of FINN before 0.2.0, selected with
-`createProcess(mortality_draw = "gamma")`: a Gamma distribution with the
-mean `n * p` and the variance `n * p * (1 - p)` of the binomial, sampled
-with `rsample()` so that the draw carries a pathwise gradient to `n` and
-`p`. The draw is continuous, not an integer count; the simulation rounds
-it afterwards. See
+[`createProcess(mortality_draw = "gamma")`](https://finnverse.github.io/FINN/reference/createProcess.md):
+a Gamma distribution with the mean `n * p` and the variance
+`n * p * (1 - p)` of the binomial, sampled with `rsample()` so that the
+draw carries a pathwise gradient to `n` and `p`. The draw is continuous,
+not an integer count; the simulation rounds it afterwards. See
 [`binomial_from_poisson()`](https://finnverse.github.io/FINN/reference/binomial_from_poisson.md)
 for what that rounding costs and
 [`createProcess()`](https://finnverse.github.io/FINN/reference/createProcess.md)

@@ -1,8 +1,9 @@
 # Draw deaths as a Bernoulli/Poisson count
 
 The alternative mortality draw, selected with
-`createProcess(mortality_draw = "poisson")`. The default since 0.2.0 is
-`mortality_draw = "binomial"`, the exact binomial;
+[`createProcess(mortality_draw = "poisson")`](https://finnverse.github.io/FINN/reference/createProcess.md).
+The default since 0.2.0 is `mortality_draw = "binomial"`, the exact
+binomial;
 [`binomial_from_gamma()`](https://finnverse.github.io/FINN/reference/binomial_from_gamma.md)
 (`mortality_draw = "gamma"`) reproduces results published before 0.2.0.
 A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is

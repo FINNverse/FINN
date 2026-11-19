@@ -135,10 +135,11 @@ finn(
   annual time steps it is the annual growth rate.
   [`makeObsData()`](https://finnverse.github.io/FINN/reference/makeObsData.md)
   returns the annual rate (as in the bundled FIA data); with
-  `makeObsData(rates = "interval")` it returns the increment between two
-  censuses, which is the per-step rate only when one step is one census
-  interval. The terms follow Kohyama, Kohyama & Sheil (2018), who
-  distinguish a rate per year from the change over a census interval.
+  [`makeObsData(rates = "interval")`](https://finnverse.github.io/FINN/reference/makeObsData.md)
+  it returns the increment between two censuses, which is the per-step
+  rate only when one step is one census interval. The terms follow
+  Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from
+  the change over a census interval.
 
 - recruit_obs_weight:
 
@@ -152,8 +153,9 @@ finn(
 - ...:
 
   Arguments of earlier versions, still accepted with a warning:
-  `reg_floor` (now `createProcess(reg_floor = )` of the regeneration
-  process) and `growth_period_scale` (`TRUE` is now
+  `reg_floor` (now
+  [`createProcess(reg_floor = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
+  of the regeneration process) and `growth_period_scale` (`TRUE` is now
   `growth_rate = "period"`).
 
 ## Value
@@ -225,14 +227,16 @@ environment: for every species, the columns of the environment table
 that the process' `formula` names are turned into one number that scales
 the process. By default that response is a simple linear (growth,
 regeneration) or logistic (mortality) function with one coefficient per
-predictor and species; `createProcess(hidden = )` turns it into a small
-neural network. The simulated stand variables (mean dbh, basal area,
-number of trees) and the simulated rates (growth, mortality,
-recruitment) of every site and year are what
+predictor and species;
+[`createProcess(hidden = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
+turns it into a small neural network. The simulated stand variables
+(mean dbh, basal area, number of trees) and the simulated rates (growth,
+mortality, recruitment) of every site and year are what
 [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) compares
 with the observations.
 
-**The default processes** are, in 0.2.0, `createProcess(func = growth)`,
+**The default processes** are, in 0.2.0,
+[`createProcess(func = growth)`](https://finnverse.github.io/FINN/reference/createProcess.md),
 `createProcess(func = mortality)`,
 `createProcess(func = regeneration_capped)` and
 `createProcess(func = competition)`: the equations of Pichler & Käber
@@ -283,10 +287,11 @@ independently:
   to the environment. Every parameter has a meaning and a unit.
 
 - *level 1* – the equation, but its environmental response is a small
-  network (`createProcess(hidden = c(20, 20))`). The demography stays
-  the package's equation, so the model still extrapolates the way that
-  equation says it should, while the response to climate is free in
-  shape.
+  network
+  ([`createProcess(hidden = c(20, 20))`](https://finnverse.github.io/FINN/reference/createProcess.md)).
+  The demography stays the package's equation, so the model still
+  extrapolates the way that equation says it should, while the response
+  to climate is free in shape.
 
 - *level 2* – the equation itself replaced by a network
   ([`createHybrid()`](https://finnverse.github.io/FINN/reference/createHybrid.md)).
@@ -306,17 +311,25 @@ covers. And a process' `formula` should name the predictors you would
 defend in a regression rather than every column of `env`, because each
 one costs a coefficient per species.
 
-**Checking a fitted model.** `fit(plot_progress = TRUE)` and `$history`
-say whether the fit moved and which response drove it;
+**Checking a fitted model.**
+[`fit(plot_progress = TRUE)`](https://finnverse.github.io/FINN/reference/fit.md)
+and `$history` say whether the fit moved and which response drove it;
 [`summary.finn_class()`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
-reports the parameters;
+reports the skill on the training data and a holdout (stored by
+[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md),
+drawn by
+[`comparePlot()`](https://finnverse.github.io/FINN/reference/comparePlot.md)),
+whether the fit has settled, and the environmental importances;
+[`plot.finn_class()`](https://finnverse.github.io/FINN/reference/plot.finn_class.md)
+draws the fitted parameters;
 [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) shows the
 fitted environmental responses, including those of a network;
 [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
-from bare ground shows what the model does outside the observation
-window. The last one is worth the time: a model that predicts the
-holdout well and grows an implausible stand from bare ground has usually
-learned the observed window rather than the dynamics that produced it.
+from bare ground (`bare_ground = TRUE`) shows what the model does
+outside the observation window. The last one is worth the time: a model
+that predicts the holdout well and grows an implausible stand from bare
+ground has usually learned the observed window rather than the dynamics
+that produced it.
 
 ## References
 

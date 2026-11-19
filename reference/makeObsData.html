@@ -155,7 +155,7 @@ recode: <code>year_before</code>, <code>dbh_before</code>, <code>period_length</
 increment over the interval, <code>dbh/dbh_before - 1</code>) and
 <code>growth</code> (the tree's growth rate in the unit of <code>rates</code>, the
 quantity behind <code>obs_dt$growth</code> and the <code>growth</code> column of
-<code>fit(tree_data = )</code>); an input column <code>growth</code> is replaced.</p></li>
+<code><a href="fit.html">fit(tree_data = )</a></code>); an input column <code>growth</code> is replaced.</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -166,7 +166,7 @@ of the <code>period_length</code> years before each census into one rate per yea
 with the same functional (the geometric mean of \(1 + g\) minus one, one
 minus the geometric mean survival), and sums the simulated recruits over
 them (see <code><a href="finn_data.html">finn_data</a></code>). <code>rates = "interval"</code> belongs with
-<code>resolveSiteIDs(time_axis = "census")</code>, where one simulation step is
+<code><a href="resolveSiteIDs.html">resolveSiteIDs(time_axis = "census")</a></code>, where one simulation step is
 one census interval and nothing is compounded. The counts
 (<code>n_at_risk</code>, <code>n_died</code>, <code>growth_n</code>) and <code>reg</code> stay
 quantities of the whole interval in both modes: the counts weight the

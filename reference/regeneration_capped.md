@@ -56,7 +56,8 @@ draw, and `reg` is scored on the per-hectare value.
 ## Details
 
 The cap is the parameter `reg_logK` (`K = exp(reg_logK)`), which **FINN
-creates itself** – there is nothing to declare. `createProcess(cap = )`
+creates itself** – there is nothing to declare.
+[`createProcess(cap = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
 decides its resolution: `"all"` (the default) gives one cap shared by
 every species, `"species"` one cap per species. Read the fitted value
 back with `exp(as.numeric(m$reg_logK))`.
@@ -71,8 +72,8 @@ pull of a staged calibration. It is added **after** the
 `loss_weights = "auto"` baseline scaling, so `prior_lambda` means the
 same thing on every dataset.
 
-`createProcess(prior = "max_obs_recruits")`, the default, resolves the
-prior from the data at the start of
+[`createProcess(prior = "max_obs_recruits")`](https://finnverse.github.io/FINN/reference/createProcess.md),
+the default, resolves the prior from the data at the start of
 [`fit()`](https://finnverse.github.io/FINN/reference/fit.md): the
 largest observed recruitment rate per timestep,
 `max(reg / period_length)`. The division matters on any inventory with a

@@ -18,6 +18,14 @@ with `siteID`, `patchID`, `cohortID`, `species`, `dbh`, `trees`).
 Build the cohort tensors, either from a cohort table (`obs_df`) or from
 arrays of `dbh`, `trees` and `species`
 
+Store a plain R copy of the cohort arrays (used by `restore()`)
+
+Rebuild the tensors from the stored R copy when they are no longer
+valid, as after [`readRDS()`](https://rdrr.io/r/base/readRDS.html) of a
+saved `CohortMat` (or of the list
+[`resolveSiteIDs()`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
+returns) in a new session
+
 Convert the cohort tensors back to a cohort table
 
 ## Usage
@@ -74,6 +82,8 @@ CohortMat(
 
 A `CohortMat`, a `torch` `nn_module` whose `dbh`, `trees` and `species`
 buffers hold the cohorts as `[sites, patches, cohorts]` tensors.
+
+The `CohortMat`, invisibly.
 
 A `data.frame` with one row per cohort and the columns `siteID`,
 `patchID`, `cohortID`, `species`, `dbh` and `trees`.

@@ -25,6 +25,7 @@ restores the 0.1.0 result.
 | [`predict()`](https://rspatial.github.io/terra/reference/predict.html) and [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md) leave `requires_grad` as they found it instead of switching every parameter on ([\#55](https://github.com/FINNverse/FINN/issues/55)) | always | \- |
 | [`resolveSiteIDs()`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md) numbers sites, patches and species by radix order instead of the collation locale’s | always | reproduces 0.1.0 where `LC_COLLATE` was already `C` |
 | A hybrid growth process reads the growth predictors and a hybrid mortality process the mortality predictors ([\#72](https://github.com/FINNverse/FINN/issues/72), B2) | always | \- (0.1.0 and 0.2.0-rc fed each the other’s; identical where the two formulas are the same) |
+| [`predict()`](https://rspatial.github.io/terra/reference/predict.html) / [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md) from bare ground without `patches` use the patch count of the fit instead of 100 | `patches` not given: `model$patches` | `patches = 100` |
 
 The sections *The stem-count gradient*, *The death draw*, *The recruit
 draw*, *The mortality limits* and *The recruitment cap* under **The
@@ -128,13 +129,8 @@ the new form, and gives the same result.
 
 - Removed from the exported interface, as nothing in the package, the
   tests or the vignettes used them: `aggregate_results_old()`,
-  `np_runif()`, `sample_poisson_relaxed()`, the undocumented
-  [`plot()`](https://rspatial.github.io/terra/reference/plot.html)
-  method of a model (use
-  [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) and
-  [`summary()`](https://rspatial.github.io/terra/reference/summary.html)),
-  and the internal helpers `groupby_mean()` and `index_species()` are no
-  longer exported.
+  `np_runif()`, `sample_poisson_relaxed()`, and the internal helpers
+  `groupby_mean()` and `index_species()` are no longer exported.
 
 ### Documentation and data preparation
 
@@ -451,6 +447,142 @@ for someone who was affected.
 | A U+039B and a U+00D7 in [`?fit`](https://finnverse.github.io/FINN/reference/fit.md), a stray `\cr`, two dangling `\link` targets, a `@param` on the wrong function | no — the LaTeX manual and two `R CMD check` WARNINGs |
 
 ### New features
+
+- **[`plot()`](https://rspatial.github.io/terra/reference/plot.html) of
+  a fitted model draws its parameters.** `plot(model)` now runs from a
+  bare call and shows the fitted parameters themselves, per species: the
+  species-specific parameters of every process and the recruit
+  dispersion `theta` on the scale they act on, each against its
+  admissible range from `createProcess(lower, upper)`, so a parameter
+  that ended the fit at a bound stands out. `pars = "env"` switches to
+  the environmental niches: for every process whose environmental
+  response is linear, the fitted environmental term over the range each
+  predictor covers in the training data, on the predictor’s original
+  scale; a process with a neural network response is skipped with a
+  warning that points to
+  [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md).
+  `species =` selects species. The argument `pars` and its values
+  `"process"` / `"env"` are those of 0.1.0, where the method was
+  undocumented, failed on a bare call (a length-2 condition in `if()`,
+  an error since R 4.2.0) and drew the first-layer weights of the
+  environmental network as bars.
+
+- **[`plot()`](https://rspatial.github.io/terra/reference/plot.html) of
+  a simulation.**
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+  and
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)
+  return a list of class `finn_simulation` (the tables inside are
+  unchanged), and `plot(sim)` draws basal area, mean dbh and stem number
+  per species over the simulated years, averaged over the sites, or for
+  one site with `sites =`; `response =` takes any of the seven simulated
+  variables. The leading species are coloured and named, every other
+  species is a pale grey line, and the stand total is dashed. A
+  bare-ground run is drawn as a succession, one panel per site labelled
+  with its mean climate.
+
+- **[`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) and the
+  conditional effects for any process function.** FINN now records the
+  inputs of every process step itself while it computes the conditional
+  effects, so a process function of one’s own (which does not record
+  them) is covered as well; a model saved with an earlier version keeps
+  the methods it was saved with, and a process without recorded inputs
+  is left out with a message instead of an error. `plot(ale)` names the
+  species.
+
+- **`plot(model, parameter_names = )`** names the parameters of a
+  process function of one’s own; FINN’s own process functions are named
+  from their documentation.
+
+- **Species by their names.**
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) keeps the
+  names of the `species_name` column of the data
+  (`model$species_names`); the plots label species by name, and every
+  plot takes `species_names =` for a model without them.
+
+- **[`comparePlot()`](https://finnverse.github.io/FINN/reference/comparePlot.md):
+  simulation against observations.** `comparePlot(sim, obs)`, or
+  `plot(sim, obs)`, pairs a simulation with the observed data,
+  aggregated the way
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) scores it
+  (states at the census, growth and mortality compounded over the
+  interval, recruits summed). It draws observed against simulated for
+  `dbh`, `ba`, `trees` and `growth` with R2 in each panel, the ROC curve
+  of the interval death probability with its AUC for mortality, and for
+  recruitment the ratio of simulated to observed recruitment over all
+  sites per species. With the observed trees (`tree_data =`, as for
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md)) the dbh
+  panel shows the largest diameter per site and species (all species
+  pooled: per site), which is robust against a few large or many small
+  trees; the simulation records its cohorts at the census years for it.
+  `type = "heatmap"` shows the skill of every species at a glance: R2
+  (and the AUC for mortality) per response and species, next to the
+  ratio of simulated to observed. `type = "timeseries"` draws the
+  simulated trajectory with the observations as points at their census
+  years. `species =` pools all species (default) or draws chosen
+  species; long and wide tables are both accepted, and observations
+  without a simulated counterpart are left out with a message. An
+  observation is placed as in
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md), by the
+  position of its `year` among the years of `env` (the simulation keeps
+  them as the attribute `"env_years"`), so `env` and the observations
+  may carry calendar years.
+
+- **[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md):
+  an optional step after the fit.** It simulates the training data, a
+  holdout (`holdout = list(data =, env =, init_cohort =)`) and,
+  optionally, a bare-ground run (`bare_ground = TRUE`, `years = 500`),
+  and returns the comparison as an object of class `finn_evaluation`,
+  which the model also keeps (`model$evaluation`) for
+  [`summary()`](https://rspatial.github.io/terra/reference/summary.html).
+  [`print()`](https://rdrr.io/r/base/print.html) shows the skill tables;
+  [`plot()`](https://rspatial.github.io/terra/reference/plot.html) draws
+  the comparison (`type = "scatter"` or `"heatmap"`, from the stored
+  tables, no new simulation) or the bare-ground runs
+  (`type = "bare_ground"`). `fit(..., holdout = )` runs it right after
+  the fit. A model fitted with an earlier version takes its training
+  data through `train =`.
+
+- **[`?FINN`](https://finnverse.github.io/FINN/reference/FINN-package.md)
+  shows how to start.** The package help page lists the functions in the
+  order of an analysis (prepare the data, build, fit, evaluate, look
+  inside, simulate) with a runnable example, and the README walks
+  through a fit of the bundled FIA data with its evaluation and a
+  bare-ground run.
+
+- **[`summary()`](https://rspatial.github.io/terra/reference/summary.html)
+  of a model judges the fit.** It now shows, before the environmental
+  importance and the average conditional effects, the skill per response
+  on the training data and the holdout (R2 and the correlation of
+  observed and simulated first, then RMSE, bias, the ratio of the means,
+  and the AUC for mortality) and a convergence check: by how many
+  percent each loss term changed over the last `epochs_back` epochs, and
+  each parameter: every species-specific parameter by its name on the
+  scale it acts on, every network block as a whole, the largest change
+  of each named in a sentence (`print(s, epochs_back = 10)`). For this
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) keeps the
+  parameters of the last 51 epochs; for an older model the parameter
+  snapshots of the fit are used.
+  [`summary()`](https://rspatial.github.io/terra/reference/summary.html)
+  returns an object of class `summary.finn_class` that
+  [`print()`](https://rdrr.io/r/base/print.html) shows, instead of
+  printing as it computes.
+
+- **Bare-ground runs in one call.**
+  `simulateForest(model, bare_ground = TRUE)` runs the model from an
+  empty stand for `years = 500` years under the mean climate of the
+  fitted environment held constant, or under each site’s mean climate
+  with `sites =`.
+
+- **The patch count of the fit is the default.**
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) stores
+  the patch count it used (`model$patches`), together with the training
+  observations;
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html),
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+  and
+  [`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+  take it when `patches` is not given.
 
 - **[`regeneration_adult_effect()`](https://finnverse.github.io/FINN/reference/regeneration_adult_effect.md):
   conspecific adults as an effect, not a gate.**
@@ -868,6 +1000,35 @@ for someone who was affected.
   by 3e-6 (FINN-bwi fits/2026-11-06-finn-speed-review).
 
 ### Bug fixes
+
+- Initial cohorts survive
+  [`saveRDS()`](https://rspatial.github.io/terra/reference/serialize.html)
+  /
+  [`readRDS()`](https://rspatial.github.io/terra/reference/serialize.html)
+  ([\#77](https://github.com/FINNverse/FINN/issues/77)). A `CohortMat`
+  (e.g. `initCohorts` of the list
+  [`resolveSiteIDs()`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
+  returns) keeps a plain R copy of its arrays and rebuilds its torch
+  tensors, which
+  [`saveRDS()`](https://rspatial.github.io/terra/reference/serialize.html)
+  cannot store, when
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md),
+  [`predict()`](https://rspatial.github.io/terra/reference/predict.html)
+  or
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+  use it, or with `x$restore()`. Before, every tensor failed with
+  “external pointer is not valid” after reading.
+
+- An environment with no covariate column gives the process an intercept
+  instead of an all-`NA` design
+  ([\#64](https://github.com/FINNverse/FINN/issues/64)):
+  [`model.matrix()`](https://rdrr.io/r/stats/model.matrix.html) on a
+  frame with no columns returned zero rows, and the recruitment of an
+  intercept-only process became `NaN`.
+
+- `createProcess(initSpecies = , initEnv = )` accept a data.frame and
+  use the matrix it holds, instead of failing with “Can’t convert
+  argument” ([\#11](https://github.com/FINNverse/FINN/issues/11)).
 
 - [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) no longer
   creates or overwrites an object `counter` in the global environment.

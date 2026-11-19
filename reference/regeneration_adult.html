@@ -125,12 +125,12 @@ potential of <a href="regeneration.html">regeneration</a> where adults are many.
 with the same Beverton-Holt term as <a href="regeneration_capped.html">regeneration_capped</a>,
 <code>K m / (K + m)</code>.</p>
 <p>The cap <code>reg_logK</code> is created by <code><a href="finn.html">finn()</a></code> as for
-<a href="regeneration_capped.html">regeneration_capped</a>, with its resolution from <code>createProcess(cap = )</code>
+<a href="regeneration_capped.html">regeneration_capped</a>, with its resolution from <code><a href="createProcess.html">createProcess(cap = )</a></code>
 and its prior from <code>prior</code>/<code>prior_lambda</code>, so it need not be declared. A
 <code>reg_logK</code> declared in <code>custom_parameters</code> (as in the example) is kept and
 sets the resolution by its length, but its start value is replaced by the
 resolved prior at the first <code><a href="fit.html">fit()</a></code>. Declare the two adult parameters
-with <code>createProcess(custom_parameters = )</code>; a length-1 init gives one shared
+with <code><a href="createProcess.html">createProcess(custom_parameters = )</a></code>; a length-1 init gives one shared
 value and a length-<code>N_species</code> init one value per species:</p><ul><li><p><code>reg_logK</code> (optional, see above): the log Beverton-Holt cap, stems ha^-1
 step^-1;</p></li>
 <li><p><code>reg_adult_logx</code>: the log adult threshold, <code>x = exp(reg_adult_logx)</code> in the

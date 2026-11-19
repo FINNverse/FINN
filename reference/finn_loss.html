@@ -100,7 +100,7 @@ observation (see <a href="finn_data.html">finn_data</a> and <code><a href="fit.h
 rate (<code>dbh / dbh_before - 1</code>), the model's own quantity; training against
 the absolute increment was tested and was worse and more seed-variable,
 because it couples the growth parameters to whichever trees happen to be
-present. <code>finn(growth_rate = )</code> says whether the observed growth is a rate
+present. <code><a href="finn.html">finn(growth_rate = )</a></code> says whether the observed growth is a rate
 per time step or the increment over the whole interval.</p>
 <p>For <code>regeneration</code>, <code>"nbinom"</code> (the default) uses the recruit dispersion
 <code>theta</code> of the regeneration process and applies <code>finn(recruit_obs_weight = )</code>; <code>"poisson"</code> has no dispersion parameter, so it cannot collapse, but in
@@ -224,7 +224,7 @@ score every tree and the scored sample does not depend on the parameters;
 killed a tree the inventory found alive (<code>frac_killed</code>), in which year
 (<code>mean_kill_year</code>), and the share that entered the window already dead
 (<code>frac_ghost</code>). With the binned competition a killed cohort still occupies
-a slot of the height quantiles, so <code>createProcess(light_mask = TRUE)</code> (the
+a slot of the height quantiles, so <code><a href="createProcess.html">createProcess(light_mask = TRUE)</a></code> (the
 default) or <code>continuous = TRUE</code> is needed for the competition process;
 <code><a href="fit.html">fit()</a></code> warns otherwise.</p>
     </div>

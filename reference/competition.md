@@ -103,8 +103,9 @@ and the height comes from
 the species' height parameter `parComp[, 1]`. With a competition
 strength of 0.2 (about the start value) a cohort under 50 m^2/ha of
 taller trees receives no light. In a model the function is the
-competition process, `createProcess(func = competition)`; it takes no
-environment.
+competition process,
+[`createProcess(func = competition)`](https://finnverse.github.io/FINN/reference/createProcess.md);
+it takes no environment.
 
 ## See also
 
@@ -150,20 +151,20 @@ m <- finn(N_species = 2,
 env <- data.frame(siteID = 1L, year = 1:30, temp = 0)
 sim <- simulateForest(m, env = env, patches = 5, patch_size = 0.1)
 tail(sim$wide$site)
-#>    siteID species  year      dbh        ba trees    growth       mort   reg
-#>     <int>   <int> <int>    <num>     <num> <num>     <num>      <num> <num>
-#> 1:      1       2    25 41.34618 0.3323392   1.6 0.2630191 0.01891340   0.2
-#> 2:      1       2    26 39.42628 0.3603613   1.8 0.3062723 0.01889439   0.2
-#> 3:      1       2    27 42.14650 0.3896927   1.8 0.3313038 0.01886775   0.0
-#> 4:      1       2    28 40.76972 0.3218157   1.6 0.2931730 0.01885694   0.0
-#> 5:      1       2    29 44.11386 0.3501407   1.6 0.2866735 0.01888959   0.0
-#> 6:      1       2    30 37.63353 0.3489603   1.8 0.2344551 0.01888839   0.4
+#>    siteID species  year      dbh        ba trees     growth       mort   reg
+#>     <int>   <int> <int>    <num>     <num> <num>      <num>      <num> <num>
+#> 1:      1       2    25 67.99114 0.6146673   1.4 0.16434710 0.01953910   0.0
+#> 2:      1       2    26 70.61462 0.6518863   1.4 0.13372810 0.01936250   0.0
+#> 3:      1       2    27 73.00346 0.6872678   1.4 0.11075670 0.01920772   0.0
+#> 4:      1       2    28 72.52180 0.5896009   1.2 0.09166624 0.01908581   0.0
+#> 5:      1       2    29 75.09538 0.6182368   1.2 0.14356554 0.01932270   0.0
+#> 6:      1       2    30 66.78084 0.6467762   1.4 0.11203200 0.01912647   0.2
 #>    r_mean_ha
 #>        <num>
-#> 1: 0.7281690
-#> 2: 0.7196229
-#> 3: 0.7095281
-#> 4: 0.7148335
-#> 5: 0.7074409
-#> 6: 0.7030461
+#> 1: 0.6893740
+#> 2: 0.6762765
+#> 3: 0.6619015
+#> 4: 0.6889051
+#> 5: 0.6760167
+#> 6: 0.6620452
 ```

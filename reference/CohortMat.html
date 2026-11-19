@@ -10,6 +10,10 @@ gradient. asDF() converts it back to a cohort table (a data.frame with
 siteID, patchID, cohortID, species, dbh, trees).
 Build the cohort tensors, either from a cohort table (obs_df) or from
 arrays of dbh, trees and species
+Store a plain R copy of the cohort arrays (used by restore())
+Rebuild the tensors from the stored R copy when they are no longer valid,
+as after readRDS() of a saved CohortMat (or of the list
+resolveSiteIDs() returns) in a new session
 Convert the cohort tensors back to a cohort table"><meta property="og:description" content="A torch nn_module holding the cohorts of every site and patch as three
 aligned tensors – dbh, trees and species – each shaped
 [sites, patches, cohorts]. It is FINN's initial state: build it from an
@@ -21,6 +25,10 @@ gradient. asDF() converts it back to a cohort table (a data.frame with
 siteID, patchID, cohortID, species, dbh, trees).
 Build the cohort tensors, either from a cohort table (obs_df) or from
 arrays of dbh, trees and species
+Store a plain R copy of the cohort arrays (used by restore())
+Rebuild the tensors from the stored R copy when they are no longer valid,
+as after readRDS() of a saved CohortMat (or of the list
+resolveSiteIDs() returns) in a new session
 Convert the cohort tensors back to a cohort table"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
@@ -75,6 +83,10 @@ gradient. <code>asDF()</code> converts it back to a cohort table (a <code>data.f
 <code>siteID</code>, <code>patchID</code>, <code>cohortID</code>, <code>species</code>, <code>dbh</code>, <code>trees</code>).</p>
 <p>Build the cohort tensors, either from a cohort table (<code>obs_df</code>) or from
 arrays of <code>dbh</code>, <code>trees</code> and <code>species</code></p>
+<p>Store a plain R copy of the cohort arrays (used by <code>restore()</code>)</p>
+<p>Rebuild the tensors from the stored R copy when they are no longer valid,
+as after <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS()</a></code> of a saved <code>CohortMat</code> (or of the list
+<code><a href="resolveSiteIDs.html">resolveSiteIDs()</a></code> returns) in a new session</p>
 <p>Convert the cohort tensors back to a cohort table</p>
     </div>
 
@@ -127,6 +139,7 @@ arrays of <code>dbh</code>, <code>trees</code> and <code>species</code></p>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>CohortMat</code>, a <code>torch</code> <code>nn_module</code> whose <code>dbh</code>, <code>trees</code> and
 <code>species</code> buffers hold the cohorts as <code>[sites, patches, cohorts]</code> tensors.</p>
+<p>The <code>CohortMat</code>, invisibly.</p>
 <p>A <code>data.frame</code> with one row per cohort and the columns <code>siteID</code>,
 <code>patchID</code>, <code>cohortID</code>, <code>species</code>, <code>dbh</code> and <code>trees</code>.</p>
     </div>

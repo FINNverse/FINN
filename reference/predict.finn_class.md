@@ -32,7 +32,7 @@ predict(
 
 simulateForest(
   model,
-  env,
+  env = NULL,
   disturbance = NULL,
   patches = 100L,
   patch_size = NULL,
@@ -42,6 +42,9 @@ simulateForest(
   debug = FALSE,
   recruits = c("simulated", "observed"),
   obs_recruits = NULL,
+  bare_ground = FALSE,
+  years = 500L,
+  sites = NULL,
   ...
 )
 ```
@@ -63,6 +66,9 @@ simulateForest(
   [`fit()`](https://finnverse.github.io/FINN/reference/fit.md). Every
   row is one simulated step. See
   [finn_data](https://finnverse.github.io/FINN/reference/finn_data.md).
+  Required, except in `simulateForest()` with `bare_ground = TRUE`:
+  there `NULL` (default) takes the environment the model was fitted on,
+  and a table given is the one the mean climate is taken from.
 
 - disturbance:
 
@@ -76,7 +82,9 @@ simulateForest(
 
   (`integer(1)`)  
   Number of patches per site when the simulation starts from bare ground
-  (`init_cohort = NULL`). Ignored, with a warning when it differs, as
+  (`init_cohort = NULL`). Not given: the patch count the model was
+  fitted with (`model$patches`), or `100` for a model fitted before
+  0.2.0 or never fitted. Ignored, with a warning when it differs, as
   soon as `init_cohort` is given: the patch count then comes from the
   initial cohorts.
 
@@ -125,11 +133,12 @@ simulateForest(
   Where the recruits come from. `"simulated"` (the default) is the
   model's regeneration process. `"observed"` feeds the observed
   recruitment in `obs_recruits` instead, as
-  `fit(loss_recruit = "observed")` does, to check a model calibrated
-  that way on the intervals it was calibrated on. With observed
-  recruitment the model is not an autonomous simulator: every simulated
-  year must lie in an observed interval, and a bare-ground, succession
-  or projection run beyond them is refused. See
+  [`fit(loss_recruit = "observed")`](https://finnverse.github.io/FINN/reference/fit.md)
+  does, to check a model calibrated that way on the intervals it was
+  calibrated on. With observed recruitment the model is not an
+  autonomous simulator: every simulated year must lie in an observed
+  interval, and a bare-ground, succession or projection run beyond them
+  is refused. See
   [recruitment](https://finnverse.github.io/FINN/reference/recruitment.md)
   for the unit chain.
 
@@ -137,11 +146,11 @@ simulateForest(
 
   (`data.frame`)  
   The observed recruitment for `recruits = "observed"`, required there
-  and refused otherwise: a table like
-  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md)'s `data`
-  with `siteID`, `year`, `species`, `reg` and `period_length`, rows for
-  every species (0 where none recruited), the sites of `env` and years
-  among those of `env`. Intervals map to simulated years exactly as in
+  and refused otherwise: a table like the `data` of
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) with
+  `siteID`, `year`, `species`, `reg` and `period_length`, rows for every
+  species (0 where none recruited), the sites of `env` and years among
+  those of `env`. Intervals map to simulated years exactly as in
   [fit](https://finnverse.github.io/FINN/reference/fit.md). An `NA`
   `reg` in an interval, a year in two intervals and a year in none are
   errors.
@@ -160,15 +169,44 @@ simulateForest(
   [`finn()`](https://finnverse.github.io/FINN/reference/finn.md), fitted
   with [`fit()`](https://finnverse.github.io/FINN/reference/fit.md).
 
+- bare_ground:
+
+  (`logical(1)`)  
+  `simulateForest()` only: `TRUE` runs the model from an empty stand for
+  `years` years under a constant climate, the mean of every predictor
+  over the environment the model was fitted on (or over `env` when
+  given); see *Bare-ground runs* in the details. `init_cohort` must be
+  left out (an error otherwise) and `disturbance` is ignored. Default
+  `FALSE`.
+
+- years:
+
+  (`integer(1)`)  
+  `simulateForest()` with `bare_ground = TRUE`: the length of the run in
+  years. Default `500`.
+
+- sites:
+
+  `simulateForest()` with `bare_ground = TRUE`: `NULL` (default) one run
+  under the mean climate of all sites (`siteID` 1 in the result), or
+  site ids for one run per site under that site's mean climate (the
+  `siteID` of the fitted environment, or of `env` when given, kept in
+  the result).
+
 ## Value
 
-A named list. `$long$site` (and `$wide$site`) give the site-level
-results, averaged over the patches: columns `siteID`, `year`, `species`,
+A named list of class `finn_simulation`, which
+[`plot.finn_simulation()`](https://finnverse.github.io/FINN/reference/plot.finn_simulation.md)
+draws. `$long$site` (and `$wide$site`) give the site-level results,
+averaged over the patches: columns `siteID`, `year`, `species`,
 `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `reg`, `r_mean_ha`)
 and `value`; `$wide$site` has one column per variable instead. `siteID`
 is the id used in `env`; `year` is the simulation step, counted from 1
 (the k-th year of a site's `env` is step k), whatever the values of
-`env$year`. When `return_cohorts` is set, `$long$cohort` /
+`env$year`; the years of `env` are kept as the attribute `"env_years"`,
+with which
+[`comparePlot()`](https://finnverse.github.io/FINN/reference/comparePlot.md)
+places observations. When `return_cohorts` is set, `$long$cohort` /
 `$wide$cohort` add the per-cohort state (`dbh`, `trees`, `species`,
 growth `g`, mortality `m`, ...) for the requested timesteps.
 
@@ -182,13 +220,28 @@ automatically. A model that has not been fitted has no standardisation
 yet, so it must be given `env` on the scale its processes expect; fit it
 first (two epochs are enough for a trial).
 
+**Bare-ground runs.** `simulateForest(model, bare_ground = TRUE)` builds
+the environment itself: the model starts from an empty stand and runs
+for `years` years under a constant climate, the mean of every predictor
+over the environment the model was fitted on, or with `sites` one run
+per site under that site's mean. It shows what the model does outside
+the observation window;
+[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+stores such a run on the model.
+
 ## See also
 
 [`fit()`](https://finnverse.github.io/FINN/reference/fit.md),
 [finn_data](https://finnverse.github.io/FINN/reference/finn_data.md) for
 the input tables,
 [recruitment](https://finnverse.github.io/FINN/reference/recruitment.md)
-for the recruitment options (`recruits`, `obs_recruits`)
+for the recruitment options (`recruits`, `obs_recruits`),
+[`plot.finn_simulation()`](https://finnverse.github.io/FINN/reference/plot.finn_simulation.md)
+to draw the result,
+[`comparePlot()`](https://finnverse.github.io/FINN/reference/comparePlot.md)
+and
+[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+to compare it with observations
 
 ## Examples
 
@@ -260,4 +313,9 @@ sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year
 #> 4:      2    50 2.5170323
 #> 5:      3    10 0.9084752
 #> 6:      3    50 2.0007858
+
+# the same kind of run in one call: from an empty stand under the mean
+# climate of the fitted environment, held constant
+bare <- simulateForest(m, bare_ground = TRUE, years = 30)
+plot(bare)
 ```

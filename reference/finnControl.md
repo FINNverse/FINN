@@ -59,7 +59,8 @@ print(x, ...)
 
 ## Value
 
-A list of class `finnControl`, to be passed to `fit(control = )`.
+A list of class `finnControl`, to be passed to
+[`fit(control = )`](https://finnverse.github.io/FINN/reference/fit.md).
 
 ## Details
 

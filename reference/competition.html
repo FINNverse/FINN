@@ -131,7 +131,7 @@ taller than it (by more than 0.1 m), <code>light = max(0, 1 - sum(BA_taller * pa
 where <code>BA</code> is the basal area in m^2/ha (<code><a href="BA_stand.html">BA_stand()</a></code>) and the height comes from
 <code><a href="height.html">height()</a></code> with the species' height parameter <code>parComp[, 1]</code>. With a competition
 strength of 0.2 (about the start value) a cohort under 50 m^2/ha of taller trees receives no light. In a model the function
-is the competition process, <code>createProcess(func = competition)</code>; it takes no environment.</p>
+is the competition process, <code><a href="createProcess.html">createProcess(func = competition)</a></code>; it takes no environment.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -174,22 +174,22 @@ is the competition process, <code>createProcess(func = competition)</code>; it t
 <span class="r-in"><span><span class="va">env</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1L</span>, year <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">30</span>, temp <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m</span>, env <span class="op">=</span> <span class="va">env</span>, patches <span class="op">=</span> <span class="fl">5</span>, patch_size <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">tail</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">wide</span><span class="op">$</span><span class="va">site</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    siteID species  year      dbh        ba trees    growth       mort   reg</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt;   &lt;int&gt; &lt;int&gt;    &lt;num&gt;     &lt;num&gt; &lt;num&gt;     &lt;num&gt;      &lt;num&gt; &lt;num&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      1       2    25 41.34618 0.3323392   1.6 0.2630191 0.01891340   0.2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      1       2    26 39.42628 0.3603613   1.8 0.3062723 0.01889439   0.2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      1       2    27 42.14650 0.3896927   1.8 0.3313038 0.01886775   0.0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4:      1       2    28 40.76972 0.3218157   1.6 0.2931730 0.01885694   0.0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5:      1       2    29 44.11386 0.3501407   1.6 0.2866735 0.01888959   0.0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6:      1       2    30 37.63353 0.3489603   1.8 0.2344551 0.01888839   0.4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    siteID species  year      dbh        ba trees     growth       mort   reg</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     &lt;int&gt;   &lt;int&gt; &lt;int&gt;    &lt;num&gt;     &lt;num&gt; &lt;num&gt;      &lt;num&gt;      &lt;num&gt; &lt;num&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:      1       2    25 67.99114 0.6146673   1.4 0.16434710 0.01953910   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      1       2    26 70.61462 0.6518863   1.4 0.13372810 0.01936250   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      1       2    27 73.00346 0.6872678   1.4 0.11075670 0.01920772   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:      1       2    28 72.52180 0.5896009   1.2 0.09166624 0.01908581   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5:      1       2    29 75.09538 0.6182368   1.2 0.14356554 0.01932270   0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6:      1       2    30 66.78084 0.6467762   1.4 0.11203200 0.01912647   0.2</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    r_mean_ha</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>        &lt;num&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 0.7281690</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 0.7196229</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 0.7095281</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 0.7148335</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 0.7074409</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 0.7030461</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 0.6893740</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 0.6762765</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 0.6619015</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 0.6889051</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5: 0.6760167</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6: 0.6620452</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

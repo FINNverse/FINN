@@ -86,9 +86,9 @@ mortality(
   behaviour before 0.2.0) the term spans only a few tenths on the logit
   between slow and fast trees even at the bound. Set it for a fitted
   model through
-  `createProcess(func = FINN::mortality, growth_scale = 1)`, not through
-  a wrapper function: the kernel reads `self$record_raws` from its own
-  environment and a wrapper leaves that unbound.
+  [`createProcess(func = FINN::mortality, growth_scale = 1)`](https://finnverse.github.io/FINN/reference/createProcess.md),
+  not through a wrapper function: the kernel reads `self$record_raws`
+  from its own environment and a wrapper leaves that unbound.
 
 ## Value
 
@@ -100,13 +100,14 @@ step, `[sites, patches, cohorts]`.
 The environmental response is `sigmoid(pred)`. Before any fitting it
 starts at about 2 % mortality per time step: the intercept of the
 response is `qlogis(0.02)` and its other weights are 0 (with
-`createProcess(hidden = )` the bias of the output layer carries the
-intercept), and the species terms for light, size and growth move it by
-at most about one logit unit. Until 0.2.0 the weights started at torch's
-random values, i.e. at `sigmoid(0) = 0.5` per step, which on yearly
-steps emptied an unfitted stand within a decade.
-`createProcess(initEnv = )` sets another start; a formula without an
-intercept (`~ 0 + temp`) leaves torch's start in place.
+[`createProcess(hidden = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
+the bias of the output layer carries the intercept), and the species
+terms for light, size and growth move it by at most about one logit
+unit. Until 0.2.0 the weights started at torch's random values, i.e. at
+`sigmoid(0) = 0.5` per step, which on yearly steps emptied an unfitted
+stand within a decade. `createProcess(initEnv = )` sets another start; a
+formula without an intercept (`~ 0 + temp`) leaves torch's start in
+place.
 
 ## See also
 

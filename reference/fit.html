@@ -75,7 +75,7 @@ inventory data. The model simulates every site from its initial trees
 through the years of <code>env</code>, the simulation is compared with the observed
 stand variables and demographic rates in <code>data</code>, and the parameters of all
 processes – the species parameters of the mechanistic equations (for a
-process built with <code>createProcess(optimizeSpecies = TRUE)</code>), their
+process built with <code><a href="createProcess.html">createProcess(optimizeSpecies = TRUE)</a></code>), their
 responses to the environment, and the weights of any neural-network process
 – are adjusted together, in one joint optimization, until the simulation
 matches the observations as well as it can. The processes are never
@@ -127,6 +127,7 @@ compared with the observations.</p>
 <span>  teacher_forcing <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  rb_gradient <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  trees_offset <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  holdout <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span>,</span>
 <span>  loss <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -171,9 +172,11 @@ See <a href="finn_data.html">finn_data</a>.</p></dd>
 
 <dt id="arg-patches">patches<a class="anchor" aria-label="anchor" href="#arg-patches"></a></dt>
 <dd><p>(<code>integer(1)</code>)<br> Number of patches per site when the fit
-starts from bare ground (<code>init_cohort = NULL</code>). Ignored, with a warning
-when it differs, as soon as <code>init_cohort</code> is given: the patch count then
-comes from the initial cohorts.</p></dd>
+starts from bare ground (<code>init_cohort = NULL</code>). Default <code>100</code>. Ignored,
+with a warning when it differs, as soon as <code>init_cohort</code> is given: the
+patch count then comes from the initial cohorts. The patch count of the
+fit is stored as <code>model$patches</code>; <code><a href="predict.finn_class.html">simulateForest()</a></code> and
+<code><a href="evaluate.html">evaluate()</a></code> take it when their <code>patches</code> is not given.</p></dd>
 
 
 <dt id="arg-patch-size">patch_size<a class="anchor" aria-label="anchor" href="#arg-patch-size"></a></dt>
@@ -353,7 +356,7 @@ Or one entry per predictor (named, or in column order): <code>"auto"</code>,
 <code>"identity"</code>, <code>"0to1"</code> or a function <code>f(x)</code> returning <code>list(center =, scale =)</code>,
 e.g. <code>c(temp = "auto", management = "identity")</code> to keep an ordinal
 predictor on its own scale. The constants are stored on the model
-(<code>model$env_scaling</code>) and re-applied by <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>/<code><a href="predict.finn_class.html">simulateForest()</a></code>, so
+(<code>model$env_scaling</code>) and re-applied by <code><a href="predict.finn_class.html">simulateForest()</a></code>, so
 <code>env</code> is always passed in natural units. See <a href="finn_data.html">finn_data</a>.</p></dd>
 
 
@@ -397,7 +400,7 @@ because the aggregated rates would then mix pre- and post-anchor state.
 <code>fit()</code> copies the anchors onto its own device and never modifies them, so one
 list can be reused across fits. Ignored unless <code>reanchor = TRUE</code>.</p>
 <p><strong>Build the arrays directly</strong> –
-<code>CohortMat(dbh = , trees = , species = , dims = , sp = )</code> – rather than via
+<code><a href="CohortMat.html">CohortMat(dbh = , trees = , species = , dims = , sp = )</a></code> – rather than via
 <code>CohortMat(obs_df = )</code>. The <code>obs_df</code> path runs <code><a href="obsDF2arrays.html">obsDF2arrays()</a></code>, which rounds
 <code>trees</code> to whole stems and silently renumbers any <code>siteID</code>/<code>patchID</code> that is
 not a complete <code>1:n</code> sequence; on a simulated or partly empty stand that
@@ -440,7 +443,7 @@ multi-year trajectory to truncate – and the anchor validation refuses any
 <code>update_step</code> that would change which observations are scored.</p>
 <p><code>anchor_cohorts</code> must supply an anchor for every observed timestep except the
 last (nothing is conditioned on the final census, because nothing follows it).
-Only <code>fit()</code> teacher-forces; <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>/<code><a href="predict.finn_class.html">simulateForest()</a></code> always simulate,
+Only <code>fit()</code> teacher-forces; <code><a href="predict.finn_class.html">simulateForest()</a></code> always simulates,
 so a teacher-forced model is still validated by single shooting.</p></dd>
 
 
@@ -469,12 +472,24 @@ four orders above the rest. <code>NULL</code> restores those two historical cons
 and so reproduces a fit made before 0.2.0.</p></dd>
 
 
+<dt id="arg-holdout">holdout<a class="anchor" aria-label="anchor" href="#arg-holdout"></a></dt>
+<dd><p><code>NULL</code> (default), or a list with holdout <code>data</code>, <code>env</code> and
+<code>init_cohort</code> (and optionally <code>disturbance</code> and <code>tree_data</code>), as the
+<code>holdout</code> of <code><a href="evaluate.html">evaluate()</a></code>: after the fit, <code><a href="evaluate.html">evaluate()</a></code>
+simulates the training data and the holdout and stores the comparison on
+the model (<code>model$evaluation</code>, an object of class <code>finn_evaluation</code> with a
+<code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> and a <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> method), which <code><a href="summary.finn_class.html">summary.finn_class()</a></code> prints.
+The same as calling <code>evaluate(model, holdout = )</code> after the fit, except
+that <code>fit()</code> returns the model; if that evaluation fails, the fit is kept
+and a warning says why.</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Arguments of earlier versions, still accepted with a warning:
 <code>weights</code> (now <code>loss_weights</code>), <code>recruits</code> (now <code>loss_recruit</code>), and
 <code>optimizer</code>, <code>lr_scheduler</code>, <code>lr_scheduler_params</code>, <code>clip_norm</code> (now
-members of <code>control = finnControl()</code>). Any other named argument is passed
-on to the optimizer, as before; <code>finnControl(...)</code> is the place for it now.</p></dd>
+members of <code>control</code>, see <code><a href="finnControl.html">finnControl()</a></code>). Any other named argument is passed
+on to the optimizer, as before; <code><a href="finnControl.html">finnControl()</a></code> is the place for it now.</p></dd>
 
 
 <dt id="arg-loss">loss<a class="anchor" aria-label="anchor" href="#arg-loss"></a></dt>
@@ -485,7 +500,9 @@ on to the optimizer, as before; <code>finnControl(...)</code> is the place for i
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The fitted <code>model</code>, invisibly. <code>fit()</code> trains the model in place, so
 the returned object is the one passed in, now carrying the training results
-(e.g. <code>$history</code>, <code>$loss_weights</code>, <code>$loss_baseline</code>, <code>$param_history</code>).</p>
+(e.g. <code>$history</code>, <code>$loss_weights</code>, <code>$loss_baseline</code>, <code>$param_history</code>),
+the patch count of the fit (<code>$patches</code>) and, with <code>holdout</code>, the
+evaluation (<code>$evaluation</code>).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -511,7 +528,7 @@ are summed and the stand variables are taken at the census year. A year in
 which a species has no trees in the simulation counts as growth 0 and
 survival 1, and the rate is spread over the full <code>period_length</code>, because
 the observed rate is derived from the counts over the whole interval. With
-<code>finn(growth_rate = "period")</code> growth is the compounded increment over the
+<code><a href="finn.html">finn(growth_rate = "period")</a></code> growth is the compounded increment over the
 interval instead.</p>
 <p><strong>Reading the progress.</strong> With the default <code>loss_weights = "auto"</code> every
 response's loss is reported as a fraction of the loss a constant prediction
@@ -556,7 +573,7 @@ large <code>epochs</code> in advance.</p>
 
 <p>Before the death draw, the simulation clamps the per-cohort mortality
 probability of every step to the interval
-<code>createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)</code> of the
+<code><a href="createProcess.html">createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)</a></code> of the
 mortality process, so at least 0.1 % and at most 99.9 % of a cohort is at
 risk per simulated step however extreme the fitted rate. The bound is per
 <em>step</em>, not per year: on five-year steps the floor is 0.02 %/yr, on decadal
@@ -594,7 +611,9 @@ only comparable between fits that score the same set of responses.</p>
 simulation is compared with the observations, <code><a href="finnControl.html">finnControl()</a></code> for the
 optimizer settings, <a href="recruitment.html">recruitment</a> for the recruitment options
 (<code>loss_recruit</code>, the regeneration likelihood), <code><a href="predict.finn_class.html">simulateForest()</a></code>
-to simulate with the fitted model</p></div>
+to simulate with the fitted model, <code><a href="evaluate.html">evaluate()</a></code>,
+<code><a href="summary.finn_class.html">summary.finn_class()</a></code> and <code><a href="plot.finn_class.html">plot.finn_class()</a></code> to judge the
+fit</p></div>
     </div>
 
     <div class="section level2">

@@ -7,12 +7,13 @@ trees through the years of `env`, the simulation is compared with the
 observed stand variables and demographic rates in `data`, and the
 parameters of all processes – the species parameters of the mechanistic
 equations (for a process built with
-`createProcess(optimizeSpecies = TRUE)`), their responses to the
-environment, and the weights of any neural-network process – are
-adjusted together, in one joint optimization, until the simulation
-matches the observations as well as it can. The processes are never
-calibrated one at a time: this joint calibration is what makes the
-estimated processes consistent with each other.
+[`createProcess(optimizeSpecies = TRUE)`](https://finnverse.github.io/FINN/reference/createProcess.md)),
+their responses to the environment, and the weights of any
+neural-network process – are adjusted together, in one joint
+optimization, until the simulation matches the observations as well as
+it can. The processes are never calibrated one at a time: this joint
+calibration is what makes the estimated processes consistent with each
+other.
 
 The defaults are robust in most cases. A first call needs `data`, `env`,
 `init_cohort`, `patch_size` and `epochs`; everything else can stay as it
@@ -62,6 +63,7 @@ fit(
   teacher_forcing = FALSE,
   rb_gradient = TRUE,
   trees_offset = 0.01,
+  holdout = NULL,
   ...,
   loss = NULL
 )
@@ -118,9 +120,14 @@ fit(
 
   (`integer(1)`)  
   Number of patches per site when the fit starts from bare ground
-  (`init_cohort = NULL`). Ignored, with a warning when it differs, as
-  soon as `init_cohort` is given: the patch count then comes from the
-  initial cohorts.
+  (`init_cohort = NULL`). Default `100`. Ignored, with a warning when it
+  differs, as soon as `init_cohort` is given: the patch count then comes
+  from the initial cohorts. The patch count of the fit is stored as
+  `model$patches`;
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+  and
+  [`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+  take it when their `patches` is not given.
 
 - patch_size:
 
@@ -334,7 +341,7 @@ fit(
   `c(temp = "auto", management = "identity")` to keep an ordinal
   predictor on its own scale. The constants are stored on the model
   (`model$env_scaling`) and re-applied by
-  [`predict()`](https://rdrr.io/r/stats/predict.html)/[`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md),
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md),
   so `env` is always passed in natural units. See
   [finn_data](https://finnverse.github.io/FINN/reference/finn_data.md).
 
@@ -386,8 +393,8 @@ fit(
   list can be reused across fits. Ignored unless `reanchor = TRUE`.
 
   **Build the arrays directly** –
-  `CohortMat(dbh = , trees = , species = , dims = , sp = )` – rather
-  than via `CohortMat(obs_df = )`. The `obs_df` path runs
+  [`CohortMat(dbh = , trees = , species = , dims = , sp = )`](https://finnverse.github.io/FINN/reference/CohortMat.md)
+  – rather than via `CohortMat(obs_df = )`. The `obs_df` path runs
   [`obsDF2arrays()`](https://finnverse.github.io/FINN/reference/obsDF2arrays.md),
   which rounds `trees` to whole stems and silently renumbers any
   `siteID`/`patchID` that is not a complete `1:n` sequence; on a
@@ -438,8 +445,8 @@ fit(
   `anchor_cohorts` must supply an anchor for every observed timestep
   except the last (nothing is conditioned on the final census, because
   nothing follows it). Only `fit()` teacher-forces;
-  [`predict()`](https://rdrr.io/r/stats/predict.html)/[`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
-  always simulate, so a teacher-forced model is still validated by
+  [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+  always simulates, so a teacher-forced model is still validated by
   single shooting.
 
 - rb_gradient:
@@ -471,14 +478,34 @@ fit(
   `y/offset`, four orders above the rest. `NULL` restores those two
   historical constants and so reproduces a fit made before 0.2.0.
 
+- holdout:
+
+  `NULL` (default), or a list with holdout `data`, `env` and
+  `init_cohort` (and optionally `disturbance` and `tree_data`), as the
+  `holdout` of
+  [`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md):
+  after the fit,
+  [`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+  simulates the training data and the holdout and stores the comparison
+  on the model (`model$evaluation`, an object of class `finn_evaluation`
+  with a [`print()`](https://rdrr.io/r/base/print.html) and a
+  [`plot()`](https://rdrr.io/r/graphics/plot.default.html) method),
+  which
+  [`summary.finn_class()`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
+  prints. The same as calling `evaluate(model, holdout = )` after the
+  fit, except that `fit()` returns the model; if that evaluation fails,
+  the fit is kept and a warning says why.
+
 - ...:
 
   Arguments of earlier versions, still accepted with a warning:
   `weights` (now `loss_weights`), `recruits` (now `loss_recruit`), and
   `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` (now
-  members of `control = finnControl()`). Any other named argument is
-  passed on to the optimizer, as before; `finnControl(...)` is the place
-  for it now.
+  members of `control`, see
+  [`finnControl()`](https://finnverse.github.io/FINN/reference/finnControl.md)).
+  Any other named argument is passed on to the optimizer, as before;
+  [`finnControl()`](https://finnverse.github.io/FINN/reference/finnControl.md)
+  is the place for it now.
 
 - loss:
 
@@ -488,7 +515,9 @@ fit(
 
 The fitted `model`, invisibly. `fit()` trains the model in place, so the
 returned object is the one passed in, now carrying the training results
-(e.g. `$history`, `$loss_weights`, `$loss_baseline`, `$param_history`).
+(e.g. `$history`, `$loss_weights`, `$loss_baseline`, `$param_history`),
+the patch count of the fit (`$patches`) and, with `holdout`, the
+evaluation (`$evaluation`).
 
 ## Details
 
@@ -517,7 +546,8 @@ survival `1 - m`; the recruits are summed and the stand variables are
 taken at the census year. A year in which a species has no trees in the
 simulation counts as growth 0 and survival 1, and the rate is spread
 over the full `period_length`, because the observed rate is derived from
-the counts over the whole interval. With `finn(growth_rate = "period")`
+the counts over the whole interval. With
+[`finn(growth_rate = "period")`](https://finnverse.github.io/FINN/reference/finn.md)
 growth is the compounded increment over the interval instead.
 
 **Reading the progress.** With the default `loss_weights = "auto"` every
@@ -562,14 +592,14 @@ the parameters settle instead of fixing a large `epochs` in advance.
 
 Before the death draw, the simulation clamps the per-cohort mortality
 probability of every step to the interval
-`createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)` of
-the mortality process, so at least 0.1 % and at most 99.9 % of a cohort
-is at risk per simulated step however extreme the fitted rate. The bound
-is per *step*, not per year: on five-year steps the floor is 0.02 %/yr,
-on decadal ones 0.01 %/yr. Until 0.2.0 the interval was hard-coded to
-`[0.01, 0.99]`, which made simulated low-mortality stands lose stems the
-observations did not. The per-tree mortality loss is not affected by
-either bound; it clamps at `1e-6`. See
+[`createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)`](https://finnverse.github.io/FINN/reference/createProcess.md)
+of the mortality process, so at least 0.1 % and at most 99.9 % of a
+cohort is at risk per simulated step however extreme the fitted rate.
+The bound is per *step*, not per year: on five-year steps the floor is
+0.02 %/yr, on decadal ones 0.01 %/yr. Until 0.2.0 the interval was
+hard-coded to `[0.01, 0.99]`, which made simulated low-mortality stands
+lose stems the observations did not. The per-tree mortality loss is not
+affected by either bound; it clamps at `1e-6`. See
 [`createProcess()`](https://finnverse.github.io/FINN/reference/createProcess.md).
 
 ## The arguments that shape the loss, and how they combine
@@ -639,7 +669,12 @@ for the optimizer settings,
 for the recruitment options (`loss_recruit`, the regeneration
 likelihood),
 [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
-to simulate with the fitted model
+to simulate with the fitted model,
+[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md),
+[`summary.finn_class()`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
+and
+[`plot.finn_class()`](https://finnverse.github.io/FINN/reference/plot.finn_class.md)
+to judge the fit
 
 ## Examples
 

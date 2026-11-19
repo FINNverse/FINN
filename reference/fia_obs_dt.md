@@ -47,7 +47,8 @@ rows, 14 columns). The year-0 initial state is in `fia_init_trees` /
 - `ba`:
 
   living basal area, m2 – the mean over the site's patches (0.06 ha
-  each; `makeObsData(aggregate_by_site = TRUE)`).
+  each;
+  [`makeObsData(aggregate_by_site = TRUE)`](https://finnverse.github.io/FINN/reference/makeObsData.md)).
 
 - `trees`:
 
@@ -106,8 +107,11 @@ inventory into the same per-year rate before comparing, and compares
 mortality counts are in
 [fia_tree_dt](https://finnverse.github.io/FINN/reference/fia_tree_dt.md).
 Before FINN 0.2.0 the tables had one step per ten-year interval (`year`
-1 and 2, rates over the interval); `makeObsData(rates = "interval")` and
-`resolveSiteIDs(time_axis = "census")` still build such tables.
+1 and 2, rates over the interval);
+[`makeObsData(rates = "interval")`](https://finnverse.github.io/FINN/reference/makeObsData.md)
+and
+[`resolveSiteIDs(time_axis = "census")`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
+still build such tables.
 
 ## See also
 

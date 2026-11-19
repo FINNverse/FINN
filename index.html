@@ -83,6 +83,50 @@
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/install-deprecated.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FINNverse/FINN"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
+<h2 id="a-first-example">A first example<a class="anchor" aria-label="anchor" href="#a-first-example"></a>
+</h2>
+<p>FINN comes with forest inventory data from Oregon (US FIA): observations of 200 plots over two remeasurement intervals, their climate, and the trees at the first census. The example fits a model to them, checks it on 200 plots it has not seen, and simulates from bare ground.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/FINNverse/FINN" class="external-link">FINN</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span>
+<span><span class="va">Nsp</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">fia_obs_dt</span><span class="op">$</span><span class="va">species</span><span class="op">)</span></span>
+<span><span class="va">init</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">fia_init_trees</span>, Nspecies <span class="op">=</span> <span class="va">Nsp</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># one process per component; growth, mortality and regeneration respond</span></span>
+<span><span class="co"># linearly to temperature and precipitation</span></span>
+<span><span class="fu"><a href="reference/FINN.seed.html">FINN.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/finn.html">finn</a></span><span class="op">(</span>N_species <span class="op">=</span> <span class="va">Nsp</span>, recruits_dbh <span class="op">=</span> <span class="fl">12.9</span>,</span>
+<span>          competition_process  <span class="op">=</span> <span class="fu"><a href="reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">0</span>, <span class="va">competition</span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>          growth_process       <span class="op">=</span> <span class="fu"><a href="reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">growth</span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>          mortality_process    <span class="op">=</span> <span class="fu"><a href="reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">mortality</span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>          regeneration_process <span class="op">=</span> <span class="fu"><a href="reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">prec</span>, <span class="va">regeneration_capped</span>, optimizeSpecies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># all processes are fitted jointly; `holdout` evaluates the model right after the fit</span></span>
+<span><span class="fu"><a href="reference/fit.html">fit</a></span><span class="op">(</span><span class="va">m</span>, data <span class="op">=</span> <span class="va">fia_obs_dt</span>, env <span class="op">=</span> <span class="va">fia_env_dt</span>, init_cohort <span class="op">=</span> <span class="va">init</span>,</span>
+<span>    epochs <span class="op">=</span> <span class="fl">300L</span>, batchsize <span class="op">=</span> <span class="fl">40L</span>, patches <span class="op">=</span> <span class="fl">4</span>, patch_size <span class="op">=</span> <span class="fl">0.06</span>,</span>
+<span>    tree_data <span class="op">=</span> <span class="va">fia_tree_dt</span>, plot_progress <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>    holdout <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">fia_obs_test</span>, env <span class="op">=</span> <span class="va">fia_env_test</span>,</span>
+<span>                   init_cohort <span class="op">=</span> <span class="fu"><a href="reference/makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">fia_init_test</span>, Nspecies <span class="op">=</span> <span class="va">Nsp</span><span class="op">)</span>,</span>
+<span>                   tree_data <span class="op">=</span> <span class="va">fia_tree_test</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><strong>Bare ground.</strong> A fitted model can be run from an empty stand. This is the hardest test of a forest model: the species composition and the size structure have to emerge from growth, mortality, competition and regeneration alone.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cold_to_warm</span> <span class="op">&lt;-</span> <span class="va">fia_env_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>temp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">temp</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="va">siteID</span><span class="op">]</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">temp</span><span class="op">)</span><span class="op">]</span><span class="op">$</span><span class="va">siteID</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">10</span>, <span class="fl">100</span>, <span class="fl">190</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">bg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m</span>, bare_ground <span class="op">=</span> <span class="cn">TRUE</span>, years <span class="op">=</span> <span class="fl">500</span>, sites <span class="op">=</span> <span class="va">cold_to_warm</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">bg</span><span class="op">)</span></span></code></pre></div>
+<p><img src="reference/figures/README-example-bare-ground-1.png" width="100%"></p>
+<p><strong>Observed against simulated</strong> on the 200 test plots: the largest tree, basal area, stem number and growth with R², mortality as a ROC curve with its AUC, recruitment as the ratio of simulated to observed per species.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">m</span><span class="op">$</span><span class="va">evaluation</span><span class="op">)</span></span></code></pre></div>
+<p><img src="reference/figures/README-example-evaluation-1.png" width="100%"></p>
+<p><strong>Over time.</strong> The simulated stands of the 200 test plots over the 22 years, per species, as the mean over the plots:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m</span>, env <span class="op">=</span> <span class="va">fia_env_test</span>,</span>
+<span>                      init_cohort <span class="op">=</span> <span class="fu"><a href="reference/makeInitCohorts.html">makeInitCohorts</a></span><span class="op">(</span><span class="va">fia_init_test</span>, Nspecies <span class="op">=</span> <span class="va">Nsp</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></code></pre></div>
+<p><img src="reference/figures/README-example-timeseries-1.png" width="100%"></p>
+<p><code>summary(m)</code> prints the skill on the training and the test plots, how far the fit has converged and the effects of the environment; <code>plot(m)</code> draws the fitted parameters of every species.</p>
+</div>
+<div class="section level2">
 <h2 id="introduction">Introduction<a class="anchor" aria-label="anchor" href="#introduction"></a>
 </h2>
 <p>Start with <a href="https://finnverse.github.io/FINN/articles/A-Introduction_to_FINN.html">Introduction to FINN</a>, then browse the rest:</p>
@@ -132,16 +176,16 @@
 <p>Pichler, M. &amp; Käber, Y. (2026) Inferring processes within dynamic forest models using hybrid modelling. <em>Methods in Ecology and Evolution</em>, <strong>17</strong>, 2477–2493. <a href="https://doi.org/10.1111/2041-210X.70347" class="external-link uri">https://doi.org/10.1111/2041-210X.70347</a></p>
 </blockquote>
 <p><code>citation("FINN")</code> prints this entry and its BibTeX form:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="va">@Article</span>{,</span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="dt">title</span>   = {Inferring processes within dynamic forest models using hybrid modelling},</span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="dt">author</span>  = {Maximilian Pichler and Yannek Käber},</span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="dt">journal</span> = {Methods in Ecology and Evolution},</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="dt">year</span>    = {2026},</span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="dt">volume</span>  = {17},</span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="dt">number</span>  = {8},</span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="dt">pages</span>   = {2477--2493},</span>
-<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  <span class="dt">doi</span>     = {10.1111/2041-210X.70347},</span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="va">@Article</span>{,</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="dt">title</span>   = {Inferring processes within dynamic forest models using hybrid modelling},</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="dt">author</span>  = {Maximilian Pichler and Yannek Käber},</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="dt">journal</span> = {Methods in Ecology and Evolution},</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="dt">year</span>    = {2026},</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>  <span class="dt">volume</span>  = {17},</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>  <span class="dt">number</span>  = {8},</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>  <span class="dt">pages</span>   = {2477--2493},</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>  <span class="dt">doi</span>     = {10.1111/2041-210X.70347},</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>}</span></code></pre></div>
 </div>
 </div>
 

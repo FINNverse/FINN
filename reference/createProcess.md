@@ -230,11 +230,11 @@ createProcess(
   `"binomial"` (default since 0.2.0) is `torch`'s exact binomial
   sampler: integer-valued, exact in both moments, at constant memory. It
   has no gradient of its own, which costs nothing under
-  `fit(rb_gradient = TRUE)` (the default), where the gradient is taken
-  through the expected number of deaths. Under
-  `fit(rb_gradient = FALSE)` there is no such path, and `"binomial"`
-  falls back to the `"gamma"` draw. `"bernoulli"` gives each tree of the
-  cohort its own reparameterised Bernoulli trial
+  [`fit(rb_gradient = TRUE)`](https://finnverse.github.io/FINN/reference/fit.md)
+  (the default), where the gradient is taken through the expected number
+  of deaths. Under `fit(rb_gradient = FALSE)` there is no such path, and
+  `"binomial"` falls back to the `"gamma"` draw. `"bernoulli"` gives
+  each tree of the cohort its own reparameterised Bernoulli trial
   ([`binomial_from_bernoulli()`](https://finnverse.github.io/FINN/reference/binomial_from_bernoulli.md)),
   which is integer-valued, matches the binomial in both moments –
   measured 12.011 / 8.387 against an exact 12.000 / 8.400 at `n = 40`,
@@ -378,9 +378,9 @@ createProcess(
   did not: at a 1 % floor it loses 1 % of every cohort per step however
   low the fitted rate.
 
-  The floor exists because
-  [`binomial_from_gamma()`](https://finnverse.github.io/FINN/reference/binomial_from_gamma.md)'s
-  shape `n*p/(1-p)` degenerates as `p -> 0`. Measured with that draw, it
+  The floor exists because the shape of
+  [`binomial_from_gamma()`](https://finnverse.github.io/FINN/reference/binomial_from_gamma.md),
+  `n*p/(1-p)`, degenerates as `p -> 0`. Measured with that draw, it
   stays finite with an unbiased mean gradient down to `1e-4`, but
   single-draw gradients grow heavy-tailed as `n*p` shrinks – the largest
   per-tree gradient is about ten times the old default's at `1e-3` and
@@ -405,8 +405,10 @@ createProcess(
   0.2.0 the floor was hard-coded to `0.2`, which with many species adds
   a large recruitment that does not depend on anything (65 species x 0.2
   = 13 trees per ha and year); models saved before then keep that value
-  when reloaded. `finn(reg_floor = )`, the argument of earlier versions,
-  is still accepted with a warning and overrides this value.
+  when reloaded.
+  [`finn(reg_floor = )`](https://finnverse.github.io/FINN/reference/finn.md),
+  the argument of earlier versions, is still accepted with a warning and
+  overrides this value.
 
 ## Value
 

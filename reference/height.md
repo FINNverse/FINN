@@ -42,7 +42,9 @@ As the diameter grows, the height approaches
 first column of the competition parameters), FINN keeps it between 0.3
 and \\\log(2.3) \approx 0.83\\, so no species can grow taller than 130
 m, the physical limit of tree height (Koch et al. 2004). Values below
-0.3 suit small trees and shrubs; set `createProcess(lower = )` for them.
+0.3 suit small trees and shrubs; set
+[`createProcess(lower = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
+for them.
 
 ## References
 

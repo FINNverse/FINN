@@ -25,12 +25,14 @@
 <url><loc>https://finnverse.github.io/FINN/reference/binomial_from_gamma.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/binomial_from_poisson.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/climateDF2array.html</loc></url>
+<url><loc>https://finnverse.github.io/FINN/reference/comparePlot.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/competition.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/compute_env_scaling.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/conditionalEffects.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/createHybrid.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/createProcess.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/dbh2ba.html</loc></url>
+<url><loc>https://finnverse.github.io/FINN/reference/evaluate.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/feature_importance.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/fia_env_dt.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/fia_init_trees.html</loc></url>
@@ -50,6 +52,8 @@
 <url><loc>https://finnverse.github.io/FINN/reference/mortality.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/obsDF2arrays.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/plot.FINNale.html</loc></url>
+<url><loc>https://finnverse.github.io/FINN/reference/plot.finn_class.html</loc></url>
+<url><loc>https://finnverse.github.io/FINN/reference/plot.finn_simulation.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/pred2DF.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/predict.finn_class.html</loc></url>
 <url><loc>https://finnverse.github.io/FINN/reference/predictTrees.html</loc></url>

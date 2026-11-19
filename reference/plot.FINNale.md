@@ -11,7 +11,7 @@ line each.
 
 ``` r
 # S3 method for class 'FINNale'
-plot(x, process = NULL, scale = FALSE, ...)
+plot(x, process = NULL, scale = FALSE, species_names = NULL, ...)
 ```
 
 ## Arguments
@@ -34,6 +34,13 @@ plot(x, process = NULL, scale = FALSE, ...)
   so the effects are dimensionless and comparable (a shared y-axis is
   then used); if `FALSE` (default) the raw ALE is shown with free
   y-axes.
+
+- species_names:
+
+  Species names for the legend (see
+  [`plot.finn_class()`](https://finnverse.github.io/FINN/reference/plot.finn_class.md));
+  `NULL` (default): the names the model keeps from
+  [`fit()`](https://finnverse.github.io/FINN/reference/fit.md).
 
 - ...:
 

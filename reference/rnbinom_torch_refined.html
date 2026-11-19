@@ -57,7 +57,7 @@ sample_poisson_gaussian().'></head><body>
 
     <div class="ref-description section level2">
     <p>The default regeneration sampler since 0.2.0, selected with
-<code>createProcess(regeneration_sampler = "refined")</code>; <code>rnbinom_torch()</code>
+<code><a href="createProcess.html">createProcess(regeneration_sampler = "refined")</a></code>; <code>rnbinom_torch()</code>
 (<code>regeneration_sampler = "gaussian"</code>) reproduces results published before
 0.2.0. Three differences: the probability clamp is <code>1e-10</code> instead of <code>1e-4</code>,
 the Gamma draw is clamped at that same <code>eps</code> instead of taking <code>+0.001</code> and an

@@ -129,9 +129,9 @@ adults recruits only at <code>reg_floor</code>.</p>
 an adult at <code>x = 9.4</code> cm, so a low <code>A_half</code> gives a non-zero adult term even
 in a stand of seedlings.</p>
 <p>The cap <code>reg_logK</code> is created by <code><a href="finn.html">finn()</a></code> as for
-<a href="regeneration_capped.html">regeneration_capped</a> (resolution from <code>createProcess(cap = )</code>, prior
+<a href="regeneration_capped.html">regeneration_capped</a> (resolution from <code><a href="createProcess.html">createProcess(cap = )</a></code>, prior
 from <code>prior</code>/<code>prior_lambda</code>), so it need not be declared. Declare the three
-adult parameters with <code>createProcess(custom_parameters = )</code>; a length-1 init
+adult parameters with <code><a href="createProcess.html">createProcess(custom_parameters = )</a></code>; a length-1 init
 gives one shared value and a length-<code>N_species</code> init one value per species:</p><ul><li><p><code>reg_adult_logx</code>: the log adult threshold, <code>x = exp(reg_adult_logx)</code> in the
 units of <code>dbh</code>;</p></li>
 <li><p><code>reg_adult_logA</code>: the log half-saturation adult density,

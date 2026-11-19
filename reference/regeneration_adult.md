@@ -83,14 +83,16 @@ term as
 The cap `reg_logK` is created by
 [`finn()`](https://finnverse.github.io/FINN/reference/finn.md) as for
 [regeneration_capped](https://finnverse.github.io/FINN/reference/regeneration_capped.md),
-with its resolution from `createProcess(cap = )` and its prior from
-`prior`/`prior_lambda`, so it need not be declared. A `reg_logK`
-declared in `custom_parameters` (as in the example) is kept and sets the
-resolution by its length, but its start value is replaced by the
-resolved prior at the first
+with its resolution from
+[`createProcess(cap = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
+and its prior from `prior`/`prior_lambda`, so it need not be declared. A
+`reg_logK` declared in `custom_parameters` (as in the example) is kept
+and sets the resolution by its length, but its start value is replaced
+by the resolved prior at the first
 [`fit()`](https://finnverse.github.io/FINN/reference/fit.md). Declare
-the two adult parameters with `createProcess(custom_parameters = )`; a
-length-1 init gives one shared value and a length-`N_species` init one
+the two adult parameters with
+[`createProcess(custom_parameters = )`](https://finnverse.github.io/FINN/reference/createProcess.md);
+a length-1 init gives one shared value and a length-`N_species` init one
 value per species:
 
 - `reg_logK` (optional, see above): the log Beverton-Holt cap, stems

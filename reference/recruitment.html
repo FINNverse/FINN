@@ -76,7 +76,7 @@ pages carry the full argument descriptions.</p>
 <p>One simulated year of recruitment runs in three steps. The regeneration
 process returns an EXPECTED recruitment per hectare for every site, patch and
 species. This rate is turned into a whole number of recruits per patch, which
-enter the stand as new cohorts at <code>finn(recruits_dbh = )</code>. During <code><a href="fit.html">fit()</a></code>
+enter the stand as new cohorts at <code><a href="finn.html">finn(recruits_dbh = )</a></code>. During <code><a href="fit.html">fit()</a></code>
 the expected rate (not the drawn recruits), summed over an observation
 interval, is compared with the observed <code>reg</code> by the regeneration likelihood.</p>
     </div>
@@ -90,7 +90,7 @@ interval, is compared with the observed <code>reg</code> by the regeneration lik
 <code>finn(regeneration_process = )</code>. All mechanistic variants share the same core:
 a light response gated by the species parameter <code>parReg</code>, times the
 environmental response <code>exp(env)</code>, plus the additive floor
-<code>createProcess(reg_floor = )</code> of the regeneration process (default <code>1e-3</code>
+<code><a href="createProcess.html">createProcess(reg_floor = )</a></code> of the regeneration process (default <code>1e-3</code>
 stems per ha and year).</p><ul><li><p><code><a href="regeneration.html">regeneration()</a></code>: the core alone. The expected recruitment is not
 bounded; it grows with the environmental response.</p></li>
 <li><p><code><a href="regeneration_capped.html">regeneration_capped()</a></code>: the default since 0.2.0, used when
@@ -110,7 +110,7 @@ recruitment of a species is multiplied by <code>f(A) = A / (A + A_half)</code>, 
 <code>A</code> is the density of its own adults (stems above an adult threshold <code>x</code>)
 pooled over the patches of the site. A species without adults on a site
 recruits only at <code>reg_floor</code>. <code>x</code> and <code>A_half</code> are declared through
-<code>createProcess(custom_parameters = )</code>; see its help page.</p></li>
+<code><a href="createProcess.html">createProcess(custom_parameters = )</a></code>; see its help page.</p></li>
 <li><p><code><a href="regeneration_adult_effect.html">regeneration_adult_effect()</a></code>: the adult density as an effect on
 recruitment instead of a gate,
 <code>f(A) = f0 + (1 - f0) A / (A + A_half)</code> with <code>f0 = plogis(reg_adult_logitf0)</code>,
@@ -129,7 +129,7 @@ accepts <code>cap</code>, <code>prior</code> and <code>prior_lambda</code>, but 
 
 
 <p>The expected rate per ha times <code>patch_size</code> (in ha) is the expected number
-of recruits per patch. <code>createProcess(sample_regeneration = )</code> decides how it
+of recruits per patch. <code><a href="createProcess.html">createProcess(sample_regeneration = )</a></code> decides how it
 becomes a whole number:</p><ul><li><p><code>sample_regeneration = TRUE</code> (default): recruits are drawn from a negative
 binomial with that mean and size <code>theta</code> (the dispersion, next section),
 using <code>createProcess(regeneration_sampler = )</code>. <code>"refined"</code> (default since
@@ -157,7 +157,7 @@ likelihood alike.</p></li>
 <li><p><code>theta_floor</code>: a lower bound applied wherever <code>theta</code> is read, trained or
 not. Default <code>0.5</code> since 0.2.0; <code>0</code> or <code>NULL</code> removes it. A fixed
 <code>dispersion_parameter</code> below the floor is raised to the floor.</p></li>
-</ul><p>With the default <code>fit(rb_gradient = TRUE)</code>, <code>theta</code> is set only by the
+</ul><p>With the default <code><a href="fit.html">fit(rb_gradient = TRUE)</a></code>, <code>theta</code> is set only by the
 regeneration likelihood. On sparse, zero-heavy recruitment data the
 likelihood optimum of <code>theta</code> is very small: a small <code>theta</code> widens the
 likelihood and so lowers the loss without improving the predicted mean, and
@@ -184,10 +184,10 @@ short fits, a fixed <code>theta</code> gets the level right sooner.</p>
     <h2 id="the-likelihood-and-the-observation-operator">The likelihood and the observation operator<a class="anchor" aria-label="anchor" href="#the-likelihood-and-the-observation-operator"></a></h2>
 
 
-<p><code>fit(loss_family = c(regeneration = ))</code> chooses the regeneration likelihood.
+<p><code><a href="fit.html">fit(loss_family = c(regeneration = ))</a></code> chooses the regeneration likelihood.
 <code>"nbinom"</code> (default) uses <code>theta</code> as above. <code>"poisson"</code> has no dispersion
 parameter and so cannot collapse; <code>theta</code> then only shapes the recruit draw.</p>
-<p><code>finn(recruit_obs_weight = w)</code> is an observation operator: it maps the
+<p><code><a href="finn.html">finn(recruit_obs_weight = w)</a></code> is an observation operator: it maps the
 predicted and the observed recruitment per ha alike into the count space of
 the sampling design before they are compared, so that the likelihood sees
 the counts that were actually tallied. For an angle-count inventory
@@ -204,20 +204,20 @@ number the fit returns, though not the ranking between model configurations.</p>
 scores the per-ha values as they are and <code>recruit_obs_weight</code> has no effect,
 without a warning; the Poisson variance then is that of a per-ha value, not of
 the tallied count. The Poisson term adds
-<code>fit(trees_offset = )</code> (default <code>0.01</code>) to the prediction.</p>
+<code><a href="fit.html">fit(trees_offset = )</a></code> (default <code>0.01</code>) to the prediction.</p>
     </div>
     <div class="section level2">
     <h2 id="feeding-observed-recruitment">Feeding observed recruitment<a class="anchor" aria-label="anchor" href="#feeding-observed-recruitment"></a></h2>
 
 
-<p><code>fit(loss_recruit = "observed")</code> drives the simulated stand with the observed
+<p><code><a href="fit.html">fit(loss_recruit = "observed")</a></code> drives the simulated stand with the observed
 recruitment instead of the regeneration process. The observed <code>reg</code> divided
 by <code>period_length</code> is the expected recruitment per ha and year in every year
 of that interval; times <code>patch_size</code> it is drawn per patch by the recruit
 sampler, as above. Growth, mortality and competition run and are trained as
 usual. The regeneration term is weighted 0 and every regeneration parameter
 (species parameters, environment response, cap, <code>theta</code>, custom parameters)
-is frozen for that call. <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> and <code><a href="predict.finn_class.html">simulateForest()</a></code> take
+is frozen for that call. <code><a href="predict.finn_class.html">predict()</a></code> and <code><a href="predict.finn_class.html">simulateForest()</a></code> take
 <code>recruits = "observed"</code> and the table <code>obs_recruits</code> to simulate the same way. With
 observed recruitment the model is not an autonomous simulator: every
 simulated year must lie in an observed interval, and bare-ground, succession

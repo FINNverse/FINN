@@ -109,7 +109,7 @@ and <code>reg</code> is scored on the per-hectare value.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The cap is the parameter <code>reg_logK</code> (<code>K = exp(reg_logK)</code>), which <strong>FINN
-creates itself</strong> – there is nothing to declare. <code>createProcess(cap = )</code>
+creates itself</strong> – there is nothing to declare. <code><a href="createProcess.html">createProcess(cap = )</a></code>
 decides its resolution: <code>"all"</code> (the default) gives one cap shared by every
 species, <code>"species"</code> one cap per species. Read the fitted value back with
 <code>exp(as.numeric(m$reg_logK))</code>.</p>
@@ -124,7 +124,7 @@ the cap carries a prior, added to the objective as
 <code>prior_lambda * (log K - log prior)^2</code> per cap – the same form as the L2
 pull of a staged calibration. It is added <strong>after</strong> the <code>loss_weights = "auto"</code>
 baseline scaling, so <code>prior_lambda</code> means the same thing on every dataset.</p>
-<p><code>createProcess(prior = "max_obs_recruits")</code>, the default, resolves the prior
+<p><code><a href="createProcess.html">createProcess(prior = "max_obs_recruits")</a></code>, the default, resolves the prior
 from the data at the start of <code><a href="fit.html">fit()</a></code>: the largest observed recruitment
 rate per timestep, <code>max(reg / period_length)</code>. The division matters on any
 inventory with a remeasurement interval, because <code>reg</code> is the SUM over that

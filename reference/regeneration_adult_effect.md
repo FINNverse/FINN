@@ -92,11 +92,13 @@ term even in a stand of seedlings.
 The cap `reg_logK` is created by
 [`finn()`](https://finnverse.github.io/FINN/reference/finn.md) as for
 [regeneration_capped](https://finnverse.github.io/FINN/reference/regeneration_capped.md)
-(resolution from `createProcess(cap = )`, prior from
-`prior`/`prior_lambda`), so it need not be declared. Declare the three
-adult parameters with `createProcess(custom_parameters = )`; a length-1
-init gives one shared value and a length-`N_species` init one value per
-species:
+(resolution from
+[`createProcess(cap = )`](https://finnverse.github.io/FINN/reference/createProcess.md),
+prior from `prior`/`prior_lambda`), so it need not be declared. Declare
+the three adult parameters with
+[`createProcess(custom_parameters = )`](https://finnverse.github.io/FINN/reference/createProcess.md);
+a length-1 init gives one shared value and a length-`N_species` init one
+value per species:
 
 - `reg_adult_logx`: the log adult threshold, `x = exp(reg_adult_logx)`
   in the units of `dbh`;

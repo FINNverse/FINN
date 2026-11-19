@@ -232,9 +232,11 @@ the rescaling; the points are our four species.
 </h2>
 <p>In this example we simulate under constant environment
 (<code>climate = 0</code>), so succession here comes purely from the
-demographic trade-offs. We run from bare ground with no disturbance. We
-will explore the implications of adding an environmental gradient in the
-next section.</p>
+demographic trade-offs. We run from bare ground with no disturbance:
+<code>simulateForest(bare_ground = TRUE)</code> starts from an empty
+stand and holds the climate of <code>env</code> constant at its mean for
+<code>years</code> years. We will explore the implications of adding an
+environmental gradient in the next section.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">env_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Nsites</span>, year <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Ntimesteps</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">env_dt</span><span class="op">$</span><span class="va">climate</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
@@ -247,57 +249,35 @@ next section.</p>
 <span>  mortality_process    <span class="op">=</span> <span class="fu"><a href="../reference/createProcess.html">createProcess</a></span><span class="op">(</span><span class="op">~</span><span class="fl">1</span><span class="op">+</span><span class="va">climate</span>, <span class="fu">FINN</span><span class="fu">::</span><span class="va"><a href="../reference/mortality.html">mortality</a></span>,    initSpecies <span class="op">=</span> <span class="va">parMort</span>,   initEnv <span class="op">=</span> <span class="va">parMortEnv</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">m</span>, init_cohort <span class="op">=</span> <span class="cn">NULL</span>, env <span class="op">=</span> <span class="va">env_dt</span>, disturbance <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>               patches <span class="op">=</span> <span class="fl">100</span>, device <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># average over patches; convert per-patch ba/trees to per-hectare</span></span>
-<span><span class="va">p_dat</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">year</span>, <span class="va">species</span>, <span class="va">variable</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="va">p_dat</span><span class="op">[</span><span class="va">variable</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ba"</span>, <span class="st">"trees"</span><span class="op">)</span>, <span class="va">value</span> <span class="op">:=</span> <span class="va">value</span> <span class="op">/</span> <span class="va">patch_size</span><span class="op">]</span></span>
-<span></span>
-<span><span class="va">sp_labs</span> <span class="op">&lt;-</span> <span class="va">species</span>   <span class="co"># Betula, Tilia, Carpinus, Fagus (pioneer -&gt; climax)</span></span></code></pre></div>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m</span>, env <span class="op">=</span> <span class="va">env_dt</span>, bare_ground <span class="op">=</span> <span class="cn">TRUE</span>, years <span class="op">=</span> <span class="va">Ntimesteps</span>,</span>
+<span>                      patches <span class="op">=</span> <span class="fl">100</span>, patch_size <span class="op">=</span> <span class="va">patch_size</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="the-successional-pattern">The successional pattern<a class="anchor" aria-label="anchor" href="#the-successional-pattern"></a>
 </h2>
+<p><code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> draws a bare-ground run as a succession, basal
+area by species. The model carries no species names (it was not fitted
+to data), so we pass them. Basal area and tree numbers in the simulation
+are per patch, here 0.1 ha: multiply by 10 for values per hectare.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">ba</span> <span class="op">&lt;-</span> <span class="va">p_dat</span><span class="op">[</span><span class="va">variable</span> <span class="op">==</span> <span class="st">"ba"</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">ba</span><span class="op">[</span><span class="va">year</span> <span class="op">&lt;=</span> <span class="fl">150</span><span class="op">]</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_colour_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Dark2"</span>, name <span class="op">=</span> <span class="st">"Species"</span>, labels <span class="op">=</span> <span class="va">sp_labs</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Year"</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression</a></span><span class="op">(</span><span class="va">Basal</span><span class="op">~</span><span class="va">area</span><span class="op">~</span><span class="op">(</span><span class="va">m</span><span class="op">^</span><span class="fl">2</span><span class="op">/</span><span class="va">ha</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sim</span>, species_names <span class="op">=</span> <span class="va">species</span><span class="op">)</span></span></code></pre></div>
 <div class="figure" style="text-align: center">
-<img src="B/B-plot-succession-1.png" alt="Basal area by species over time. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."><p class="caption">
-Basal area by species over time. The pioneer peaks within the first
-decade and collapses; mid-seral species crest in turn; the
-shade-tolerant climax rises slowly and dominates the mature stand.
+<img src="B/B-plot-succession-1.png" alt="Basal area by species over time (m² per patch of 0.1 ha); the dashed line is the stand total. The pioneer peaks within the first decade and collapses; mid-seral species crest in turn; the shade-tolerant climax rises slowly and dominates the mature stand."><p class="caption">
+Basal area by species over time (m² per patch of 0.1 ha); the dashed
+line is the stand total. The pioneer peaks within the first decade and
+collapses; mid-seral species crest in turn; the shade-tolerant climax
+rises slowly and dominates the mature stand.
 </p>
 </div>
 <p>The same run, across every state variable FINN tracks (diameter,
-basal area, tree numbers, growth, mortality and regeneration):</p>
+basal area, tree numbers, growth, mortality and the expected
+regeneration per hectare, <code>r_mean_ha</code>):</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">panel</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/copy.html" class="external-link">copy</a></span><span class="op">(</span><span class="va">p_dat</span><span class="op">)</span></span>
-<span><span class="co"># regeneration is shown as the mean per hectare (r_mean_ha); the per-patch</span></span>
-<span><span class="co"># count (reg) is dropped.</span></span>
-<span><span class="va">panel</span><span class="op">[</span>, <span class="va">variable2</span> <span class="op">:=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span></span>
-<span>  <span class="va">variable</span>,</span>
-<span>  levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dbh"</span>, <span class="st">"ba"</span>, <span class="st">"trees"</span>, <span class="st">"AL"</span>, <span class="st">"growth"</span>, <span class="st">"mort"</span>, <span class="st">"r_mean_ha"</span><span class="op">)</span>,</span>
-<span>  labels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"avg. DBH [cm]"</span>, <span class="st">"Basal Area [m2/ha]"</span>, <span class="st">"Trees [N/ha]"</span>,</span>
-<span>             <span class="st">"Available Light [%]"</span>, <span class="st">"Growth [cm/yr]"</span>, <span class="st">"Mortality [%]"</span>,</span>
-<span>             <span class="st">"Regeneration [N/ha]"</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">panel</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">variable2</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">year</span> <span class="op">&lt;=</span> <span class="fl">150</span><span class="op">]</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span><span class="va">variable2</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">2</span>, strip.position <span class="op">=</span> <span class="st">"left"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/coord_cartesian.html" class="external-link">coord_cartesian</a></span><span class="op">(</span>ylim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="cn">NA</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_colour_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Dark2"</span>, name <span class="op">=</span> <span class="st">"Species"</span>, labels <span class="op">=</span> <span class="va">sp_labs</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Year"</span>, y <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>strip.placement <span class="op">=</span> <span class="st">"outside"</span>,</span>
-<span>        strip.text.y.left <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">90</span><span class="op">)</span>,</span>
-<span>        axis.title.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sim</span>, response <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ba"</span>, <span class="st">"dbh"</span>, <span class="st">"trees"</span>, <span class="st">"growth"</span>, <span class="st">"mort"</span>, <span class="st">"r_mean_ha"</span><span class="op">)</span>,</span>
+<span>     species_names <span class="op">=</span> <span class="va">species</span><span class="op">)</span></span></code></pre></div>
 <div class="figure" style="text-align: center">
-<img src="B/B-plot-all-variables-1.png" alt="Succession across all FINN state variables for the four species."><p class="caption">
-Succession across all FINN state variables for the four species.
+<img src="B/B-plot-all-variables-1.png" alt="Succession across the FINN state variables for the four species."><p class="caption">
+Succession across the FINN state variables for the four species.
 </p>
 </div>
 <div class="section level3">
@@ -314,7 +294,7 @@ growth and high regeneration let it dominate the canopy within the first
 decade. But as the canopy closes, light drops below its high
 <code>shade</code> threshold and it can no longer regenerate because it
 is shade-intolerant. Its mortality increases rapidly once overtopped
-(visible in the mortality panel: from ~0.08 yr⁻¹ in full light to ~0.3
+(visible in the mortality panel: from ~0.08 yr⁻¹ in full light to ~0.25
 yr⁻¹ in shade), clearing the standing trees. By mid-succession it is
 nearly gone.</li>
 <li>
@@ -328,7 +308,7 @@ run.</li>
 slowly and regenerates sparsely, so early on it is barely visible. But
 it regenerates under shade (lowest <code>shade</code>), is
 shade-tolerant so it barely dies even when overtopped (mortality stays
-~0.02–0.03 yr⁻¹ throughout), and is the tallest (highest
+at ~0.03 yr⁻¹ throughout), and is the tallest (highest
 <code>height_allom</code>). So once the early- and mid-successional
 canopy disappears it overtops and dominates the mature forest.</li>
 </ul>
@@ -452,38 +432,26 @@ of these niches the model adds a site-productivity hump that makes the
 benign middle most productive.
 </p>
 </div>
-<p>We use the <code>predict</code> function to simulate from
-<code>m_T</code> for three artificial sites along the climate gradient
-and compare the simulated succession trajectories.</p>
+<p>We simulate <code>m_T</code> from bare ground for three artificial
+sites along the climate gradient, one row of <code>env</code> per site,
+and compare the simulated succession trajectories. With
+<code>sites</code>, <code>simulateForest(bare_ground = TRUE)</code> runs
+each site under its own climate, and <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> draws one panel
+per site.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">site_temp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`cold-wet` <span class="op">=</span> <span class="op">-</span><span class="fl">1</span>, benign <span class="op">=</span> <span class="fl">0.33</span>, `warm-dry` <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="va">runs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/rbindlist.html" class="external-link">rbindlist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">site_temp</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">nm</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">tt</span> <span class="op">&lt;-</span> <span class="va">site_temp</span><span class="op">[[</span><span class="va">nm</span><span class="op">]</span><span class="op">]</span></span>
-<span>  <span class="va">env_dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Nsites</span>, year <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">Ntimesteps</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">env_dt</span><span class="op">$</span><span class="va">climate</span> <span class="op">&lt;-</span> <span class="va">tt</span></span>
-<span>  <span class="va">env_dt</span><span class="op">$</span><span class="va">climate_sq</span> <span class="op">&lt;-</span> <span class="va">tt</span><span class="op">^</span><span class="fl">2</span></span>
-<span>  <span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">m_T</span>, init_cohort <span class="op">=</span> <span class="cn">NULL</span>, env <span class="op">=</span> <span class="va">env_dt</span>, disturbance <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>                 patches <span class="op">=</span> <span class="fl">100</span>, device <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
-<span>  <span class="va">ba</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">[</span><span class="va">variable</span> <span class="op">==</span> <span class="st">"ba"</span>, <span class="fu">.</span><span class="op">(</span>value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span> <span class="op">/</span> <span class="va">patch_size</span><span class="op">)</span>,</span>
-<span>                      by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">year</span>, <span class="va">species</span><span class="op">)</span><span class="op">]</span></span>
-<span>  <span class="va">ba</span><span class="op">[</span>, <span class="va">climate</span> <span class="op">:=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">nm</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">site_temp</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
-<span>  <span class="va">ba</span></span>
-<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">runs</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">year</span>, <span class="va">value</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span><span class="va">climate</span>, ncol <span class="op">=</span> <span class="fl">3</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_colour_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Dark2"</span>, name <span class="op">=</span> <span class="st">"Species"</span>, labels <span class="op">=</span> <span class="va">species_T</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Year"</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression</a></span><span class="op">(</span><span class="va">Basal</span><span class="op">~</span><span class="va">area</span><span class="op">~</span><span class="op">(</span><span class="va">m</span><span class="op">^</span><span class="fl">2</span><span class="op">/</span><span class="va">ha</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/guides.html" class="external-link">guides</a></span><span class="op">(</span>colour <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/guide_legend.html" class="external-link">guide_legend</a></span><span class="op">(</span>nrow <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">site_climate</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`cold-wet` <span class="op">=</span> <span class="op">-</span><span class="fl">1</span>, benign <span class="op">=</span> <span class="fl">0.33</span>, `warm-dry` <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">env_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span>siteID <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, year <span class="op">=</span> <span class="fl">1L</span>, climate <span class="op">=</span> <span class="va">site_climate</span>,</span>
+<span>                    climate_sq <span class="op">=</span> <span class="va">site_climate</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
+<span><span class="va">runs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">m_T</span>, env <span class="op">=</span> <span class="va">env_T</span>, bare_ground <span class="op">=</span> <span class="cn">TRUE</span>, sites <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
+<span>                       years <span class="op">=</span> <span class="va">Ntimesteps</span>, patches <span class="op">=</span> <span class="fl">100</span>, patch_size <span class="op">=</span> <span class="va">patch_size</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">runs</span>, species_names <span class="op">=</span> <span class="va">species_T</span>, n_species <span class="op">=</span> <span class="va">Nsp_T</span><span class="op">)</span></span></code></pre></div>
 <div class="figure" style="text-align: center">
-<img src="B/B-climate-succession-1.png" alt="The same species pool along a cold-wet to warm-dry climate gradient. A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer."><p class="caption">
-The same species pool along a cold-wet to warm-dry climate gradient. A
-spruce and pine stand forms in the cold and wet, a beech-dominated mixed
-forest in the benign middle, and an oak and hornbeam wood in the warm
-and dry, each opened by the birch pioneer.
+<img src="B/B-climate-succession-1.png" alt="The same species pool along a cold-wet to warm-dry climate gradient (basal area in m² per patch of 0.1 ha; panels from cold-wet, climate -1, to warm-dry, climate 1). A spruce and pine stand forms in the cold and wet, a beech-dominated mixed forest in the benign middle, and an oak and hornbeam wood in the warm and dry, each opened by the birch pioneer."><p class="caption">
+The same species pool along a cold-wet to warm-dry climate gradient
+(basal area in m² per patch of 0.1 ha; panels from cold-wet, climate -1,
+to warm-dry, climate 1). A spruce and pine stand forms in the cold and
+wet, a beech-dominated mixed forest in the benign middle, and an oak and
+hornbeam wood in the warm and dry, each opened by the birch pioneer.
 </p>
 </div>
 <p>One pioneer and six climate specialists, and FINN sorts them into

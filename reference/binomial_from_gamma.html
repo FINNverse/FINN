@@ -55,7 +55,7 @@ createProcess() for the other draws.'></head><body>
 
     <div class="ref-description section level2">
     <p>The mortality draw of FINN before 0.2.0, selected with
-<code>createProcess(mortality_draw = "gamma")</code>: a Gamma distribution with the mean
+<code><a href="createProcess.html">createProcess(mortality_draw = "gamma")</a></code>: a Gamma distribution with the mean
 <code>n * p</code> and the variance <code>n * p * (1 - p)</code> of the binomial, sampled with
 <code>rsample()</code> so that the draw carries a pathwise gradient to <code>n</code> and <code>p</code>. The
 draw is continuous, not an integer count; the simulation rounds it afterwards.

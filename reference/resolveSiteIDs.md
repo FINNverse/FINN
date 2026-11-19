@@ -45,7 +45,8 @@ resolveSiteIDs(
   0.1.0: `year` is the index of the inventory (0, 1, 2, ...), one
   simulation step is one census interval (`period_length = 1`), `env_dt`
   keeps the inventory years, and the observations of the first inventory
-  stay in `obs_dt`. Use it with `makeObsData(rates = "interval")`.
+  stay in `obs_dt`. Use it with
+  [`makeObsData(rates = "interval")`](https://finnverse.github.io/FINN/reference/makeObsData.md).
   Unlike 0.1.0, which built the initial cohorts from the second
   inventory, the census axis now starts from the first one, so 0.1.0
   results are not reproduced exactly.
@@ -60,8 +61,9 @@ A list with:
 - `tree_dt`: tree table with indices and standardized species.
 
 - `env_dt`: environment table with indices, the years of the simulation:
-  `siteID`, `year` and the predictors, what `fit(env = )` takes
-  (`siteID_dt` maps the ids back to the site names).
+  `siteID`, `year` and the predictors, what
+  [`fit(env = )`](https://finnverse.github.io/FINN/reference/fit.md)
+  takes (`siteID_dt` maps the ids back to the site names).
 
 - `obs_dt`: site-aggregated observations by species, with
   `period_length`.
@@ -74,11 +76,19 @@ A list with:
 
 - `initCohort_dt` (optional): trees used to build cohorts.
 
-`initCohorts` holds torch tensors, which
-[`saveRDS()`](https://rdrr.io/r/base/readRDS.html) cannot store: after
-[`readRDS()`](https://rdrr.io/r/base/readRDS.html) they fail with
-"external pointer is not valid". The tables survive, so rebuild the
-cohorts after reading:
+The list can be stored with
+[`saveRDS()`](https://rdrr.io/r/base/readRDS.html) and read back with
+[`readRDS()`](https://rdrr.io/r/base/readRDS.html): `initCohorts` keeps
+a plain R copy of its arrays and rebuilds its torch tensors, which
+[`saveRDS()`](https://rdrr.io/r/base/readRDS.html) cannot store, when
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md),
+[`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+or
+[`predict.finn_class()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+use it (or by `x$initCohorts$restore()`, see
+[`CohortMat`](https://finnverse.github.io/FINN/reference/CohortMat.md)).
+Cohorts saved with FINN before 0.2.0 carry no such copy; rebuild them
+from the table with
 `x$initCohorts <- makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt))`.
 
 ## Details

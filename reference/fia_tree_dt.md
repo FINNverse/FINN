@@ -8,7 +8,8 @@ holdout sites (`fia_tree_test`): every tree alive at the start of an
 interval, with its diameter then and its fate over the interval. These
 are the closed cohorts whose counts (`n_at_risk`, `n_died`) the site
 tables carry, and the `tree_data` of
-`fit(loss_aggregation = c(mortality = "tree"))` and
+[`fit(loss_aggregation = c(mortality = "tree"))`](https://finnverse.github.io/FINN/reference/fit.md)
+and
 [`predictTrees()`](https://finnverse.github.io/FINN/reference/predictTrees.md),
 which score the mortality function on every observed tree instead of on
 the site's pooled rate (see

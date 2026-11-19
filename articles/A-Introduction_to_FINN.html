@@ -409,9 +409,12 @@ noisy realisation. Averaging over many patches creates a smooth
 stand-level aggregation of the forest state.</p>
 <p>Aggregation of patches is done internally. simulateForest() returns
 patch-averaged, stand-level results in
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi><mi>o</mi><mi>n</mi><mi>g</mi></mrow><annotation encoding="application/x-tex">long</annotation></semantics></math>site.
-The mean() in the plotting code below only collapses the site dimension,
-which matters when you simulate more than one site.</p>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi><mi>o</mi><mi>n</mi><mi>g</mi></mrow><annotation encoding="application/x-tex">long</annotation></semantics></math>site:
+one row per site, year, species and variable. Basal area
+(<code>ba</code>, m²) and tree numbers (<code>trees</code>) are per
+patch, here 0.1 ha, so multiply by 10 for values per hectare;
+<code>r_mean_ha</code>, the expected recruitment, is already per
+hectare.</p>
 <p>If you need more than the stand-level averages, set return_cohorts to
 keep the raw per-cohort state for the timesteps you choose. This records
 each cohort’s size, species and tree number together with its growth and
@@ -422,37 +425,44 @@ and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mi>i</mi><mi>d</mi><mi>e</mi></mrow><annotation encoding="application/x-tex">wide</annotation></semantics></math>cohort.
 It is FALSE by default because storing every cohort at every timestep is
 expensive.</p>
+<p><code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> draws a simulation: one panel per variable and
+one line per species, averaged over the sites, and the stand total of
+<code>ba</code> and <code>trees</code> as a dashed line. By default it
+shows <code>ba</code>, <code>dbh</code> and <code>trees</code>;
+<code>response</code> chooses others. The run with a single patch:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">for</span><span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"patches_1"</span>, <span class="st">"patches_100"</span><span class="op">)</span><span class="op">)</span><span class="op">{</span></span>
-<span>  <span class="co"># $long$site is already averaged over patches; this mean() collapses sites</span></span>
-<span>  <span class="va">p_dat</span> <span class="op">&lt;-</span> <span class="va">predictions</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span>value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span><span class="op">)</span>, by <span class="op">=</span> <span class="fu">.</span><span class="op">(</span><span class="va">year</span>, <span class="va">species</span>, <span class="va">variable</span><span class="op">)</span><span class="op">]</span></span>
-<span>  <span class="va">p_dat</span><span class="op">[</span>, <span class="va">variable2</span> <span class="op">:=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span></span>
-<span>    <span class="va">variable</span>,</span>
-<span>    levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dbh"</span>, <span class="st">"ba"</span>, <span class="st">"trees"</span>, <span class="st">"AL"</span>, <span class="st">"growth"</span>, <span class="st">"mort"</span>, <span class="st">"reg"</span>, <span class="st">"r_mean_ha"</span><span class="op">)</span>,</span>
-<span>    labels <span class="op">=</span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"avg. DBH [cm]"</span>, <span class="st">"Basal Area [m2/ha]"</span>, <span class="st">"Trees [N/ha]"</span>,</span>
-<span>                <span class="st">"Available Light [%]"</span>, <span class="st">"Growth [cm/yr]"</span>, <span class="st">"Mortality [%]"</span>,</span>
-<span>                <span class="st">"Reg. Count [N/ha]"</span>, <span class="st">"Reg. Mean [N/ha]"</span><span class="op">)</span></span>
-<span>    <span class="op">)</span>,<span class="op">]</span></span>
-<span>  <span class="va">p_dat</span><span class="op">[</span><span class="va">variable</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ba"</span>, <span class="st">"trees"</span><span class="op">)</span>, <span class="va">value</span> <span class="op">:=</span> <span class="va">value</span><span class="op">/</span><span class="va">patch_size</span>,<span class="op">]</span></span>
-<span>  <span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">p_dat</span><span class="op">[</span><span class="va">year</span> <span class="op">&lt;=</span> <span class="fl">100</span><span class="op">]</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">year</span>, y <span class="op">=</span> <span class="va">value</span>, color <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">species</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Year"</span>, y <span class="op">=</span> <span class="st">"Value"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/coord_cartesian.html" class="external-link">coord_cartesian</a></span><span class="op">(</span>ylim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="cn">NA</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span><span class="va">variable2</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">2</span>, strip.position <span class="op">=</span> <span class="st">"left"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span></span>
-<span>    axis.title.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>    strip.placement <span class="op">=</span> <span class="st">"outside"</span>,</span>
-<span>    strip.text.y.left <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">90</span><span class="op">)</span></span>
-<span>  <span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/guides.html" class="external-link">guides</a></span><span class="op">(</span>color <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/guide_legend.html" class="external-link">guide_legend</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Species"</span>, override.aes <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">5</span><span class="op">)</span>, ncol <span class="op">=</span> <span class="fl">2</span>, title.position <span class="op">=</span> <span class="st">"top"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_colour_discrete.html" class="external-link">scale_color_discrete</a></span><span class="op">(</span>name <span class="op">=</span> <span class="st">"Species"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"patches = "</span>,<span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gsub</a></span><span class="op">(</span><span class="st">"patches_"</span>, <span class="st">""</span>, <span class="va">i</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">p</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-<p><img src="A/A-plot-patches-1.png" style="display: block; margin: auto;"><img src="A/A-plot-patches-2.png" style="display: block; margin: auto;"></p>
+<code class="sourceCode R"><span><span class="va">vars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ba"</span>, <span class="st">"dbh"</span>, <span class="st">"trees"</span>, <span class="st">"growth"</span>, <span class="st">"mort"</span>, <span class="st">"r_mean_ha"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">predictions</span><span class="op">$</span><span class="va">patches_1</span>, response <span class="op">=</span> <span class="va">vars</span><span class="op">)</span></span></code></pre></div>
+<p><img src="A/A-plot-patches-1-1.png" style="display: block; margin: auto;"></p>
+<p>and the run with 100 patches, the same model under the same
+disturbances:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">predictions</span><span class="op">$</span><span class="va">patches_100</span>, response <span class="op">=</span> <span class="va">vars</span><span class="op">)</span></span></code></pre></div>
+<p><img src="A/A-plot-patches-100-1.png" style="display: block; margin: auto;"></p>
+<p>The single patch jumps with every recruitment pulse, death and
+disturbance; the mean over 100 patches shows the stand. Each disturbance
+clears most of it, the total basal area (dashed) drops towards zero, and
+the most light-demanding species 5 recruits in a burst before the stand
+closes again. Without disturbance the stand would develop as in the run
+from bare ground below.</p>
+<div class="section level4">
+<h4 id="from-bare-ground">From bare ground<a class="anchor" aria-label="anchor" href="#from-bare-ground"></a>
+</h4>
+<p>A run from an empty stand needs no environment table of its own:
+<code>simulateForest(bare_ground = TRUE)</code> holds the climate
+constant at its mean, over the sites of <code>env</code> or, for a
+fitted model, of the environment it was fitted on, and runs for
+<code>years</code> years without disturbance. <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> draws
+such a run as a succession, one panel per site, labelled with its
+climate:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">succession</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/predict.finn_class.html">simulateForest</a></span><span class="op">(</span><span class="va">simulationModel</span>, env <span class="op">=</span> <span class="va">env_dt</span>, bare_ground <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>                             years <span class="op">=</span> <span class="fl">500</span>, patches <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">succession</span><span class="op">)</span></span></code></pre></div>
+<p><img src="A/A-bare-ground-1.png" style="display: block; margin: auto;"></p>
+<p>The light-demanding species 4 and 5 come first, species 3 and 2
+follow, and the shade-tolerant species 1 dominates the mature stand.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.0 (2025-04-11)</span></span>
 <span><span class="co">#&gt; Platform: aarch64-apple-darwin20</span></span>
@@ -484,6 +494,7 @@ expensive.</p>
 <span><span class="co">#&gt; [25] farver_2.1.2       R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0     </span></span>
 <span><span class="co">#&gt; [29] callr_3.7.6        magrittr_2.0.3     withr_3.0.2        tools_4.5.0       </span></span>
 <span><span class="co">#&gt; [33] bit64_4.6.0-1      gtable_0.3.6</span></span></code></pre></div>
+</div>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

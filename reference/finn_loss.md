@@ -55,9 +55,10 @@ they meet the observation (see
 compared as a *relative* rate (`dbh / dbh_before - 1`), the model's own
 quantity; training against the absolute increment was tested and was
 worse and more seed-variable, because it couples the growth parameters
-to whichever trees happen to be present. `finn(growth_rate = )` says
-whether the observed growth is a rate per time step or the increment
-over the whole interval.
+to whichever trees happen to be present.
+[`finn(growth_rate = )`](https://finnverse.github.io/FINN/reference/finn.md)
+says whether the observed growth is a rate per time step or the
+increment over the whole interval.
 
 For `regeneration`, `"nbinom"` (the default) uses the recruit dispersion
 `theta` of the regeneration process and applies
@@ -211,10 +212,10 @@ simulation killed a tree the inventory found alive (`frac_killed`), in
 which year (`mean_kill_year`), and the share that entered the window
 already dead (`frac_ghost`). With the binned competition a killed cohort
 still occupies a slot of the height quantiles, so
-`createProcess(light_mask = TRUE)` (the default) or `continuous = TRUE`
-is needed for the competition process;
-[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) warns
-otherwise.
+[`createProcess(light_mask = TRUE)`](https://finnverse.github.io/FINN/reference/createProcess.md)
+(the default) or `continuous = TRUE` is needed for the competition
+process; [`fit()`](https://finnverse.github.io/FINN/reference/fit.md)
+warns otherwise.
 
 ## Where the recruits come from (`loss_recruit`)
 

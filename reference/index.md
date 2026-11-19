@@ -34,10 +34,30 @@ Calibrate every component jointly, end-to-end, then simulate.
 - [`predict(`*`<finn_class>`*`)`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
   [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
   : Simulate a forest with a FINN model
+- [`plot(`*`<finn_simulation>`*`)`](https://finnverse.github.io/FINN/reference/plot.finn_simulation.md)
+  [`print(`*`<finn_simulation>`*`)`](https://finnverse.github.io/FINN/reference/plot.finn_simulation.md)
+  : Plot a FINN simulation
 - [`predictTrees()`](https://finnverse.github.io/FINN/reference/predictTrees.md)
   : Predict growth and mortality for individual observed trees
 - [`FINN.seed()`](https://finnverse.github.io/FINN/reference/FINN.seed.md)
   : Set Seed for Reproducibility in R and Torch
+
+## Evaluation
+
+Judge a fitted model against the observations, on the training data and
+a holdout.
+
+- [`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+  [`print(`*`<finn_evaluation>`*`)`](https://finnverse.github.io/FINN/reference/evaluate.md)
+  [`plot(`*`<finn_evaluation>`*`)`](https://finnverse.github.io/FINN/reference/evaluate.md)
+  : Evaluate a fitted model
+- [`comparePlot()`](https://finnverse.github.io/FINN/reference/comparePlot.md)
+  [`print(`*`<finn_heatmap>`*`)`](https://finnverse.github.io/FINN/reference/comparePlot.md)
+  [`print(`*`<finn_comparison>`*`)`](https://finnverse.github.io/FINN/reference/comparePlot.md)
+  : Compare a simulation with observations
+- [`summary(`*`<finn_class>`*`)`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
+  [`print(`*`<summary.finn_class>`*`)`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
+  : Summarise a fitted FINN model
 
 ## Processes
 
@@ -122,12 +142,12 @@ FINN standardises environmental predictors internally
 
 Read back what a fitted - or hybrid - model actually learned.
 
+- [`plot(`*`<finn_class>`*`)`](https://finnverse.github.io/FINN/reference/plot.finn_class.md)
+  : Plot the fitted parameters of a FINN model
 - [`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) :
   Accumulated local effect plots
 - [`plot(`*`<FINNale>`*`)`](https://finnverse.github.io/FINN/reference/plot.FINNale.md)
   : Plot ALE curves of a FINN model
-- [`summary(`*`<finn_class>`*`)`](https://finnverse.github.io/FINN/reference/summary.finn_class.md)
-  : Summarise a fitted FINN model
 - [`conditionalEffects()`](https://finnverse.github.io/FINN/reference/conditionalEffects.md)
   : Conditional effects of a FINN model
 - [`averageConditionalEffects()`](https://finnverse.github.io/FINN/reference/averageConditionalEffects.md)

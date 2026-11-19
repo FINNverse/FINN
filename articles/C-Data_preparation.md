@@ -367,6 +367,30 @@ init_cohorts
 #> • species: Long [1:8, 1:4, 1:15]
 ```
 
+The list
+[`resolveSiteIDs()`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
+returns, initial cohorts included, can be saved with
+[`saveRDS()`](https://rspatial.github.io/terra/reference/serialize.html)
+and read back with
+[`readRDS()`](https://rspatial.github.io/terra/reference/serialize.html),
+so the preparation needs to run only once. The cohorts keep a plain R
+copy of their arrays and rebuild their torch tensors when
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md),
+[`predict()`](https://rspatial.github.io/terra/reference/predict.html)
+or
+[`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+use them:
+
+``` r
+
+path <- tempfile(fileext = ".rds")
+saveRDS(inputs, path)
+inputs_read <- readRDS(path)
+# the cohorts read back hold the same trees
+identical(inputs_read$initCohorts$dbh_r, init_cohorts$dbh_r)
+#> [1] TRUE
+```
+
 To build cohorts yourself from a year-0 tree slice, call
 [`makeInitCohorts()`](https://finnverse.github.io/FINN/reference/makeInitCohorts.md)
 directly; it expects `siteID, patchID, species, dbh, treeName` (+

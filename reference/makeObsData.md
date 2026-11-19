@@ -112,7 +112,9 @@ A list with:
   previous record), `rel_growth` (the increment over the interval,
   `dbh/dbh_before - 1`) and `growth` (the tree's growth rate in the unit
   of `rates`, the quantity behind `obs_dt$growth` and the `growth`
-  column of `fit(tree_data = )`); an input column `growth` is replaced.
+  column of
+  [`fit(tree_data = )`](https://finnverse.github.io/FINN/reference/fit.md));
+  an input column `growth` is replaced.
 
 ## Details
 
@@ -127,14 +129,15 @@ geometric mean of \\1 + g\\ minus one, one minus the geometric mean
 survival), and sums the simulated recruits over them (see
 [`finn_data`](https://finnverse.github.io/FINN/reference/finn_data.md)).
 `rates = "interval"` belongs with
-`resolveSiteIDs(time_axis = "census")`, where one simulation step is one
-census interval and nothing is compounded. The counts (`n_at_risk`,
-`n_died`, `growth_n`) and `reg` stay quantities of the whole interval in
-both modes: the counts weight the likelihood by the number of trees
-behind an observation, and `reg` is compared with the recruits summed
-over the interval. To use the table, express `year` as years since the
-first inventory, give `env` one row per site and year from 1 to the last
-census, and build the initial cohorts from the first inventory;
+[`resolveSiteIDs(time_axis = "census")`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md),
+where one simulation step is one census interval and nothing is
+compounded. The counts (`n_at_risk`, `n_died`, `growth_n`) and `reg`
+stay quantities of the whole interval in both modes: the counts weight
+the likelihood by the number of trees behind an observation, and `reg`
+is compared with the recruits summed over the interval. To use the
+table, express `year` as years since the first inventory, give `env` one
+row per site and year from 1 to the last census, and build the initial
+cohorts from the first inventory;
 [`resolveSiteIDs`](https://finnverse.github.io/FINN/reference/resolveSiteIDs.md)
 does all three.
 

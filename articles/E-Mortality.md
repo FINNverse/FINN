@@ -200,33 +200,47 @@ the census compounded into one rate per year,
 `1 - exp(mean(log1p(-m)))`, the functional behind the observed
 `1 - (1 - n_died / n_at_risk)^(1 / period_length)`.
 
+[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+does this pairing. It simulates the model on the sites it was fitted to
+and, with `holdout`, on sites it has not seen, aggregates every response
+the way [`fit()`](https://finnverse.github.io/FINN/reference/fit.md)
+scores it, and keeps the paired table (`$matched`) and the skill
+measures (`$skill`) of each set. The result is also stored on the model,
+where
+[`summary()`](https://rspatial.github.io/terra/reference/summary.html)
+reads it.
+
 ``` r
 
-# the simulated yearly mortality, compounded over each observation's interval
-at_census <- function(site, obs_l) {
-  win <- unique(obs_l[, .(siteID, census = year, period_length)])
-  win <- win[, .(year = seq(census - period_length + 1L, census)), by = .(siteID, census)]
-  merge(site[variable == "mort", .(siteID, year, species, value)], win, by = c("siteID", "year"))[
-    , .(variable = "mort", value = 1 - exp(mean(log1p(-pmin(value, 1 - 1e-4))))), by = .(siteID, year = census, species)]
-}
-pred_of <- function(model, label, env, init, obs_l, split) {
-  model$eval()
-  sim <- predict(model, env = env, init_cohort = init,
-                 patches = 4, patch_size = 0.06, device = "cpu")
-  merge(obs_l, at_census(sim$long$site, obs_l), by = c("siteID", "year", "species", "variable"
-  ))[, `:=`(model = label, split = split)][]
-}
-to_long <- function(d) melt(d, id.vars = c("siteID", "year", "period_length", "species", "species_name"),
-                            measure.vars = "mort", variable.name = "variable", value.name = "obs",
-                            variable.factor = FALSE)
-
+holdout <- list(data = obs_test, env = env_test, init_cohort = init_cohorts_test)
+m$eval(); m_mort$eval()
 FINN.seed(1)
-obs_pred <- rbind(
-  pred_of(m,      "Process (mechanistic)",   env_dt,   init_cohorts,      to_long(obs_dt),   "train"),
-  pred_of(m,      "Process (mechanistic)",   env_test, init_cohorts_test, to_long(obs_test), "holdout"),
-  pred_of(m_mort, "Hybrid (mortality = NN)", env_dt,   init_cohorts,      to_long(obs_dt),   "train"),
-  pred_of(m_mort, "Hybrid (mortality = NN)", env_test, init_cohorts_test, to_long(obs_test), "holdout"))
+ev      <- evaluate(m,      holdout = holdout)
+ev_mort <- evaluate(m_mort, holdout = holdout)
+
+# the paired mortality cells of both models on both sets
+mort_of <- function(ev, label)
+  rbind(ev$train$matched[variable == "mort"][, `:=`(model = label, split = "train")],
+        ev$holdout$matched[variable == "mort"][, `:=`(model = label, split = "holdout")])
+mort_pred <- rbind(mort_of(ev,      "Process (mechanistic)"),
+                   mort_of(ev_mort, "Hybrid (mortality = NN)"))
+mort_pred[1:3, .(siteID, year, species_name, period_length, n_at_risk, n_died, obs, pred, p_interval)]
+#>    siteID  year          species_name period_length n_at_risk n_died       obs
+#>     <int> <int>                <char>         <num>     <int>  <int>     <num>
+#> 1:      1    10 Pseudotsuga menziesii            10         2      0 0.0000000
+#> 2:      1    10         Abies grandis            10         6      0 0.0000000
+#> 3:      1    10                 other            10         3      1 0.0397355
+#>            pred p_interval
+#>           <num>      <num>
+#> 1: 0.0003227343 0.00322266
+#> 2: 0.0022701982 0.02247146
+#> 3: 0.0050098909 0.04898441
 ```
+
+Each row is one site, census and species: the observed yearly rate
+`obs`, the simulated yearly rate `pred` compounded over the interval,
+and `p_interval`, the probability that a tree dies over the whole
+interval, `1 - (1 - pred)^period_length`.
 
 Rank correlation is the natural first reach, and it is a trap here.
 Two-thirds of the observed proportions are exactly zero, so Spearman
@@ -236,9 +250,8 @@ cannot see what it learned”.
 
 ``` r
 
-obs_pred[is.finite(obs) & is.finite(value),
-         .(spearman = round(cor(obs, value, method = "spearman"), 2), n = .N),
-         by = .(model, split)][order(split, model)]
+mort_pred[, .(spearman = round(cor(obs, pred, method = "spearman"), 2), n = .N),
+          by = .(model, split)][order(split, model)]
 #>                      model   split spearman     n
 #>                     <char>  <char>    <num> <int>
 #> 1: Hybrid (mortality = NN) holdout     0.07   994
@@ -251,8 +264,9 @@ obs_pred[is.finite(obs) & is.finite(value),
 give a higher death probability to a tree that died than to one that
 survived? Each observation stands for `n_at_risk` Bernoulli trials of
 which `n_died` are deaths, all sharing that observation’s predicted
-probability, so rather than expand the trials we weight them, with tied
-predictions taking half credit (the standard Mann-Whitney treatment).
+probability of death over the interval, so rather than expand the trials
+we weight them, with tied predictions taking half credit (the standard
+Mann-Whitney treatment). Written out:
 
 ``` r
 
@@ -265,13 +279,8 @@ auc_binom <- function(p, pos, neg) {
   sum(g$pos * (neg_below + 0.5 * g$neg)) / den    # 0.5 credit for ties
 }
 
-counts <- rbind(
-  obs_dt[,   .(siteID, year, species, n_at_risk, n_died, split = "train")],
-  obs_test[, .(siteID, year, species, n_at_risk, n_died, split = "holdout")])
-mort_pred <- merge(obs_pred, counts, by = c("siteID", "year", "species", "split"))
-
-auc_tab <- mort_pred[is.finite(value) & n_at_risk > 0,
-  .(AUC     = round(auc_binom(value, n_died, n_at_risk - n_died), 3),
+auc_tab <- mort_pred[n_at_risk > 0,
+  .(AUC     = round(auc_binom(p_interval, n_died, n_at_risk - n_died), 3),
     deaths  = sum(n_died),
     at_risk = sum(n_at_risk)), by = .(model, split)]
 auc_tab[order(split, -AUC)]
@@ -284,13 +293,204 @@ auc_tab[order(split, -AUC)]
 ```
 
 0.5 is coin-flipping, 1.0 is perfect ranking.
+[`evaluate()`](https://finnverse.github.io/FINN/reference/evaluate.md)
+computes the same AUC in its skill table, next to the ratio of the
+predicted to the observed deaths (the expected deaths
+`n_at_risk * p_interval` summed over the cells):
+
+``` r
+
+skill_of <- function(ev, label)
+  rbind(ev$train$skill[variable == "mort", .(model = label, split = "train", AUC = round(auc, 3),
+                                             deaths_ratio = round(deaths_ratio, 2))],
+        ev$holdout$skill[variable == "mort", .(model = label, split = "holdout", AUC = round(auc, 3),
+                                               deaths_ratio = round(deaths_ratio, 2))])
+rbind(skill_of(ev, "Process (mechanistic)"), skill_of(ev_mort, "Hybrid (mortality = NN)"))
+#>                      model   split   AUC deaths_ratio
+#>                     <char>  <char> <num>        <num>
+#> 1:   Process (mechanistic)   train 0.639         1.30
+#> 2:   Process (mechanistic) holdout 0.524         1.25
+#> 3: Hybrid (mortality = NN)   train 0.643         0.43
+#> 4: Hybrid (mortality = NN) holdout 0.537         0.45
+```
+
+[`plot()`](https://rspatial.github.io/terra/reference/plot.html) of the
+evaluation draws the ROC curve behind it, here of the mechanistic model
+on the holdout (`response` keeps the mortality panel only; without it
+the page also shows the other responses):
+
+``` r
+
+plot(ev, response = "mort")
+```
+
+![](E/E-roc-holdout-1.png)
+
+and on its training sites:
+
+``` r
+
+plot(ev, response = "mort", set = "train")
+```
+
+![](E/E-roc-train-1.png)
+
+[`summary()`](https://rspatial.github.io/terra/reference/summary.html)
+prints the skill tables of both sets with the AUC, followed by the
+convergence of the fit and the environmental effects. The environmental
+effects take long on all 200 training sites, so `env` and `init_cohort`
+give them a subset of 30 sites:
+
+``` r
+xai_sites <- sort(unique(env_dt$siteID))[1:30]
+env_xai   <- env_dt[siteID %in% xai_sites]
+init_xai  <- makeInitCohorts(init_trees[siteID %in% xai_sites], Nspecies = Nsp)
+summary(m, env = env_xai, init_cohort = init_xai)
+FINN model summary
+==================
+
+## Skill (observed vs simulated, aggregated as fit() scores)
+
+Training data:
+ response      R2 correlation     RMSE     bias pred/obs    n   AUC
+      dbh  0.6308       0.833 13.50357 -5.46851    0.863 1048    NA
+       ba  0.9353       0.971  0.12872 -0.01282    0.892 4400    NA
+    trees  0.8000       0.895  0.75783  0.04324    1.068 4400    NA
+   growth  0.2118       0.559  0.00775 -0.00138    0.875 1003    NA
+     mort  0.0741       0.383  0.10492 -0.00778    1.004 1003 0.639
+      reg -0.0273       0.240  6.15605  0.21111    1.138 4400    NA
+ deaths pred/obs
+              NA
+              NA
+              NA
+              NA
+             1.3
+              NA
+
+Holdout:
+ response      R2 correlation     RMSE     bias pred/obs    n   AUC
+      dbh  0.4645      0.7412 13.90761 -4.79831    0.868 1048    NA
+       ba  0.9233      0.9680  0.09635 -0.01028    0.882 4400    NA
+    trees  0.8066      0.8986  0.78260  0.02472    1.039 4400    NA
+   growth  0.2984      0.6035  0.00773 -0.00046    0.960 1000    NA
+     mort -0.0256     -0.0208  0.09162 -0.00525    1.006  994 0.524
+      reg  0.0906      0.3144  6.03722  0.09746    1.063 4400    NA
+ deaths pred/obs
+              NA
+              NA
+              NA
+              NA
+            1.25
+              NA
+
+## Convergence
+
+Loss: the largest change is dbh, -1.90 % over the last 50 epochs (mean of the last 50 epochs against the 50 before).
+         term loss_now  change
+          dbh   0.3787 -1.90 %
+           ba   0.0658 -0.07 %
+        trees   0.3293 -0.09 %
+       growth   0.5962 -1.01 %
+    mortality   0.9526  0.15 %
+ regeneration   0.5670 -0.33 %
+
+Parameters: how much they moved over the last 50 epochs (from the parameters of every epoch).
+  The change is the size of the step the values took, as a percentage of the size of the values:
+  100 x |values now - values then| / |values then|, over all species of a parameter (or all weights
+  of a network layer). 1 % means the values moved by about a hundredth of their size.
+  The species parameter that moved most: mortality: growth, 8.84 %; the largest change overall: mortality: growth, 8.84 %.
+      process                   part                      moved most change
+       growth     species parameters              growth: size decay 4.25 %
+       growth environmental response              nn_growth.0.weight 5.45 %
+    mortality     species parameters               mortality: growth 8.84 %
+    mortality environmental response           nn_mortality.0.weight 2.69 %
+ regeneration     species parameters regeneration: light requirement 7.56 %
+ regeneration environmental response        nn_regeneration.0.weight 2.44 %
+ regeneration     recruit dispersion          par_theta_recruits_raw 0.00 %
+ regeneration        recruitment cap                        reg_logK 0.01 %
+  competition     species parameters           competition: strength 4.08 %
+
+## Environment
+
+### GROWTH
+
+Analytical ALE importance (rate-normalised) (species in columns):
+ variable Pseudotsuga menziesii Pinus ponderosa Pinus contorta Abies concolor
+     prec                0.3162          0.2559          0.020         0.0162
+     temp                0.0671          0.0132          0.101         0.3665
+ Abies grandis Tsuga heterophylla Tsuga mertensiana Lithocarpus densiflorus
+       0.00264            0.00588            0.0247                   0.193
+       0.01798            0.89255            0.2413                   0.431
+ Alnus rubra Abies amabilis  other
+     0.00747          6.049 0.2916
+     0.59406          0.564 0.0793
+
+Average conditional effects (mean; species in columns):
+ variable Pseudotsuga menziesii Pinus ponderosa Pinus contorta Abies concolor
+     temp             -0.000777       -0.000807        0.00309       -0.00647
+     prec              0.001979        0.011100       -0.00271        0.00240
+ Abies grandis Tsuga heterophylla Tsuga mertensiana Lithocarpus densiflorus
+      0.001585             0.0301           0.00446                -0.00580
+     -0.000653             0.0047           0.00156                -0.00471
+ Alnus rubra Abies amabilis    other
+    -0.00835        0.00374 -0.00131
+     0.00103       -0.02102  0.00282
+
+### MORTALITY
+
+Analytical ALE importance (rate-normalised) (species in columns):
+ variable Pseudotsuga menziesii Pinus ponderosa Pinus contorta Abies concolor
+     temp                 8.533         1.98970          0.211           1.26
+     prec                 0.407         0.00817          0.990           3.31
+ Abies grandis Tsuga heterophylla Tsuga mertensiana Lithocarpus densiflorus
+         0.867             0.6833            0.0683                   5.086
+         0.101             0.0117            1.0807                   0.544
+ Alnus rubra Abies amabilis    other
+      0.1066         0.5951 0.154370
+      0.0326         0.0342 0.000396
+
+Average conditional effects (mean; species in columns):
+ variable Pseudotsuga menziesii Pinus ponderosa Pinus contorta Abies concolor
+     prec              -0.00763       -0.000712        0.00876        0.00461
+     temp               0.00873        0.003568        0.00371       -0.00324
+ Abies grandis Tsuga heterophylla Tsuga mertensiana Lithocarpus densiflorus
+      -0.00765           0.000747           -0.0245                 0.00411
+       0.01338          -0.001029           -0.0055                -0.00659
+ Alnus rubra Abies amabilis     other
+     0.00322       -0.00691 -8.76e-05
+     0.00461       -0.01584 -1.53e-03
+
+### REGENERATION
+
+Analytical ALE importance (rate-normalised) (species in columns):
+ variable Pseudotsuga menziesii Pinus ponderosa Pinus contorta Abies concolor
+     prec                0.0283           0.553          0.443         0.9998
+     temp                0.7742           0.691          1.212         0.0235
+ Abies grandis Tsuga heterophylla Tsuga mertensiana Lithocarpus densiflorus
+         0.275             1.0666              1.50                    0.55
+         1.261             0.0073              1.75                    1.54
+ Alnus rubra Abies amabilis other
+       0.340           9.76 2.621
+       0.912           1.49 0.567
+
+Average conditional effects (mean; species in columns):
+ variable Pseudotsuga menziesii Pinus ponderosa Pinus contorta Abies concolor
+     prec                0.0774          -0.738         -0.481       -0.12727
+     temp                0.3236           0.113         -0.580       -0.00943
+ Abies grandis Tsuga heterophylla Tsuga mertensiana Lithocarpus densiflorus
+        -0.174            0.15469             0.329                  0.0379
+        -0.317           -0.00442            -0.432                  0.0827
+ Alnus rubra Abies amabilis  other
+      0.1095         0.0718  0.128
+      0.0836        -0.0503 -0.050
+```
 
 Read the two splits **together**, because the gap between them is the
-result. On the training sites the model ranks deaths above survivors
-better than chance, so there *is* a learnable mortality signal, and the
-model finds it. On the held-out sites that skill collapses to ~0.5. The
-model is not failing to fit mortality; it is fitting it and **not
-generalising**.
+result. On the training sites the models rank deaths above survivors
+better than chance (AUC 0.64 and 0.64), so there *is* a learnable
+mortality signal, and the models find it. On the held-out sites that
+skill falls to 0.52 and 0.54, close to 0.5. The model is not failing to
+fit mortality; it is fitting it and **not generalising**.
 
 That is what a few hundred deaths buys. With ~69% of observations at
 exactly zero and mortality concentrated in whichever species happened to
@@ -434,11 +634,29 @@ table per process, so the same tool reads a mechanistic mortality
 function and a neural network standing in its place. The effect is on
 the yearly mortality **probability**.
 
+We read the effects over the same 30 training sites as
+[`summary()`](https://rspatial.github.io/terra/reference/summary.html)
+above (without `env` and `init_cohort`,
+[`ALE()`](https://finnverse.github.io/FINN/reference/ALE.md) uses all
+training sites the model keeps from
+[`fit()`](https://finnverse.github.io/FINN/reference/fit.md)).
+[`plot()`](https://rspatial.github.io/terra/reference/plot.html) draws
+the environmental drivers, one line per species, here for the network:
+
 ``` r
 
-FINN.seed(1)
-ale_proc <- ALE(m,      env_dt, init_cohorts, plot = FALSE)
-ale_hyb  <- ALE(m_mort, env_dt, init_cohorts, plot = FALSE)
+ale_proc <- ALE(m,      env = env_xai, init_cohort = init_xai, plot = FALSE)
+ale_hyb  <- ALE(m_mort, env = env_xai, init_cohort = init_xai, plot = FALSE)
+plot(ale_hyb, process = "mortality")
+```
+
+![](E/E-ale-network-1.png)
+
+To compare the two models on the same axes, we put both tables together,
+on the natural scale of the climate drivers:
+
+``` r
+
 
 to_natural <- function(a, model) {
   sc <- as.data.table(model$env_scaling)[, .(var = variable, center, scale)]
@@ -503,14 +721,13 @@ sessionInfo()
 #> [4] FINN_0.2.0         
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] Matrix_1.7-3       bit_4.6.0          gtable_0.3.6       dplyr_1.1.4       
-#>  [5] compiler_4.5.0     tidyselect_1.2.1   Rcpp_1.1.2         callr_3.7.6       
-#>  [9] splines_4.5.0      scales_1.4.0       lattice_0.22-6     R6_2.6.1          
-#> [13] labeling_0.4.3     generics_0.1.4     knitr_1.50         tibble_3.3.0      
-#> [17] pillar_1.11.0      RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57         
-#> [21] bit64_4.6.0-1      viridisLite_0.4.2  cli_3.6.6          withr_3.0.2       
-#> [25] magrittr_2.0.3     mgcv_1.9-1         ps_1.9.1           grid_4.5.0        
-#> [29] processx_3.8.6     lifecycle_1.0.5    nlme_3.1-168       coro_1.1.0        
-#> [33] vctrs_0.6.5        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      
-#> [37] abind_1.4-8        tools_4.5.0        pkgconfig_2.0.3
+#>  [1] vctrs_0.6.5        cli_3.6.6          knitr_1.50         rlang_1.2.0       
+#>  [5] xfun_0.57          processx_3.8.6     generics_0.1.4     coro_1.1.0        
+#>  [9] labeling_0.4.3     glue_1.8.0         bit_4.6.0          ps_1.9.1          
+#> [13] scales_1.4.0       grid_4.5.0         abind_1.4-8        evaluate_1.0.5    
+#> [17] tibble_3.3.0       lifecycle_1.0.5    compiler_4.5.0     dplyr_1.1.4       
+#> [21] RColorBrewer_1.1-3 Rcpp_1.1.2         pkgconfig_2.0.3    farver_2.1.2      
+#> [25] R6_2.6.1           tidyselect_1.2.1   pillar_1.11.0      callr_3.7.6       
+#> [29] magrittr_2.0.3     withr_3.0.2        tools_4.5.0        bit64_4.6.0-1     
+#> [33] gtable_0.3.6
 ```

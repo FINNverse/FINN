@@ -74,7 +74,7 @@ and the vignette <em>Preparing your data for FINN</em>
 tree list.</p>
 <p>The short version: build <code>data</code> and <code>env</code> with <code><a href="makeObsData.html">makeObsData()</a></code> and
 <code><a href="resolveSiteIDs.html">resolveSiteIDs()</a></code>, the initial trees with <code><a href="makeInitCohorts.html">makeInitCohorts()</a></code>,
-and pass them to <code>fit(data = , env = , init_cohort = )</code>. The three helpers
+and pass them to <code><a href="fit.html">fit(data = , env = , init_cohort = )</a></code>. The three helpers
 produce exactly the columns below.</p>
     </div>
 
@@ -143,7 +143,7 @@ after its last are simulated but not scored.</p>
 <p><strong>Units.</strong> Use the units of your inventory consistently: <code>dbh</code> in cm,
 areas in m2 per patch of <code>patch_size</code> ha, recruits per hectare. The
 per-hectare quantities depend on <code>patch_size</code>, so pass the plot size of
-the inventory to <code>fit(patch_size = )</code>.</p>
+the inventory to <code><a href="fit.html">fit(patch_size = )</a></code>.</p>
 <p></p><div class="sourceCode r"><pre><code><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fia_obs_dt</span><span class="op">[</span>, <span class="fu">.</span><span class="op">(</span><span class="va">siteID</span>, <span class="va">year</span>, <span class="va">period_length</span>, <span class="va">species</span>, <span class="va">dbh</span>, <span class="va">ba</span>, <span class="va">trees</span>, <span class="va">growth</span>, <span class="va">mort</span>,</span>
 <span>                    <span class="va">reg</span>, <span class="va">n_at_risk</span>, <span class="va">growth_n</span><span class="op">)</span><span class="op">]</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="co">#&gt;    siteID  year period_length species    dbh    ba trees  growth  mort   reg n_at_risk growth_n</span></span>
@@ -175,7 +175,7 @@ from the initial trees at year 0, so an inventory at year 10 is compared
 with the stand after ten simulated years and <code>env</code> starts at year 1.</p>
 <p>A climate that does not change between years is repeated for every year,
 as here; a year-by-year climate gives every step its own row. Which
-columns a process uses is set by <code>createProcess(formula = )</code>, e.g.
+columns a process uses is set by <code><a href="createProcess.html">createProcess(formula = )</a></code>, e.g.
 <code>~ temp + prec</code>; the default <code>~.</code> uses every predictor column.</p>
     </div>
     <div class="section level2">
@@ -192,11 +192,11 @@ happens. <code>NULL</code> (the default) means no disturbance.</p>
     <h2 id="init-cohort-the-initial-trees"><code>init_cohort</code> – the initial trees<a class="anchor" aria-label="anchor" href="#init-cohort-the-initial-trees"></a></h2>
 
 
-<p>A <code>CohortMat</code>, the trees of every site at the first census grouped into
+<p>A <a href="CohortMat.html">CohortMat</a>, the trees of every site at the first census grouped into
 cohorts of one species and one diameter per patch, built by
 <code><a href="makeInitCohorts.html">makeInitCohorts()</a></code> from a table with <code>siteID</code>, <code>patchID</code>, <code>species</code>,
 <code>dbh</code> and optionally <code>trees</code> (stems the row stands for, default 1).
-<code>makeInitCohorts(dbh_binsize = )</code> bins the diameters into fewer, cheaper
+<code><a href="makeInitCohorts.html">makeInitCohorts(dbh_binsize = )</a></code> bins the diameters into fewer, cheaper
 cohorts; without it every tree is a cohort, which the per-tree scoring
 needs. The number of patches per site is read from <code>init_cohort</code>, so
 <code>fit(patches = )</code> is ignored when it is given. Without <code>init_cohort</code> every

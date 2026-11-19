@@ -94,7 +94,7 @@ axis. Default TRUE.</p></dd>
 the inventory (0, 1, 2, ...), one simulation step is one census interval
 (<code>period_length = 1</code>), <code>env_dt</code> keeps the inventory years, and
 the observations of the first inventory stay in <code>obs_dt</code>. Use it
-with <code>makeObsData(rates = "interval")</code>. Unlike 0.1.0, which built
+with <code><a href="makeObsData.html">makeObsData(rates = "interval")</a></code>. Unlike 0.1.0, which built
 the initial cohorts from the second inventory, the census axis now
 starts from the first one, so 0.1.0 results are not reproduced exactly.</p></dd>
 
@@ -106,7 +106,7 @@ calendar year).</p></li>
 <li><p><code>tree_dt</code>: tree table with indices and standardized species.</p></li>
 <li><p><code>env_dt</code>: environment table with indices, the years of the
 simulation: <code>siteID</code>, <code>year</code> and the predictors, what
-<code>fit(env = )</code> takes (<code>siteID_dt</code> maps the ids back to the
+<code><a href="fit.html">fit(env = )</a></code> takes (<code>siteID_dt</code> maps the ids back to the
 site names).</p></li>
 <li><p><code>obs_dt</code>: site-aggregated observations by species, with
 <code>period_length</code>.</p></li>
@@ -114,9 +114,13 @@ site names).</p></li>
 <li><p><code>species_dt</code>: species lookup (<code>species</code>, <code>species_name</code>).</p></li>
 <li><p><code>initCohorts</code> (optional): FINN <code>CohortMat</code> object.</p></li>
 <li><p><code>initCohort_dt</code> (optional): trees used to build cohorts.</p></li>
-</ul><p><code>initCohorts</code> holds torch tensors, which <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code> cannot store:
-after <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS()</a></code> they fail with "external pointer is not valid". The
-tables survive, so rebuild the cohorts after reading:
+</ul><p>The list can be stored with <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code> and read back with
+<code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS()</a></code>: <code>initCohorts</code> keeps a plain R copy of its arrays and
+rebuilds its torch tensors, which <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code> cannot store, when
+<code><a href="fit.html">fit()</a></code>, <code><a href="predict.finn_class.html">simulateForest()</a></code> or <code><a href="predict.finn_class.html">predict.finn_class()</a></code>
+use it (or by <code>x$initCohorts$restore()</code>, see <code><a href="CohortMat.html">CohortMat</a></code>).
+Cohorts saved with FINN before 0.2.0 carry no such copy; rebuild them from
+the table with
 <code>x$initCohorts &lt;- makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt))</code>.</p>
     </div>
     <div class="section level2">

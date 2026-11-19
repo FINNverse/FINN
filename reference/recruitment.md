@@ -20,8 +20,8 @@ One simulated year of recruitment runs in three steps. The regeneration
 process returns an EXPECTED recruitment per hectare for every site,
 patch and species. This rate is turned into a whole number of recruits
 per patch, which enter the stand as new cohorts at
-`finn(recruits_dbh = )`. During
-[`fit()`](https://finnverse.github.io/FINN/reference/fit.md) the
+[`finn(recruits_dbh = )`](https://finnverse.github.io/FINN/reference/finn.md).
+During [`fit()`](https://finnverse.github.io/FINN/reference/fit.md) the
 expected rate (not the drawn recruits), summed over an observation
 interval, is compared with the observed `reg` by the regeneration
 likelihood.
@@ -32,8 +32,8 @@ The process is the `func` of the regeneration process passed to
 `finn(regeneration_process = )`. All mechanistic variants share the same
 core: a light response gated by the species parameter `parReg`, times
 the environmental response `exp(env)`, plus the additive floor
-`createProcess(reg_floor = )` of the regeneration process (default
-`1e-3` stems per ha and year).
+[`createProcess(reg_floor = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
+of the regeneration process (default `1e-3` stems per ha and year).
 
 - [`regeneration()`](https://finnverse.github.io/FINN/reference/regeneration.md):
   the core alone. The expected recruitment is not bounded; it grows with
@@ -62,7 +62,8 @@ the environmental response `exp(env)`, plus the additive floor
   its own adults (stems above an adult threshold `x`) pooled over the
   patches of the site. A species without adults on a site recruits only
   at `reg_floor`. `x` and `A_half` are declared through
-  `createProcess(custom_parameters = )`; see its help page.
+  [`createProcess(custom_parameters = )`](https://finnverse.github.io/FINN/reference/createProcess.md);
+  see its help page.
 
 - [`regeneration_adult_effect()`](https://finnverse.github.io/FINN/reference/regeneration_adult_effect.md):
   the adult density as an effect on recruitment instead of a gate,
@@ -87,7 +88,8 @@ them.
 ## From expected recruitment to recruits
 
 The expected rate per ha times `patch_size` (in ha) is the expected
-number of recruits per patch. `createProcess(sample_regeneration = )`
+number of recruits per patch.
+[`createProcess(sample_regeneration = )`](https://finnverse.github.io/FINN/reference/createProcess.md)
 decides how it becomes a whole number:
 
 - `sample_regeneration = TRUE` (default): recruits are drawn from a
@@ -127,12 +129,13 @@ control it:
   or not. Default `0.5` since 0.2.0; `0` or `NULL` removes it. A fixed
   `dispersion_parameter` below the floor is raised to the floor.
 
-With the default `fit(rb_gradient = TRUE)`, `theta` is set only by the
-regeneration likelihood. On sparse, zero-heavy recruitment data the
-likelihood optimum of `theta` is very small: a small `theta` widens the
-likelihood and so lowers the loss without improving the predicted mean,
-and the same small `theta` makes the simulated draws bursty. A free
-`theta` can therefore run away.
+With the default
+[`fit(rb_gradient = TRUE)`](https://finnverse.github.io/FINN/reference/fit.md),
+`theta` is set only by the regeneration likelihood. On sparse,
+zero-heavy recruitment data the likelihood optimum of `theta` is very
+small: a small `theta` widens the likelihood and so lowers the loss
+without improving the predicted mean, and the same small `theta` makes
+the simulated draws bursty. A free `theta` can therefore run away.
 
 What the floor does: it keeps the fit stable, and in a fit run to
 convergence it costs nothing we could resolve. In one converged pair of
@@ -154,15 +157,16 @@ recruitment level only once the parameters have settled
 
 ## The likelihood and the observation operator
 
-`fit(loss_family = c(regeneration = ))` chooses the regeneration
-likelihood. `"nbinom"` (default) uses `theta` as above. `"poisson"` has
-no dispersion parameter and so cannot collapse; `theta` then only shapes
-the recruit draw.
+[`fit(loss_family = c(regeneration = ))`](https://finnverse.github.io/FINN/reference/fit.md)
+chooses the regeneration likelihood. `"nbinom"` (default) uses `theta`
+as above. `"poisson"` has no dispersion parameter and so cannot
+collapse; `theta` then only shapes the recruit draw.
 
-`finn(recruit_obs_weight = w)` is an observation operator: it maps the
-predicted and the observed recruitment per ha alike into the count space
-of the sampling design before they are compared, so that the likelihood
-sees the counts that were actually tallied. For an angle-count inventory
+[`finn(recruit_obs_weight = w)`](https://finnverse.github.io/FINN/reference/finn.md)
+is an observation operator: it maps the predicted and the observed
+recruitment per ha alike into the count space of the sampling design
+before they are compared, so that the likelihood sees the counts that
+were actually tallied. For an angle-count inventory
 `w = g(recruits_dbh) / BAF`. For a fixed-radius small-tree plot that
 counts the stems in a diameter band below the recruitment threshold,
 
@@ -180,19 +184,22 @@ In 0.2.0 `recruit_obs_weight` is applied **only** under `"nbinom"`. With
 term scores the per-ha values as they are and `recruit_obs_weight` has
 no effect, without a warning; the Poisson variance then is that of a
 per-ha value, not of the tallied count. The Poisson term adds
-`fit(trees_offset = )` (default `0.01`) to the prediction.
+[`fit(trees_offset = )`](https://finnverse.github.io/FINN/reference/fit.md)
+(default `0.01`) to the prediction.
 
 ## Feeding observed recruitment
 
-`fit(loss_recruit = "observed")` drives the simulated stand with the
-observed recruitment instead of the regeneration process. The observed
-`reg` divided by `period_length` is the expected recruitment per ha and
-year in every year of that interval; times `patch_size` it is drawn per
-patch by the recruit sampler, as above. Growth, mortality and
-competition run and are trained as usual. The regeneration term is
-weighted 0 and every regeneration parameter (species parameters,
-environment response, cap, `theta`, custom parameters) is frozen for
-that call. [`predict()`](https://rdrr.io/r/stats/predict.html) and
+[`fit(loss_recruit = "observed")`](https://finnverse.github.io/FINN/reference/fit.md)
+drives the simulated stand with the observed recruitment instead of the
+regeneration process. The observed `reg` divided by `period_length` is
+the expected recruitment per ha and year in every year of that interval;
+times `patch_size` it is drawn per patch by the recruit sampler, as
+above. Growth, mortality and competition run and are trained as usual.
+The regeneration term is weighted 0 and every regeneration parameter
+(species parameters, environment response, cap, `theta`, custom
+parameters) is frozen for that call.
+[`predict()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
+and
 [`simulateForest()`](https://finnverse.github.io/FINN/reference/predict.finn_class.md)
 take `recruits = "observed"` and the table `obs_recruits` to simulate
 the same way. With observed recruitment the model is not an autonomous
