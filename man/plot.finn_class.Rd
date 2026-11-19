@@ -4,32 +4,35 @@
 \alias{plot.finn_class}
 \title{Plot the fitted parameters of a FINN model}
 \usage{
-\method{plot}{finn_class}(x, what = c("all", "process", "env"), species = NULL, env = NULL, ...)
+\method{plot}{finn_class}(x, pars = c("process", "env"), species = NULL, env = NULL, ...)
 }
 \arguments{
 \item{x}{A model built by \code{\link[=finn]{finn()}}, usually fitted with \code{\link[=fit]{fit()}}.}
 
-\item{what}{Which panels: \code{"all"} (default) both, \code{"process"} the process
-parameters only, \code{"env"} the environmental niches only.}
+\item{pars}{Which parameters: \code{"process"} (default) the species-specific
+process parameters, \code{"env"} the environmental niches. The argument and its
+two values are those of the \code{plot()} method of FINN 0.1.0, so a call such
+as \code{plot(m, pars = "env")} keeps working.}
 
 \item{species}{Species numbers to draw; \code{NULL} (default) all.}
 
 \item{env}{Table whose predictor ranges the niches span; \code{NULL} (default)
-the environment the model was fitted on.}
+the environment the model was fitted on. Only used with \code{pars = "env"}.}
 
 \item{...}{Unused.}
 }
 \value{
-The \code{ggplot} objects, invisibly: a list with elements \code{process} and
-\code{env} (each \code{NULL} when not drawn). Each plot is printed.
+The \code{ggplot} object, invisibly (\code{NULL} when there is nothing to
+draw); it is printed.
 }
 \description{
 Draws the fitted parameters themselves, per species, on the scale on which
-they enter the model -- no simulation is involved.
+they enter the model -- no simulation is involved. By default the process
+parameters; \code{pars = "env"} switches to the environmental niches.
 }
 \details{
 \itemize{
-\item \strong{Process parameters} (\code{what = "process"}): one panel per parameter of the
+\item \strong{Process parameters} (\code{pars = "process"}, the default): one panel per parameter of the
 growth, mortality, regeneration and competition processes, and the recruit
 dispersion \code{theta}; one point per species, on the constrained scale the
 process function uses. The admissible range set by
@@ -37,7 +40,7 @@ process function uses. The admissible range set by
 \code{theta} it starts at the floor \code{createProcess(theta_floor)}), so a species
 whose parameter ended the fit at a bound -- drawn as an open triangle -- is
 visible at a glance (see \code{?createProcess} on what such a parameter means).
-\item \strong{Environmental niches} (\code{what = "env"}): for each process whose
+\item \strong{Environmental niches} (\code{pars = "env"}): for each process whose
 environmental response is linear (no \code{hidden}, no custom \code{NN}, not
 \code{\link[=createHybrid]{createHybrid()}}), the fitted environmental term of every species across
 the range each predictor covers in \code{env}, with the other predictors held at
@@ -66,7 +69,7 @@ fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% si
     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
 plot(m)
-plot(m, what = "env", species = 1:3)
+plot(m, pars = "env", species = 1:3)
 \dontshow{\}) # examplesIf}
 }
 \seealso{

@@ -366,14 +366,15 @@ someone who was affected.
   the species-specific parameters of every process and the recruit dispersion
   `theta` on the scale they act on, each against its admissible range from
   `createProcess(lower, upper)`, so a parameter that ended the fit at a bound
-  stands out; and, for every process whose environmental response is linear,
-  the fitted environmental term over the range each predictor covers in the
-  training data, on the predictor's original scale. A process with a neural
-  network response is skipped with a warning that points to `ALE()`.
-  `what = "process"` / `"env"` and `species =` select. In 0.1.0 this method
-  was undocumented, failed on a bare call (a length-2 condition in `if()`,
-  an error since R 4.2.0) and drew the first-layer weights of the
-  environmental network as bars.
+  stands out. `pars = "env"` switches to the environmental niches: for every
+  process whose environmental response is linear, the fitted environmental
+  term over the range each predictor covers in the training data, on the
+  predictor's original scale; a process with a neural network response is
+  skipped with a warning that points to `ALE()`. `species =` selects species.
+  The argument `pars` and its values `"process"` / `"env"` are those of 0.1.0,
+  where the method was undocumented, failed on a bare call (a length-2
+  condition in `if()`, an error since R 4.2.0) and drew the first-layer
+  weights of the environmental network as bars.
 
 * **`plot()` of a simulation.** `simulateForest()` and `predict()` return a
   list of class `finn_simulation` (the tables inside are unchanged), and

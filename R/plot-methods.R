@@ -126,9 +126,10 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #' Plot the fitted parameters of a FINN model
 #'
 #' Draws the fitted parameters themselves, per species, on the scale on which
-#' they enter the model -- no simulation is involved.
+#' they enter the model -- no simulation is involved. By default the process
+#' parameters; `pars = "env"` switches to the environmental niches.
 #'
-#' * **Process parameters** (`what = "process"`): one panel per parameter of the
+#' * **Process parameters** (`pars = "process"`, the default): one panel per parameter of the
 #'   growth, mortality, regeneration and competition processes, and the recruit
 #'   dispersion `theta`; one point per species, on the constrained scale the
 #'   process function uses. The admissible range set by
@@ -136,7 +137,7 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #'   `theta` it starts at the floor `createProcess(theta_floor)`), so a species
 #'   whose parameter ended the fit at a bound -- drawn as an open triangle -- is
 #'   visible at a glance (see `?createProcess` on what such a parameter means).
-#' * **Environmental niches** (`what = "env"`): for each process whose
+#' * **Environmental niches** (`pars = "env"`): for each process whose
 #'   environmental response is linear (no `hidden`, no custom `NN`, not
 #'   [createHybrid()]), the fitted environmental term of every species across
 #'   the range each predictor covers in `env`, with the other predictors held at
@@ -150,14 +151,16 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #'   Competition does not depend on the environment.
 #'
 #' @param x A model built by [finn()], usually fitted with [fit()].
-#' @param what Which panels: `"all"` (default) both, `"process"` the process
-#'   parameters only, `"env"` the environmental niches only.
+#' @param pars Which parameters: `"process"` (default) the species-specific
+#'   process parameters, `"env"` the environmental niches. The argument and its
+#'   two values are those of the `plot()` method of FINN 0.1.0, so a call such
+#'   as `plot(m, pars = "env")` keeps working.
 #' @param species Species numbers to draw; `NULL` (default) all.
 #' @param env Table whose predictor ranges the niches span; `NULL` (default)
-#'   the environment the model was fitted on.
+#'   the environment the model was fitted on. Only used with `pars = "env"`.
 #' @param ... Unused.
-#' @return The `ggplot` objects, invisibly: a list with elements `process` and
-#'   `env` (each `NULL` when not drawn). Each plot is printed.
+#' @return The `ggplot` object, invisibly (`NULL` when there is nothing to
+#'   draw); it is printed.
 #' @seealso [ALE()] for the effect of a network response, [summary.finn_class()]
 #'   for importances, [plot.finn_simulation()] for a simulation.
 #' @examplesIf torch::torch_is_installed()
@@ -174,14 +177,14 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #'     init_cohort = init, epochs = 2L, patches = 4, patch_size = 0.06,
 #'     plot_progress = FALSE)
 #' plot(m)
-#' plot(m, what = "env", species = 1:3)
+#' plot(m, pars = "env", species = 1:3)
 #' @export
-plot.finn_class = function(x, what = c("all", "process", "env"), species = NULL, env = NULL, ...) {
-  what = match.arg(what)
+plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = NULL, ...) {
+  pars = match.arg(pars)
   sp = species_subset(species, x$N_species)
-  out = list(process = NULL, env = NULL)
+  out = NULL
 
-  if (what %in% c("all", "process")) {
+  if (pars == "process") {
     df = process_parameter_table(x, sp)
     if (is.null(df)) {
       message("This model has no species-specific process parameters to plot.")
@@ -203,11 +206,11 @@ plot.finn_class = function(x, what = c("all", "process", "env"), species = NULL,
         ggplot2::theme_minimal() +
         ggplot2::theme(panel.grid.minor = ggplot2::element_blank(), legend.position = "bottom")
       print(p)
-      out$process = p
+      out = p
     }
   }
 
-  if (what %in% c("all", "env")) {
+  if (pars == "env") {
     env_tab = if (is.null(env)) x$train_env else env
     if (is.null(env_tab)) {
       warning("No environment to take the predictor ranges from: fit the model first or pass `env`.", call. = FALSE)
@@ -227,7 +230,7 @@ plot.finn_class = function(x, what = c("all", "process", "env"), species = NULL,
           ggplot2::theme_minimal() +
           ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
         print(p)
-        out$env = p
+        out = p
       }
     }
   }

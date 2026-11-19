@@ -7,12 +7,12 @@ test_that("plot() of a model draws the parameters inside their bounds and the li
   m <- toy$model
 
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+  # the bare call draws the process parameters
   p <- plot(m)
-  expect_named(p, c("process", "env"))
-  expect_s3_class(p$process, "ggplot")
-  expect_s3_class(p$env, "ggplot")
+  expect_s3_class(p, "ggplot")
+  expect_true(all(c("lower", "upper", "at_bound") %in% names(p$data)))
 
-  par_df <- p$process$data
+  par_df <- p$data
   # every species-specific process parameter, on the constrained scale, inside its band
   expect_setequal(unique(par_df$process), c("growth", "mortality", "regeneration", "competition"))
   expect_true(all(par_df$value >= par_df$lower - 1e-6 & par_df$value <= par_df$upper + 1e-6))
@@ -22,7 +22,10 @@ test_that("plot() of a model draws the parameters inside their bounds and the li
   expect_equal(par_df$value[par_df$process == "growth" & par_df$parameter == "size decay"], g[, 2],
                tolerance = 1e-6)
 
-  env_df <- p$env$data
+  # pars = "env", the argument and value of the 0.1.0 method, switches to the niches
+  pe <- plot(m, pars = "env")
+  expect_s3_class(pe, "ggplot")
+  env_df <- pe$data
   expect_setequal(unique(as.character(env_df$process)), c("growth", "mortality", "regeneration"))
   expect_setequal(unique(env_df$predictor), c("temp", "prec"))
   # the x axis spans the training range of each predictor on its original scale
@@ -32,10 +35,10 @@ test_that("plot() of a model draws the parameters inside their bounds and the li
   expect_lt(max(abs(diff(diff(one$value)))), 1e-4)
 
   # subsets
-  p1 <- plot(m, what = "process", species = 1:2)
-  expect_null(p1$env)
-  expect_setequal(as.integer(as.character(p1$process$data$species)), 1:2)
+  p1 <- plot(m, pars = "process", species = 1:2)
+  expect_setequal(as.integer(as.character(p1$data$species)), 1:2)
   expect_error(plot(m, species = 99), "species")
+  expect_error(plot(m, pars = "all"), "should be one of")
 })
 
 test_that("plot() of a model skips a network response with a warning", {
@@ -49,10 +52,12 @@ test_that("plot() of a model skips a network response with a warning", {
   suppressMessages(fit(m, env = toy$env, data = toy$obs, init_cohort = toy$init, epochs = 1L,
                        patches = 4, patch_size = 0.06, plot_progress = FALSE))
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  expect_warning(p <- plot(m, what = "env"), "neural network.*ALE")
-  expect_false("growth" %in% as.character(p$env$data$process))
+  expect_warning(p <- plot(m, pars = "env"), "neural network.*ALE")
+  expect_false("growth" %in% as.character(p$data$process))
+  # the process parameters of the network process are still drawn
+  expect_true("growth" %in% plot(m)$data$process)
   # an unfitted model has no range to span
-  expect_warning(plot(finn(N_species = toy$Nsp, recruits_dbh = 12.9), what = "env"), "fit the model first")
+  expect_warning(plot(finn(N_species = toy$Nsp, recruits_dbh = 12.9), pars = "env"), "fit the model first")
 })
 
 test_that("a simulation has class finn_simulation and plot() draws it", {
