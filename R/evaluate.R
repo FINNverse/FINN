@@ -286,7 +286,7 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
       sc[, variable := droplevels(variable)]
       sk = skill[variable %in% c("dbh", "ba", "trees", "growth")]
       if (!is.null(species)) sk[, species_lab := labs[as.character(species)]]
-      sk[, label := ifelse(is.finite(r2), sprintf("R² = %.2f", r2), "R² = NA")]
+      sk[, label := ifelse(is.finite(r2), sprintf("R\u00b2 = %.2f", r2), "R\u00b2 = NA")]
       fct = if (is.null(species)) ggplot2::facet_wrap(~ variable, scales = "free", nrow = 1)
             else ggplot2::facet_grid(species_lab ~ variable, scales = "free")
       panels$scatter = ggplot2::ggplot(sc, ggplot2::aes(x = pred, y = obs)) +
@@ -320,7 +320,7 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries"), species = NU
         panels$mort = ggplot2::ggplot(mo, ggplot2::aes(x = pred, y = obs)) +
           ggplot2::geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = "dashed") +
           ggplot2::geom_point(alpha = 0.35, size = 1) +
-          ggplot2::labs(x = "simulated", y = "observed", title = sprintf("mort (no n_at_risk / n_died for an AUC): R² = %.2f", sk$r2[1])) +
+          ggplot2::labs(x = "simulated", y = "observed", title = sprintf("mort (no n_at_risk / n_died for an AUC): R\u00b2 = %.2f", sk$r2[1])) +
           theme_finn + ggplot2::theme(plot.title = ggplot2::element_text(size = 10))
       }
     }
