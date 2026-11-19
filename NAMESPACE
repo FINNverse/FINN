@@ -2,10 +2,12 @@
 
 S3method(plot,FINNale)
 S3method(plot,finn_class)
+S3method(plot,finn_evaluation)
 S3method(plot,finn_simulation)
 S3method(predict,finn_class)
 S3method(print,finnControl)
 S3method(print,finn_comparison)
+S3method(print,finn_evaluation)
 S3method(print,finn_heatmap)
 S3method(print,finn_simulation)
 S3method(print,summary.finn_class)

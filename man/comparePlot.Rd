@@ -137,7 +137,8 @@ plot(sim, fia_obs_dt[siteID \%in\% sites], type = "timeseries", species = 1:2)
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[=evaluate]{evaluate()}}, which stores the same comparison on the model, and
+\code{\link[=evaluate]{evaluate()}}, which returns the same comparison and keeps it on the
+model, and
 \code{\link[=summary.finn_class]{summary.finn_class()}}, which prints it; \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} for the
 simulation alone.
 }

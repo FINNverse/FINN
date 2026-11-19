@@ -177,8 +177,23 @@ test_that("simulateForest(bare_ground = TRUE) runs from an empty stand under the
   expect_equal(sum(bg$long$site[year == 1 & variable == "trees"]$value > 0) >= 0, TRUE)
   expect_error(simulateForest(toy$model), "`env` is needed")
   expect_error(simulateForest(toy$model, bare_ground = TRUE, init_cohort = toy$init), "empty stand")
-  evaluate(toy$model, bare_ground = TRUE, years = 10)
+  ev <- evaluate(toy$model, holdout = toy$holdout, bare_ground = TRUE, years = 10)
   expect_false(is.null(toy$model$evaluation$bare_ground))
+  # evaluate() returns its own object, and the model keeps the same one
+  expect_s3_class(ev, "finn_evaluation")
+  expect_identical(unclass(ev)$holdout$skill, toy$model$evaluation$holdout$skill)
+  expect_output(print(ev), "Holdout")
+  expect_output(print(ev, species = TRUE), "per species")
+  # plot(): the comparison from the stored table, the heatmap, the bare-ground runs
+  p1 <- plot(ev)
+  expect_s3_class(p1, "finn_comparison")
+  expect_equal(attr(p1, "skill")[variable == "ba"]$r2, ev$holdout$skill[variable == "ba"]$r2)
+  expect_s3_class(plot(ev, type = "heatmap"), "finn_heatmap")
+  expect_s3_class(plot(ev, type = "bare_ground"), "ggplot")
+  expect_s3_class(plot(ev, set = "train"), "finn_comparison")
+  expect_error(plot(ev, type = "timeseries"), "should be one of")
+  ev0 <- evaluate(toy$model)
+  expect_error(plot(ev0, type = "bare_ground"), "No bare-ground run")
 })
 
 test_that("initial cohorts survive saveRDS()/readRDS() (#77)", {

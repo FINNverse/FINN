@@ -689,12 +689,14 @@ finn = function(N_species,
 #'   four orders above the rest. `NULL` restores those two historical constants
 #'   and so reproduces a fit made before 0.2.0.
 #' @param holdout `NULL` (default), or a list with holdout `data`, `env` and
-#'   `init_cohort` (and optionally `disturbance`), as the `holdout` of
-#'   [FINN::evaluate()]: after the fit, [FINN::evaluate()]
+#'   `init_cohort` (and optionally `disturbance` and `tree_data`), as the
+#'   `holdout` of [FINN::evaluate()]: after the fit, [FINN::evaluate()]
 #'   simulates the training data and the holdout and stores the comparison on
-#'   the model (`model$evaluation`), which [FINN::summary.finn_class()] prints. The
-#'   same as calling `evaluate(model, holdout = )` after the fit; if that
-#'   evaluation fails, the fit is kept and a warning says why.
+#'   the model (`model$evaluation`, an object of class `finn_evaluation` with a
+#'   `print()` and a `plot()` method), which [FINN::summary.finn_class()] prints.
+#'   The same as calling `evaluate(model, holdout = )` after the fit, except
+#'   that `fit()` returns the model; if that evaluation fails, the fit is kept
+#'   and a warning says why.
 #' @param ... Arguments of earlier versions, still accepted with a warning:
 #'   `weights` (now `loss_weights`), `recruits` (now `loss_recruit`), and
 #'   `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` (now
@@ -1366,7 +1368,11 @@ simulateForest = function(model,
     # labelled with the site's mean climate
     attr(out, "bare_ground") = TRUE
     first = env[!duplicated(siteID)]
-    preds = utils::head(setdiff(names(first), c("siteID", "year")), 5L)
+    # the predictors the model uses (its process formulas), else the first five columns
+    used = unique(unlist(lapply(c("growth_formula", "mortality_formula", "regeneration_formula"),
+                                function(f) if (is.null(model[[f]])) NULL else all.vars(model[[f]]))))
+    preds = intersect(used, setdiff(names(first), c("siteID", "year")))
+    if (!length(preds)) preds = utils::head(setdiff(names(first), c("siteID", "year")), 5L)
     attr(out, "site_labels") = stats::setNames(
       vapply(seq_len(nrow(first)), function(i)
         paste(sprintf("%s %s", preds, signif(unlist(first[i, preds, with = FALSE]), 3)), collapse = ", "),

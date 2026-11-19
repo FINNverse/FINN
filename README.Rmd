@@ -50,6 +50,68 @@ Or the development version from [GitHub](https://github.com/FINNverse/FINN):
 devtools::install_github("FINNverse/FINN")
 ```
 
+## A first example
+
+FINN comes with forest inventory data from Oregon (US FIA): observations of
+200 plots over two remeasurement intervals, their climate, and the trees at the
+first census. The example fits a model to them, checks it on 200 plots it has
+not seen, and simulates from bare ground.
+
+```{r example-fit, message = FALSE, warning = FALSE, results = "hide"}
+library(FINN)
+library(data.table)
+Nsp  <- max(fia_obs_dt$species)
+init <- makeInitCohorts(fia_init_trees, Nspecies = Nsp)
+
+# one process per component; growth, mortality and regeneration respond
+# linearly to temperature and precipitation
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          competition_process  = createProcess(~ 0, competition, optimizeSpecies = TRUE),
+          growth_process       = createProcess(~ temp + prec, growth, optimizeSpecies = TRUE),
+          mortality_process    = createProcess(~ temp + prec, mortality, optimizeSpecies = TRUE),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped, optimizeSpecies = TRUE))
+
+# all processes are fitted jointly; `holdout` evaluates the model right after the fit
+fit(m, data = fia_obs_dt, env = fia_env_dt, init_cohort = init,
+    epochs = 300L, batchsize = 40L, patches = 4, patch_size = 0.06,
+    tree_data = fia_tree_dt, plot_progress = FALSE,
+    holdout = list(data = fia_obs_test, env = fia_env_test,
+                   init_cohort = makeInitCohorts(fia_init_test, Nspecies = Nsp),
+                   tree_data = fia_tree_test))
+```
+
+**Bare ground.** A fitted model can be run from an empty stand. This is the
+hardest test of a forest model: the species composition and the size structure
+have to emerge from growth, mortality, competition and regeneration alone.
+
+```{r example-bare-ground, message = FALSE, fig.width = 10, fig.height = 4.5, dpi = 110}
+cold_to_warm <- fia_env_dt[, .(temp = mean(temp)), by = siteID][order(temp)]$siteID[c(10, 100, 190)]
+bg <- simulateForest(m, bare_ground = TRUE, years = 500, sites = cold_to_warm)
+plot(bg)
+```
+
+**Observed against simulated** on the 200 test plots: the largest tree, basal
+area, stem number and growth with R², mortality as a ROC curve with its AUC,
+recruitment as the ratio of simulated to observed per species.
+
+```{r example-evaluation, fig.width = 10, fig.height = 7, dpi = 110}
+plot(m$evaluation)
+```
+
+**Over time.** The simulated stands of the 200 test plots over the 22 years,
+per species, as the mean over the plots:
+
+```{r example-timeseries, message = FALSE, fig.width = 10, fig.height = 4, dpi = 110}
+sim <- simulateForest(m, env = fia_env_test,
+                      init_cohort = makeInitCohorts(fia_init_test, Nspecies = Nsp))
+plot(sim)
+```
+
+`summary(m)` prints the skill on the training and the test plots, how far the
+fit has converged and the effects of the environment; `plot(m)` draws the
+fitted parameters of every species.
+
 ## Introduction
 
 Start with [Introduction to FINN](https://finnverse.github.io/FINN/articles/A-Introduction_to_FINN.html),

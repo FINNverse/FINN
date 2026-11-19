@@ -340,7 +340,8 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #'   attached as attribute `"matched"` and the skill measures as `"skill"`
 #'   (per response, and per species when `species` is given; the measures are
 #'   described in [summary.finn_class()]).
-#' @seealso [evaluate()], which stores the same comparison on the model, and
+#' @seealso [evaluate()], which returns the same comparison and keeps it on the
+#'   model, and
 #'   [summary.finn_class()], which prints it; [plot.finn_simulation()] for the
 #'   simulation alone.
 #' @examplesIf torch::torch_is_installed()
@@ -368,6 +369,18 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries", "heatmap"), s
   N = max(c(op$species, simulation_long(sim)$species))
   if (is.null(species_names)) species_names = attr(sim, "species_names")
   labs = species_names_lookup(N, species_names, tab = obs)
+  compare_matched(op, labs, sim = sim, type = type, species = species, response = response,
+                  sites = sites, n_species = n_species)
+}
+
+# The figures of comparePlot() from the paired table (match_simulation()); also
+# what plot() of an evaluate() result draws, from the table it stored. The time
+# series needs the simulation itself.
+compare_matched = function(op, labs, sim = NULL, type = "scatter", species = NULL, response = NULL,
+                           sites = NULL, n_species = 12L) {
+  op = data.table::copy(op)
+  if (type == "timeseries" && is.null(sim))
+    stop("The time series needs the simulation: simulateForest(), then comparePlot(sim, obs, type = \"timeseries\").", call. = FALSE)
   if (!is.null(sites)) {
     op = op[siteID %in% sites]
     if (!nrow(op)) stop("None of `sites` has a matching observation.", call. = FALSE)
@@ -387,8 +400,12 @@ comparePlot = function(sim, obs, type = c("scatter", "timeseries", "heatmap"), s
   op[, species_lab := labs[as.character(species)]]
   skill = skill_table(op, by_species = !is.null(species))
 
+  # by species: one panel per species and response, each with its own y scale
+  # (facet_grid frees y only per row, which squashed the responses of a species
+  # onto one scale)
   facet = if (is.null(species)) ggplot2::facet_wrap(~ variable, scales = "free")
-          else ggplot2::facet_grid(species_lab ~ variable, scales = "free")
+          else ggplot2::facet_wrap(species_lab ~ variable, scales = "free",
+                                   ncol = data.table::uniqueN(op$variable))
 
   theme_finn = ggplot2::theme_minimal() +
     ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
@@ -634,11 +651,12 @@ bare_ground_env = function(model, sites = NULL, years = 500L, env = NULL) {
 
 #' Evaluate a fitted model
 #'
-#' An optional step after [fit()] that simulates the model and stores what is
-#' needed to judge it on the model object, as `model$evaluation`;
-#' [`summary()`][summary.finn_class] prints it and [comparePlot()] draws the same
-#' comparison. Calling [fit()] with its argument `holdout` runs it right after
-#' the fit.
+#' An optional step after [fit()] that simulates the model and returns what is
+#' needed to judge it, as an object of class `finn_evaluation` with a `print()`
+#' and a `plot()` method. The model keeps the same object as
+#' `model$evaluation`; [`summary()`][summary.finn_class] prints it and
+#' [comparePlot()] draws the same comparison from a simulation. Calling [fit()]
+#' with its argument `holdout` runs it right after the fit.
 #'
 #' * **Training data**: the model is simulated from the training initial state
 #'   under the training environment and compared with the observations it was
@@ -673,14 +691,17 @@ bare_ground_env = function(model, sites = NULL, years = 500L, env = NULL) {
 #' @param train `NULL` (default): the training data the model keeps from
 #'   [fit()]. A list like `holdout` for a model that keeps none (fitted before
 #'   0.2.0, e.g. read with [torch::torch_load()]).
-#' @return The model, invisibly; it is changed in place, as by [fit()], and
-#'   carries `model$evaluation`: a list with `train` and, when given, `holdout`
-#'   (each with the paired table `matched` and the skill measures `skill`
-#'   overall and `skill_species` per species; the measures are described in
-#'   [summary.finn_class()]), and with `bare_ground = TRUE` also `bare_ground`
-#'   (the simulation, as [simulateForest()] returns it) and
-#'   `bare_ground_settings` (`years`, `sites`, `patches`). A new call replaces
-#'   the stored evaluation.
+#' @return An object of class `finn_evaluation`: a list with `train` and, when
+#'   given, `holdout` (each with the paired table `matched` and the skill
+#'   measures `skill` overall and `skill_species` per species; the measures are
+#'   described in [summary.finn_class()]), and with `bare_ground = TRUE` also
+#'   `bare_ground` (the simulation, as [simulateForest()] returns it) and
+#'   `bare_ground_settings` (`years`, `sites`, `patches`). `print()` shows the
+#'   skill tables; `plot()` draws the comparison (`type = "scatter"` or
+#'   `"heatmap"`, as [comparePlot()]) or the bare-ground runs (`type =
+#'   "bare_ground"`). The same object is kept on the model as
+#'   `model$evaluation` (a new call replaces it), where [summary.finn_class()]
+#'   reads it.
 #' @seealso [comparePlot()], [summary.finn_class()], [simulateForest()]
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -696,10 +717,14 @@ bare_ground_env = function(model, sites = NULL, years = 500L, env = NULL) {
 #' fit(m, data = fia_obs_dt[siteID %in% train], env = fia_env_dt[siteID %in% train],
 #'     init_cohort = init_tr, epochs = 2L, patches = 4, patch_size = 0.06,
 #'     plot_progress = FALSE)
-#' evaluate(m, holdout = list(data = fia_obs_dt[siteID %in% hold],
-#'                            env = fia_env_dt[siteID %in% hold], init_cohort = init_ho),
-#'          bare_ground = TRUE, years = 50)
-#' m$evaluation$holdout$skill
+#' ev <- evaluate(m, holdout = list(data = fia_obs_dt[siteID %in% hold],
+#'                                  env = fia_env_dt[siteID %in% hold], init_cohort = init_ho),
+#'                bare_ground = TRUE, years = 50)
+#' ev                                  # the skill on the training data and the holdout
+#' plot(ev)                            # observed against simulated on the holdout
+#' plot(ev, type = "heatmap")          # the skill of every species
+#' plot(ev, type = "bare_ground")      # the bare-ground run
+#' summary(m)                          # the model keeps the evaluation
 #' @export
 evaluate = function(model, holdout = NULL, bare_ground = FALSE, years = 500L, sites = NULL,
                     patches = NULL, train = NULL) {
@@ -744,6 +769,65 @@ evaluate = function(model, holdout = NULL, bare_ground = FALSE, years = 500L, si
     ev$bare_ground = simulateForest(model, bare_ground = TRUE, years = years, sites = sites, patches = patches)
     ev$bare_ground_settings = list(years = years, sites = sites, patches = patches)
   }
+  # its own object, returned, and kept on the model for summary()
+  ev = structure(ev, class = "finn_evaluation",
+                 species_names = species_names_lookup(model$N_species, model = model))
   model$evaluation = ev
-  invisible(model)
+  ev
+}
+
+# The skill table as print() shows it: R2 and the correlation first.
+format_skill = function(s, species_names = NULL) {
+  d = as.data.frame(data.table::copy(s))
+  if (!is.null(species_names) && "species" %in% names(d)) d$species = species_names[as.character(d$species)]
+  cols = intersect(c("variable", "species", "r2", "r", "rmse", "bias", "ratio", "n", "auc", "deaths_ratio"), names(d))
+  d = d[, cols, drop = FALSE]
+  names(d) = c(variable = "response", species = "species", r2 = "R2", r = "correlation", rmse = "RMSE", bias = "bias",
+               ratio = "pred/obs", n = "n", auc = "AUC", deaths_ratio = "deaths pred/obs")[cols]
+  d
+}
+
+#' @rdname evaluate
+#' @param x A `finn_evaluation` object, as `evaluate()` returns it.
+#' @param species (`logical(1)`)\cr `print()`: also the skill per species.
+#'   Default `FALSE`.
+#' @param ... `print()`: unused. `plot()`: for the comparison, the arguments
+#'   `species`, `response`, `sites` and `n_species` of [comparePlot()]; for
+#'   `type = "bare_ground"`, passed to [plot.finn_simulation()].
+#' @export
+print.finn_evaluation = function(x, species = FALSE, ...) {
+  cat("FINN evaluation\n===============\n")
+  labs = attr(x, "species_names")
+  for (s in intersect(c("train", "holdout"), names(x))) {
+    cat(sprintf("\n%s (observed vs simulated, aggregated as fit() scores):\n",
+                if (s == "train") "Training data" else "Holdout"))
+    print(format_skill(x[[s]]$skill), row.names = FALSE, digits = 3)
+    if (isTRUE(species)) {
+      cat("\nper species:\n")
+      print(format_skill(x[[s]]$skill_species, labs), row.names = FALSE, digits = 3)
+    }
+  }
+  if (!is.null(x$bare_ground))
+    cat(sprintf("\nBare ground: %d years, %d run(s); plot(x, type = \"bare_ground\") draws them.\n",
+                as.integer(x$bare_ground_settings$years), data.table::uniqueN(x$bare_ground$long$site$siteID)))
+  invisible(x)
+}
+
+#' @rdname evaluate
+#' @param type `plot()`: `"scatter"` (default) or `"heatmap"`, the figures of
+#'   [comparePlot()] from the stored comparison, or `"bare_ground"`, the
+#'   succession of the bare-ground runs (see [plot.finn_simulation()]).
+#' @param set `plot()`: `"holdout"` (default when there is one) or `"train"`.
+#' @export
+plot.finn_evaluation = function(x, type = c("scatter", "heatmap", "bare_ground"),
+                                set = NULL, ...) {
+  type = match.arg(type)
+  if (type == "bare_ground") {
+    if (is.null(x$bare_ground)) stop("No bare-ground run stored: evaluate(..., bare_ground = TRUE).", call. = FALSE)
+    return(plot(x$bare_ground, species_names = attr(x, "species_names"), ...))
+  }
+  if (is.null(set)) set = if (!is.null(x$holdout)) "holdout" else "train"
+  set = match.arg(set, c("holdout", "train"))
+  if (is.null(x[[set]])) stop(sprintf("This evaluation has no `%s` set.", set), call. = FALSE)
+  compare_matched(x[[set]]$matched, attr(x, "species_names"), type = type, ...)
 }

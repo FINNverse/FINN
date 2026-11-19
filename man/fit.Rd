@@ -315,12 +315,14 @@ four orders above the rest. \code{NULL} restores those two historical constants
 and so reproduces a fit made before 0.2.0.}
 
 \item{holdout}{\code{NULL} (default), or a list with holdout \code{data}, \code{env} and
-\code{init_cohort} (and optionally \code{disturbance}), as the \code{holdout} of
-\code{\link[=evaluate]{evaluate()}}: after the fit, \code{\link[=evaluate]{evaluate()}}
+\code{init_cohort} (and optionally \code{disturbance} and \code{tree_data}), as the
+\code{holdout} of \code{\link[=evaluate]{evaluate()}}: after the fit, \code{\link[=evaluate]{evaluate()}}
 simulates the training data and the holdout and stores the comparison on
-the model (\code{model$evaluation}), which \code{\link[=summary.finn_class]{summary.finn_class()}} prints. The
-same as calling \code{evaluate(model, holdout = )} after the fit; if that
-evaluation fails, the fit is kept and a warning says why.}
+the model (\code{model$evaluation}, an object of class \code{finn_evaluation} with a
+\code{print()} and a \code{plot()} method), which \code{\link[=summary.finn_class]{summary.finn_class()}} prints.
+The same as calling \code{evaluate(model, holdout = )} after the fit, except
+that \code{fit()} returns the model; if that evaluation fails, the fit is kept
+and a warning says why.}
 
 \item{...}{Arguments of earlier versions, still accepted with a warning:
 \code{weights} (now \code{loss_weights}), \code{recruits} (now \code{loss_recruit}), and

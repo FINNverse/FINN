@@ -2,6 +2,8 @@
 % Please edit documentation in R/evaluate.R
 \name{evaluate}
 \alias{evaluate}
+\alias{print.finn_evaluation}
+\alias{plot.finn_evaluation}
 \title{Evaluate a fitted model}
 \usage{
 evaluate(
@@ -13,6 +15,10 @@ evaluate(
   patches = NULL,
   train = NULL
 )
+
+\method{print}{finn_evaluation}(x, species = FALSE, ...)
+
+\method{plot}{finn_evaluation}(x, type = c("scatter", "heatmap", "bare_ground"), set = NULL, ...)
 }
 \arguments{
 \item{model}{A model built by \code{\link[=finn]{finn()}} and fitted with \code{\link[=fit]{fit()}}.}
@@ -43,23 +49,41 @@ initial cohorts.}
 \item{train}{\code{NULL} (default): the training data the model keeps from
 \code{\link[=fit]{fit()}}. A list like \code{holdout} for a model that keeps none (fitted before
 0.2.0, e.g. read with \code{\link[torch:torch_load]{torch::torch_load()}}).}
+
+\item{x}{A \code{finn_evaluation} object, as \code{evaluate()} returns it.}
+
+\item{species}{(\code{logical(1)})\cr \code{print()}: also the skill per species.
+Default \code{FALSE}.}
+
+\item{...}{\code{print()}: unused. \code{plot()}: for the comparison, the arguments
+\code{species}, \code{response}, \code{sites} and \code{n_species} of \code{\link[=comparePlot]{comparePlot()}}; for
+\code{type = "bare_ground"}, passed to \code{\link[=plot.finn_simulation]{plot.finn_simulation()}}.}
+
+\item{type}{\code{plot()}: \code{"scatter"} (default) or \code{"heatmap"}, the figures of
+\code{\link[=comparePlot]{comparePlot()}} from the stored comparison, or \code{"bare_ground"}, the
+succession of the bare-ground runs (see \code{\link[=plot.finn_simulation]{plot.finn_simulation()}}).}
+
+\item{set}{\code{plot()}: \code{"holdout"} (default when there is one) or \code{"train"}.}
 }
 \value{
-The model, invisibly; it is changed in place, as by \code{\link[=fit]{fit()}}, and
-carries \code{model$evaluation}: a list with \code{train} and, when given, \code{holdout}
-(each with the paired table \code{matched} and the skill measures \code{skill}
-overall and \code{skill_species} per species; the measures are described in
-\code{\link[=summary.finn_class]{summary.finn_class()}}), and with \code{bare_ground = TRUE} also \code{bare_ground}
-(the simulation, as \code{\link[=simulateForest]{simulateForest()}} returns it) and
-\code{bare_ground_settings} (\code{years}, \code{sites}, \code{patches}). A new call replaces
-the stored evaluation.
+An object of class \code{finn_evaluation}: a list with \code{train} and, when
+given, \code{holdout} (each with the paired table \code{matched} and the skill
+measures \code{skill} overall and \code{skill_species} per species; the measures are
+described in \code{\link[=summary.finn_class]{summary.finn_class()}}), and with \code{bare_ground = TRUE} also
+\code{bare_ground} (the simulation, as \code{\link[=simulateForest]{simulateForest()}} returns it) and
+\code{bare_ground_settings} (\code{years}, \code{sites}, \code{patches}). \code{print()} shows the
+skill tables; \code{plot()} draws the comparison (\code{type = "scatter"} or
+\code{"heatmap"}, as \code{\link[=comparePlot]{comparePlot()}}) or the bare-ground runs (\code{type = "bare_ground"}). The same object is kept on the model as
+\code{model$evaluation} (a new call replaces it), where \code{\link[=summary.finn_class]{summary.finn_class()}}
+reads it.
 }
 \description{
-An optional step after \code{\link[=fit]{fit()}} that simulates the model and stores what is
-needed to judge it on the model object, as \code{model$evaluation};
-\code{\link[=summary.finn_class]{summary()}} prints it and \code{\link[=comparePlot]{comparePlot()}} draws the same
-comparison. Calling \code{\link[=fit]{fit()}} with its argument \code{holdout} runs it right after
-the fit.
+An optional step after \code{\link[=fit]{fit()}} that simulates the model and returns what is
+needed to judge it, as an object of class \code{finn_evaluation} with a \code{print()}
+and a \code{plot()} method. The model keeps the same object as
+\code{model$evaluation}; \code{\link[=summary.finn_class]{summary()}} prints it and
+\code{\link[=comparePlot]{comparePlot()}} draws the same comparison from a simulation. Calling \code{\link[=fit]{fit()}}
+with its argument \code{holdout} runs it right after the fit.
 }
 \details{
 \itemize{
@@ -90,10 +114,14 @@ m <- finn(N_species = Nsp, recruits_dbh = 12.9,
 fit(m, data = fia_obs_dt[siteID \%in\% train], env = fia_env_dt[siteID \%in\% train],
     init_cohort = init_tr, epochs = 2L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
-evaluate(m, holdout = list(data = fia_obs_dt[siteID \%in\% hold],
-                           env = fia_env_dt[siteID \%in\% hold], init_cohort = init_ho),
-         bare_ground = TRUE, years = 50)
-m$evaluation$holdout$skill
+ev <- evaluate(m, holdout = list(data = fia_obs_dt[siteID \%in\% hold],
+                                 env = fia_env_dt[siteID \%in\% hold], init_cohort = init_ho),
+               bare_ground = TRUE, years = 50)
+ev                                  # the skill on the training data and the holdout
+plot(ev)                            # observed against simulated on the holdout
+plot(ev, type = "heatmap")          # the skill of every species
+plot(ev, type = "bare_ground")      # the bare-ground run
+summary(m)                          # the model keeps the evaluation
 \dontshow{\}) # examplesIf}
 }
 \seealso{

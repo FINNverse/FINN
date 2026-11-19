@@ -425,9 +425,18 @@ someone who was affected.
 * **`evaluate()`: an optional step after the fit.** It simulates the training
   data, a holdout (`holdout = list(data =, env =, init_cohort =)`) and,
   optionally, a bare-ground run (`bare_ground = TRUE`, `years = 500`), and
-  stores the comparison on the model as `model$evaluation`.
-  `fit(..., holdout = )` runs it right after the fit. A model fitted with an
-  earlier version takes its training data through `train =`.
+  returns the comparison as an object of class `finn_evaluation`, which the
+  model also keeps (`model$evaluation`) for `summary()`. `print()` shows the
+  skill tables; `plot()` draws the comparison (`type = "scatter"` or
+  `"heatmap"`, from the stored tables, no new simulation) or the bare-ground
+  runs (`type = "bare_ground"`). `fit(..., holdout = )` runs it right after the
+  fit. A model fitted with an earlier version takes its training data through
+  `train =`.
+
+* **`?FINN` shows how to start.** The package help page lists the functions in
+  the order of an analysis (prepare the data, build, fit, evaluate, look
+  inside, simulate) with a runnable example, and the README walks through a
+  fit of the bundled FIA data with its evaluation and a bare-ground run.
 
 * **`summary()` of a model judges the fit.** It now shows, before the
   environmental importance and the average conditional effects, the skill per

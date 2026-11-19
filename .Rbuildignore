@@ -29,3 +29,4 @@
 ^README\.html$
 ^vignettes/.*\.Rmd\.orig$
 ^vignettes/build\.R$
+^release-notes$

@@ -15,24 +15,68 @@ the simulation (implemented in \pkg{torch}).
 }
 \section{Getting started}{
 
-\itemize{
-\item \code{\link[=finn]{finn()}} assembles a model from one process per component, each built
-with \code{\link[=createProcess]{createProcess()}} (mechanistic) or \code{\link[=createHybrid]{createHybrid()}} (neural network).
-\item \code{\link[=simulateForest]{simulateForest()}} runs a model forward from known parameters.
-\item \code{\link[=fit]{fit()}} calibrates a model to data; \code{\link[=predict.finn_class]{predict.finn_class()}} simulates
-with it.
-\item \code{\link[=makeObsData]{makeObsData()}}, \code{\link[=resolveSiteIDs]{resolveSiteIDs()}} and \code{\link[=makeInitCohorts]{makeInitCohorts()}} turn a raw
-tree list into FINN's input tables.
-\item \code{\link[=evaluate]{evaluate()}}, \code{\link[=comparePlot]{comparePlot()}} and \code{\link[=summary.finn_class]{summary.finn_class()}} judge a
-fitted model against the observations, on the training data and a
-holdout; \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} draws a simulation.
-\item \code{\link[=plot.finn_class]{plot.finn_class()}}, \code{\link[=ALE]{ALE()}}, \code{\link[=feature_importance]{feature_importance()}} and
-\code{\link[=conditionalEffects]{conditionalEffects()}} interpret a fitted model.
+The functions in the order of a typical analysis:
+\enumerate{
+\item \strong{Prepare the data.} \code{\link[=makeObsData]{makeObsData()}}, \code{\link[=resolveSiteIDs]{resolveSiteIDs()}} and
+\code{\link[=makeInitCohorts]{makeInitCohorts()}} turn a raw tree list into FINN's input tables: the
+observations, the environment of every year and the initial cohorts
+(\link{finn_data}).
+\item \strong{Build the model.} \code{\link[=finn]{finn()}} assembles one process per component
+(growth, mortality, regeneration, competition), each built with
+\code{\link[=createProcess]{createProcess()}} (mechanistic, with a linear or neural-network response
+to the environment) or \code{\link[=createHybrid]{createHybrid()}} (a neural network).
+\item \strong{Fit it.} \code{\link[=fit]{fit()}} estimates all processes jointly against all
+observed responses; its argument \code{holdout} evaluates the model right
+after the fit.
+\item \strong{Evaluate it.} \code{\link[=evaluate]{evaluate()}} compares simulations with the
+observations of the training data and a holdout and returns the result
+(also kept in the model); \code{\link[=comparePlot]{comparePlot()}} draws observed against
+simulated, as a scatter page, a heatmap per species or a time series;
+\code{\link[=summary.finn_class]{summary.finn_class()}} shows the skill, the convergence of the fit and
+the effects of the environment.
+\item \strong{Look inside.} \code{\link[=plot.finn_class]{plot.finn_class()}} draws the fitted parameters,
+\code{\link[=ALE]{ALE()}} the effects of the environment, also of a neural network.
+\item \strong{Simulate.} \code{\link[=simulateForest]{simulateForest()}} runs the model forward, also from
+bare ground (\code{bare_ground = TRUE}); \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} draws the
+result.
 }
 
 The vignettes give a guided tour: \code{browseVignettes("FINN")}.
 }
 
+\examples{
+\dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
+library(data.table)
+# the bundled Oregon FIA data: observations, environment and initial trees
+Nsp   <- max(fia_obs_dt$species)
+train <- 1:4; hold <- 5:6
+init  <- makeInitCohorts(fia_init_trees[siteID \%in\% train], Nspecies = Nsp)
+
+# build the model: the environmental responses as linear functions of
+# temperature and precipitation
+FINN.seed(1)
+m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+          growth_process       = createProcess(~ temp + prec, growth),
+          mortality_process    = createProcess(~ temp + prec, mortality),
+          regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+
+# fit all processes jointly (a real calibration runs hundreds of epochs)
+fit(m, data = fia_obs_dt[siteID \%in\% train], env = fia_env_dt[siteID \%in\% train],
+    init_cohort = init, epochs = 3L, patch_size = 0.06, plot_progress = FALSE)
+
+# evaluate on two sites the model has not seen, with a bare-ground run
+ev <- evaluate(m, holdout = list(
+  data = fia_obs_dt[siteID \%in\% hold], env = fia_env_dt[siteID \%in\% hold],
+  init_cohort = makeInitCohorts(fia_init_trees[siteID \%in\% hold], Nspecies = Nsp)),
+  bare_ground = TRUE, years = 100)
+plot(ev)                         # observed against simulated
+plot(ev, type = "bare_ground")   # succession from an empty stand
+
+# skill, convergence and environmental effects; the fitted parameters
+summary(m)
+plot(m)
+\dontshow{\}) # examplesIf}
+}
 \seealso{
 Useful links:
 \itemize{

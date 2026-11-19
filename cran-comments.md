@@ -26,6 +26,15 @@ interface agreed for them:
   FIA calibration sample ships as lazy-loaded datasets (`fia_obs_dt` and eight
   more, including the per-tree tables `fia_tree_dt` / `fia_tree_test`) on that
   axis, in place of CSV files under `inst/extdata`.
+* Evaluation and plotting of a fitted model: `evaluate()` compares simulations
+  with the observations of the training data and a holdout and returns the
+  result (also kept in the model, also run by `fit(holdout = )`);
+  `comparePlot()` draws observed against simulated (scatter page, heatmap per
+  species, time series); `summary()` of a model reports the skill, the
+  convergence of the fit and the environmental effects; `plot()` methods for a
+  model (the fitted parameters), a simulation and an evaluation; and
+  `simulateForest(bare_ground = TRUE)` runs a model from an empty stand. The
+  base package 'grid' is added to Imports for arranging the figure panels.
 * `fit()` compounds the simulated yearly rates of an observation interval into
   the per-year rate the observation carries (the functional `makeObsData()`
   uses), and the mortality response starts at about 2 % per year instead of
