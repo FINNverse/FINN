@@ -131,7 +131,11 @@ match_simulation = function(sim, obs, quiet = FALSE, tree_data = NULL) {
     if (is.null(sm)) {
       note("`tree_data` is given, but the simulation recorded no cohorts: simulate with return_cohorts = <the census years> for the largest dbh.")
     } else {
-      om = observed_dbh_max(tree_data)
+      td = data.table::as.data.table(tree_data)
+      # the interval of each census from the observations when the trees do not carry it
+      if (!"period_length" %in% names(td))
+        td = merge(td, unique(o[, list(siteID, year, period_length)]), by = c("siteID", "year"))
+      om = observed_dbh_max(td)
       dm = merge(om, sm, by = c("siteID", "year", "species"))
       dm = merge(dm, unique(o[, c("siteID", "year", "species", "period_length",
                                    intersect("species_name", names(o))), with = FALSE]),
@@ -278,8 +282,9 @@ species_names_lookup = function(N, species_names = NULL, model = NULL, tab = NUL
 #' @param sites Site ids to include; `NULL` (default) all.
 #' @param tree_data `NULL` (default), or the observed trees in the format of the
 #'   `tree_data` of [fit()] (see [finn_data]: `siteID`, `year`, `species`, `dbh`
-#'   at the start of the interval, and `growth`, `died`, `period_length`): adds
-#'   the largest diameter (`dbh_max`) to the comparison.
+#'   at the start of the interval, and `growth`, `died`, `period_length`; the
+#'   interval is taken from `obs` when the trees do not carry it): adds the
+#'   largest diameter (`dbh_max`) to the comparison.
 #' @param n_species Number of species in the recruitment panel. Default `12`.
 #' @param species_names Species names for the labels: a character vector in
 #'   species order, a vector named by species number, or a table with
@@ -494,6 +499,9 @@ skill_heatmap = function(op, labs) {
                                  name = "R\u00b2 / AUC") +
     ggplot2::labs(x = NULL, y = NULL, title = "Skill per species: R\u00b2 (mortality: AUC); below 0 drawn as 0") +
     theme_h
+  # mortality: predicted over observed deaths where the counts are there (the
+  # magnitude that goes with the AUC)
+  sk[variable == "mort" & is.finite(deaths_ratio), ratio := deaths_ratio]
   s2 = sk[, list(species_lab, variable, ratio)]
   s2[, variable := factor(as.character(variable), levels = response_levels)]
   ratio = ggplot2::ggplot(s2, ggplot2::aes(x = variable, y = species_lab, fill = log2(ratio))) +

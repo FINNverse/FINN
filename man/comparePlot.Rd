@@ -44,8 +44,9 @@ species numbers draw one row of panels per species.}
 
 \item{tree_data}{\code{NULL} (default), or the observed trees in the format of the
 \code{tree_data} of \code{\link[=fit]{fit()}} (see \link{finn_data}: \code{siteID}, \code{year}, \code{species}, \code{dbh}
-at the start of the interval, and \code{growth}, \code{died}, \code{period_length}): adds
-the largest diameter (\code{dbh_max}) to the comparison.}
+at the start of the interval, and \code{growth}, \code{died}, \code{period_length}; the
+interval is taken from \code{obs} when the trees do not carry it): adds the
+largest diameter (\code{dbh_max}) to the comparison.}
 
 \item{n_species}{Number of species in the recruitment panel. Default \code{12}.}
 
