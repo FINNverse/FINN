@@ -30,3 +30,5 @@
 ^vignettes/.*\.Rmd\.orig$
 ^vignettes/build\.R$
 ^release-notes$
+^man/figures/README-
+^man/figures/competition_

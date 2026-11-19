@@ -63,34 +63,32 @@ axis it now builds the initial cohorts from the first inventory.
 * GitHub Actions: ubuntu-latest (R-devel, R-release, R-oldrel-1),
   macos-latest and windows-latest (R-release), without the backend: OK.
 
-* win-builder on the submitted state: R-devel (2026-11-17 r90926 ucrt) Status
-  OK; R-release (4.6.2 ucrt) 1 NOTE, a URL check of
-  https://www.gnu.org/licenses/gpl-3.0 (README.md) that timed out connecting to
-  www.gnu.org from the check machine. The URL resolves, and the same URL passed
-  on the R-devel run. (An earlier run noted "height/width attributes should be
-  in pixels" for the figure in `?finn`; it is now given in pixels.)
+* win-builder (R-devel and R-release) on the submitted state: see the results
+  added below once they are in.
 
 ## R CMD check results
 
-Local run with the torch backend installed, `R CMD check --as-cran --no-manual`
-(the machine has no pdflatex; the Rd files pass every Rd check):
+Local run with the torch backend installed, `R CMD check --as-cran` (PDF
+manual included):
 
-0 errors | 1 warning | 0 notes
+0 errors | 1 warning | 0 notes (besides the time-server and HTML Tidy notes of
+the local machine)
 
 * checking whether package 'FINN' can be installed ... WARNING
   `R_ext/Boolean.h:62:36: warning: unknown warning group
   '-Wfixed-enum-extension'`. This comes from R 4.5.0's own header with Apple
   clang 21 on the local machine, not from FINN's code; it is absent on the
   check services' compilers.
-* On a loaded machine the check notes examples above 5 s elapsed
-  (`feature_importance`, `ALE` and a few more, each fitting a small model on
-  two or three sites of the bundled data first). They need the torch backend
-  and do not run on the check machines (`@examplesIf
+* With the backend the check notes one example above 5 s elapsed (the
+  package help page `?FINN`, which fits a small model on four sites of the
+  bundled data, evaluates it and draws the results, 7.6 s). It needs the torch
+  backend and does not run on the check machines (`@examplesIf
   torch::torch_is_installed()`).
 
-The test suite ran in full with the backend: 909 tests passed, 0 failed, 1
+The test suite ran in full with the backend: 1061 tests passed, 0 failed, 1
 skipped (a thread-count test that torch's native macOS backend cannot repeat
-in one session). The tarball is 4.2 MB, the installed package under 5 MB.
+in one session). Without the backend the check is clean apart from the local
+compiler warning above. The tarball is 2.7 MB.
 
 ## Notes for the reviewer
 
