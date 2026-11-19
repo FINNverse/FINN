@@ -386,6 +386,17 @@ someone who was affected.
   line, and the stand total is dashed. A bare-ground run is drawn as a
   succession, one panel per site labelled with its mean climate.
 
+* **`ALE()` and the conditional effects for any process function.** FINN now
+  records the inputs of every process step itself while it computes the
+  conditional effects, so a process function of one's own (which does not
+  record them) is covered as well; a model saved with an earlier version keeps
+  the methods it was saved with, and a process without recorded inputs is left
+  out with a message instead of an error. `plot(ale)` names the species.
+
+* **`plot(model, parameter_names = )`** names the parameters of a process
+  function of one's own; FINN's own process functions are named from their
+  documentation.
+
 * **Species by their names.** `fit()` keeps the names of the `species_name`
   column of the data (`model$species_names`); the plots label species by
   name, and every plot takes `species_names =` for a model without them.
@@ -422,9 +433,12 @@ someone who was affected.
   environmental importance and the average conditional effects, the skill per
   response on the training data and the holdout (R2 first, then RMSE, r, bias,
   the ratio of the means, and the AUC for mortality) and a convergence check:
-  by how many percent each loss term and each parameter block changed over
-  the last `epochs_back` epochs (`print(s, epochs_back = 10)`). For this
-  `fit()` keeps the parameters of the last 51 epochs. `summary()` returns an
+  by how many percent each loss term changed over the last `epochs_back`
+  epochs, and each parameter: every species-specific parameter by its name on
+  the scale it acts on, every network block as a whole, the largest change of
+  each named in a sentence (`print(s, epochs_back = 10)`). For this `fit()`
+  keeps the parameters of the last 51 epochs; for an older model the parameter
+  snapshots of the fit are used. `summary()` returns an
   object of class `summary.finn_class` that `print()` shows, instead of
   printing as it computes.
 

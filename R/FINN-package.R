@@ -56,5 +56,5 @@ utils::globalVariables(c(
   "auc", "census", "deaths_ratio", "label", "max_year", "obs", "p_interval", "pred",
   "r2", "species_lab", "total_ba", "years", "ratio", "ratio_w",
   "fpr", "tpr", "name", "share", "bound", "total", "colour_group", "site_lab", "value_max",
-  "dbh_end", "dbh_max", "died", "any_obs", "n", "step"
+  "dbh_end", "dbh_max", "died", "any_obs", "n", "step", "obs_sum", "tile_label"
 ))

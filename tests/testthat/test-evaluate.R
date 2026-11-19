@@ -123,9 +123,30 @@ test_that("summary() prints skill, convergence and the environment; print() take
   expect_true(any(grepl("Skill", out)) && any(grepl("Convergence", out)) && any(grepl("Holdout", out)))
   cv <- FINN:::convergence_table(s$convergence, 2)
   expect_equal(cv$k_loss, 2L); expect_equal(cv$k_params, 2L)
-  P <- s$convergence$params; nm <- cv$params$block[1]
-  a <- P[[4]][[nm]]; b <- P[[2]][[nm]]
-  expect_equal(cv$params$change_pct[1], 100 * sqrt(sum((a - b)^2)) / sqrt(sum(b^2)))
+  P <- s$convergence$params
+  # a network block: the relative L2 change of its weights
+  nn <- cv$params[cv$params$kind == "network weights", ][1, ]
+  a <- P[[4]][[nn$parameter]]; b <- P[[2]][[nn$parameter]]
+  expect_equal(nn$change_pct, 100 * sqrt(sum((a - b)^2)) / sqrt(sum(b^2)))
+  # a species parameter (trained only with optimizeSpecies = TRUE, as in the
+  # helper's model): by name, on the scale it acts on
+  tm <- fit_toy_finn(epochs = 4L)$model
+  s2 <- suppressMessages(suppressWarnings(summary(tm)))
+  cvt <- FINN:::convergence_table(s2$convergence, 2)
+  row <- cvt$params[cvt$params$parameter == "mortality: growth", ]
+  expect_equal(nrow(row), 1L)
+  mk <- s2$convergence$mechanistic$par_mortality_unconstrained
+  on <- function(z) mk$lower[3] + (mk$upper[3] - mk$lower[3]) * stats::plogis(z[, 3])
+  Pt <- s2$convergence$params
+  x1 <- on(Pt[[4]]$par_mortality_unconstrained); x0 <- on(Pt[[2]]$par_mortality_unconstrained)
+  expect_equal(row$change_pct, 100 * sqrt(sum((x1 - x0)^2)) / sqrt(sum(x0^2)))
+  expect_true(any(grepl("the species parameter that moves most", capture.output(print(s2, epochs_back = 2)))))
+  # without the per-epoch record, the snapshots of the fit are used
+  conv2 <- s$convergence; conv2$params <- list()
+  conv2$snapshots <- P; conv2$snap_every <- 1L
+  cv2 <- FINN:::convergence_table(conv2, 2)
+  expect_equal(cv2$params_source, "snapshot")
+  expect_equal(cv2$k_params, 2L)
 })
 
 test_that("simulateForest(bare_ground = TRUE) runs from an empty stand under the mean climate", {
@@ -258,4 +279,39 @@ test_that("a failing holdout evaluation keeps the fit; a model read with torch_l
   ic <- FINN:::.finn_train_ic(m2)
   expect_true(FINN:::cohort_tensors_valid(ic))
   expect_identical(ic$dbh_r, init$dbh_r)
+})
+
+test_that("ALE works with a process function of one's own; parameter names; 'no obs' tiles", {
+  skip_if_no_torch()
+  Nsp <- max(FINN::fia_obs_dt$species); tr <- 1:3
+  init <- suppressWarnings(makeInitCohorts(FINN::fia_init_trees[siteID %in% tr], Nspecies = Nsp))
+  # a mortality function of one's own that does not record its inputs
+  my_mort <- function(dbh, species, trees, parMort, pred, light, base_steepness = 5, debug = FALSE, growth = NULL) {
+    torch::torch_sigmoid(pred + light * parMort[, 1][species] + parMort[, 2][species] * dbh / 100 +
+                         growth * 100 * parMort[, 3][species])
+  }
+  FINN.seed(1)
+  m <- finn(N_species = Nsp, recruits_dbh = 12.9,
+            growth_process       = createProcess(~ temp + prec, growth),
+            mortality_process    = createProcess(~ temp + prec, my_mort),
+            regeneration_process = createProcess(~ temp + prec, regeneration_capped))
+  suppressMessages(fit(m, data = FINN::fia_obs_dt[siteID %in% tr], env = FINN::fia_env_dt[siteID %in% tr],
+                       init_cohort = init, epochs = 1L, patch_size = 0.06, plot_progress = FALSE))
+  a <- ALE(m, plot = FALSE)
+  expect_true("mortality" %in% names(a))
+  expect_gt(nrow(a$mortality), 0)
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+  # FINN does not know the parameters of my_mort: numbered, or named by the user
+  expect_true(any(plot(m)$data$parameter == "parameter 1"))
+  p <- plot(m, parameter_names = list(mortality = c("shade", "size", "growth")))
+  expect_true(all(c("shade", "size", "growth") %in% p$data$parameter[p$data$process == "mortality"]))
+  expect_error(plot(m, parameter_names = list(mortality = "shade")), "has 1 names")
+  # a species without observed recruitment: its ratio tile says so
+  sim <- simulateForest(m, env = FINN::fia_env_dt[siteID %in% tr], init_cohort = init)
+  obs <- data.table::copy(FINN::fia_obs_dt[siteID %in% tr])
+  sp0 <- obs[reg > 0, species][1]
+  obs[species == sp0, reg := 0]
+  h <- comparePlot(sim, obs, type = "heatmap")
+  lab <- h$ratio$data[species == sp0 & variable == "reg"]$tile_label
+  expect_equal(lab, "no obs")
 })

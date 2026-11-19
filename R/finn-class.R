@@ -1943,6 +1943,7 @@ finn_class = nn_module(
         # a hybrid growth process the mortality design matrix (#72, B2)
         else pred = env[["growth"]][,i,]
 
+        n_raw_g = length(self$raw_g)
         g = self$growth_func(
           dbh = dbh,
           species = species,
@@ -1951,6 +1952,12 @@ finn_class = nn_module(
           light = light,
           trees = trees
         )
+        # ALE() / conditionalEffects() read the inputs of every step (record_raws);
+        # FINN's own process functions record them, a user's function need not, so
+        # they are recorded here in the same layout when the function did not
+        if (isTRUE(self$record_raws) && length(self$raw_g) == n_raw_g)
+          self$raw_g = c(self$raw_g, list(as_array(torch::torch_cat(list(
+            dbh$unsqueeze(4), light$unsqueeze(4), trees$unsqueeze(4), species$unsqueeze(4)$float()), dim = 4)$cpu())))
         self$g = g
         dbh_growth = dbh*g
         dbh = dbh + dbh_growth
@@ -1976,6 +1983,7 @@ finn_class = nn_module(
         if(!inherits(self$process_mortality, "hybrid")) pred = index_species(pred_mort, species)
         else pred = env[["mort"]][,i,]
 
+        n_raw_m = length(self$raw_m)
         m = self$mortality_func(
           dbh = dbh,
           species = species,
@@ -1985,6 +1993,10 @@ finn_class = nn_module(
           light = light,
           growth = g
         )
+        if (isTRUE(self$record_raws) && length(self$raw_m) == n_raw_m)
+          self$raw_m = c(self$raw_m, list(as_array(torch::torch_cat(list(
+            dbh$unsqueeze(4), g$unsqueeze(4), light$unsqueeze(4), (trees + 0.001)$unsqueeze(4),
+            species$unsqueeze(4)$float()), dim = 4)$cpu())))
 
         n_at_risk = torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0)
         # The floor guards the Gamma draw, whose shape n*p/(1-p) degenerates as p -> 0.
@@ -2092,7 +2104,10 @@ finn_class = nn_module(
                         light = AL_reg)
         if(all(c("dbh", "trees") %in% names(formals(self$regeneration_func))))
           reg_args = c(reg_args, list(dbh = dbh, trees = trees))
+        n_raw_r = length(self$raw_r)
         r_mean_ha = do.call(self$regeneration_func, reg_args)
+        if (isTRUE(self$record_raws) && length(self$raw_r) == n_raw_r)
+          self$raw_r = c(self$raw_r, list(as_array(AL_reg$unsqueeze(4)$cpu())))
       }
 
       r_mean_patch = r_mean_ha*self$patch_size_ha

@@ -10,6 +10,7 @@
   species = NULL,
   env = NULL,
   species_names = NULL,
+  parameter_names = NULL,
   ...
 )
 }
@@ -31,6 +32,13 @@ the model was fitted on. Only used with \code{pars = "env"}.}
 species order, a vector named by species number, or a table with \code{species}
 and \code{species_name}. \code{NULL} (default): the names \code{\link[=fit]{fit()}} kept from the
 \code{species_name} column of the data, else "species 1", "species 2", ...}
+
+\item{parameter_names}{Names of the species-specific parameters of a process
+function of your own, as a list by process, e.g.
+\code{list(mortality = c("shade", "size", "growth"))}. \code{NULL} (default): the
+documented names for FINN's own process functions (\code{\link[=growth]{growth()}},
+\code{\link[=mortality]{mortality()}}, \code{\link[=regeneration]{regeneration()}}, \code{\link[=regeneration_capped]{regeneration_capped()}},
+\code{\link[=competition]{competition()}}), else "parameter 1", "parameter 2", ...}
 
 \item{...}{Unused.}
 }

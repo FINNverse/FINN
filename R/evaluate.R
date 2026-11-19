@@ -544,11 +544,17 @@ skill_heatmap = function(op, labs) {
   # mortality: predicted over observed deaths where the counts are there (the
   # magnitude that goes with the AUC)
   sk[variable == "mort" & is.finite(deaths_ratio), ratio := deaths_ratio]
-  s2 = sk[, list(species_lab, variable, ratio)]
+  s2 = sk[, list(species, species_lab, variable, ratio)]
+  # a ratio is undefined where the species was never observed for that response
+  # (e.g. no recruitment in the selected sites): say so in the tile
+  tot = op[, list(obs_sum = sum(obs, na.rm = TRUE)), by = list(species, variable = as.character(variable))]
+  s2 = merge(s2[, variable := as.character(variable)], tot, by = c("species", "variable"), all.x = TRUE)
+  s2[, tile_label := ifelse(is.finite(ratio), sprintf("%.2f", ratio),
+                            ifelse(!is.na(obs_sum) & obs_sum == 0, "no obs", ""))]
   s2[, variable := factor(as.character(variable), levels = response_levels)]
   ratio = ggplot2::ggplot(s2, ggplot2::aes(x = variable, y = species_lab, fill = log2(ratio))) +
     ggplot2::geom_tile(colour = "white") +
-    ggplot2::geom_text(ggplot2::aes(label = ifelse(is.finite(ratio), sprintf("%.2f", ratio), "")), size = 3) +
+    ggplot2::geom_text(ggplot2::aes(label = tile_label), size = 3) +
     ggplot2::scale_fill_gradient2(low = "#B2182B", mid = "white", high = "#2166AC", midpoint = 0,
                                   limits = c(-2, 2), oob = function(x, ...) pmin(pmax(x, -2), 2),
                                   na.value = "grey95", name = "log2(sim / obs)") +

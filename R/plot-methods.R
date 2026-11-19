@@ -13,7 +13,14 @@ default_parameter_names = list(
 # The labels of the columns of model$par_<type>: the documented names when the
 # process uses FINN's own function (or regeneration_capped(), which shares the
 # parameter of regeneration()), else "parameter 1", "parameter 2", ...
-parameter_labels = function(model, type, k) {
+parameter_labels = function(model, type, k, parameter_names = NULL) {
+  given = parameter_names[[type]]
+  if (!is.null(given)) {
+    if (length(given) != k)
+      stop(sprintf("`parameter_names$%s` has %d names; the %s process has %d parameters.",
+                   type, length(given), type, k), call. = FALSE)
+    return(as.character(given))
+  }
   proc = model[[paste0("process_", type)]]
   def  = default_parameter_names[[type]]
   # compared as text: a function read back with torch_load() carries the same
@@ -43,7 +50,7 @@ species_subset = function(species, N) {
 
 # One row per process parameter and species: the fitted value on the scale the
 # parameter acts on, and the admissible range from createProcess(lower, upper).
-process_parameter_table = function(model, species) {
+process_parameter_table = function(model, species, parameter_names = NULL) {
   rows = list()
   for (type in c("growth", "mortality", "regeneration", "competition")) {
     mat = tryCatch(model[[paste0("par_", type, "_r")]], error = function(e) NULL)
@@ -51,7 +58,7 @@ process_parameter_table = function(model, species) {
     mat = as.matrix(mat)
     lower = as.numeric(torch::as_array(model[[paste0("par_", type, "_lower")]]$cpu()))
     upper = as.numeric(torch::as_array(model[[paste0("par_", type, "_upper")]]$cpu()))
-    labs  = parameter_labels(model, type, ncol(mat))
+    labs  = parameter_labels(model, type, ncol(mat), parameter_names)
     for (j in seq_len(ncol(mat))) {
       rows[[length(rows) + 1L]] = data.frame(
         process = type, parameter = labs[j], species = species,
@@ -167,6 +174,12 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #'   species order, a vector named by species number, or a table with `species`
 #'   and `species_name`. `NULL` (default): the names [fit()] kept from the
 #'   `species_name` column of the data, else "species 1", "species 2", ...
+#' @param parameter_names Names of the species-specific parameters of a process
+#'   function of your own, as a list by process, e.g.
+#'   `list(mortality = c("shade", "size", "growth"))`. `NULL` (default): the
+#'   documented names for FINN's own process functions ([growth()],
+#'   [mortality()], [regeneration()], [regeneration_capped()],
+#'   [competition()]), else "parameter 1", "parameter 2", ...
 #' @param ... Unused.
 #' @return The `ggplot` object, invisibly (`NULL` when there is nothing to
 #'   draw); it is printed.
@@ -190,14 +203,14 @@ niche_table = function(model, env, species, n_grid = 100L) {
 #' plot(m, pars = "env", species = 1:3)
 #' @export
 plot.finn_class = function(x, pars = c("process", "env"), species = NULL, env = NULL,
-                           species_names = NULL, ...) {
+                           species_names = NULL, parameter_names = NULL, ...) {
   pars = match.arg(pars)
   sp = species_subset(species, x$N_species)
   labs = species_names_lookup(x$N_species, species_names, model = x)
   out = NULL
 
   if (pars == "process") {
-    df = process_parameter_table(x, sp)
+    df = process_parameter_table(x, sp, parameter_names)
     if (is.null(df)) {
       message("This model has no species-specific process parameters to plot.")
     } else {
@@ -369,8 +382,10 @@ plot.finn_simulation = function(x, y = NULL, response = NULL, sites = NULL, ...,
     lab_levels = vapply(sort(unique(agg$siteID)), lab_of, character(1))
     agg[, site_lab := factor(vapply(siteID, lab_of, character(1)), levels = lab_levels)]
     tot[, site_lab := factor(vapply(siteID, lab_of, character(1)), levels = lab_levels)]
-    fct = if (length(response) == 1L) ggplot2::facet_wrap(~ site_lab)
-          else ggplot2::facet_grid(variable ~ site_lab, scales = "free_y")
+    # at most three sites per row, the climate labels wrapped, so the panels stay readable
+    wrap = ggplot2::label_wrap_gen(width = 32)
+    fct = if (length(response) == 1L) ggplot2::facet_wrap(~ site_lab, ncol = min(3L, length(lab_levels)), labeller = wrap)
+          else ggplot2::facet_grid(variable ~ site_lab, scales = "free_y", labeller = wrap)
   } else {
     fct = ggplot2::facet_wrap(~ variable, scales = "free_y")
   }

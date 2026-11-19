@@ -76,10 +76,16 @@ data first (one simulation) and stores it on the model.
 \item \strong{Convergence}: by how many percent each loss term changed over the last
 \code{epochs_back} epochs (the mean of the last \code{epochs_back} epochs against
 the mean of the \code{epochs_back} before), and by how many percent each
-parameter block moved over the last \code{epochs_back} epochs (relative L2
-change, \verb{||theta_now - theta_then|| / ||theta_then||}). \code{\link[=fit]{fit()}} keeps the
-parameters of the last 51 epochs for this, so \code{epochs_back} can be at
-most 50 for the parameters. A fit has settled when both are small.
+parameter moved over the last \code{epochs_back} epochs (relative L2 change
+over the species, \verb{||theta_now - theta_then|| / ||theta_then||}): every
+species-specific parameter of a process by its name and on the scale it
+acts on (e.g. "mortality: growth"), every network and other parameter
+block as a whole. The print names the largest change of each. \code{\link[=fit]{fit()}}
+keeps the parameters of the last 51 epochs for this, so \code{epochs_back} can
+be at most 50; for a model fitted before this version the parameter
+snapshots of the fit (\code{model$param_history}, every \code{checkpoints} epochs)
+are used instead. A fit has settled when both are small; network weights
+can keep moving while the loss stays flat.
 \item \strong{Bare ground}, when \code{\link[=evaluate]{evaluate()}} stored a bare-ground run: per site,
 the total basal area and the leading species with its share, as the mean
 over the last tenth of the run.

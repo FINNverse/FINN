@@ -56,6 +56,14 @@ ALE_ce = function(X, ce) {
   processes = list()
 
   for(process in c("mortality", "growth", "regeneration")) {
+    raws = switch(process, growth = model$raw_g, mortality = model$raw_m, regeneration = model$raw_r)
+    if (length(raws) < years) {
+      # a user's process function in a model saved before FINN recorded the inputs of
+      # every process itself (or read back with torch_load(), which keeps the methods
+      # it was saved with): no inputs to differentiate at, so this process is left out
+      message(sprintf("conditional effects: the %s process recorded no inputs during the simulation (a custom process function in a model saved with an earlier FINN version); it is left out.", process))
+      next
+    }
     proc_formula = switch(process,
                           growth       = model$process_growth$formula,
                           mortality    = model$process_mortality$formula,
@@ -285,6 +293,8 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
     if(!is.null(ce$key)) model$ale = out
   }
 
+  # the species names the model keeps, for the legend
+  attr(out, "species_names") = species_names_lookup(model$N_species, model = model)
   if(isTRUE(plot)) tryCatch(plot(out, process = process, scale = scale), error = function(e) warning("ALE plot could not be drawn: ", conditionMessage(e), call. = FALSE))
   invisible(out)
 }
@@ -304,6 +314,8 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #' @param scale (`logical(1)`)\cr if `TRUE`, divide each curve by the SD of its
 #'   process x species rate so the effects are dimensionless and comparable (a shared
 #'   y-axis is then used); if `FALSE` (default) the raw ALE is shown with free y-axes.
+#' @param species_names Species names for the legend (see [plot.finn_class()]);
+#'   `NULL` (default): the names the model keeps from [fit()].
 #' @param ... currently ignored.
 #' @return invisibly, the `ggplot` object.
 #'
@@ -331,7 +343,7 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #'
 #' @method plot FINNale
 #' @export
-plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
+plot.FINNale = function(x, process = NULL, scale = FALSE, species_names = NULL, ...) {
   env_vars = attr(x, "env_vars")
   procs    = if(is.null(process)) names(x) else intersect(names(x), process)
 
@@ -348,7 +360,10 @@ plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
   if(!nrow(df)) { message("No environmental predictors to plot."); return(invisible(NULL)) }
 
   df$process = factor(df$process, levels = intersect(c("growth", "mortality", "regeneration"), unique(df$process)))
-  df$species = factor(df$species)
+  labs = if (!is.null(species_names) || is.null(attr(x, "species_names")))
+    species_names_lookup(max(df$species), species_names) else attr(x, "species_names")
+  sp_levels = sort(unique(df$species))
+  df$species = factor(labs[as.character(df$species)], levels = labs[as.character(sp_levels)])
 
   ylab         = "ALE"
   facet_scales = "free"
@@ -676,10 +691,16 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' 2. **Convergence**: by how many percent each loss term changed over the last
 #'    `epochs_back` epochs (the mean of the last `epochs_back` epochs against
 #'    the mean of the `epochs_back` before), and by how many percent each
-#'    parameter block moved over the last `epochs_back` epochs (relative L2
-#'    change, `||theta_now - theta_then|| / ||theta_then||`). [fit()] keeps the
-#'    parameters of the last 51 epochs for this, so `epochs_back` can be at
-#'    most 50 for the parameters. A fit has settled when both are small.
+#'    parameter moved over the last `epochs_back` epochs (relative L2 change
+#'    over the species, `||theta_now - theta_then|| / ||theta_then||`): every
+#'    species-specific parameter of a process by its name and on the scale it
+#'    acts on (e.g. "mortality: growth"), every network and other parameter
+#'    block as a whole. The print names the largest change of each. [fit()]
+#'    keeps the parameters of the last 51 epochs for this, so `epochs_back` can
+#'    be at most 50; for a model fitted before this version the parameter
+#'    snapshots of the fit (`model$param_history`, every `checkpoints` epochs)
+#'    are used instead. A fit has settled when both are small; network weights
+#'    can keep moving while the loss stays flat.
 #' 3. **Bare ground**, when [evaluate()] stored a bare-ground run: per site,
 #'    the total basal area and the leading species with its share, as the mean
 #'    over the last tenth of the run.
@@ -762,7 +783,22 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
 
   # 2. convergence: the stored history, judged at print time
   loss = if (length(object$history)) do.call(rbind, object$history) else NULL
-  convergence = list(loss = loss, params = object$param_recent, epochs = object$param_recent_epochs)
+  # the mechanistic parameters by name, mapped to the scale they act on
+  # (lower + (upper - lower) * plogis(x)), so their change reads in their own units
+  mech = list()
+  for (type in c("growth", "mortality", "regeneration", "competition")) {
+    lo = object[[paste0("par_", type, "_lower")]]; up = object[[paste0("par_", type, "_upper")]]
+    if (is.null(lo) || is.null(up)) next
+    lo = as.numeric(torch::as_array(lo$cpu())); up = as.numeric(torch::as_array(up$cpu()))
+    mech[[paste0("par_", type, "_unconstrained")]] =
+      list(type = type, lower = lo, upper = up, labels = parameter_labels(object, type, length(lo)))
+  }
+  # snapshots every `checkpoints` epochs (model$param_history): the fallback for a
+  # model that keeps no per-epoch parameters (fitted before this version)
+  snap_every = if (length(object$param_history) && length(object$history))
+    max(1L, as.integer(round(length(object$history) / length(object$param_history)))) else NA_integer_
+  convergence = list(loss = loss, params = object$param_recent, epochs = object$param_recent_epochs,
+                     snapshots = object$param_history, snap_every = snap_every, mechanistic = mech)
 
   # 3. bare ground
   bare = NULL
@@ -770,7 +806,8 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     d = data.table::as.data.table(ev$bare_ground$long$site)[variable == "ba"]
     last = max(d$year)
     end = d[year > last - max(1L, floor(0.1 * last)), list(ba = mean(value)), by = list(siteID, species)]
-    bare = end[, list(total_ba = sum(ba), leading_species = species[which.max(ba)],
+    sp_lab = species_names_lookup(object$N_species, model = object)
+    bare = end[, list(total_ba = sum(ba), leading_species = sp_lab[as.character(species[which.max(ba)])],
                       leading_share = max(ba) / sum(ba)), by = siteID]
     bare[, years := last]
   }
@@ -827,18 +864,40 @@ convergence_table = function(conv, k) {
                           change_pct = 100 * (now[keep] - then[keep]) / abs(then[keep]))
     out$k_loss = k
   }
-  P = conv$params
+  # the per-epoch record of the last 51 epochs, else the snapshots of the fit
+  P = conv$params; step = 1L; src = "epoch"
+  if (length(P) < 2L && length(conv$snapshots) >= 2L && is.finite(conv$snap_every)) {
+    P = conv$snapshots; step = conv$snap_every; src = "snapshot"
+  }
   if (length(P) >= 2L) {
-    kk = min(k, length(P) - 1L)
+    kk = min(max(1L, as.integer(round(k / step))), length(P) - 1L)
     a = P[[length(P)]]; b = P[[length(P) - kk]]
-    nms = intersect(names(a), names(b))
-    ch = vapply(nms, function(nm) {
-      den = sqrt(sum(b[[nm]]^2))
+    rel = function(x, y) {
+      den = sqrt(sum(y^2))
       if (!is.finite(den) || den == 0) return(NA_real_)
-      100 * sqrt(sum((a[[nm]] - b[[nm]])^2)) / den
-    }, numeric(1))
-    out$params = data.frame(block = nms, change_pct = ch)[order(-ch), , drop = FALSE]
-    out$k_params = kk
+      100 * sqrt(sum((x - y)^2)) / den
+    }
+    rows = list()
+    for (nm in intersect(names(a), names(b))) {
+      mk = conv$mechanistic[[nm]]
+      if (!is.null(mk) && is.matrix(a[[nm]]) && ncol(a[[nm]]) == length(mk$lower)) {
+        # one row per named parameter, on the scale it acts on (over all species)
+        for (j in seq_len(ncol(a[[nm]]))) {
+          on_scale = function(z) mk$lower[j] + (mk$upper[j] - mk$lower[j]) * stats::plogis(z[, j])
+          rows[[length(rows) + 1L]] = data.frame(parameter = sprintf("%s: %s", mk$type, mk$labels[j]),
+                                                 kind = "species parameter",
+                                                 change_pct = rel(on_scale(a[[nm]]), on_scale(b[[nm]])))
+        }
+      } else {
+        rows[[length(rows) + 1L]] = data.frame(parameter = nm,
+                                               kind = if (grepl("^nn_", nm)) "network weights" else "other",
+                                               change_pct = rel(a[[nm]], b[[nm]]))
+      }
+    }
+    pr = do.call(rbind, rows)
+    out$params = pr[order(-pr$change_pct), , drop = FALSE]
+    out$k_params = kk * step
+    out$params_source = src
   }
   out
 }
@@ -874,18 +933,28 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
 
   cv = convergence_table(x$convergence, epochs_back)
   cat("\n## Convergence\n")
+  pct = function(v) sprintf("%.2f %%", v)
   if (is.null(cv$loss)) {
     cat(sprintf("  loss: fewer than %d + 1 epochs recorded\n", epochs_back))
   } else {
-    cat(sprintf("\nLoss, mean of the last %d epochs against the %d before (%% change):\n", cv$k_loss, cv$k_loss))
-    print(cv$loss, row.names = FALSE, digits = 3)
+    l = cv$loss; i = which.max(abs(l$change_pct))
+    cat(sprintf("\nLoss: the largest change is %s, %s over the last %d epochs (mean of the last %d epochs against the %d before).\n",
+                l$term[i], pct(l$change_pct[i]), cv$k_loss, cv$k_loss, cv$k_loss))
+    l$change = pct(l$change_pct); l$change_pct = NULL
+    print(l, row.names = FALSE, digits = 3)
   }
   if (is.null(cv$params)) {
-    cat("  parameters: no recent parameters stored (model fitted before this version, or one epoch)\n")
+    cat("  parameters: none stored (a model fitted before this version without parameter snapshots, or a single epoch)\n")
   } else {
-    cat(sprintf("\nParameters, change over the last %d epochs (relative L2, %%), largest first:\n", cv$k_params))
-    print(utils::head(cv$params, 12L), row.names = FALSE, digits = 3)
-    if (nrow(cv$params) > 12L) cat(sprintf("  ... %d more blocks in summary(m)$convergence\n", nrow(cv$params) - 12L))
+    p = cv$params
+    sp = p[p$kind == "species parameter", , drop = FALSE]
+    cat(sprintf("\nParameters, change over the last %d epochs (relative L2 over the species, %%; from the %s):\n",
+                cv$k_params, if (identical(cv$params_source, "snapshot")) "parameter snapshots of the fit" else "parameters of every epoch"))
+    if (nrow(sp)) cat(sprintf("  the species parameter that moves most: %s, %s\n", sp$parameter[1], pct(sp$change_pct[1])))
+    cat(sprintf("  the block that moves most overall: %s, %s\n", p$parameter[1], pct(p$change_pct[1])))
+    p$change = pct(p$change_pct); p$change_pct = NULL
+    print(utils::head(p, 12L), row.names = FALSE)
+    if (nrow(p) > 12L) cat(sprintf("  ... %d more in summary(m)$convergence\n", nrow(p) - 12L))
   }
 
   if (!is.null(x$bare_ground)) {
