@@ -728,6 +728,9 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'   across processes and species (Sobol-style). Default `TRUE`.
 #' @param epochs_back (`integer(1)`)\cr the window of the convergence check, in
 #'   epochs. Default `50`.
+#' @param species_names,parameter_names Names of the species and of the
+#'   parameters of a process function of one's own, as for [plot.finn_class()];
+#'   `NULL` (default): the names the model keeps.
 #' @param ... `summary()`: passed to [feature_importance()] with
 #'   `importance = "permutation"` (and from there to
 #'   [`predict()`][predict.finn_class]). `print()`: unused.
@@ -765,7 +768,8 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'
 #' @method summary finn_class
 #' @export
-summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, epochs_back = 50L, ...) {
+summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, epochs_back = 50L, ...,
+                              species_names = NULL, parameter_names = NULL) {
   importance = match.arg(importance)
 
   # 1. skill, from the stored evaluation (run on the training data if missing)
@@ -791,7 +795,7 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     if (is.null(lo) || is.null(up)) next
     lo = as.numeric(torch::as_array(lo$cpu())); up = as.numeric(torch::as_array(up$cpu()))
     mech[[paste0("par_", type, "_unconstrained")]] =
-      list(type = type, lower = lo, upper = up, labels = parameter_labels(object, type, length(lo)))
+      list(type = type, lower = lo, upper = up, labels = parameter_labels(object, type, length(lo), parameter_names))
   }
   # snapshots every `checkpoints` epochs (model$param_history): the fallback for a
   # model that keeps no per-epoch parameters (fitted before this version)
@@ -806,7 +810,7 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     d = data.table::as.data.table(ev$bare_ground$long$site)[variable == "ba"]
     last = max(d$year)
     end = d[year > last - max(1L, floor(0.1 * last)), list(ba = mean(value)), by = list(siteID, species)]
-    sp_lab = species_names_lookup(object$N_species, model = object)
+    sp_lab = species_names_lookup(object$N_species, species_names, model = object)
     bare = end[, list(total_ba = sum(ba), leading_species = sp_lab[as.character(species[which.max(ba)])],
                       leading_share = max(ba) / sum(ba)), by = siteID]
     bare[, years := last]
@@ -842,7 +846,7 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
                  bare_ground = bare, importance = env_section$vi,
                  average_conditional_effects = env_section$ace,
                  method = importance, importance_label = env_section$vi_label,
-                 species_names = species_names_lookup(object$N_species, model = object),
+                 species_names = species_names_lookup(object$N_species, species_names, model = object),
                  environment_error = env_section$error, epochs_back = as.integer(epochs_back)),
             class = "summary.finn_class")
 }

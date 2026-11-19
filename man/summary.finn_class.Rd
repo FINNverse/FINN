@@ -15,7 +15,9 @@
   nperm = 20L,
   scale = TRUE,
   epochs_back = 50L,
-  ...
+  ...,
+  species_names = NULL,
+  parameter_names = NULL
 )
 
 \method{print}{summary.finn_class}(x, epochs_back = x$epochs_back, species = FALSE, ...)
@@ -47,6 +49,10 @@ epochs. Default \code{50}.}
 \item{...}{\code{summary()}: passed to \code{\link[=feature_importance]{feature_importance()}} with
 \code{importance = "permutation"} (and from there to
 \code{\link[=predict.finn_class]{predict()}}). \code{print()}: unused.}
+
+\item{species_names, parameter_names}{Names of the species and of the
+parameters of a process function of one's own, as for \code{\link[=plot.finn_class]{plot.finn_class()}};
+\code{NULL} (default): the names the model keeps.}
 
 \item{x}{A \code{summary.finn_class} object.}
 
