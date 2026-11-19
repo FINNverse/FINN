@@ -63,7 +63,7 @@ taller than it (by more than 0.1 m), \code{light = max(0, 1 - sum(BA_taller * pa
 where \code{BA} is the basal area in m^2/ha (\code{\link[=BA_stand]{BA_stand()}}) and the height comes from
 \code{\link[=height]{height()}} with the species' height parameter \code{parComp[, 1]}. With a competition
 strength of 0.2 (about the start value) a cohort under 50 m^2/ha of taller trees receives no light. In a model the function
-is the competition process, \code{createProcess(func = competition)}; it takes no environment.
+is the competition process, \code{\link[=createProcess]{createProcess(func = competition)}}; it takes no environment.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}

@@ -93,7 +93,7 @@ BA_stand <- function(dbh, trees, patch_size_ha) {
 #' parameter is fitted (the first column of the competition parameters), FINN keeps
 #' it between 0.3 and \eqn{\log(2.3) \approx 0.83}{log(2.3) = 0.83}, so no species
 #' can grow taller than 130 m, the physical limit of tree height (Koch et al. 2004).
-#' Values below 0.3 suit small trees and shrubs; set `createProcess(lower = )` for
+#' Values below 0.3 suit small trees and shrubs; set [`createProcess(lower = )`][createProcess] for
 #' them.
 #'
 #' @references Koch, G. W., Sillett, S. C., Jennings, G. M. & Davis, S. D. (2004).
@@ -131,7 +131,7 @@ height = function(dbh, parHeight) {
 #' where `BA` is the basal area in m^2/ha ([FINN::BA_stand()]) and the height comes from
 #' [FINN::height()] with the species' height parameter `parComp[, 1]`. With a competition
 #' strength of 0.2 (about the start value) a cohort under 50 m^2/ha of taller trees receives no light. In a model the function
-#' is the competition process, `createProcess(func = competition)`; it takes no environment.
+#' is the competition process, [`createProcess(func = competition)`][createProcess]; it takes no environment.
 #'
 #' @param dbh torch.Tensor Diameter at breast height for each cohort, in cm, `[sites, patches, cohorts]`.
 #' @param species torch.Tensor (int64) species index for each cohort, `[sites, patches, cohorts]`.
@@ -274,7 +274,7 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 #'   effect. With the raw rate (`growth_scale = 1`, the behaviour before 0.2.0)
 #'   the term spans only a few tenths on the logit between slow and fast trees
 #'   even at the bound. Set it for a fitted model through
-#'   `createProcess(func = FINN::mortality, growth_scale = 1)`, not through a
+#'   [`createProcess(func = FINN::mortality, growth_scale = 1)`][createProcess], not through a
 #'   wrapper function: the kernel reads `self$record_raws` from its own
 #'   environment and a wrapper leaves that unbound.
 #'
@@ -288,7 +288,7 @@ competition = function(dbh, species, trees, parComp, h = NULL, patch_size_ha, ba
 #' @section The starting value:
 #' The environmental response is `sigmoid(pred)`. Before any fitting it starts
 #' at about 2 % mortality per time step: the intercept of the response is
-#' `qlogis(0.02)` and its other weights are 0 (with `createProcess(hidden = )`
+#' `qlogis(0.02)` and its other weights are 0 (with [`createProcess(hidden = )`][createProcess]
 #' the bias of the output layer carries the intercept), and the species terms
 #' for light, size and growth move it by at most about one logit unit. Until
 #' 0.2.0 the weights started at torch's random values, i.e. at `sigmoid(0) =
@@ -522,7 +522,7 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' as a deprecated alias for one release.
 #'
 #' The cap is the parameter `reg_logK` (`K = exp(reg_logK)`), which **FINN
-#' creates itself** -- there is nothing to declare. `createProcess(cap = )`
+#' creates itself** -- there is nothing to declare. [`createProcess(cap = )`][createProcess]
 #' decides its resolution: `"all"` (the default) gives one cap shared by every
 #' species, `"species"` one cap per species. Read the fitted value back with
 #' `exp(as.numeric(m$reg_logK))`.
@@ -535,7 +535,7 @@ regeneration_hybrid = function(species, parReg, pred, light, debug = FALSE) {
 #' pull of a staged calibration. It is added **after** the `loss_weights = "auto"`
 #' baseline scaling, so `prior_lambda` means the same thing on every dataset.
 #'
-#' `createProcess(prior = "max_obs_recruits")`, the default, resolves the prior
+#' [`createProcess(prior = "max_obs_recruits")`][createProcess], the default, resolves the prior
 #' from the data at the start of [FINN::fit()]: the largest observed recruitment
 #' rate per timestep, `max(reg / period_length)`. The division matters on any
 #' inventory with a remeasurement interval, because `reg` is the SUM over that
@@ -651,12 +651,12 @@ regeneration_capped = function(species, parReg, pred, light, debug = FALSE) {
 #' `K m / (K + m)`.
 #'
 #' The cap `reg_logK` is created by [FINN::finn()] as for
-#' [FINN::regeneration_capped], with its resolution from `createProcess(cap = )`
+#' [FINN::regeneration_capped], with its resolution from [`createProcess(cap = )`][createProcess]
 #' and its prior from `prior`/`prior_lambda`, so it need not be declared. A
 #' `reg_logK` declared in `custom_parameters` (as in the example) is kept and
 #' sets the resolution by its length, but its start value is replaced by the
 #' resolved prior at the first [FINN::fit()]. Declare the two adult parameters
-#' with `createProcess(custom_parameters = )`; a length-1 init gives one shared
+#' with [`createProcess(custom_parameters = )`][createProcess]; a length-1 init gives one shared
 #' value and a length-`N_species` init one value per species:
 #' * `reg_logK` (optional, see above): the log Beverton-Holt cap, stems ha^-1
 #'   step^-1;
@@ -786,9 +786,9 @@ regeneration_adult = function(species, parReg, pred, light, dbh = NULL, trees = 
 #' in a stand of seedlings.
 #'
 #' The cap `reg_logK` is created by [FINN::finn()] as for
-#' [FINN::regeneration_capped] (resolution from `createProcess(cap = )`, prior
+#' [FINN::regeneration_capped] (resolution from [`createProcess(cap = )`][createProcess], prior
 #' from `prior`/`prior_lambda`), so it need not be declared. Declare the three
-#' adult parameters with `createProcess(custom_parameters = )`; a length-1 init
+#' adult parameters with [`createProcess(custom_parameters = )`][createProcess]; a length-1 init
 #' gives one shared value and a length-`N_species` init one value per species:
 #' * `reg_adult_logx`: the log adult threshold, `x = exp(reg_adult_logx)` in the
 #'   units of `dbh`;

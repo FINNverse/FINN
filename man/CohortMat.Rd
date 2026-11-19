@@ -33,6 +33,8 @@ CohortMat(
 A \code{CohortMat}, a \code{torch} \code{nn_module} whose \code{dbh}, \code{trees} and
 \code{species} buffers hold the cohorts as \verb{[sites, patches, cohorts]} tensors.
 
+The \code{CohortMat}, invisibly.
+
 A \code{data.frame} with one row per cohort and the columns \code{siteID},
 \code{patchID}, \code{cohortID}, \code{species}, \code{dbh} and \code{trees}.
 }
@@ -49,6 +51,12 @@ gradient. \code{asDF()} converts it back to a cohort table (a \code{data.frame} 
 
 Build the cohort tensors, either from a cohort table (\code{obs_df}) or from
 arrays of \code{dbh}, \code{trees} and \code{species}
+
+Store a plain R copy of the cohort arrays (used by \code{restore()})
+
+Rebuild the tensors from the stored R copy when they are no longer valid,
+as after \code{readRDS()} of a saved \code{CohortMat} (or of the list
+\code{\link[=resolveSiteIDs]{resolveSiteIDs()}} returns) in a new session
 
 Convert the cohort tensors back to a cohort table
 }

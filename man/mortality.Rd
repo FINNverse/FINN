@@ -47,7 +47,7 @@ standard deviation of observed growth), so that the growth coefficient
 effect. With the raw rate (\code{growth_scale = 1}, the behaviour before 0.2.0)
 the term spans only a few tenths on the logit between slow and fast trees
 even at the bound. Set it for a fitted model through
-\code{createProcess(func = FINN::mortality, growth_scale = 1)}, not through a
+\code{\link[=createProcess]{createProcess(func = FINN::mortality, growth_scale = 1)}}, not through a
 wrapper function: the kernel reads \code{self$record_raws} from its own
 environment and a wrapper leaves that unbound.}
 }
@@ -73,7 +73,7 @@ with \code{mortality_draw}; both are settings of \code{\link[=createProcess]{cre
 
 The environmental response is \code{sigmoid(pred)}. Before any fitting it starts
 at about 2 \% mortality per time step: the intercept of the response is
-\code{qlogis(0.02)} and its other weights are 0 (with \code{createProcess(hidden = )}
+\code{qlogis(0.02)} and its other weights are 0 (with \code{\link[=createProcess]{createProcess(hidden = )}}
 the bias of the output layer carries the intercept), and the species terms
 for light, size and growth move it by at most about one logit unit. Until
 0.2.0 the weights started at torch's random values, i.e. at \code{sigmoid(0) = 0.5} per step, which on yearly steps emptied an unfitted stand within a

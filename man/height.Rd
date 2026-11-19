@@ -29,7 +29,7 @@ m: 35 m for parHeight = 0.3, 65 m for 0.5, 101 m for 0.7. When the height
 parameter is fitted (the first column of the competition parameters), FINN keeps
 it between 0.3 and \eqn{\log(2.3) \approx 0.83}{log(2.3) = 0.83}, so no species
 can grow taller than 130 m, the physical limit of tree height (Koch et al. 2004).
-Values below 0.3 suit small trees and shrubs; set \code{createProcess(lower = )} for
+Values below 0.3 suit small trees and shrubs; set \code{\link[=createProcess]{createProcess(lower = )}} for
 them.
 }
 \examples{

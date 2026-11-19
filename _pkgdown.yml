@@ -57,8 +57,16 @@ reference:
   - finnControl
   - predict.finn_class
   - simulateForest
+  - plot.finn_simulation
   - predictTrees
   - FINN.seed
+
+- title: Evaluation
+  desc: Judge a fitted model against the observations, on the training data and a holdout.
+  contents:
+  - evaluate
+  - comparePlot
+  - summary.finn_class
 
 - title: Processes
   desc: The built-in mechanistic demographic functions and allometries.
@@ -106,9 +114,9 @@ reference:
 - title: Interpretation (xAI)
   desc: Read back what a fitted - or hybrid - model actually learned.
   contents:
+  - plot.finn_class
   - ALE
   - plot.FINNale
-  - summary.finn_class
   - conditionalEffects
   - averageConditionalEffects
   - feature_importance

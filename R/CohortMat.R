@@ -346,6 +346,34 @@ CohortMat = torch::nn_module("CohortMat",
     if (!inherits(self$dbh, "torch_tensor")) self$register_buffer("dbh", torch::torch_tensor(self$dbh, dtype = torch::torch_float32()))
     if (!inherits(self$trees, "torch_tensor")) self$register_buffer("trees", torch::torch_tensor(self$trees, dtype = torch::torch_float32()))
     if (!inherits(self$species, "torch_tensor")) self$register_buffer("species", torch::torch_tensor(self$species, dtype = torch::torch_int64()))
+    # a plain R copy of the three arrays: saveRDS() keeps it, while it keeps only
+    # the (then invalid) pointers of the tensors, so restore() can rebuild them
+    self$keep_arrays()
+  },
+
+  #' @description
+  #' Store a plain R copy of the cohort arrays (used by `restore()`)
+  keep_arrays = function() {
+    self$cohort_arrays = list(dbh = torch::as_array(self$dbh$cpu()),
+                              trees = torch::as_array(self$trees$cpu()),
+                              species = torch::as_array(self$species$cpu()))
+    invisible(self)
+  },
+
+  #' @description
+  #' Rebuild the tensors from the stored R copy when they are no longer valid,
+  #' as after `readRDS()` of a saved `CohortMat` (or of the list
+  #' [resolveSiteIDs()] returns) in a new session
+  #' @return The `CohortMat`, invisibly.
+  restore = function() {
+    if (cohort_tensors_valid(self)) return(invisible(self))
+    a = self$cohort_arrays
+    if (is.null(a))
+      stop("The tensors of this CohortMat are no longer valid (it was saved with saveRDS() and read back), and it carries no R copy to rebuild them from. Rebuild it with makeInitCohorts() from the cohort table, e.g. makeInitCohorts(x$initCohort_dt, Nspecies = nrow(x$species_dt)) for the list resolveSiteIDs() returns.", call. = FALSE)
+    self$register_buffer("dbh", torch::torch_tensor(a$dbh, dtype = torch::torch_float32()))
+    self$register_buffer("trees", torch::torch_tensor(a$trees, dtype = torch::torch_float32()))
+    self$register_buffer("species", torch::torch_tensor(a$species, dtype = torch::torch_int64()))
+    invisible(self)
   },
 
   #' @description
@@ -359,19 +387,41 @@ CohortMat = torch::nn_module("CohortMat",
 
   active = list(
     dbh_r = function(value) {
-      if(missing(value)) torch::as_array(self$dbh)
-      else self$register_buffer("dbh", torch::torch_tensor(value, dtype = torch::torch_float32()))
+      if(missing(value)) { self$restore(); torch::as_array(self$dbh$cpu()) }
+      else { self$register_buffer("dbh", torch::torch_tensor(value, dtype = torch::torch_float32())); self$keep_arrays() }
     },
     trees_r = function(value) {
-      if(missing(value)) torch::as_array(self$trees)
-      else self$register_buffer("trees", torch::torch_tensor(value, dtype = torch::torch_float32()))
+      if(missing(value)) { self$restore(); torch::as_array(self$trees$cpu()) }
+      else { self$register_buffer("trees", torch::torch_tensor(value, dtype = torch::torch_float32())); self$keep_arrays() }
     },
     species_r = function(value) {
-      if(missing(value)) torch::as_array(self$species)
-      else self$register_buffer("species", torch::torch_tensor(value, dtype = torch::torch_int64()))
+      if(missing(value)) { self$restore(); torch::as_array(self$species$cpu()) }
+      else { self$register_buffer("species", torch::torch_tensor(value, dtype = torch::torch_int64())); self$keep_arrays() }
     }
   )
 )
+
+# TRUE when the three cohort tensors still point to live memory; FALSE after a
+# saveRDS()/readRDS() round trip, which keeps only the external pointers.
+cohort_tensors_valid = function(x) {
+  isTRUE(tryCatch({
+    for (nm in c("dbh", "trees", "species")) invisible(x[[nm]]$numel())
+    TRUE
+  }, error = function(e) FALSE))
+}
+
+# Entry check of fit(), predict() / simulateForest() and predictTrees(): a
+# CohortMat read back from disk gets its tensors rebuilt (#77).
+restore_init_cohort = function(init_cohort) {
+  if (inherits(init_cohort, "CohortMat")) {
+    if (is.function(init_cohort$restore)) init_cohort$restore()
+    # a CohortMat created by an earlier FINN version (e.g. the one a model read
+    # with torch_load() keeps from its fit) has no restore() and no R copy
+    else if (!cohort_tensors_valid(init_cohort))
+      stop("The tensors of this CohortMat are no longer valid (it was created with an earlier FINN version and read back from disk), and it carries no R copy to rebuild them from. Rebuild the initial cohorts with makeInitCohorts() and pass them as `init_cohort`.", call. = FALSE)
+  }
+  init_cohort
+}
 
 # Bare ground, the start of fit() and predict() / simulateForest() when
 # `init_cohort = NULL`: one cohort slot per patch holding no stems (dbh 0,

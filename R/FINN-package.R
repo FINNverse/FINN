@@ -12,10 +12,14 @@
 #'   \item [finn()] assembles a model from one process per component, each built
 #'     with [createProcess()] (mechanistic) or [createHybrid()] (neural network).
 #'   \item [simulateForest()] runs a model forward from known parameters.
-#'   \item [fit()] calibrates a model to data; [predict.finn_class()] scores it.
+#'   \item [fit()] calibrates a model to data; [predict.finn_class()] simulates
+#'     with it.
 #'   \item [makeObsData()], [resolveSiteIDs()] and [makeInitCohorts()] turn a raw
 #'     tree list into FINN's input tables.
-#'   \item [ALE()], [summary.finn_class()], [feature_importance()] and
+#'   \item [evaluate()], [comparePlot()] and [summary.finn_class()] judge a
+#'     fitted model against the observations, on the training data and a
+#'     holdout; [plot.finn_simulation()] draws a simulation.
+#'   \item [plot.finn_class()], [ALE()], [feature_importance()] and
 #'     [conditionalEffects()] interpret a fitted model.
 #' }
 #'
@@ -45,5 +49,12 @@ utils::globalVariables(c(
   "siteName", "species", "species_before", "species_name", "status", "td",
   "treeName", "trees", "trees_ha", "value", "var", "variable", "year_before",
   "TransformerEncoderLayer", ".env_row", "first", "growth",
-  "period_length_in", "pl_rate", "step"
+  "period_length_in", "pl_rate", "step",
+  # plot.finn_class() and plot.finn_simulation()
+  "at_bound", "hi", "lo", "lower", "n_sites", "panel", "predictor", "upper", "x", "year",
+  # comparePlot(), evaluate(), summary()
+  "auc", "census", "deaths_ratio", "label", "max_year", "obs", "p_interval", "pred",
+  "r2", "species_lab", "total_ba", "years", "ratio", "ratio_w",
+  "fpr", "tpr", "name", "share", "bound", "total", "colour_group", "site_lab", "value_max",
+  "dbh_end", "dbh_max", "died", "any_obs", "n", "step", "obs_sum", "tile_label"
 ))

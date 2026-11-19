@@ -51,11 +51,22 @@ ALE_ce = function(X, ce) {
   env_sites  = sort(unique(env_dt$siteID))
   years      = length(env_years)
   sitesTotal = length(env_sites)
-  patches    = dim(model$raw_g[[1]])[2]
+  # the patch count from any process that recorded its inputs: growth may be the
+  # one that recorded none (see below)
+  recorded   = Filter(length, list(model$raw_g, model$raw_m, model$raw_r))
+  patches    = if (length(recorded)) dim(recorded[[1]][[1]])[2] else 0L
 
   processes = list()
 
   for(process in c("mortality", "growth", "regeneration")) {
+    raws = switch(process, growth = model$raw_g, mortality = model$raw_m, regeneration = model$raw_r)
+    if (length(raws) < years) {
+      # a user's process function in a model saved before FINN recorded the inputs of
+      # every process itself (or read back with torch_load(), which keeps the methods
+      # it was saved with): no inputs to differentiate at, so this process is left out
+      message(sprintf("conditional effects: the %s process recorded no inputs during the simulation (a custom process function in a model saved with an earlier FINN version); it is left out.", process))
+      next
+    }
     proc_formula = switch(process,
                           growth       = model$process_growth$formula,
                           mortality    = model$process_mortality$formula,
@@ -162,7 +173,9 @@ ALE_ce = function(X, ce) {
 
 .finn_train_ic = function(model) {
   ic = model$train_init_cohort
-  if(is.null(ic)) NULL else ic$cohort
+  # a model read back with torch_load() holds the cohorts with dead tensors:
+  # rebuilt from their R copy (#77)
+  if(is.null(ic)) NULL else restore_init_cohort(ic$cohort)
 }
 
 .finn_get_ce = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_seed = 42L) {
@@ -283,6 +296,8 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
     if(!is.null(ce$key)) model$ale = out
   }
 
+  # the species names the model keeps, for the legend
+  attr(out, "species_names") = species_names_lookup(model$N_species, model = model)
   if(isTRUE(plot)) tryCatch(plot(out, process = process, scale = scale), error = function(e) warning("ALE plot could not be drawn: ", conditionMessage(e), call. = FALSE))
   invisible(out)
 }
@@ -302,6 +317,8 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #' @param scale (`logical(1)`)\cr if `TRUE`, divide each curve by the SD of its
 #'   process x species rate so the effects are dimensionless and comparable (a shared
 #'   y-axis is then used); if `FALSE` (default) the raw ALE is shown with free y-axes.
+#' @param species_names Species names for the legend (see [plot.finn_class()]);
+#'   `NULL` (default): the names the model keeps from [fit()].
 #' @param ... currently ignored.
 #' @return invisibly, the `ggplot` object.
 #'
@@ -329,7 +346,7 @@ ALE = function(model, env = NULL, init_cohort = NULL, env_autoscale = TRUE, sim_
 #'
 #' @method plot FINNale
 #' @export
-plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
+plot.FINNale = function(x, process = NULL, scale = FALSE, species_names = NULL, ...) {
   env_vars = attr(x, "env_vars")
   procs    = if(is.null(process)) names(x) else intersect(names(x), process)
 
@@ -346,7 +363,10 @@ plot.FINNale = function(x, process = NULL, scale = FALSE, ...) {
   if(!nrow(df)) { message("No environmental predictors to plot."); return(invisible(NULL)) }
 
   df$process = factor(df$process, levels = intersect(c("growth", "mortality", "regeneration"), unique(df$process)))
-  df$species = factor(df$species)
+  labs = if (!is.null(species_names) || is.null(attr(x, "species_names")))
+    species_names_lookup(max(df$species), species_names) else attr(x, "species_names")
+  sp_levels = sort(unique(df$species))
+  df$species = factor(labs[as.character(df$species)], levels = labs[as.character(sp_levels)])
 
   ylab         = "ALE"
   facet_scales = "free"
@@ -548,9 +568,10 @@ averageConditionalEffects = function(model, env = NULL, init_cohort = NULL, env_
 #' @param method (`character(1)`)\cr `"rmse"` or `"sobol"`.
 #' @param seed (`integer(1)`|`NULL`)\cr R RNG seed controlling which permutations are drawn.
 #' @param sim_seed (`integer(1)`|`NULL`)\cr torch seed for common random numbers across runs.
-#' @param env_autoscale (`logical(1)`)\cr see [ALE()]. `TRUE` (default) leaves `predict()` to
+#' @param env_autoscale (`logical(1)`)\cr see [ALE()]. `TRUE` (default) leaves
+#'   [`predict()`][predict.finn_class] to
 #'   rescale raw `env` internally; `FALSE` treats `env` as already on the model scale.
-#' @param ... passed to [predict()] (e.g. `patches`, `patch_size`).
+#' @param ... passed to [`predict()`][predict.finn_class] (e.g. `patches`, `patch_size`).
 #' @return a named list (one per process) of data.frames with columns
 #'   `species, variable, importance`, sorted within species.
 #' @seealso [summary.finn_class()] (`importance = "permutation"`), [ALE()]
@@ -658,15 +679,58 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' Summarise a fitted FINN model
 #'
 #' @description
-#' Prints, per process and per species, the environmental variable importance
-#' and the average conditional effects. Both are derived from the model's
-#' conditional effects, which are computed once and cached — so if [ALE()] was
-#' already run (or a previous `summary()`), the default path needs no further
-#' simulation.
+#' Collects what is needed to judge a fitted model, in this order:
+#'
+#' 1. **Skill**: per response, R2 (`1 - SSE/SST`) and the correlation (Pearson
+#'    r) of observed and simulated first, then RMSE, the bias, the ratio of the mean prediction to the mean observation (is the
+#'    magnitude right?; for mortality weighted by the trees at risk, where the
+#'    observations carry `n_at_risk` and `n_died`) and n; for mortality also the
+#'    tree-level AUC and the ratio of predicted to observed deaths. On the
+#'    training data and, when [evaluate()] or the argument `holdout` of [fit()]
+#'    stored one, on the holdout. The observations are compared with the
+#'    simulation aggregated the way [fit()] scores it (see [comparePlot()]).
+#'    Without a stored evaluation, `summary()` runs [evaluate()] on the training
+#'    data first (one simulation) and stores it on the model.
+#' 2. **Convergence**: by how many percent each loss term changed over the last
+#'    `epochs_back` epochs (the mean of the last `epochs_back` epochs against
+#'    the mean of the `epochs_back` before), as a table with one sentence on
+#'    the largest change; and how much the parameters moved over the last
+#'    `epochs_back` epochs, as a table with one row per process (growth,
+#'    mortality, regeneration, competition) and part (its species parameters,
+#'    where they are fitted (`optimizeSpecies = TRUE` in [createProcess()]),
+#'    its environmental response, i.e. the network or the linear climate
+#'    effects, and for regeneration the recruit dispersion and the cap),
+#'    naming the parameter that moved most. The change is the size of the
+#'    step the values took as a percentage of their size,
+#'    `100 * |values now - values then| / |values then|`, over all species of
+#'    a parameter (on the scale it acts on, e.g. "mortality: growth") or all
+#'    weights of a network layer; 1 % means the values moved by about a
+#'    hundredth of their size. [fit()]
+#'    keeps the parameters of the last 51 epochs for this, so `epochs_back` can
+#'    be at most 50; for a model fitted before this version the parameter
+#'    snapshots of the fit (`model$param_history`, every `checkpoints` epochs)
+#'    are used instead; they carry no epoch, so the epochs between them are
+#'    estimated from the length of the loss history and their number (exact
+#'    for one call of [fit()] whose `epochs` is a multiple of `checkpoints`).
+#'    Below the explanation, one sentence names the species parameter that
+#'    moved most and the largest change overall. A fit has settled when both
+#'    are small; network weights can keep moving while the loss stays flat.
+#' 3. **Bare ground**, when [evaluate()] stored a bare-ground run: per site,
+#'    the total basal area and the leading species with its share, as the mean
+#'    over the last tenth of the run.
+#' 4. **Environmental importance and average conditional effects**, per process
+#'    and species, from the model's conditional effects (computed once and
+#'    cached, see [ALE()]). Where they cannot be computed for a model, a
+#'    warning says why and the other sections are still returned.
+#'
+#' `print()` shows it; `print(s, epochs_back = 10)` redoes the convergence
+#' check over another window without recomputing anything. [plot.finn_class()]
+#' draws the fitted parameters themselves.
 #'
 #' @param object (`finn_class`)\cr fitted model.
-#' @param env,init_cohort (`NULL` or data)\cr interpretation data; `NULL` uses the cached
-#'   training data (see [ALE()]).
+#' @param env,init_cohort (`NULL` or data)\cr interpretation data for the
+#'   importance and the conditional effects; `NULL` uses the cached training
+#'   data (see [ALE()]).
 #' @param importance (`character(1)`)\cr `"ale"` (default) = analytical ALE-variance importance
 #'   (cheap, from the cache); `"permutation"` = re-simulating permutation importance
 #'   (see [feature_importance()]), cached on the model under the same input key.
@@ -676,10 +740,27 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #' @param scale (`logical(1)`)\cr for `importance = "ale"`, divide `Var(ALE)` by the
 #'   process x species rate variance so the importances are dimensionless and comparable
 #'   across processes and species (Sobol-style). Default `TRUE`.
-#' @param ... passed through (e.g. to [predict()] for the permutation option).
-#' @return invisibly, a list with `importance`, `average_conditional_effects`, and `method`.
+#' @param epochs_back (`integer(1)`)\cr the window of the convergence check, in
+#'   epochs. Default `50`.
+#' @param species_names,parameter_names Names of the species and of the
+#'   parameters of a process function of one's own, as for [plot.finn_class()];
+#'   `NULL` (default): the species names the model keeps from [fit()] and the
+#'   documented parameter names of FINN's own process functions.
+#' @param ... `summary()`: passed to [feature_importance()] with
+#'   `importance = "permutation"` (and from there to
+#'   [`predict()`][predict.finn_class]). `print()`: unused.
+#' @return `summary()`: an object of class `summary.finn_class`, a list with
+#'   `skill` (per set, overall), `skill_species` (per set and species),
+#'   `convergence` (the loss history, the recent parameters, the parameter
+#'   snapshots with their estimated spacing, and the bounds and names of the
+#'   species parameters), `bare_ground`,
+#'   `importance`, `average_conditional_effects`, `method` (the `importance`
+#'   option), `importance_label`, `species_names`, `environment_error` (`NULL`,
+#'   or why item 4 could not be computed) and `epochs_back`. `print()`: `x`,
+#'   invisibly.
 #'
-#' @seealso [ALE()], [averageConditionalEffects()], [feature_importance()]
+#' @seealso [evaluate()], [comparePlot()], [plot.finn_class()], [ALE()],
+#'   [averageConditionalEffects()], [feature_importance()]
 #'
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -693,19 +774,69 @@ feature_importance = function(model, env = NULL, init_cohort = NULL, nperm = 20L
 #'           mortality_process    = createProcess(~ temp + prec, mortality),
 #'           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 #' fit(m, data = fia_obs_dt[siteID %in% sites], env = fia_env_dt[siteID %in% sites],
-#'     init_cohort = init, epochs = 1L, patches = 4, patch_size = 0.06,
+#'     init_cohort = init, epochs = 3L, patches = 4, patch_size = 0.06,
 #'     plot_progress = FALSE)
 #'
-#' # which predictor matters for which process and species, and in which direction
 #' s <- summary(m)
-#' # the printed tables are also returned
-#' head(s$importance$growth)
+#' s
+#' # the convergence check over the last two epochs instead
+#' print(s, epochs_back = 2)
+#' # the tables are also returned
+#' s$skill$train
 #'
 #' @method summary finn_class
 #' @export
-summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, ...) {
+summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance = c("ale", "permutation"), env_autoscale = TRUE, sim_seed = 42L, nperm = 20L, scale = TRUE, epochs_back = 50L, ...,
+                              species_names = NULL, parameter_names = NULL) {
   importance = match.arg(importance)
 
+  # 1. skill, from the stored evaluation (run on the training data if missing)
+  if (is.null(object$evaluation) && !is.null(object$train_data)) {
+    message("Evaluating on the training data (one simulation); evaluate() can add a holdout and a bare-ground run.")
+    # a failed comparison must not cost the rest of the summary
+    tryCatch(evaluate(object), error = function(e)
+      warning(sprintf("summary(): the model could not be evaluated on its training data (%s); the skill section is left out.",
+                      conditionMessage(e)), call. = FALSE))
+  }
+  ev = object$evaluation
+  sets = intersect(c("train", "holdout"), names(ev))
+  skill = stats::setNames(lapply(sets, function(s) ev[[s]]$skill), sets)
+  skill_species = stats::setNames(lapply(sets, function(s) ev[[s]]$skill_species), sets)
+
+  # 2. convergence: the stored history, judged at print time
+  loss = if (length(object$history)) do.call(rbind, object$history) else NULL
+  # the mechanistic parameters by name, mapped to the scale they act on
+  # (lower + (upper - lower) * plogis(x)), so their change reads in their own units
+  mech = list()
+  for (type in c("growth", "mortality", "regeneration", "competition")) {
+    lo = object[[paste0("par_", type, "_lower")]]; up = object[[paste0("par_", type, "_upper")]]
+    if (is.null(lo) || is.null(up)) next
+    lo = as.numeric(torch::as_array(lo$cpu())); up = as.numeric(torch::as_array(up$cpu()))
+    mech[[paste0("par_", type, "_unconstrained")]] =
+      list(type = type, lower = lo, upper = up, labels = parameter_labels(object, type, length(lo), parameter_names))
+  }
+  # snapshots every `checkpoints` epochs (model$param_history): the fallback for a
+  # model that keeps no per-epoch parameters (fitted before this version)
+  snap_every = if (length(object$param_history) && length(object$history))
+    max(1L, as.integer(round(length(object$history) / length(object$param_history)))) else NA_integer_
+  convergence = list(loss = loss, params = object$param_recent, epochs = object$param_recent_epochs,
+                     snapshots = object$param_history, snap_every = snap_every, mechanistic = mech)
+
+  # 3. bare ground
+  bare = NULL
+  if (!is.null(ev$bare_ground)) {
+    d = data.table::as.data.table(ev$bare_ground$long$site)[variable == "ba"]
+    last = max(d$year)
+    end = d[year > last - max(1L, floor(0.1 * last)), list(ba = mean(value)), by = list(siteID, species)]
+    sp_lab = species_names_lookup(object$N_species, species_names, model = object)
+    bare = end[, list(total_ba = sum(ba), leading_species = sp_lab[as.character(species[which.max(ba)])],
+                      leading_share = max(ba) / sum(ba)), by = siteID]
+    bare[, years := last]
+  }
+
+  # 4. importance and average conditional effects; if they cannot be computed
+  # for this model, the sections above are still returned and printed
+  env_section = tryCatch({
   if(importance == "ale") {
     vi       = .importance_ale_var(object, env, init_cohort, env_autoscale, sim_seed, scale = scale)
     vi_label = if(isTRUE(scale)) "Analytical ALE importance (rate-normalised)" else "Analytical ALE-variance importance"
@@ -721,32 +852,205 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
     }
     vi_label = sprintf("Permutation importance (nperm = %d)", nperm)
   }
-
   ace = averageConditionalEffects(object, env, init_cohort, env_autoscale, sim_seed)
+  list(vi = vi, ace = ace, vi_label = vi_label, error = NULL)
+  }, error = function(e) {
+    warning(sprintf("summary(): the environmental importance and conditional effects could not be computed for this model (%s); the other sections are shown.",
+                    conditionMessage(e)), call. = FALSE)
+    list(vi = NULL, ace = NULL, vi_label = NULL, error = conditionMessage(e))
+  })
+
+  structure(list(skill = skill, skill_species = skill_species, convergence = convergence,
+                 bare_ground = bare, importance = env_section$vi,
+                 average_conditional_effects = env_section$ace,
+                 method = importance, importance_label = env_section$vi_label,
+                 species_names = species_names_lookup(object$N_species, species_names, model = object),
+                 environment_error = env_section$error, epochs_back = as.integer(epochs_back)),
+            class = "summary.finn_class")
+}
+
+# Which process and which part of it a parameter row belongs to: the species
+# parameters of a process ("growth: light requirement"), its environmental
+# response (the network or the linear climate effects, nn_<process>.*), the
+# recruit dispersion and the recruitment cap of regeneration, and the rest.
+parameter_groups = function(p) {
+  procs = c("growth", "mortality", "regeneration", "competition")
+  p$process = "other"; p$part = "other parameters"
+  for (pr in procs) {
+    sp = p$kind == "species parameter" & startsWith(p$parameter, paste0(pr, ":"))
+    p$process[sp] = pr; p$part[sp] = "species parameters"
+    nn = grepl(paste0("^nn_", pr, "\\."), p$parameter)
+    p$process[nn] = pr; p$part[nn] = "environmental response"
+  }
+  th = p$parameter == "par_theta_recruits_raw"; p$process[th] = "regeneration"; p$part[th] = "recruit dispersion"
+  ck = p$parameter == "reg_logK";               p$process[ck] = "regeneration"; p$part[ck] = "recruitment cap"
+  ms = grepl("^mort_", p$parameter);           p$process[ms] = "mortality";    p$part[ms] = "other parameters"
+  p$group = paste(p$process, p$part)
+  p
+}
+
+# Percent change of every loss term over the last k epochs, and of every
+# parameter over the last k (at most 50) stored epochs, or between the
+# snapshots of the fit closest to k epochs apart.
+convergence_table = function(conv, k) {
+  k = as.integer(k)
+  out = list(loss = NULL, params = NULL, k_loss = NA_integer_, k_params = NA_integer_)
+  L = conv$loss
+  if (!is.null(L) && nrow(L) > k) {
+    n = nrow(L)
+    now  = colMeans(L[(n - k + 1):n, , drop = FALSE], na.rm = TRUE)
+    then = colMeans(L[max(1, n - 2 * k + 1):(n - k), , drop = FALSE], na.rm = TRUE)
+    terms = c("dbh", "ba", "trees", "growth", "mortality", "regeneration", "prior penalty")
+    nm = if (ncol(L) == length(terms)) terms else paste0("term ", seq_len(ncol(L)))
+    keep = is.finite(now) & is.finite(then) & then != 0
+    out$loss = data.frame(term = nm[keep], loss_now = now[keep],
+                          change_pct = 100 * (now[keep] - then[keep]) / abs(then[keep]))
+    out$k_loss = k
+  }
+  # the per-epoch record of the last 51 epochs, else the snapshots of the fit
+  P = conv$params; step = 1L; src = "epoch"
+  if (length(P) < 2L && length(conv$snapshots) >= 2L && is.finite(conv$snap_every)) {
+    P = conv$snapshots; step = conv$snap_every; src = "snapshot"
+  }
+  if (length(P) >= 2L) {
+    kk = min(max(1L, as.integer(round(k / step))), length(P) - 1L)
+    a = P[[length(P)]]; b = P[[length(P) - kk]]
+    rel = function(x, y) {
+      den = sqrt(sum(y^2))
+      if (!is.finite(den) || den == 0) return(NA_real_)
+      100 * sqrt(sum((x - y)^2)) / den
+    }
+    rows = list()
+    for (nm in intersect(names(a), names(b))) {
+      mk = conv$mechanistic[[nm]]
+      if (!is.null(mk) && is.matrix(a[[nm]]) && ncol(a[[nm]]) == length(mk$lower)) {
+        # one row per named parameter, on the scale it acts on (over all species)
+        for (j in seq_len(ncol(a[[nm]]))) {
+          on_scale = function(z) mk$lower[j] + (mk$upper[j] - mk$lower[j]) * stats::plogis(z[, j])
+          rows[[length(rows) + 1L]] = data.frame(parameter = sprintf("%s: %s", mk$type, mk$labels[j]),
+                                                 kind = "species parameter",
+                                                 change_pct = rel(on_scale(a[[nm]]), on_scale(b[[nm]])))
+        }
+      } else {
+        rows[[length(rows) + 1L]] = data.frame(parameter = nm,
+                                               kind = if (grepl("^nn_", nm)) "network weights" else "other",
+                                               change_pct = rel(a[[nm]], b[[nm]]))
+      }
+    }
+    pr = do.call(rbind, rows)
+    out$params = pr[order(-pr$change_pct), , drop = FALSE]
+    out$k_params = kk * step
+    out$k_steps = kk
+    out$params_source = src
+  }
+  out
+}
+
+#' @rdname summary.finn_class
+#' @param x A `summary.finn_class` object.
+#' @param species (`logical(1)`)\cr also print the skill per species. Default `FALSE`.
+#' @export
+print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FALSE, ...) {
+  cat("FINN model summary\n==================\n")
+
+  fmt_skill = function(s) {
+    d = as.data.frame(s)
+    # R2 and the correlation first: how much of the observed variation the
+    # simulation reproduces, and how closely the two go together
+    cols = intersect(c("variable", "species", "r2", "r", "rmse", "bias", "ratio", "n", "auc", "deaths_ratio"), names(d))
+    d = d[, cols, drop = FALSE]
+    names(d) = c(variable = "response", species = "species", r2 = "R2", r = "correlation", rmse = "RMSE", bias = "bias",
+                 ratio = "pred/obs", n = "n", auc = "AUC", deaths_ratio = "deaths pred/obs")[cols]
+    d
+  }
+  cat("\n## Skill (observed vs simulated, aggregated as fit() scores)\n")
+  if (!length(x$skill)) {
+    cat("  (no evaluation: run evaluate() on a model fitted with this version)\n")
+  } else for (s in names(x$skill)) {
+    cat(sprintf("\n%s:\n", if (s == "train") "Training data" else "Holdout"))
+    print(fmt_skill(x$skill[[s]]), row.names = FALSE, digits = 3)
+    if (isTRUE(species)) {
+      cat(sprintf("\n%s, per species:\n", if (s == "train") "Training data" else "Holdout"))
+      ss = data.table::copy(x$skill_species[[s]])
+      if (!is.null(x$species_names)) ss[, species := x$species_names[as.character(species)]]
+      print(fmt_skill(ss), row.names = FALSE, digits = 3)
+    }
+  }
+
+  cv = convergence_table(x$convergence, epochs_back)
+  cat("\n## Convergence\n")
+  pct = function(v) sprintf("%.2f %%", v)
+  if (is.null(cv$loss)) {
+    cat(sprintf("  loss: fewer than %d + 1 epochs recorded\n", epochs_back))
+  } else {
+    l = cv$loss; i = which.max(abs(l$change_pct))
+    cat(sprintf("\nLoss: the largest change is %s, %s over the last %d epochs (mean of the last %d epochs against the %d before).\n",
+                l$term[i], pct(l$change_pct[i]), cv$k_loss, cv$k_loss, cv$k_loss))
+    l$change = pct(l$change_pct); l$change_pct = NULL
+    print(l, row.names = FALSE, digits = 3)
+  }
+  if (is.null(cv$params)) {
+    cat("  parameters: none stored (a model fitted before this version without parameter snapshots, or a single epoch)\n")
+  } else {
+    p = parameter_groups(cv$params)
+    # the snapshots carry no epoch: their spacing is the epochs of the last fit()
+    # call over their number, exact for one call with `epochs` a multiple of `checkpoints`
+    if (identical(cv$params_source, "snapshot"))
+      cat(sprintf("\nParameters: how much they moved from the parameter snapshot %d before the last to the last one (about %d epochs, taking the snapshots of the fit as evenly spaced).\n",
+                  cv$k_steps, cv$k_params))
+    else
+      cat(sprintf("\nParameters: how much they moved over the last %d epochs (from the parameters of every epoch).\n", cv$k_params))
+    cat("  The change is the size of the step the values took, as a percentage of the size of the values:\n",
+        "  100 x |values now - values then| / |values then|, over all species of a parameter (or all weights\n",
+        "  of a network layer). 1 % means the values moved by about a hundredth of their size.\n", sep = "")
+    top = p[order(-p$change_pct), , drop = FALSE][!duplicated(p$group[order(-p$change_pct)]), , drop = FALSE]
+    top = top[order(match(top$process, c("growth", "mortality", "regeneration", "competition", "other")),
+                    match(top$part, c("species parameters", "environmental response", "recruit dispersion",
+                                      "recruitment cap", "other parameters"))), , drop = FALSE]
+    sp = p[p$kind == "species parameter", , drop = FALSE]
+    if (nrow(sp)) {
+      j = which.max(sp$change_pct)
+      cat(sprintf("  The species parameter that moved most: %s, %s; the largest change overall: %s, %s.\n",
+                  sp$parameter[j], pct(sp$change_pct[j]), p$parameter[which.max(p$change_pct)], pct(max(p$change_pct, na.rm = TRUE))))
+    }
+    tab = data.frame(process = top$process, part = top$part, `moved most` = top$parameter,
+                     change = pct(top$change_pct), check.names = FALSE)
+    print(tab, row.names = FALSE)
+  }
+
+  if (!is.null(x$bare_ground)) {
+    cat("\n## Bare ground (mean of the last tenth of the run)\n")
+    print(as.data.frame(x$bare_ground), row.names = FALSE, digits = 3)
+  }
 
   wide = function(df, value_col) {
     if(is.null(df) || !nrow(df)) return(df)
     dt = data.table::as.data.table(df)
     w  = data.table::dcast(dt, variable ~ species, value.var = value_col)
     sp = setdiff(names(w), "variable")
-    data.table::setnames(w, sp, paste0("sp", sp))
-    spc = paste0("sp", sp)
+    # species by name where the model knows them, else sp1, sp2, ...
+    nm = if (!is.null(x$species_names) && !all(grepl("^species [0-9]+$", x$species_names[sp])))
+      x$species_names[sp] else paste0("sp", sp)
+    data.table::setnames(w, sp, nm)
+    spc = nm
     w   = w[order(-rowMeans(abs(as.matrix(w[, ..spc])), na.rm = TRUE))]
     as.data.frame(w)
   }
-
-  cat("FINN model summary\n==================\n")
+  cat("\n## Environment\n")
+  if (!is.null(x$environment_error)) {
+    cat(sprintf("  (not available for this model: %s)\n", x$environment_error))
+    return(invisible(x))
+  }
   for(process in c("growth", "mortality", "regeneration")) {
     cat(sprintf("\n### %s\n", toupper(process)))
-    cat(sprintf("\n%s (species in columns):\n", vi_label))
-    vp = vi[[process]]
+    cat(sprintf("\n%s (species in columns):\n", x$importance_label))
+    vp = x$importance[[process]]
     if(is.null(vp) || !nrow(vp)) { cat("  (no environmental predictors)\n") } else { print(wide(vp, "importance"), row.names = FALSE, digits = 3) }
     cat("\nAverage conditional effects (mean; species in columns):\n")
-    ap = ace[[process]]
+    ap = x$average_conditional_effects[[process]]
     if(is.null(ap) || !nrow(ap)) { cat("  (no environmental predictors)\n") } else { print(wide(ap, "mean_effect"), row.names = FALSE, digits = 3) }
   }
-
-  invisible(list(importance = vi, average_conditional_effects = ace, method = importance))
+  invisible(x)
 }
 
 

@@ -22,7 +22,7 @@
 
 simulateForest(
   model,
-  env,
+  env = NULL,
   disturbance = NULL,
   patches = 100L,
   patch_size = NULL,
@@ -32,6 +32,9 @@ simulateForest(
   debug = FALSE,
   recruits = c("simulated", "observed"),
   obs_recruits = NULL,
+  bare_ground = FALSE,
+  years = 500L,
+  sites = NULL,
   ...
 )
 }
@@ -40,7 +43,10 @@ simulateForest(
 
 \item{env}{(\code{data.frame})\cr The environment of every site and simulated
 year: one row per \code{siteID} and \code{year}, plus one column per predictor, as
-in \code{\link[=fit]{fit()}}. Every row is one simulated step. See \link{finn_data}.}
+in \code{\link[=fit]{fit()}}. Every row is one simulated step. See \link{finn_data}.
+Required, except in \code{simulateForest()} with \code{bare_ground = TRUE}: there
+\code{NULL} (default) takes the environment the model was fitted on, and a
+table given is the one the mean climate is taken from.}
 
 \item{disturbance}{(\code{data.frame} or \code{NULL})\cr Optional disturbances: one
 row per \code{siteID} and \code{year} with the column \code{intensity}, the probability
@@ -48,7 +54,9 @@ row per \code{siteID} and \code{year} with the column \code{intensity}, the prob
 \link{finn_data}.}
 
 \item{patches}{(\code{integer(1)})\cr Number of patches per site when the
-simulation starts from bare ground (\code{init_cohort = NULL}). Ignored, with a
+simulation starts from bare ground (\code{init_cohort = NULL}). Not given: the
+patch count the model was fitted with (\code{model$patches}), or \code{100} for a
+model fitted before 0.2.0 or never fitted. Ignored, with a
 warning when it differs, as soon as \code{init_cohort} is given: the patch
 count then comes from the initial cohorts.}
 
@@ -79,7 +87,7 @@ step is stored, with the intermediate quantities of the processes.}
 \item{recruits}{(\code{character(1)})\cr Where the recruits come from. \code{"simulated"}
 (the default) is the model's regeneration process. \code{"observed"} feeds the
 observed recruitment in \code{obs_recruits} instead, as
-\code{fit(loss_recruit = "observed")} does, to check a model calibrated that way
+\code{\link[=fit]{fit(loss_recruit = "observed")}} does, to check a model calibrated that way
 on the intervals it was calibrated on. With observed recruitment the model
 is not an autonomous simulator: every simulated year must lie in an
 observed interval, and a bare-ground, succession or projection run beyond
@@ -87,7 +95,7 @@ them is refused. See \link{recruitment} for the unit chain.}
 
 \item{obs_recruits}{(\code{data.frame})\cr The observed recruitment for
 \code{recruits = "observed"}, required there and refused otherwise: a table like
-\code{fit()}'s \code{data} with \code{siteID}, \code{year}, \code{species}, \code{reg} and \code{period_length},
+the \code{data} of \code{\link[=fit]{fit()}} with \code{siteID}, \code{year}, \code{species}, \code{reg} and \code{period_length},
 rows for every species (0 where none recruited), the sites of \code{env} and years
 among those of \code{env}. Intervals map to simulated years exactly as in
 \link{fit}. An \code{NA} \code{reg} in an interval, a year in two intervals and a year
@@ -99,14 +107,33 @@ large runs). The default processes all sites in one batch and is what almost
 all users want.}
 
 \item{model}{(\code{finn_class})\cr The model built by \code{\link[=finn]{finn()}}, fitted with \code{\link[=fit]{fit()}}.}
+
+\item{bare_ground}{(\code{logical(1)})\cr \code{simulateForest()} only: \code{TRUE} runs the
+model from an empty stand for \code{years} years under a constant climate, the
+mean of every predictor over the environment the model was fitted on (or
+over \code{env} when given); see \emph{Bare-ground runs} in the details.
+\code{init_cohort} must be left out (an error otherwise) and \code{disturbance} is
+ignored. Default \code{FALSE}.}
+
+\item{years}{(\code{integer(1)})\cr \code{simulateForest()} with \code{bare_ground = TRUE}:
+the length of the run in years. Default \code{500}.}
+
+\item{sites}{\code{simulateForest()} with \code{bare_ground = TRUE}: \code{NULL} (default)
+one run under the mean climate of all sites (\code{siteID} 1 in the result),
+or site ids for one run per site under that site's mean climate (the
+\code{siteID} of the fitted environment, or of \code{env} when given, kept in the
+result).}
 }
 \value{
-A named list. \verb{$long$site} (and \verb{$wide$site}) give the site-level
+A named list of class \code{finn_simulation}, which \code{\link[=plot.finn_simulation]{plot.finn_simulation()}}
+draws. \verb{$long$site} (and \verb{$wide$site}) give the site-level
 results, averaged over the patches: columns \code{siteID}, \code{year}, \code{species},
 \code{variable} (\code{dbh}, \code{ba}, \code{trees}, \code{growth}, \code{mort}, \code{reg}, \code{r_mean_ha}) and
 \code{value}; \verb{$wide$site} has one column per variable instead. \code{siteID} is the
 id used in \code{env}; \code{year} is the simulation step, counted from 1 (the k-th
-year of a site's \code{env} is step k), whatever the values of \code{env$year}. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
+year of a site's \code{env} is step k), whatever the values of \code{env$year}; the
+years of \code{env} are kept as the attribute \code{"env_years"}, with which
+\code{\link[=comparePlot]{comparePlot()}} places observations. When \code{return_cohorts} is set, \verb{$long$cohort} / \verb{$wide$cohort} add
 the per-cohort state (\code{dbh}, \code{trees}, \code{species}, growth \code{g}, mortality \code{m},
 ...) for the requested timesteps.
 }
@@ -126,6 +153,13 @@ in natural units: the standardisation learned by \code{\link[=fit]{fit()}} is ap
 automatically. A model that has not been fitted has no standardisation yet,
 so it must be given \code{env} on the scale its processes expect; fit it first
 (two epochs are enough for a trial).
+
+\strong{Bare-ground runs.} \code{simulateForest(model, bare_ground = TRUE)} builds the
+environment itself: the model starts from an empty stand and runs for
+\code{years} years under a constant climate, the mean of every predictor over
+the environment the model was fitted on, or with \code{sites} one run per site
+under that site's mean. It shows what the model does outside the
+observation window; \code{\link[=evaluate]{evaluate()}} stores such a run on the model.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
@@ -157,9 +191,16 @@ succession <- fia_env_dt[siteID \%in\% sites & year == 1][rep(1:3, each = 50)]
 succession[, year := rep(1:50, times = 3)]
 sim50 <- simulateForest(m, env = succession, patches = 4)
 sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year \%in\% c(10, 50)]
+
+# the same kind of run in one call: from an empty stand under the mean
+# climate of the fitted environment, held constant
+bare <- simulateForest(m, bare_ground = TRUE, years = 30)
+plot(bare)
 \dontshow{\}) # examplesIf}
 }
 \seealso{
 \code{\link[=fit]{fit()}}, \link{finn_data} for the input tables, \link{recruitment} for
-the recruitment options (\code{recruits}, \code{obs_recruits})
+the recruitment options (\code{recruits}, \code{obs_recruits}),
+\code{\link[=plot.finn_simulation]{plot.finn_simulation()}} to draw the result, \code{\link[=comparePlot]{comparePlot()}}
+and \code{\link[=evaluate]{evaluate()}} to compare it with observations
 }

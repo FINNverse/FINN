@@ -34,7 +34,7 @@ parameter group. Default \code{2}.}
 \item{x}{(\code{finnControl})\cr The object to print.}
 }
 \value{
-A list of class \code{finnControl}, to be passed to \code{fit(control = )}.
+A list of class \code{finnControl}, to be passed to \code{\link[=fit]{fit(control = )}}.
 }
 \description{
 Collects the settings of the optimization behind \code{\link[=fit]{fit()}} in one object,

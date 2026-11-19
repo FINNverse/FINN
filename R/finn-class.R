@@ -60,12 +60,12 @@
 #' the process' `formula` names are turned into one number that scales the
 #' process. By default that response is a simple linear (growth, regeneration)
 #' or logistic (mortality) function with one coefficient per predictor and
-#' species; `createProcess(hidden = )` turns it into a small neural network.
+#' species; [`createProcess(hidden = )`][createProcess] turns it into a small neural network.
 #' The simulated stand variables (mean dbh, basal area, number of trees) and
 #' the simulated rates (growth, mortality, recruitment) of every site and year
 #' are what [FINN::fit()] compares with the observations.
 #'
-#' **The default processes** are, in 0.2.0, `createProcess(func = growth)`,
+#' **The default processes** are, in 0.2.0, [`createProcess(func = growth)`][createProcess],
 #' `createProcess(func = mortality)`, `createProcess(func = regeneration_capped)`
 #' and `createProcess(func = competition)`: the equations of Pichler & Käber
 #' (2026), with one change -- recruitment is capped ([FINN::regeneration_capped()]
@@ -105,7 +105,7 @@
 #' * *fully mechanistic* -- the equation, with a linear or logistic response to
 #'   the environment. Every parameter has a meaning and a unit.
 #' * *level 1* -- the equation, but its environmental response is a small
-#'   network (`createProcess(hidden = c(20, 20))`). The demography stays the
+#'   network ([`createProcess(hidden = c(20, 20))`][createProcess]). The demography stays the
 #'   package's equation, so the model still extrapolates the way that equation
 #'   says it should, while the response to climate is free in shape.
 #' * *level 2* -- the equation itself replaced by a network
@@ -124,10 +124,14 @@
 #' regression rather than every column of `env`, because each one costs a
 #' coefficient per species.
 #'
-#' **Checking a fitted model.** `fit(plot_progress = TRUE)` and `$history` say
+#' **Checking a fitted model.** [`fit(plot_progress = TRUE)`][fit] and `$history` say
 #' whether the fit moved and which response drove it; [FINN::summary.finn_class()] reports
-#' the parameters; [FINN::ALE()] shows the fitted environmental responses,
-#' including those of a network; [FINN::simulateForest()] from bare ground shows
+#' the skill on the training data and a holdout (stored by [FINN::evaluate()],
+#' drawn by [FINN::comparePlot()]), whether the fit has settled, and the
+#' environmental importances; [FINN::plot.finn_class()] draws the fitted
+#' parameters; [FINN::ALE()] shows the fitted environmental responses,
+#' including those of a network; [FINN::simulateForest()] from bare ground
+#' (`bare_ground = TRUE`) shows
 #' what the model does outside the observation window. The last one is worth the
 #' time: a model that predicts the holdout well and grows an implausible stand
 #' from bare ground has usually learned the observed window rather than the
@@ -179,7 +183,7 @@
 #'   observation interval spans several time steps (`period_length` in the
 #'   data). If unsure, keep the default: with annual time steps it is the
 #'   annual growth rate. [FINN::makeObsData()] returns the annual rate (as in
-#'   the bundled FIA data); with `makeObsData(rates = "interval")` it returns
+#'   the bundled FIA data); with [`makeObsData(rates = "interval")`][makeObsData] it returns
 #'   the increment between two censuses, which is the per-step rate only when
 #'   one step is one census interval. The terms follow
 #'   Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from the
@@ -190,7 +194,7 @@
 #'   tallies. Default `1`, which leaves per-hectare data as they are. See
 #'   [recruitment].
 #' @param ... Arguments of earlier versions, still accepted with a warning:
-#'   `reg_floor` (now `createProcess(reg_floor = )` of the regeneration process)
+#'   `reg_floor` (now [`createProcess(reg_floor = )`][createProcess] of the regeneration process)
 #'   and `growth_period_scale` (`TRUE` is now `growth_rate = "period"`).
 #'
 #' @references
@@ -323,7 +327,7 @@ finn = function(N_species,
 #' through the years of `env`, the simulation is compared with the observed
 #' stand variables and demographic rates in `data`, and the parameters of all
 #' processes -- the species parameters of the mechanistic equations (for a
-#' process built with `createProcess(optimizeSpecies = TRUE)`), their
+#' process built with [`createProcess(optimizeSpecies = TRUE)`][createProcess]), their
 #' responses to the environment, and the weights of any neural-network process
 #' -- are adjusted together, in one joint optimization, until the simulation
 #' matches the observations as well as it can. The processes are never
@@ -359,7 +363,7 @@ finn = function(N_species,
 #' which a species has no trees in the simulation counts as growth 0 and
 #' survival 1, and the rate is spread over the full `period_length`, because
 #' the observed rate is derived from the counts over the whole interval. With
-#' `finn(growth_rate = "period")` growth is the compounded increment over the
+#' [`finn(growth_rate = "period")`][finn] growth is the compounded increment over the
 #' interval instead.
 #'
 #' **Reading the progress.** With the default `loss_weights = "auto"` every
@@ -401,7 +405,7 @@ finn = function(N_species,
 #' @section Bounds on simulated mortality:
 #' Before the death draw, the simulation clamps the per-cohort mortality
 #' probability of every step to the interval
-#' `createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)` of the
+#' [`createProcess(mortality_floor = 0.001, mortality_ceiling = 0.999)`][createProcess] of the
 #' mortality process, so at least 0.1 % and at most 99.9 % of a cohort is at
 #' risk per simulated step however extreme the fitted rate. The bound is per
 #' *step*, not per year: on five-year steps the floor is 0.02 %/yr, on decadal
@@ -476,9 +480,11 @@ finn = function(N_species,
 #'   have the same sites and years as `env`. `NULL` (default): no disturbance.
 #'   See [finn_data].
 #' @param patches (`integer(1)`)\cr Number of patches per site when the fit
-#'   starts from bare ground (`init_cohort = NULL`). Ignored, with a warning
-#'   when it differs, as soon as `init_cohort` is given: the patch count then
-#'   comes from the initial cohorts.
+#'   starts from bare ground (`init_cohort = NULL`). Default `100`. Ignored,
+#'   with a warning when it differs, as soon as `init_cohort` is given: the
+#'   patch count then comes from the initial cohorts. The patch count of the
+#'   fit is stored as `model$patches`; [FINN::simulateForest()] and
+#'   [FINN::evaluate()] take it when their `patches` is not given.
 #' @param patch_size (`numeric(1)`)\cr Area of one patch in ha. Default `0.1`.
 #'   Use the plot size of the inventory (the bundled FIA data: `0.06`). A
 #'   model that was fitted or simulated with another patch size before gives a
@@ -589,7 +595,7 @@ finn = function(N_species,
 #'   `"identity"`, `"0to1"` or a function `f(x)` returning `list(center =, scale =)`,
 #'   e.g. `c(temp = "auto", management = "identity")` to keep an ordinal
 #'   predictor on its own scale. The constants are stored on the model
-#'   (`model$env_scaling`) and re-applied by `predict()`/`simulateForest()`, so
+#'   (`model$env_scaling`) and re-applied by [FINN::simulateForest()], so
 #'   `env` is always passed in natural units. See [finn_data].
 #' @param nonfinite (`character(1)`)\cr What happens when one of the six loss
 #'   terms is not finite at a scored timestep (an overflowing likelihood, a
@@ -625,8 +631,8 @@ finn = function(N_species,
 #'   list can be reused across fits. Ignored unless `reanchor = TRUE`.
 #'
 #'   **Build the arrays directly** --
-#'   `CohortMat(dbh = , trees = , species = , dims = , sp = )` -- rather than via
-#'   `CohortMat(obs_df = )`. The `obs_df` path runs `obsDF2arrays()`, which rounds
+#'   [`CohortMat(dbh = , trees = , species = , dims = , sp = )`][CohortMat] -- rather than via
+#'   `CohortMat(obs_df = )`. The `obs_df` path runs [FINN::obsDF2arrays()], which rounds
 #'   `trees` to whole stems and silently renumbers any `siteID`/`patchID` that is
 #'   not a complete `1:n` sequence; on a simulated or partly empty stand that
 #'   corrupts the anchor, and a renumbered site no longer aligns with `init_cohort`.
@@ -661,7 +667,7 @@ finn = function(N_species,
 #'
 #'   `anchor_cohorts` must supply an anchor for every observed timestep except the
 #'   last (nothing is conditioned on the final census, because nothing follows it).
-#'   Only `fit()` teacher-forces; `predict()`/`simulateForest()` always simulate,
+#'   Only `fit()` teacher-forces; [FINN::simulateForest()] always simulates,
 #'   so a teacher-forced model is still validated by single shooting.
 #' @param rb_gradient (`logical(1)`)\cr Take the gradient of the drawn death and
 #'   recruitment counts through their expectation instead of through the draw. The
@@ -682,21 +688,32 @@ finn = function(N_species,
 #'   the historical `1e-5` (poisson) and `0.001` (nbinom) left it at `y/offset`,
 #'   four orders above the rest. `NULL` restores those two historical constants
 #'   and so reproduces a fit made before 0.2.0.
+#' @param holdout `NULL` (default), or a list with holdout `data`, `env` and
+#'   `init_cohort` (and optionally `disturbance`), as the `holdout` of
+#'   [FINN::evaluate()]: after the fit, [FINN::evaluate()]
+#'   simulates the training data and the holdout and stores the comparison on
+#'   the model (`model$evaluation`), which [FINN::summary.finn_class()] prints. The
+#'   same as calling `evaluate(model, holdout = )` after the fit; if that
+#'   evaluation fails, the fit is kept and a warning says why.
 #' @param ... Arguments of earlier versions, still accepted with a warning:
 #'   `weights` (now `loss_weights`), `recruits` (now `loss_recruit`), and
 #'   `optimizer`, `lr_scheduler`, `lr_scheduler_params`, `clip_norm` (now
-#'   members of `control = finnControl()`). Any other named argument is passed
-#'   on to the optimizer, as before; `finnControl(...)` is the place for it now.
+#'   members of `control`, see [finnControl()]). Any other named argument is passed
+#'   on to the optimizer, as before; [finnControl()] is the place for it now.
 #' @param loss Deprecated name of `loss_family`, still accepted with a warning.
 #'
 #' @return The fitted `model`, invisibly. `fit()` trains the model in place, so
 #'   the returned object is the one passed in, now carrying the training results
-#'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`, `$param_history`).
+#'   (e.g. `$history`, `$loss_weights`, `$loss_baseline`, `$param_history`),
+#'   the patch count of the fit (`$patches`) and, with `holdout`, the
+#'   evaluation (`$evaluation`).
 #' @seealso [finn_data] for the input tables, [finn_loss] for how the
 #'   simulation is compared with the observations, [finnControl()] for the
 #'   optimizer settings, [recruitment] for the recruitment options
 #'   (`loss_recruit`, the regeneration likelihood), [FINN::simulateForest()]
-#'   to simulate with the fitted model
+#'   to simulate with the fitted model, [FINN::evaluate()],
+#'   [FINN::summary.finn_class()] and [FINN::plot.finn_class()] to judge the
+#'   fit
 #' @export
 #' @examplesIf torch::torch_is_installed()
 #' library(data.table)
@@ -762,6 +779,7 @@ fit = function(model,
                teacher_forcing = FALSE,
                rb_gradient = TRUE,
                trees_offset = 0.01,
+               holdout = NULL,
                ...,
                loss = NULL) {
   # the thread count is validated (and set) before anything else, so a wrong
@@ -825,10 +843,13 @@ fit = function(model,
     env = check_fit_env(env, data = data, caller = "fit()")
     disturbance = check_fit_disturbance(disturbance, env, caller = "fit()")
   }
+  if (!is.null(holdout) && (!is.list(holdout) || is.null(holdout$data) || is.null(holdout$env)))
+    stop("`holdout` must be a list with `data`, `env` and `init_cohort` (see ?evaluate).", call. = FALSE)
+  init_cohort = restore_init_cohort(init_cohort)
   check_patch_arguments(model, patches, patch_size, init_cohort,
                         patches_given = !missing(patches), caller = "fit()")
 
-  invisible(model$fit(data = data,
+  out = model$fit(data = data,
                       env = env,
                       disturbance = disturbance,
                       patches = patches,
@@ -866,7 +887,14 @@ fit = function(model,
                       trees_offset = trees_offset,
                       loss_resolution = match.arg(loss_resolution),
                       recruits = loss_recruit,
-                      optimizer_args = optimizer_args))
+                      optimizer_args = optimizer_args)
+  # optional: evaluate on the training data and the holdout right away
+  # (an evaluation that fails must not take the finished fit with it)
+  if (!is.null(holdout) && !is.null(data))
+    tryCatch(evaluate(model, holdout = holdout), error = function(e)
+      warning(sprintf("fit(): the model is fitted, but the evaluation with `holdout` failed (%s); run evaluate() on the model once the holdout is in order.",
+                      conditionMessage(e)), call. = FALSE))
+  invisible(out)
 }
 
 # The six-slot loss_family vector fit() works on, from a full vector or a
@@ -1119,16 +1147,28 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #' so it must be given `env` on the scale its processes expect; fit it first
 #' (two epochs are enough for a trial).
 #'
+#' **Bare-ground runs.** `simulateForest(model, bare_ground = TRUE)` builds the
+#' environment itself: the model starts from an empty stand and runs for
+#' `years` years under a constant climate, the mean of every predictor over
+#' the environment the model was fitted on, or with `sites` one run per site
+#' under that site's mean. It shows what the model does outside the
+#' observation window; [FINN::evaluate()] stores such a run on the model.
+#'
 #' @param object (`finn_class`)\cr The model built by [FINN::finn()], fitted with [FINN::fit()].
 #' @param env (`data.frame`)\cr The environment of every site and simulated
 #'   year: one row per `siteID` and `year`, plus one column per predictor, as
 #'   in [FINN::fit()]. Every row is one simulated step. See [finn_data].
+#'   Required, except in `simulateForest()` with `bare_ground = TRUE`: there
+#'   `NULL` (default) takes the environment the model was fitted on, and a
+#'   table given is the one the mean climate is taken from.
 #' @param disturbance (`data.frame` or `NULL`)\cr Optional disturbances: one
 #'   row per `siteID` and `year` with the column `intensity`, the probability
 #'   (0 to 1) that a patch of that site loses all its trees in that year. See
 #'   [finn_data].
 #' @param patches (`integer(1)`)\cr Number of patches per site when the
-#'   simulation starts from bare ground (`init_cohort = NULL`). Ignored, with a
+#'   simulation starts from bare ground (`init_cohort = NULL`). Not given: the
+#'   patch count the model was fitted with (`model$patches`), or `100` for a
+#'   model fitted before 0.2.0 or never fitted. Ignored, with a
 #'   warning when it differs, as soon as `init_cohort` is given: the patch
 #'   count then comes from the initial cohorts.
 #' @param patch_size (`numeric(1)`)\cr Area of one patch in ha. `NULL`
@@ -1153,33 +1193,51 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #' @param recruits (`character(1)`)\cr Where the recruits come from. `"simulated"`
 #'   (the default) is the model's regeneration process. `"observed"` feeds the
 #'   observed recruitment in `obs_recruits` instead, as
-#'   `fit(loss_recruit = "observed")` does, to check a model calibrated that way
+#'   [`fit(loss_recruit = "observed")`][fit] does, to check a model calibrated that way
 #'   on the intervals it was calibrated on. With observed recruitment the model
 #'   is not an autonomous simulator: every simulated year must lie in an
 #'   observed interval, and a bare-ground, succession or projection run beyond
 #'   them is refused. See [recruitment] for the unit chain.
 #' @param obs_recruits (`data.frame`)\cr The observed recruitment for
 #'   `recruits = "observed"`, required there and refused otherwise: a table like
-#'   `fit()`'s `data` with `siteID`, `year`, `species`, `reg` and `period_length`,
+#'   the `data` of [FINN::fit()] with `siteID`, `year`, `species`, `reg` and `period_length`,
 #'   rows for every species (0 where none recruited), the sites of `env` and years
 #'   among those of `env`. Intervals map to simulated years exactly as in
 #'   [FINN::fit]. An `NA` `reg` in an interval, a year in two intervals and a year
 #'   in none are errors.
+#' @param bare_ground (`logical(1)`)\cr `simulateForest()` only: `TRUE` runs the
+#'   model from an empty stand for `years` years under a constant climate, the
+#'   mean of every predictor over the environment the model was fitted on (or
+#'   over `env` when given); see *Bare-ground runs* in the details.
+#'   `init_cohort` must be left out (an error otherwise) and `disturbance` is
+#'   ignored. Default `FALSE`.
+#' @param years (`integer(1)`)\cr `simulateForest()` with `bare_ground = TRUE`:
+#'   the length of the run in years. Default `500`.
+#' @param sites `simulateForest()` with `bare_ground = TRUE`: `NULL` (default)
+#'   one run under the mean climate of all sites (`siteID` 1 in the result),
+#'   or site ids for one run per site under that site's mean climate (the
+#'   `siteID` of the fitted environment, or of `env` when given, kept in the
+#'   result).
 #' @param ... Advanced options forwarded to the internal simulator, chiefly
 #'   `batchsize` (split the sites into batches of this many to cap memory for very
 #'   large runs). The default processes all sites in one batch and is what almost
 #'   all users want.
 #'
-#' @return A named list. `$long$site` (and `$wide$site`) give the site-level
+#' @return A named list of class `finn_simulation`, which [plot.finn_simulation()]
+#'   draws. `$long$site` (and `$wide$site`) give the site-level
 #'   results, averaged over the patches: columns `siteID`, `year`, `species`,
 #'   `variable` (`dbh`, `ba`, `trees`, `growth`, `mort`, `reg`, `r_mean_ha`) and
 #'   `value`; `$wide$site` has one column per variable instead. `siteID` is the
 #'   id used in `env`; `year` is the simulation step, counted from 1 (the k-th
-#'   year of a site's `env` is step k), whatever the values of `env$year`. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
+#'   year of a site's `env` is step k), whatever the values of `env$year`; the
+#'   years of `env` are kept as the attribute `"env_years"`, with which
+#'   [FINN::comparePlot()] places observations. When `return_cohorts` is set, `$long$cohort` / `$wide$cohort` add
 #'   the per-cohort state (`dbh`, `trees`, `species`, growth `g`, mortality `m`,
 #'   ...) for the requested timesteps.
 #' @seealso [FINN::fit()], [finn_data] for the input tables, [recruitment] for
-#'   the recruitment options (`recruits`, `obs_recruits`)
+#'   the recruitment options (`recruits`, `obs_recruits`),
+#'   [FINN::plot.finn_simulation()] to draw the result, [FINN::comparePlot()]
+#'   and [FINN::evaluate()] to compare it with observations
 #' @method predict finn_class
 #' @export
 #' @examplesIf torch::torch_is_installed()
@@ -1211,6 +1269,11 @@ predictTrees = function(model, tree_data, env, patches = 100L, patch_size = NULL
 #' succession[, year := rep(1:50, times = 3)]
 #' sim50 <- simulateForest(m, env = succession, patches = 4)
 #' sim50$long$site[variable == "ba", .(ba = sum(value)), by = .(siteID, year)][year %in% c(10, 50)]
+#'
+#' # the same kind of run in one call: from an empty stand under the mean
+#' # climate of the fitted environment, held constant
+#' bare <- simulateForest(m, bare_ground = TRUE, years = 30)
+#' plot(bare)
 predict.finn_class = function(object,
                               env,
                               disturbance = NULL,
@@ -1227,22 +1290,35 @@ predict.finn_class = function(object,
   # simulateForest() says whether `patches` was given; a direct predict() call knows itself
   patches_given = if (!is.null(dots$.patches_given)) dots$.patches_given else !missing(patches)
   dots$.patches_given = NULL
+  # not given: the patch count of the fit
+  if (!patches_given && !is.null(object$patches)) patches = object$patches
+  init_cohort = restore_init_cohort(init_cohort)
   env = check_fit_env(env, caller = "predict()")
   disturbance = check_fit_disturbance(disturbance, env, caller = "predict()")
   if (is.null(patch_size)) patch_size = if (is.null(object$patch_size_ha)) 0.1 else object$patch_size_ha
   check_patch_arguments(object, patches, patch_size, init_cohort,
                         patches_given = patches_given, caller = "predict()")
-  do.call(object$simulate, c(list(env = env,
-                                  disturbance = disturbance,
-                                  patches = patches,
-                                  patch_size = patch_size,
-                                  init_cohort = init_cohort,
-                                  device = device,
-                                  return_cohorts = return_cohorts,
-                                  debug = debug,
-                                  recruits = match.arg(recruits),
-                                  obs_recruits = obs_recruits),
-                             dots))
+  out = do.call(object$simulate, c(list(env = env,
+                                        disturbance = disturbance,
+                                        patches = patches,
+                                        patch_size = patch_size,
+                                        init_cohort = init_cohort,
+                                        device = device,
+                                        return_cohorts = return_cohorts,
+                                        debug = debug,
+                                        recruits = match.arg(recruits),
+                                        obs_recruits = obs_recruits),
+                                   dots))
+  # the class goes on the outer list only, so plot() can dispatch; the tables
+  # inside ($long$site, $wide$site, ...) stay exactly as before
+  class(out) = c("finn_simulation", class(out))
+  attr(out, "species_names") = object$species_names
+  # the simulated steps are numbered 1, 2, ...; the years of `env` they stand
+  # for (and the growth unit of the model) let comparePlot() and evaluate()
+  # place observations as fit() does
+  attr(out, "env_years") = sort(unique(env[["year"]]))
+  if (isTRUE(object$growth_period_scale)) attr(out, "growth_rate") = "period"
+  out
 }
 
 
@@ -1250,7 +1326,7 @@ predict.finn_class = function(object,
 #' @param model (`finn_class`)\cr The model built by [FINN::finn()], fitted with [FINN::fit()].
 #' @export
 simulateForest = function(model,
-                          env,
+                          env = NULL,
                           disturbance = NULL,
                           patches = 100L,
                           patch_size = NULL,
@@ -1260,20 +1336,44 @@ simulateForest = function(model,
                           debug = FALSE,
                           recruits = c("simulated", "observed"),
                           obs_recruits = NULL,
+                          bare_ground = FALSE,
+                          years = 500L,
+                          sites = NULL,
                           ...) {
-  predict(model,
-          env = env,
-          disturbance = disturbance,
-          patches = patches,
-          patch_size = patch_size,
-          init_cohort = init_cohort,
-          device = device,
-          return_cohorts = return_cohorts,
-          debug = debug,
-          recruits = match.arg(recruits),
-          obs_recruits = obs_recruits,
-          .patches_given = !missing(patches),
-          ...)
+  if (isTRUE(bare_ground)) {
+    if (!is.null(init_cohort))
+      stop("`bare_ground = TRUE` starts from an empty stand; leave `init_cohort` out.", call. = FALSE)
+    env = bare_ground_env(model, sites = sites, years = years, env = env)
+    disturbance = NULL
+  } else if (is.null(env)) {
+    stop("`env` is needed, unless `bare_ground = TRUE`.", call. = FALSE)
+  }
+  out = predict(model,
+                env = env,
+                disturbance = disturbance,
+                patches = patches,
+                patch_size = patch_size,
+                init_cohort = init_cohort,
+                device = device,
+                return_cohorts = return_cohorts,
+                debug = debug,
+                recruits = match.arg(recruits),
+                obs_recruits = obs_recruits,
+                .patches_given = !missing(patches),
+                ...)
+  if (isTRUE(bare_ground)) {
+    # plot() draws a bare-ground run as a succession, one panel per site,
+    # labelled with the site's mean climate
+    attr(out, "bare_ground") = TRUE
+    first = env[!duplicated(siteID)]
+    preds = utils::head(setdiff(names(first), c("siteID", "year")), 5L)
+    attr(out, "site_labels") = stats::setNames(
+      vapply(seq_len(nrow(first)), function(i)
+        paste(sprintf("%s %s", preds, signif(unlist(first[i, preds, with = FALSE]), 3)), collapse = ", "),
+        character(1)),
+      first$siteID)
+  }
+  out
 }
 
 # Translate the user-facing `return_cohorts` argument into the concrete vector of
@@ -1372,7 +1472,9 @@ reserved_model_fields = c(
   "pred_rec", "quant_obs", "quant_probs", "quant_tau", "reanchor", "record_raws",
   "recruit_obs_weight", "recruits_dbh", "reg_floor", "regeneration_sampler", "theta_floor",
   "rb_gradient", "trees_offset", "reg_cap", "reg_prior", "reg_prior_lambda", "reg_prior_value", "sample_regeneration", "site_lookup", "species_embedder", "teacher_forcing", "train_env",
-  "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred")
+  "train_init_cohort", "transformer_encoder", "tree_data", "tree_deaths", "tree_obs", "tree_pred",
+  "train_data", "train_disturbance", "patches", "evaluation", "param_recent", "param_recent_epochs",
+  "species_names", "train_tree_data")
 is_reserved_model_field = function(name) {
   name %in% reserved_model_fields ||
     grepl("^(par|env|nn|loss|process)_|_(formula|func|optimized)$", name)
@@ -1841,6 +1943,7 @@ finn_class = nn_module(
         # a hybrid growth process the mortality design matrix (#72, B2)
         else pred = env[["growth"]][,i,]
 
+        n_raw_g = length(self$raw_g)
         g = self$growth_func(
           dbh = dbh,
           species = species,
@@ -1849,6 +1952,12 @@ finn_class = nn_module(
           light = light,
           trees = trees
         )
+        # ALE() / conditionalEffects() read the inputs of every step (record_raws);
+        # FINN's own process functions record them, a user's function need not, so
+        # they are recorded here in the same layout when the function did not
+        if (isTRUE(self$record_raws) && length(self$raw_g) == n_raw_g)
+          self$raw_g = c(self$raw_g, list(as_array(torch::torch_cat(list(
+            dbh$unsqueeze(4), light$unsqueeze(4), trees$unsqueeze(4), species$unsqueeze(4)$float()), dim = 4)$cpu())))
         self$g = g
         dbh_growth = dbh*g
         dbh = dbh + dbh_growth
@@ -1874,6 +1983,7 @@ finn_class = nn_module(
         if(!inherits(self$process_mortality, "hybrid")) pred = index_species(pred_mort, species)
         else pred = env[["mort"]][,i,]
 
+        n_raw_m = length(self$raw_m)
         m = self$mortality_func(
           dbh = dbh,
           species = species,
@@ -1883,6 +1993,10 @@ finn_class = nn_module(
           light = light,
           growth = g
         )
+        if (isTRUE(self$record_raws) && length(self$raw_m) == n_raw_m)
+          self$raw_m = c(self$raw_m, list(as_array(torch::torch_cat(list(
+            dbh$unsqueeze(4), g$unsqueeze(4), light$unsqueeze(4), (trees + 0.001)$unsqueeze(4),
+            species$unsqueeze(4)$float()), dim = 4)$cpu())))
 
         n_at_risk = torch::torch_clamp(trees+trees$le(0.5)$float()+0.01, min = 1.0)
         # The floor guards the Gamma draw, whose shape n*p/(1-p) degenerates as p -> 0.
@@ -1990,7 +2104,10 @@ finn_class = nn_module(
                         light = AL_reg)
         if(all(c("dbh", "trees") %in% names(formals(self$regeneration_func))))
           reg_args = c(reg_args, list(dbh = dbh, trees = trees))
+        n_raw_r = length(self$raw_r)
         r_mean_ha = do.call(self$regeneration_func, reg_args)
+        if (isTRUE(self$record_raws) && length(self$raw_r) == n_raw_r)
+          self$raw_r = c(self$raw_r, list(as_array(AL_reg$unsqueeze(4)$cpu())))
       }
 
       r_mean_patch = r_mean_ha*self$patch_size_ha
@@ -2893,6 +3010,20 @@ finn_class = nn_module(
 
     self$train_env         = data.table::copy(data.table::as.data.table(env))
     self$train_init_cohort = if(is.null(init_cohort)) NULL else list(cohort = init_cohort)
+    # kept for evaluate() and summary(): the observations, the disturbances and the
+    # patch count of this fit (the initial cohorts fix the patches when given)
+    self$train_data        = data.table::copy(data.table::as.data.table(data))
+    # the observed trees, for the largest diameter in evaluate()
+    self$train_tree_data   = if (is.null(tree_data)) NULL else data.table::copy(data.table::as.data.table(tree_data))
+    # the species names of the data, for the labels of the plots
+    self$species_names     = if ("species_name" %in% names(data))
+      unique(as.data.frame(data)[, c("species", "species_name")]) else self$species_names
+    self$train_disturbance = if(is.null(disturbance)) NULL else data.table::copy(data.table::as.data.table(disturbance))
+    self$patches           = if(!is.null(init_cohort) && !is.null(init_cohort$species_r)) as.integer(dim(init_cohort$species_r)[2]) else as.integer(patches)
+    self$evaluation        = NULL
+    # the parameters of the last epochs, for the convergence check of summary()
+    self$param_recent        = list()
+    self$param_recent_epochs = integer(0)
     self$fit_id            = as.numeric(Sys.time())
     self$conditional_effects = NULL
     self$ale                 = NULL
@@ -3568,6 +3699,11 @@ finn_class = nn_module(
 
       #cat("Epoch: ", epoch, "Loss: ", bl, "\n")
       self$history[[epoch]] = colMeans(batch_loss, na.rm = TRUE)
+      # the parameters of the last 51 epochs, for the convergence check of
+      # summary() (a copy only; the training is not touched)
+      self$param_recent = c(utils::tail(self$param_recent, 50L),
+                            list(lapply(self$parameters, function(p) as.matrix(p$detach()$cpu()))))
+      self$param_recent_epochs = c(utils::tail(self$param_recent_epochs, 50L), epoch)
 
       # How often the simulation killed a tree the inventory found alive, summed over this
       # epoch's batches. Every tracked cohort is scored over its whole window, so this is a

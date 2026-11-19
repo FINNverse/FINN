@@ -22,6 +22,7 @@ or documentation. Each row names the setting that restores the 0.1.0 result.
 | `predict()` and `simulateForest()` leave `requires_grad` as they found it instead of switching every parameter on (#55) | always | - |
 | `resolveSiteIDs()` numbers sites, patches and species by radix order instead of the collation locale's | always | reproduces 0.1.0 where `LC_COLLATE` was already `C` |
 | A hybrid growth process reads the growth predictors and a hybrid mortality process the mortality predictors (#72, B2) | always | - (0.1.0 and 0.2.0-rc fed each the other's; identical where the two formulas are the same) |
+| `predict()` / `simulateForest()` from bare ground without `patches` use the patch count of the fit instead of 100 | `patches` not given: `model$patches` | `patches = 100` |
 
 The sections *The stem-count gradient*, *The death draw*, *The recruit draw*, *The
 mortality limits* and *The recruitment cap* under **The release in detail** carry
@@ -105,8 +106,7 @@ and gives the same result.
 
 * Removed from the exported interface, as nothing in the package, the tests
   or the vignettes used them: `aggregate_results_old()`, `np_runif()`,
-  `sample_poisson_relaxed()`, the undocumented `plot()` method of a model
-  (use `ALE()` and `summary()`), and the internal helpers `groupby_mean()`
+  `sample_poisson_relaxed()`, and the internal helpers `groupby_mean()`
   and `index_species()` are no longer exported.
 
 ## Documentation and data preparation
@@ -361,6 +361,97 @@ someone who was affected.
 | A U+039B and a U+00D7 in `?fit`, a stray `\cr`, two dangling `\link` targets, a `@param` on the wrong function | no — the LaTeX manual and two `R CMD check` WARNINGs |
 
 ## New features
+
+* **`plot()` of a fitted model draws its parameters.** `plot(model)` now runs
+  from a bare call and shows the fitted parameters themselves, per species:
+  the species-specific parameters of every process and the recruit dispersion
+  `theta` on the scale they act on, each against its admissible range from
+  `createProcess(lower, upper)`, so a parameter that ended the fit at a bound
+  stands out. `pars = "env"` switches to the environmental niches: for every
+  process whose environmental response is linear, the fitted environmental
+  term over the range each predictor covers in the training data, on the
+  predictor's original scale; a process with a neural network response is
+  skipped with a warning that points to `ALE()`. `species =` selects species.
+  The argument `pars` and its values `"process"` / `"env"` are those of 0.1.0,
+  where the method was undocumented, failed on a bare call (a length-2
+  condition in `if()`, an error since R 4.2.0) and drew the first-layer
+  weights of the environmental network as bars.
+
+* **`plot()` of a simulation.** `simulateForest()` and `predict()` return a
+  list of class `finn_simulation` (the tables inside are unchanged), and
+  `plot(sim)` draws basal area, mean dbh and stem number per species over the
+  simulated years, averaged over the sites, or for one site with
+  `sites =`; `response =` takes any of the seven simulated variables. The
+  leading species are coloured and named, every other species is a pale grey
+  line, and the stand total is dashed. A bare-ground run is drawn as a
+  succession, one panel per site labelled with its mean climate.
+
+* **`ALE()` and the conditional effects for any process function.** FINN now
+  records the inputs of every process step itself while it computes the
+  conditional effects, so a process function of one's own (which does not
+  record them) is covered as well; a model saved with an earlier version keeps
+  the methods it was saved with, and a process without recorded inputs is left
+  out with a message instead of an error. `plot(ale)` names the species.
+
+* **`plot(model, parameter_names = )`** names the parameters of a process
+  function of one's own; FINN's own process functions are named from their
+  documentation.
+
+* **Species by their names.** `fit()` keeps the names of the `species_name`
+  column of the data (`model$species_names`); the plots label species by
+  name, and every plot takes `species_names =` for a model without them.
+
+* **`comparePlot()`: simulation against observations.** `comparePlot(sim, obs)`,
+  or `plot(sim, obs)`, pairs a simulation with the observed data, aggregated
+  the way `fit()` scores it (states at the census, growth and mortality
+  compounded over the interval, recruits summed). It draws observed against
+  simulated for `dbh`, `ba`, `trees` and `growth` with R2 in each panel, the
+  ROC curve of the interval death probability with its AUC for mortality, and
+  for recruitment the ratio of simulated to observed recruitment over all
+  sites per species. With the observed trees (`tree_data =`, as for `fit()`)
+  the dbh panel shows the largest diameter per site and species (all species
+  pooled: per site), which is robust against a few large or many small trees;
+  the simulation records its cohorts at the census years for it.
+  `type = "heatmap"` shows the skill of every species at a glance: R2 (and the
+  AUC for mortality) per response and species, next to the ratio of
+  simulated to observed. `type = "timeseries"` draws the simulated trajectory
+  with the observations as points at their census years. `species =` pools all
+  species (default) or draws chosen species; long and wide tables are both
+  accepted, and observations without a simulated counterpart are left out with
+  a message. An observation is placed as in `fit()`, by the position of its
+  `year` among the years of `env` (the simulation keeps them as the attribute
+  `"env_years"`), so `env` and the observations may carry calendar years.
+
+* **`evaluate()`: an optional step after the fit.** It simulates the training
+  data, a holdout (`holdout = list(data =, env =, init_cohort =)`) and,
+  optionally, a bare-ground run (`bare_ground = TRUE`, `years = 500`), and
+  stores the comparison on the model as `model$evaluation`.
+  `fit(..., holdout = )` runs it right after the fit. A model fitted with an
+  earlier version takes its training data through `train =`.
+
+* **`summary()` of a model judges the fit.** It now shows, before the
+  environmental importance and the average conditional effects, the skill per
+  response on the training data and the holdout (R2 and the correlation of
+  observed and simulated first, then RMSE, bias,
+  the ratio of the means, and the AUC for mortality) and a convergence check:
+  by how many percent each loss term changed over the last `epochs_back`
+  epochs, and each parameter: every species-specific parameter by its name on
+  the scale it acts on, every network block as a whole, the largest change of
+  each named in a sentence (`print(s, epochs_back = 10)`). For this `fit()`
+  keeps the parameters of the last 51 epochs; for an older model the parameter
+  snapshots of the fit are used. `summary()` returns an
+  object of class `summary.finn_class` that `print()` shows, instead of
+  printing as it computes.
+
+* **Bare-ground runs in one call.** `simulateForest(model, bare_ground = TRUE)`
+  runs the model from an empty stand for `years = 500` years under the mean
+  climate of the fitted environment held constant, or under each site's mean
+  climate with `sites =`.
+
+* **The patch count of the fit is the default.** `fit()` stores the patch
+  count it used (`model$patches`), together with the training observations;
+  `predict()`, `simulateForest()` and `evaluate()` take it when `patches` is
+  not given.
 
 * **`regeneration_adult_effect()`: conspecific adults as an effect, not a
   gate.** `regeneration_adult()` multiplies the whole potential recruitment by
@@ -685,6 +776,21 @@ someone who was affected.
   and `predictTrees()` by 3e-6 (FINN-bwi fits/2026-11-06-finn-speed-review).
 
 ## Bug fixes
+
+* Initial cohorts survive `saveRDS()` / `readRDS()` (#77). A `CohortMat` (e.g.
+  `initCohorts` of the list `resolveSiteIDs()` returns) keeps a plain R copy of
+  its arrays and rebuilds its torch tensors, which `saveRDS()` cannot store,
+  when `fit()`, `predict()` or `simulateForest()` use it, or with
+  `x$restore()`. Before, every tensor failed with "external pointer is not
+  valid" after reading.
+
+* An environment with no covariate column gives the process an intercept
+  instead of an all-`NA` design (#64): `model.matrix()` on a frame with no
+  columns returned zero rows, and the recruitment of an intercept-only
+  process became `NaN`.
+
+* `createProcess(initSpecies = , initEnv = )` accept a data.frame and use the
+  matrix it holds, instead of failing with "Can't convert argument" (#11).
 
 * `fit()` no longer creates or overwrites an object `counter` in the global
   environment. The batch counter was advanced with `<<-`, which also left the

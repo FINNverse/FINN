@@ -16,7 +16,7 @@ pages carry the full argument descriptions.
 One simulated year of recruitment runs in three steps. The regeneration
 process returns an EXPECTED recruitment per hectare for every site, patch and
 species. This rate is turned into a whole number of recruits per patch, which
-enter the stand as new cohorts at \code{finn(recruits_dbh = )}. During \code{\link[=fit]{fit()}}
+enter the stand as new cohorts at \code{\link[=finn]{finn(recruits_dbh = )}}. During \code{\link[=fit]{fit()}}
 the expected rate (not the drawn recruits), summed over an observation
 interval, is compared with the observed \code{reg} by the regeneration likelihood.
 }
@@ -26,7 +26,7 @@ The process is the \code{func} of the regeneration process passed to
 \code{finn(regeneration_process = )}. All mechanistic variants share the same core:
 a light response gated by the species parameter \code{parReg}, times the
 environmental response \code{exp(env)}, plus the additive floor
-\code{createProcess(reg_floor = )} of the regeneration process (default \code{1e-3}
+\code{\link[=createProcess]{createProcess(reg_floor = )}} of the regeneration process (default \code{1e-3}
 stems per ha and year).
 \itemize{
 \item \code{\link[=regeneration]{regeneration()}}: the core alone. The expected recruitment is not
@@ -41,23 +41,23 @@ year) and \code{prior_lambda = 0.1} by default. The cap bounds the MEAN
 recruitment only. It does not bound the variance of the recruit draw, which
 around a capped mean is still \code{K + K^2 / theta} (see the dispersion section
 below).
-\item \code{regeneration_saturation()}: the same function as \code{regeneration_capped()}
+\item \code{\link[=regeneration_saturation]{regeneration_saturation()}}: the same function as \code{\link[=regeneration_capped]{regeneration_capped()}}
 under its older name, kept as a deprecated alias for one release.
 \item \code{\link[=regeneration_adult]{regeneration_adult()}}: the capped process with a seed source. The
 recruitment of a species is multiplied by \code{f(A) = A / (A + A_half)}, where
 \code{A} is the density of its own adults (stems above an adult threshold \code{x})
 pooled over the patches of the site. A species without adults on a site
 recruits only at \code{reg_floor}. \code{x} and \code{A_half} are declared through
-\code{createProcess(custom_parameters = )}; see its help page.
+\code{\link[=createProcess]{createProcess(custom_parameters = )}}; see its help page.
 \item \code{\link[=regeneration_adult_effect]{regeneration_adult_effect()}}: the adult density as an effect on
 recruitment instead of a gate,
 \verb{f(A) = f0 + (1 - f0) A / (A + A_half)} with \code{f0 = plogis(reg_adult_logitf0)},
 the share of the potential recruitment a species gets without adults on
 the site (seed rain from outside, advance regeneration). Prefer it to
-\code{regeneration_adult()} whenever a species must be able to establish where
+\code{\link[=regeneration_adult]{regeneration_adult()}} whenever a species must be able to establish where
 it has no adults: colonisation from an empty stand, and any free run from
 bare ground, need \code{f0 > 0}. \code{f0 -> 1} removes the adult effect, \code{f0 -> 0}
-is \code{regeneration_adult()}.
+is \code{\link[=regeneration_adult]{regeneration_adult()}}.
 }
 
 A regeneration process built with \code{\link[=createHybrid]{createHybrid()}} replaces the whole
@@ -68,7 +68,7 @@ accepts \code{cap}, \code{prior} and \code{prior_lambda}, but the network does n
 \section{From expected recruitment to recruits}{
 
 The expected rate per ha times \code{patch_size} (in ha) is the expected number
-of recruits per patch. \code{createProcess(sample_regeneration = )} decides how it
+of recruits per patch. \code{\link[=createProcess]{createProcess(sample_regeneration = )}} decides how it
 becomes a whole number:
 \itemize{
 \item \code{sample_regeneration = TRUE} (default): recruits are drawn from a negative
@@ -102,7 +102,7 @@ not. Default \code{0.5} since 0.2.0; \code{0} or \code{NULL} removes it. A fixed
 \code{dispersion_parameter} below the floor is raised to the floor.
 }
 
-With the default \code{fit(rb_gradient = TRUE)}, \code{theta} is set only by the
+With the default \code{\link[=fit]{fit(rb_gradient = TRUE)}}, \code{theta} is set only by the
 regeneration likelihood. On sparse, zero-heavy recruitment data the
 likelihood optimum of \code{theta} is very small: a small \code{theta} widens the
 likelihood and so lowers the loss without improving the predicted mean, and
@@ -129,11 +129,11 @@ short fits, a fixed \code{theta} gets the level right sooner.
 
 \section{The likelihood and the observation operator}{
 
-\code{fit(loss_family = c(regeneration = ))} chooses the regeneration likelihood.
+\code{\link[=fit]{fit(loss_family = c(regeneration = ))}} chooses the regeneration likelihood.
 \code{"nbinom"} (default) uses \code{theta} as above. \code{"poisson"} has no dispersion
 parameter and so cannot collapse; \code{theta} then only shapes the recruit draw.
 
-\code{finn(recruit_obs_weight = w)} is an observation operator: it maps the
+\code{\link[=finn]{finn(recruit_obs_weight = w)}} is an observation operator: it maps the
 predicted and the observed recruitment per ha alike into the count space of
 the sampling design before they are compared, so that the likelihood sees
 the counts that were actually tallied. For an angle-count inventory
@@ -153,19 +153,19 @@ In 0.2.0 \code{recruit_obs_weight} is applied \strong{only} under \code{"nbinom"
 scores the per-ha values as they are and \code{recruit_obs_weight} has no effect,
 without a warning; the Poisson variance then is that of a per-ha value, not of
 the tallied count. The Poisson term adds
-\code{fit(trees_offset = )} (default \code{0.01}) to the prediction.
+\code{\link[=fit]{fit(trees_offset = )}} (default \code{0.01}) to the prediction.
 }
 
 \section{Feeding observed recruitment}{
 
-\code{fit(loss_recruit = "observed")} drives the simulated stand with the observed
+\code{\link[=fit]{fit(loss_recruit = "observed")}} drives the simulated stand with the observed
 recruitment instead of the regeneration process. The observed \code{reg} divided
 by \code{period_length} is the expected recruitment per ha and year in every year
 of that interval; times \code{patch_size} it is drawn per patch by the recruit
 sampler, as above. Growth, mortality and competition run and are trained as
 usual. The regeneration term is weighted 0 and every regeneration parameter
 (species parameters, environment response, cap, \code{theta}, custom parameters)
-is frozen for that call. \code{predict()} and \code{simulateForest()} take
+is frozen for that call. \code{\link[=predict.finn_class]{predict()}} and \code{\link[=simulateForest]{simulateForest()}} take
 \code{recruits = "observed"} and the table \code{obs_recruits} to simulate the same way. With
 observed recruitment the model is not an autonomous simulator: every
 simulated year must lie in an observed interval, and bare-ground, succession

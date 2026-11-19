@@ -23,8 +23,8 @@
 #' inventory into the same per-year rate before comparing, and compares `reg`
 #' with the recruits simulated over those years. The trees behind the
 #' mortality counts are in [fia_tree_dt]. Before FINN 0.2.0 the tables had one step per ten-year
-#' interval (`year` 1 and 2, rates over the interval); `makeObsData(rates =
-#' "interval")` and `resolveSiteIDs(time_axis = "census")` still build such
+#' interval (`year` 1 and 2, rates over the interval); [`makeObsData(rates = "interval")`][makeObsData]
+#' and [`resolveSiteIDs(time_axis = "census")`][resolveSiteIDs] still build such
 #' tables.
 #'
 #' @format `fia_obs_dt` and `fia_obs_test`: one row per site x year x species
@@ -40,7 +40,7 @@
 #'     \item{`species`, `species_name`}{species index `1..11` and its name;
 #'       `"other"` pools the species outside the 98 % most abundant stems.}
 #'     \item{`ba`}{living basal area, m2 -- the mean over the site's patches
-#'       (0.06 ha each; `makeObsData(aggregate_by_site = TRUE)`).}
+#'       (0.06 ha each; [`makeObsData(aggregate_by_site = TRUE)`][makeObsData]).}
 #'     \item{`trees`}{living stems, mean per patch (hence fractional).}
 #'     \item{`dbh`}{mean diameter at breast height of living trees, cm (`NA`
 #'       when there are none).}
@@ -158,7 +158,7 @@
 #' every tree alive at the start of an interval, with its diameter then and its
 #' fate over the interval. These are the closed cohorts whose counts
 #' (`n_at_risk`, `n_died`) the site tables carry, and the `tree_data` of
-#' `fit(loss_aggregation = c(mortality = "tree"))` and [predictTrees()], which
+#' [`fit(loss_aggregation = c(mortality = "tree"))`][fit] and [predictTrees()], which
 #' score the mortality function on every observed tree instead of on the
 #' site's pooled rate (see [finn_loss]). The ids, time axis and species coding
 #' are those of the site tables, so the two join on `siteID`, `year` and

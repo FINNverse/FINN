@@ -19,10 +19,14 @@ the simulation (implemented in \pkg{torch}).
 \item \code{\link[=finn]{finn()}} assembles a model from one process per component, each built
 with \code{\link[=createProcess]{createProcess()}} (mechanistic) or \code{\link[=createHybrid]{createHybrid()}} (neural network).
 \item \code{\link[=simulateForest]{simulateForest()}} runs a model forward from known parameters.
-\item \code{\link[=fit]{fit()}} calibrates a model to data; \code{\link[=predict.finn_class]{predict.finn_class()}} scores it.
+\item \code{\link[=fit]{fit()}} calibrates a model to data; \code{\link[=predict.finn_class]{predict.finn_class()}} simulates
+with it.
 \item \code{\link[=makeObsData]{makeObsData()}}, \code{\link[=resolveSiteIDs]{resolveSiteIDs()}} and \code{\link[=makeInitCohorts]{makeInitCohorts()}} turn a raw
 tree list into FINN's input tables.
-\item \code{\link[=ALE]{ALE()}}, \code{\link[=summary.finn_class]{summary.finn_class()}}, \code{\link[=feature_importance]{feature_importance()}} and
+\item \code{\link[=evaluate]{evaluate()}}, \code{\link[=comparePlot]{comparePlot()}} and \code{\link[=summary.finn_class]{summary.finn_class()}} judge a
+fitted model against the observations, on the training data and a
+holdout; \code{\link[=plot.finn_simulation]{plot.finn_simulation()}} draws a simulation.
+\item \code{\link[=plot.finn_class]{plot.finn_class()}}, \code{\link[=ALE]{ALE()}}, \code{\link[=feature_importance]{feature_importance()}} and
 \code{\link[=conditionalEffects]{conditionalEffects()}} interpret a fitted model.
 }
 

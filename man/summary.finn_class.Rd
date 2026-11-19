@@ -2,6 +2,7 @@
 % Please edit documentation in R/xAI.R
 \name{summary.finn_class}
 \alias{summary.finn_class}
+\alias{print.summary.finn_class}
 \title{Summarise a fitted FINN model}
 \usage{
 \method{summary}{finn_class}(
@@ -13,14 +14,20 @@
   sim_seed = 42L,
   nperm = 20L,
   scale = TRUE,
-  ...
+  epochs_back = 50L,
+  ...,
+  species_names = NULL,
+  parameter_names = NULL
 )
+
+\method{print}{summary.finn_class}(x, epochs_back = x$epochs_back, species = FALSE, ...)
 }
 \arguments{
 \item{object}{(\code{finn_class})\cr fitted model.}
 
-\item{env, init_cohort}{(\code{NULL} or data)\cr interpretation data; \code{NULL} uses the cached
-training data (see \code{\link[=ALE]{ALE()}}).}
+\item{env, init_cohort}{(\code{NULL} or data)\cr interpretation data for the
+importance and the conditional effects; \code{NULL} uses the cached training
+data (see \code{\link[=ALE]{ALE()}}).}
 
 \item{importance}{(\code{character(1)})\cr \code{"ale"} (default) = analytical ALE-variance importance
 (cheap, from the cache); \code{"permutation"} = re-simulating permutation importance
@@ -36,17 +43,82 @@ training data (see \code{\link[=ALE]{ALE()}}).}
 process x species rate variance so the importances are dimensionless and comparable
 across processes and species (Sobol-style). Default \code{TRUE}.}
 
-\item{...}{passed through (e.g. to \code{\link[=predict]{predict()}} for the permutation option).}
+\item{epochs_back}{(\code{integer(1)})\cr the window of the convergence check, in
+epochs. Default \code{50}.}
+
+\item{...}{\code{summary()}: passed to \code{\link[=feature_importance]{feature_importance()}} with
+\code{importance = "permutation"} (and from there to
+\code{\link[=predict.finn_class]{predict()}}). \code{print()}: unused.}
+
+\item{species_names, parameter_names}{Names of the species and of the
+parameters of a process function of one's own, as for \code{\link[=plot.finn_class]{plot.finn_class()}};
+\code{NULL} (default): the species names the model keeps from \code{\link[=fit]{fit()}} and the
+documented parameter names of FINN's own process functions.}
+
+\item{x}{A \code{summary.finn_class} object.}
+
+\item{species}{(\code{logical(1)})\cr also print the skill per species. Default \code{FALSE}.}
 }
 \value{
-invisibly, a list with \code{importance}, \code{average_conditional_effects}, and \code{method}.
+\code{summary()}: an object of class \code{summary.finn_class}, a list with
+\code{skill} (per set, overall), \code{skill_species} (per set and species),
+\code{convergence} (the loss history, the recent parameters, the parameter
+snapshots with their estimated spacing, and the bounds and names of the
+species parameters), \code{bare_ground},
+\code{importance}, \code{average_conditional_effects}, \code{method} (the \code{importance}
+option), \code{importance_label}, \code{species_names}, \code{environment_error} (\code{NULL},
+or why item 4 could not be computed) and \code{epochs_back}. \code{print()}: \code{x},
+invisibly.
 }
 \description{
-Prints, per process and per species, the environmental variable importance
-and the average conditional effects. Both are derived from the model's
-conditional effects, which are computed once and cached — so if \code{\link[=ALE]{ALE()}} was
-already run (or a previous \code{summary()}), the default path needs no further
-simulation.
+Collects what is needed to judge a fitted model, in this order:
+\enumerate{
+\item \strong{Skill}: per response, R2 (\code{1 - SSE/SST}) and the correlation (Pearson
+r) of observed and simulated first, then RMSE, the bias, the ratio of the mean prediction to the mean observation (is the
+magnitude right?; for mortality weighted by the trees at risk, where the
+observations carry \code{n_at_risk} and \code{n_died}) and n; for mortality also the
+tree-level AUC and the ratio of predicted to observed deaths. On the
+training data and, when \code{\link[=evaluate]{evaluate()}} or the argument \code{holdout} of \code{\link[=fit]{fit()}}
+stored one, on the holdout. The observations are compared with the
+simulation aggregated the way \code{\link[=fit]{fit()}} scores it (see \code{\link[=comparePlot]{comparePlot()}}).
+Without a stored evaluation, \code{summary()} runs \code{\link[=evaluate]{evaluate()}} on the training
+data first (one simulation) and stores it on the model.
+\item \strong{Convergence}: by how many percent each loss term changed over the last
+\code{epochs_back} epochs (the mean of the last \code{epochs_back} epochs against
+the mean of the \code{epochs_back} before), as a table with one sentence on
+the largest change; and how much the parameters moved over the last
+\code{epochs_back} epochs, as a table with one row per process (growth,
+mortality, regeneration, competition) and part (its species parameters,
+where they are fitted (\code{optimizeSpecies = TRUE} in \code{\link[=createProcess]{createProcess()}}),
+its environmental response, i.e. the network or the linear climate
+effects, and for regeneration the recruit dispersion and the cap),
+naming the parameter that moved most. The change is the size of the
+step the values took as a percentage of their size,
+\verb{100 * |values now - values then| / |values then|}, over all species of
+a parameter (on the scale it acts on, e.g. "mortality: growth") or all
+weights of a network layer; 1 \% means the values moved by about a
+hundredth of their size. \code{\link[=fit]{fit()}}
+keeps the parameters of the last 51 epochs for this, so \code{epochs_back} can
+be at most 50; for a model fitted before this version the parameter
+snapshots of the fit (\code{model$param_history}, every \code{checkpoints} epochs)
+are used instead; they carry no epoch, so the epochs between them are
+estimated from the length of the loss history and their number (exact
+for one call of \code{\link[=fit]{fit()}} whose \code{epochs} is a multiple of \code{checkpoints}).
+Below the explanation, one sentence names the species parameter that
+moved most and the largest change overall. A fit has settled when both
+are small; network weights can keep moving while the loss stays flat.
+\item \strong{Bare ground}, when \code{\link[=evaluate]{evaluate()}} stored a bare-ground run: per site,
+the total basal area and the leading species with its share, as the mean
+over the last tenth of the run.
+\item \strong{Environmental importance and average conditional effects}, per process
+and species, from the model's conditional effects (computed once and
+cached, see \code{\link[=ALE]{ALE()}}). Where they cannot be computed for a model, a
+warning says why and the other sections are still returned.
+}
+
+\code{print()} shows it; \code{print(s, epochs_back = 10)} redoes the convergence
+check over another window without recomputing anything. \code{\link[=plot.finn_class]{plot.finn_class()}}
+draws the fitted parameters themselves.
 }
 \examples{
 \dontshow{if (torch::torch_is_installed()) withAutoprint(\{ # examplesIf}
@@ -61,15 +133,18 @@ m <- finn(N_species = Nsp, recruits_dbh = 12.9,
           mortality_process    = createProcess(~ temp + prec, mortality),
           regeneration_process = createProcess(~ temp + prec, regeneration_capped))
 fit(m, data = fia_obs_dt[siteID \%in\% sites], env = fia_env_dt[siteID \%in\% sites],
-    init_cohort = init, epochs = 1L, patches = 4, patch_size = 0.06,
+    init_cohort = init, epochs = 3L, patches = 4, patch_size = 0.06,
     plot_progress = FALSE)
 
-# which predictor matters for which process and species, and in which direction
 s <- summary(m)
-# the printed tables are also returned
-head(s$importance$growth)
+s
+# the convergence check over the last two epochs instead
+print(s, epochs_back = 2)
+# the tables are also returned
+s$skill$train
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[=ALE]{ALE()}}, \code{\link[=averageConditionalEffects]{averageConditionalEffects()}}, \code{\link[=feature_importance]{feature_importance()}}
+\code{\link[=evaluate]{evaluate()}}, \code{\link[=comparePlot]{comparePlot()}}, \code{\link[=plot.finn_class]{plot.finn_class()}}, \code{\link[=ALE]{ALE()}},
+\code{\link[=averageConditionalEffects]{averageConditionalEffects()}}, \code{\link[=feature_importance]{feature_importance()}}
 }

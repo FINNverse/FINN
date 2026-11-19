@@ -120,7 +120,7 @@ index_species = function(pred, species) {
 
 #' Sum cohort values per site and species
 #'
-#' The hot-path form of [aggregate_results()] used by the time loop of
+#' The hot-path form of `aggregate_results()` (an internal function) used by the time loop of
 #' `forward()`: every sample is scattered into a fresh species tensor and summed
 #' over the patches in ONE `scatter_add` for all samples (stacked along a new
 #' leading dimension), instead of one `torch_zeros` + `scatter_add` + `sum` +
@@ -217,7 +217,7 @@ check_mortality_limit = function(value, what) {
 #'
 #' @description
 #' The mortality draw of FINN before 0.2.0, selected with
-#' `createProcess(mortality_draw = "gamma")`: a Gamma distribution with the mean
+#' [`createProcess(mortality_draw = "gamma")`][createProcess]: a Gamma distribution with the mean
 #' `n * p` and the variance `n * p * (1 - p)` of the binomial, sampled with
 #' `rsample()` so that the draw carries a pathwise gradient to `n` and `p`. The
 #' draw is continuous, not an integer count; the simulation rounds it afterwards.
@@ -259,7 +259,7 @@ binomial_from_gamma = function(n, p, sample_size=1) {
 #'
 #' @description
 #' The alternative mortality draw, selected with
-#' `createProcess(mortality_draw = "poisson")`. The default since 0.2.0 is
+#' [`createProcess(mortality_draw = "poisson")`][createProcess]. The default since 0.2.0 is
 #' `mortality_draw = "binomial"`, the exact binomial; [binomial_from_gamma()]
 #' (`mortality_draw = "gamma"`) reproduces results published before 0.2.0.
 #' A cohort of one tree or fewer (`n <= 1.5`) is a Bernoulli trial and is
@@ -451,7 +451,7 @@ rnbinom_torch = function(pred, theta) {
 #'
 #' @description
 #' The default regeneration sampler since 0.2.0, selected with
-#' `createProcess(regeneration_sampler = "refined")`; `rnbinom_torch()`
+#' [`createProcess(regeneration_sampler = "refined")`][createProcess]; `rnbinom_torch()`
 #' (`regeneration_sampler = "gaussian"`) reproduces results published before
 #' 0.2.0. Three differences: the probability clamp is `1e-10` instead of `1e-4`,
 #' the Gamma draw is clamped at that same `eps` instead of taking `+0.001` and an

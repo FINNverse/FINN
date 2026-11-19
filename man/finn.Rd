@@ -69,7 +69,7 @@ compounds its simulated rates the same way. The two only differ when an
 observation interval spans several time steps (\code{period_length} in the
 data). If unsure, keep the default: with annual time steps it is the
 annual growth rate. \code{\link[=makeObsData]{makeObsData()}} returns the annual rate (as in
-the bundled FIA data); with \code{makeObsData(rates = "interval")} it returns
+the bundled FIA data); with \code{\link[=makeObsData]{makeObsData(rates = "interval")}} it returns
 the increment between two censuses, which is the per-step rate only when
 one step is one census interval. The terms follow
 Kohyama, Kohyama & Sheil (2018), who distinguish a rate per year from the
@@ -82,7 +82,7 @@ tallies. Default \code{1}, which leaves per-hectare data as they are. See
 \link{recruitment}.}
 
 \item{...}{Arguments of earlier versions, still accepted with a warning:
-\code{reg_floor} (now \code{createProcess(reg_floor = )} of the regeneration process)
+\code{reg_floor} (now \code{\link[=createProcess]{createProcess(reg_floor = )}} of the regeneration process)
 and \code{growth_period_scale} (\code{TRUE} is now \code{growth_rate = "period"}).}
 }
 \value{
@@ -150,12 +150,12 @@ environment: for every species, the columns of the environment table that
 the process' \code{formula} names are turned into one number that scales the
 process. By default that response is a simple linear (growth, regeneration)
 or logistic (mortality) function with one coefficient per predictor and
-species; \code{createProcess(hidden = )} turns it into a small neural network.
+species; \code{\link[=createProcess]{createProcess(hidden = )}} turns it into a small neural network.
 The simulated stand variables (mean dbh, basal area, number of trees) and
 the simulated rates (growth, mortality, recruitment) of every site and year
 are what \code{\link[=fit]{fit()}} compares with the observations.
 
-\strong{The default processes} are, in 0.2.0, \code{createProcess(func = growth)},
+\strong{The default processes} are, in 0.2.0, \code{\link[=createProcess]{createProcess(func = growth)}},
 \code{createProcess(func = mortality)}, \code{createProcess(func = regeneration_capped)}
 and \code{createProcess(func = competition)}: the equations of Pichler & Käber
 (2026), with one change -- recruitment is capped (\code{\link[=regeneration_capped]{regeneration_capped()}}
@@ -196,7 +196,7 @@ produce a stand that the other three processes can also live with.
 \item \emph{fully mechanistic} -- the equation, with a linear or logistic response to
 the environment. Every parameter has a meaning and a unit.
 \item \emph{level 1} -- the equation, but its environmental response is a small
-network (\code{createProcess(hidden = c(20, 20))}). The demography stays the
+network (\code{\link[=createProcess]{createProcess(hidden = c(20, 20))}}). The demography stays the
 package's equation, so the model still extrapolates the way that equation
 says it should, while the response to climate is free in shape.
 \item \emph{level 2} -- the equation itself replaced by a network
@@ -216,10 +216,14 @@ process' \code{formula} should name the predictors you would defend in a
 regression rather than every column of \code{env}, because each one costs a
 coefficient per species.
 
-\strong{Checking a fitted model.} \code{fit(plot_progress = TRUE)} and \verb{$history} say
+\strong{Checking a fitted model.} \code{\link[=fit]{fit(plot_progress = TRUE)}} and \verb{$history} say
 whether the fit moved and which response drove it; \code{\link[=summary.finn_class]{summary.finn_class()}} reports
-the parameters; \code{\link[=ALE]{ALE()}} shows the fitted environmental responses,
-including those of a network; \code{\link[=simulateForest]{simulateForest()}} from bare ground shows
+the skill on the training data and a holdout (stored by \code{\link[=evaluate]{evaluate()}},
+drawn by \code{\link[=comparePlot]{comparePlot()}}), whether the fit has settled, and the
+environmental importances; \code{\link[=plot.finn_class]{plot.finn_class()}} draws the fitted
+parameters; \code{\link[=ALE]{ALE()}} shows the fitted environmental responses,
+including those of a network; \code{\link[=simulateForest]{simulateForest()}} from bare ground
+(\code{bare_ground = TRUE}) shows
 what the model does outside the observation window. The last one is worth the
 time: a model that predicts the holdout well and grows an implausible stand
 from bare ground has usually learned the observed window rather than the

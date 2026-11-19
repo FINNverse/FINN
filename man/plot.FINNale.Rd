@@ -4,7 +4,7 @@
 \alias{plot.FINNale}
 \title{Plot ALE curves of a FINN model}
 \usage{
-\method{plot}{FINNale}(x, process = NULL, scale = FALSE, ...)
+\method{plot}{FINNale}(x, process = NULL, scale = FALSE, species_names = NULL, ...)
 }
 \arguments{
 \item{x}{an object of class \code{FINNale} (returned by \code{\link[=ALE]{ALE()}}).}
@@ -15,6 +15,9 @@
 \item{scale}{(\code{logical(1)})\cr if \code{TRUE}, divide each curve by the SD of its
 process x species rate so the effects are dimensionless and comparable (a shared
 y-axis is then used); if \code{FALSE} (default) the raw ALE is shown with free y-axes.}
+
+\item{species_names}{Species names for the legend (see \code{\link[=plot.finn_class]{plot.finn_class()}});
+\code{NULL} (default): the names the model keeps from \code{\link[=fit]{fit()}}.}
 
 \item{...}{currently ignored.}
 }
