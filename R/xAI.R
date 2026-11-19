@@ -800,6 +800,7 @@ summary.finn_class = function(object, env = NULL, init_cohort = NULL, importance
                  bare_ground = bare, importance = env_section$vi,
                  average_conditional_effects = env_section$ace,
                  method = importance, importance_label = env_section$vi_label,
+                 species_names = species_names_lookup(object$N_species, model = object),
                  environment_error = env_section$error, epochs_back = as.integer(epochs_back)),
             class = "summary.finn_class")
 }
@@ -860,7 +861,9 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
     print(fmt_skill(x$skill[[s]]), row.names = FALSE, digits = 3)
     if (isTRUE(species)) {
       cat(sprintf("\n%s, per species:\n", if (s == "train") "Training data" else "Holdout"))
-      print(fmt_skill(x$skill_species[[s]]), row.names = FALSE, digits = 3)
+      ss = data.table::copy(x$skill_species[[s]])
+      if (!is.null(x$species_names)) ss[, species := x$species_names[as.character(species)]]
+      print(fmt_skill(ss), row.names = FALSE, digits = 3)
     }
   }
 
@@ -890,8 +893,11 @@ print.summary.finn_class = function(x, epochs_back = x$epochs_back, species = FA
     dt = data.table::as.data.table(df)
     w  = data.table::dcast(dt, variable ~ species, value.var = value_col)
     sp = setdiff(names(w), "variable")
-    data.table::setnames(w, sp, paste0("sp", sp))
-    spc = paste0("sp", sp)
+    # species by name where the model knows them, else sp1, sp2, ...
+    nm = if (!is.null(x$species_names) && !all(grepl("^species [0-9]+$", x$species_names[sp])))
+      x$species_names[sp] else paste0("sp", sp)
+    data.table::setnames(w, sp, nm)
+    spc = nm
     w   = w[order(-rowMeans(abs(as.matrix(w[, ..spc])), na.rm = TRUE))]
     as.data.frame(w)
   }
