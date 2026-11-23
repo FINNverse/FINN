@@ -27,7 +27,8 @@ named above (listed in NEWS.md).
 * local macOS 26.5 (aarch64), R 4.5.0, `R CMD check --as-cran` on the built
   tarball with the torch backend (libtorch) installed, so every example and
   test ran; the PDF manual built separately with `R CMD Rd2pdf`.
-* win-builder R-devel and R-release.
+* win-builder R-devel (2026-11-17 r90926 ucrt) and R-release (4.6.2 ucrt):
+  1 NOTE each, "Days since last update: 4".
 
 ## R CMD check results
 
