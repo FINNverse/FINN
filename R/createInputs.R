@@ -462,6 +462,9 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 
   other_species <- unique(tree_dt[!(species_name %in% selected_species)]$species_name)
   tree_dt <- tree_dt[!(species_name %in% selected_species), species_name := "other",]
+  # the mortality counts are grouped by the species of the previous census, so it
+  # is lumped the same way; otherwise their deaths would fall out of "other" (#73)
+  tree_dt[!is.na(species_before) & !(species_before %in% selected_species), species_before := "other"]
   Nspecies = Nspecies + 1
   message(paste0("Combined ", uniqueN(other_species), " unselected species into 'other'\nactuall number of species including 'others' is ", Nspecies))
 
@@ -637,7 +640,10 @@ makeObsData <- function(tree_dt, plotsize, aggregate_by_site = TRUE, minNyears =
 #'   \code{siteID}, \code{patchID}, \code{species}, \code{dbh} (cm),
 #'   \code{treeName} and \code{trees} (the number of trees the row stands
 #'   for, usually 1). Without \code{dbh_binsize} a column \code{cohortID} is
-#'   added to the table by reference.
+#'   added to the table by reference. The patch dimension is set by the
+#'   \code{patchID}s present in \code{init_trees}, and \code{fit(patches = )}
+#'   does not change it: a patch that holds no tree at any site is not created.
+#'   To keep a patch that starts empty, give it a row with \code{trees = 0}.
 #' @param dbh_binsize numeric or NULL. Bin width in cm. If NULL, keep exact DBH.
 #' @param min_dbh numeric or NULL. Lower bound for binning. If NULL, uses min DBH.
 #' @param Nspecies integer. Number of species levels passed to \code{sp}.

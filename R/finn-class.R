@@ -2440,11 +2440,13 @@ finn_class = nn_module(
               }
               self$obs_rec = y[,tmp_index,,6] |> as.matrix()
               self$pred_rec = r_pred |> as.matrix()
-              self$loss_raw = as.numeric(loss)
-              keep = private$scored_terms(loss, nonfinite)
-              # kept with its unit counts; weighted and summed after the time loop
-              if (length(keep)) step_losses[[length(step_losses) + 1L]] = list(loss = loss, n = loss_n, keep = keep)
             }
+            # recorded even when no site closes a window at this step, so the
+            # dbh, ba and tree terms of such a census are kept (#74)
+            self$loss_raw = as.numeric(loss)
+            keep = private$scored_terms(loss, nonfinite)
+            # kept with its unit counts; weighted and summed after the time loop
+            if (length(keep)) step_losses[[length(step_losses) + 1L]] = list(loss = loss, n = loss_n, keep = keep)
           } else if(!is.na(period)) {
             # loss[1] = self$loss_dbh_func(y[, tmp_index,,1], Result[[1]][,(i-period+1):(i),]$mean(2) )
             # # ba
@@ -3514,6 +3516,9 @@ finn_class = nn_module(
       self$optimizer = do.call(optimizer, c(list(self$parameters, lr = lr), optimizer_args, list(...)))
       self$optimizer_lr = lr
     }
+    # a reused optimizer still carries the rate a previous call's schedule left
+    # in its param groups; every call starts at the `lr` it is given (#76)
+    for (g in seq_along(self$optimizer$param_groups)) self$optimizer$param_groups[[g]]$lr = lr
 
     # ---- Learning-rate scheduler (built fresh for this fit() call) ----
     # The scheduler tracks its own internal epoch counter starting at 0, so a
@@ -4191,6 +4196,9 @@ finn_class = nn_module(
     # Columns are expected in `data` as <response>_q<100*p>, e.g. dbh_q10,
     # dbh_q50, dbh_q90 for probs = c(0.1, 0.5, 0.9).
     build_quantile_obs = function(data, probs, response = "dbh") {
+      # extract_env() builds a model frame: under the default na.omit a row with
+      # an NA quantile is dropped and the later rows slide onto other sites (#75)
+      oldopts = options(na.action = "na.pass"); on.exit(options(oldopts), add = TRUE)
       cols = sprintf("%s_q%g", response, 100 * probs)
       missing = setdiff(cols, colnames(data))
       if (length(missing))
@@ -4288,6 +4296,8 @@ finn_class = nn_module(
     # Columns are expected in `data` as <prefix>1 ... <prefix>K+1, one row per
     # site x year x species, holding PLOT totals so the counts are integers.
     build_class_obs = function(data, K, prefix = "n_class_") {
+      # keep NA rows in place, as in build_quantile_obs() (#75)
+      oldopts = options(na.action = "na.pass"); on.exit(options(oldopts), add = TRUE)
       cols = paste0(prefix, seq_len(K))
       missing = setdiff(cols, colnames(data))
       if (length(missing))

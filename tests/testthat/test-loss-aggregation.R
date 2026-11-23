@@ -302,6 +302,29 @@ test_that("dbh quantiles run end to end and validate their input", {
   expect_equal(dim(as.array(mm$quant_obs)), c(Nsites, 2L, Nsp, 3L))
 })
 
+test_that("an NA quantile or class count stays in its own cell (FINN#75)", {
+  # under the default na.action a missing value used to drop its row, and every
+  # later row of the species slid one cell on, onto another site or year
+  obs_na <- copy(obs)
+  for (p in c(10, 90)) obs_na[[sprintf("dbh_q%g", p)]] <- 100 * obs_na$siteID + 10 * obs_na$year + obs_na$species + p / 100
+  for (k in 1:4) obs_na[[paste0("n_class_", k)]] <- 100 * obs_na$siteID + 10 * obs_na$year + obs_na$species + k
+  obs_na[siteID == 1L & year == 3L & species == 1L, `:=`(dbh_q10 = NA_real_, n_class_2 = NA_real_)]
+  mm <- run_fit(loss_family = LOSS, data = obs_na,
+                loss_aggregation = list(dbh = list(type = "quantiles", probs = c(0.1, 0.9)),
+                                        trees = list(type = "size_classes", breaks = c(10, 20, 30))))
+  q <- as.array(mm$quant_obs); cl <- as.array(mm$class_obs)
+  want_q <- array(NA_real_, dim(q)); want_cl <- array(NA_real_, dim(cl))
+  for (k in seq_len(nrow(obs_na))) {
+    r <- obs_na[k]; yi <- match(r$year, c(3L, 6L))
+    want_q[r$siteID, yi, r$species, ]  <- c(r$dbh_q10, r$dbh_q90)
+    want_cl[r$siteID, yi, r$species, ] <- unlist(r[, paste0("n_class_", 1:4), with = FALSE])
+  }
+  expect_equal(is.na(q), is.na(want_q))
+  expect_equal(q[!is.na(want_q)], want_q[!is.na(want_q)], tolerance = 1e-5)
+  expect_equal(is.na(cl), is.na(want_cl))
+  expect_equal(cl[!is.na(want_cl)], want_cl[!is.na(want_cl)], tolerance = 1e-5)
+})
+
 test_that("a per-tree aggregation forces the per-site path and its own baseline", {
   ## On a constant period the tree term used to be unreachable in forward()
   ## while compute_baseline_losses() still measured the per-tree null, so

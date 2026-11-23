@@ -1,4 +1,7 @@
-# FINN 0.2.1 (development)
+# FINN 0.2.1
+
+A bug-fix release. No argument, default or default result changes; each fix
+below changes numbers only on the path it names.
 
 ## Bug fixes
 
@@ -8,6 +11,29 @@
   full-batch fits with hybrid processes (`createHybrid()`) on large data sets
   ran out of memory (FIA CONUS, hybrid growth: 37 to 85 GB in five epochs; with
   the fix flat at 38-39 GB). Results are unchanged (#79).
+* `makeObsData()` with `Nspecies` or `NspeciesQuantile` lumped the species
+  outside the selection into `"other"` for every column except the mortality
+  counts, which are grouped by the species of the previous census. Those deaths
+  and trees at risk fell out of `"other"` (on the example tree list in
+  `inst/extdata` with `Nspecies = 2`: 6 trees at risk and 0 deaths instead of
+  162 and 16). Without a species cap nothing changes (#73).
+* `fit()` with `loss_aggregation` `"quantiles"` (dbh) or `"size_classes"`
+  (trees): a missing value in one of the observed quantile or class columns
+  dropped its row, so every later value of that species was scored against
+  another site or year. Missing values now stay in their own cell and are not
+  scored. Data without missing values in these columns are unaffected (#75).
+* `fit()` on the per-site aggregation path (mixed `period_length`) skipped the
+  whole step of a census at which no site closes an observation window, so the
+  dbh, ba and tree terms of that census were not scored. Data in which every
+  census row carries a `period_length` are unaffected (#74).
+* A second `fit()` call on the same model, after a call with a learning-rate
+  schedule, reused the optimizer at the rate the schedule had left instead of
+  the `lr` it was given. Every call now starts at its own `lr`. A model loaded
+  with `torch_load()` was not affected (#76).
+* `?makeInitCohorts` says how the patch dimension is set: by the `patchID`s
+  present in `init_trees`, not by `fit(patches = )`; a patch that starts empty
+  needs a row with `trees = 0`. Help pages that named 0.2.1 for the recruit
+  draw rounding and the parameter bounds now refer to a later feature release.
 
 # FINN 0.2.0
 

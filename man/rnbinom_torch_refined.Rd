@@ -37,13 +37,13 @@ rounds the floor away but also rounds the signal away: at a FINN patch of
 0.0168 ha the per-cell mean is 0.001-0.008, and over 2e6 draws the delivered
 fraction of the calibrated mean was 0.000-0.048 at \code{theta = 1}.
 
-One bias is left and is not repaired in 0.2.0: above \code{lambda = 2} the draw is
+One bias is left and is not repaired in the 0.2.x releases: above \code{lambda = 2} the draw is
 the Gaussian approximation FLOORED, so it delivers about half a recruit per
 draw too few (measured over 1e6 draws: -0.43 at \code{lambda = 2.5}, -0.50 from
 \code{lambda = 20}, against about 0 with rounding). It bites only where a cell's
 mean recruitment is above two, which the per-patch means above are not.
-Rounding instead of flooring is planned for 0.2.1; it changes results, so it
-is not in this release.
+Rounding instead of flooring is planned for a later feature release; it
+changes results, so it is not in the 0.2.x releases.
 
 For the measured consequence of both repairs on the simulated stand, and why
 the holdout cannot separate them, see \code{\link[=binomial_from_poisson]{binomial_from_poisson()}}.

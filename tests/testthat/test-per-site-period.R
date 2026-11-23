@@ -119,6 +119,21 @@ test_that("the per-site path stops when data carries no period_length (FINN#46)"
   expect_true(go(part, "per_site")$per_site_period)
 })
 
+test_that("a census without period_length keeps its dbh, ba and trees terms (FINN#74)", {
+  # a step at which no site closes a window used to skip the whole step, so the
+  # state terms of such a census were never scored
+  obs <- mk_obs(list(c(4, 10), c(5, 10), c(6, 10)))
+  st <- predictions(list(c(2, 10), c(2, 10), c(2, 10)))[year == 2, .(siteID, year, species, dbh, ba, trees)]
+  st[, `:=`(growth = NA_real_, mort = NA_real_, reg = NA_real_, period_length = NA_real_,
+            species_name = paste0("sp", species))]
+  exact <- rbind(obs, st, use.names = TRUE)[order(siteID, year, species)]
+  off <- copy(exact)[year == 2, `:=`(dbh = dbh * 10, ba = ba * 10)]
+  a <- run_fit(exact, "per_site"); b <- run_fit(off, "per_site")
+  expect_true(all(a$history[[1]][1:6] < 1e-8))
+  expect_true(all(b$history[[1]][1:2] > 1e-6))      # the wrong year-2 state is scored
+  expect_equal(b$history[[1]][3:6], a$history[[1]][3:6])
+})
+
 test_that("mixed periods: gradients flow through the deferred backward", {
   obsm <- mk_obs(list(c(4), c(6), c(3, 7)))
   FINN.seed(99)

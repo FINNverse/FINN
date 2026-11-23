@@ -94,7 +94,7 @@ shade, size and growth coefficients of the logit); regeneration \code{0.01} /
 (height parameter, competition strength), where the height parameter is
 capped so that no species grows taller than 130 m (see \code{\link[=height]{height()}}).
 A parameter that ends a fit at its bound is not identified by the data;
-widening the bounds is a decision for 0.2.1.}
+widening the bounds changes results and is left to a later feature release.}
 
 \item{dropout}{(\code{numeric(1)})\cr Dropout rate of the environmental-response
 network. Ignored unless \code{hidden} is set.}
@@ -180,8 +180,8 @@ applies to \code{torch_poisson}; see \code{\link[=rnbinom_torch_refined]{rnbinom
 \code{lambda = 2} it is still the floored Gaussian draw, which delivers about
 half a recruit per draw too few (measured over 1e6 draws: -0.43 at
 \code{lambda = 2.5}, -0.50 from \code{lambda = 20}, against about 0 with rounding).
-Rounding instead of flooring is planned for 0.2.1; it changes results, so it
-is not in this release.
+Rounding instead of flooring is planned for a later feature release; it
+changes results, so it is not in the 0.2.x releases.
 \code{"gaussian"} (the behaviour of every
 published FINN result) offsets the Gamma draw by \code{+0.001}, clamps the
 probability at \code{1e-4} and pushes the result through

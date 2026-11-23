@@ -64,3 +64,18 @@ test_that("a second fit() in the same session keeps the optimizer (and its Adam 
   resume_fit(m, d, opt)
   expect_true(identical(m$optimizer, first))
 })
+
+test_that("a second fit() starts at its own lr, not where a schedule left it (FINN#76)", {
+  skip_if_no_torch()
+  d <- resume_setup()
+  m <- resume_model(d$Nsp)
+  opt <- if (exists("optim_ignite_adam", envir = asNamespace("torch"))) torch::optim_ignite_adam else torch::optim_adam
+  suppressMessages(fit(m, env = d$env, data = d$obs, init_cohort = d$init, device = "cpu",
+                       epochs = 2L, patches = 4, patch_size = 0.06, lr = 0.02,
+                       control = finnControl(optimizer = opt, lr_scheduler = "step",
+                                             lr_scheduler_params = list(step_size = 1, gamma = 0.1)),
+                       plot_progress = FALSE))
+  expect_lt(m$optimizer$param_groups[[1]]$lr, 0.02)   # the schedule lowered it
+  resume_fit(m, d, opt)                               # same lr, no schedule: optimizer reused
+  expect_equal(m$optimizer$param_groups[[1]]$lr, 0.02)
+})

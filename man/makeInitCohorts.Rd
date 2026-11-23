@@ -18,7 +18,10 @@ makeInitCohorts(
 \code{siteID}, \code{patchID}, \code{species}, \code{dbh} (cm),
 \code{treeName} and \code{trees} (the number of trees the row stands
 for, usually 1). Without \code{dbh_binsize} a column \code{cohortID} is
-added to the table by reference.}
+added to the table by reference. The patch dimension is set by the
+\code{patchID}s present in \code{init_trees}, and \code{fit(patches = )}
+does not change it: a patch that holds no tree at any site is not created.
+To keep a patch that starts empty, give it a row with \code{trees = 0}.}
 
 \item{dbh_binsize}{numeric or NULL. Bin width in cm. If NULL, keep exact DBH.}
 

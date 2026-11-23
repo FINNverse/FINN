@@ -111,6 +111,19 @@ test_that("Nspecies caps species and lumps the rest into 'other'", {
   expect_lte(uniqueN(obs$species_name), 2L)
 })
 
+test_that("lumping into 'other' keeps the mortality counts of the lumped species (FINN#73)", {
+  # a second pine makes pine the top species, so oak (with its one death) is lumped
+  td <- rbind(toy_tree_dt(), data.table(siteName = "s1", patchName = "p1", treeName = "t5",
+                                        year = c(2000, 2010), species_name = "pine", dbh = c(25, 27),
+                                        status = "alive", living = TRUE))
+  full <- as.data.table(suppressMessages(makeObsData(td, plotsize = 1, aggregate_by_site = FALSE))$obs_dt)
+  lump <- as.data.table(suppressMessages(makeObsData(td, plotsize = 1, aggregate_by_site = FALSE, Nspecies = 1))$obs_dt)
+  expect_equal(lump[year == 2010 & species_name == "other", c(n_at_risk, n_died)],
+               full[year == 2010 & species_name == "oak", c(n_at_risk, n_died)])
+  expect_equal(lump[year == 2010 & species_name == "other", mort], 1 - 0.5^(1/10), tolerance = 1e-10)
+  expect_equal(lump[, sum(n_died, na.rm = TRUE)], full[, sum(n_died, na.rm = TRUE)])
+})
+
 test_that("minNyears drops sites with too few inventories", {
   s2 <- data.table(siteName = "s2", patchName = "p1", treeName = "x1",
                    year = 2005, species_name = "oak", dbh = 15,
