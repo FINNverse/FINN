@@ -3682,7 +3682,22 @@ finn_class = nn_module(
 
         batch_loss[counter, ] =  as.numeric(loss$data()$cpu())
         counter = counter + 1
+        # drop this batch's references to its autograd graph (`pred` holds plain
+        # R arrays and is read after the epochs, so it stays); see the gc() below
+        pred_tmp = NULL; loss = NULL
       })
+
+      # torch tensors are R external pointers: their memory - and the autograd
+      # graph a tensor still points to - is released only when R's garbage
+      # collector runs, and R triggers it on R-heap pressure, not on torch's
+      # allocations. Each batch builds a graph over all years (with per-site
+      # windows a single backward at the end), so without a collection the graphs
+      # and temporaries of several epochs pile up; with hybrid processes, whose
+      # networks run over every cohort and year, that reached > 100 GB on large
+      # data sets. Collect once per epoch: for a full-batch fit that is once per
+      # batch, and a mini-batch epoch leaves at most one data set's worth of
+      # graphs behind, while a gc() per mini-batch would cost ~50 ms each.
+      invisible(gc(verbose = FALSE))
 
       # too expensive with many parameters
       if(epoch %% checkpoints == 0) {

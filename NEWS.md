@@ -1,3 +1,14 @@
+# FINN 0.2.1 (development)
+
+## Bug fixes
+
+* `fit()` collects garbage once per epoch. Torch tensors are freed only when R's
+  garbage collector runs, which R triggers on its own heap, not on torch's
+  allocations, so the autograd graphs of several epochs piled up. Long
+  full-batch fits with hybrid processes (`createHybrid()`) on large data sets
+  ran out of memory (FIA CONUS, hybrid growth: 37 to 85 GB in five epochs; with
+  the fix flat at 38-39 GB). Results are unchanged (#79).
+
 # FINN 0.2.0
 
 ## Changes that alter results
