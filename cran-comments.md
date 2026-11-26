@@ -34,7 +34,8 @@ named above (listed in NEWS.md).
 
 0 errors | 0 warnings | 1 note (besides the local machine's notes below)
 
-* "Days since last update: 4": this is the bug-fix release described above.
+* "Days since last update" (4 at the win-builder check on 23 November, 7 at
+  submission): this is the bug-fix release described above.
 
 On the local machine, as for 0.2.0: a WARNING from R 4.5.0's own header
 `R_ext/Boolean.h` with Apple clang 21 (`unknown warning group
